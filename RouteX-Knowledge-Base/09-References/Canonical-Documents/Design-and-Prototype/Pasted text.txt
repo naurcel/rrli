@@ -1,0 +1,1681 @@
+// ============================================================
+// TRACKIFY - Full Figma UI Generation Script
+// Paste into Figma Plugin Console (Figma > Plugins > Development > Open Console)
+// ============================================================
+
+(async () => {
+
+await figma.loadFontAsync({ family: "Readex Pro", style: "Regular" });
+await figma.loadFontAsync({ family: "Readex Pro", style: "Medium" });
+await figma.loadFontAsync({ family: "Readex Pro", style: "SemiBold" });
+await figma.loadFontAsync({ family: "Readex Pro", style: "Bold" });
+await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+await figma.loadFontAsync({ family: "Inter", style: "Medium" });
+await figma.loadFontAsync({ family: "Inter", style: "SemiBold" });
+await figma.loadFontAsync({ family: "Inter", style: "Bold" });
+
+// ============================================================
+// DESIGN TOKENS
+// ============================================================
+const C = {
+  // Primary palette (from uploaded brand)
+  red:        { r:0.698, g:0.067, b:0.067 }, // #B21111
+  navy:       { r:0.008, g:0.125, b:0.173 }, // #02012C > adjusted to #02203E
+  white:      { r:1,     g:1,     b:1     },
+
+  // Surface / Background
+  bg:         { r:0.965, g:0.965, b:0.969 }, // #F6F6F7 near-white page
+  card:       { r:1,     g:1,     b:1     },
+  cardAlt:    { r:0.976, g:0.976, b:0.980 }, // #F9F9FA subtle row alt
+
+  // Status colors (derived from palette)
+  delivered:  { r:0.133, g:0.545, b:0.282 }, // forest green
+  inTransit:  { r:0.102, g:0.380, b:0.678 }, // strong blue
+  pending:    { r:0.788, g:0.502, b:0.020 }, // amber
+  cancelled:  { r:0.620, g:0.133, b:0.133 }, // dark red
+  needAction: { r:0.820, g:0.341, b:0.000 }, // orange
+
+  // Role tints
+  adminTint:  { r:0.698, g:0.067, b:0.067, a:0.08 },
+  staffTint:  { r:0.008, g:0.125, b:0.173, a:0.07 },
+  viewerTint: { r:0.133, g:0.545, b:0.282, a:0.07 },
+
+  // Neutrals
+  border:     { r:0.878, g:0.878, b:0.886 }, // #E0E0E2
+  text:       { r:0.098, g:0.098, b:0.118 }, // #19191E
+  textSub:    { r:0.420, g:0.420, b:0.459 }, // #6B6B75
+  textHint:   { r:0.650, g:0.650, b:0.680 }, // #A6A6AD
+
+  // Nav highlight
+  navActive:  { r:0.698, g:0.067, b:0.067 },
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+function hex(color) { return color; } // already RGB objects
+
+function frame(name, w, h) {
+  const f = figma.createFrame();
+  f.name = name;
+  f.resize(w, h);
+  f.fills = [{ type:"SOLID", color: C.bg }];
+  f.clipsContent = true;
+  return f;
+}
+
+function rect(parent, x, y, w, h, color, radius=0, opacity=1) {
+  const r = figma.createRectangle();
+  r.x = x; r.y = y; r.resize(w, h);
+  r.fills = [{ type:"SOLID", color, opacity }];
+  r.cornerRadius = radius;
+  parent.appendChild(r);
+  return r;
+}
+
+function text(parent, content, x, y, size, color, weight="Regular", w=null) {
+  const t = figma.createText();
+  t.x = x; t.y = y;
+  t.characters = String(content);
+  t.fontSize = size;
+  t.fills = [{ type:"SOLID", color }];
+  t.fontName = { family:"Readex Pro", style: weight };
+  if (w) t.resize(w, t.height);
+  parent.appendChild(t);
+  return t;
+}
+
+function line(parent, x, y, w, color) {
+  const l = figma.createLine();
+  l.x = x; l.y = y;
+  l.resize(w, 0);
+  l.strokes = [{ type:"SOLID", color }];
+  l.strokeWeight = 1;
+  parent.appendChild(l);
+  return l;
+}
+
+// SVG icon helper - appends an svg node
+function icon(parent, svgStr, x, y, size=16) {
+  const node = figma.createNodeFromSvg(svgStr);
+  node.x = x; node.y = y;
+  node.resize(size, size);
+  parent.appendChild(node);
+  return node;
+}
+
+// Status pill
+function pill(parent, label, x, y, color) {
+  const bg = figma.createFrame();
+  bg.name = "pill-" + label;
+  bg.x = x; bg.y = y;
+  bg.resize(90, 22);
+  bg.cornerRadius = 11;
+  bg.fills = [{ type:"SOLID", color, opacity:0.14 }];
+  bg.clipsContent = true;
+  const t = figma.createText();
+  t.characters = label;
+  t.fontSize = 11;
+  t.fontName = { family:"Readex Pro", style:"SemiBold" };
+  t.fills = [{ type:"SOLID", color }];
+  t.x = 8; t.y = 4;
+  bg.appendChild(t);
+  parent.appendChild(bg);
+  return bg;
+}
+
+// Card / panel
+function card(parent, x, y, w, h, radius=10, shadow=true) {
+  const f = figma.createFrame();
+  f.x = x; f.y = y;
+  f.resize(w, h);
+  f.cornerRadius = radius;
+  f.fills = [{ type:"SOLID", color: C.card }];
+  f.clipsContent = false;
+  if (shadow) {
+    f.effects = [{
+      type: "DROP_SHADOW",
+      color: { r:0, g:0, b:0, a:0.07 },
+      offset: { x:0, y:2 }, radius:8, spread:0, visible:true, blendMode:"NORMAL"
+    }];
+  }
+  parent.appendChild(f);
+  return f;
+}
+
+// Top nav bar (truck-front inspired - wide horizontal bar)
+function buildTopNav(parent, W, activeModule) {
+  const navH = 56;
+  const nav = figma.createFrame();
+  nav.name = "TopNav";
+  nav.x = 0; nav.y = 0;
+  nav.resize(W, navH);
+  nav.fills = [{ type:"SOLID", color: C.white }];
+  nav.effects = [{
+    type:"DROP_SHADOW",
+    color:{r:0,g:0,b:0,a:0.06},
+    offset:{x:0,y:2}, radius:6, spread:0, visible:true, blendMode:"NORMAL"
+  }];
+  parent.appendChild(nav);
+
+  // Logo placeholder
+  const logoBox = figma.createFrame();
+  logoBox.x = 20; logoBox.y = 10;
+  logoBox.resize(110, 36);
+  logoBox.cornerRadius = 6;
+  logoBox.fills = [{ type:"SOLID", color: C.red, opacity:0.08 }];
+  nav.appendChild(logoBox);
+  text(nav, "TRACKIFY", 30, 18, 14, C.red, "Bold");
+
+  // Nav items
+  const modules = [
+    "Home",
+    "Transactions",
+    "Search",
+    "Delivery",
+    "Reports",
+    "Security"
+  ];
+  const startX = 160;
+  const itemW = 110;
+  modules.forEach((mod, i) => {
+    const isActive = mod === activeModule;
+    const tx = startX + i * itemW;
+    const t = text(nav, mod, tx, 18, 13, isActive ? C.red : C.textSub, isActive ? "SemiBold" : "Regular");
+    if (isActive) {
+      // Underline indicator
+      const ind = figma.createRectangle();
+      ind.x = tx; ind.y = navH - 3;
+      ind.resize(t.width + 4, 3);
+      ind.fills = [{ type:"SOLID", color: C.red }];
+      ind.cornerRadius = 2;
+      nav.appendChild(ind);
+    }
+  });
+
+  // Right side: avatar circle
+  const avCircle = figma.createEllipse();
+  avCircle.x = W - 56; avCircle.y = 12;
+  avCircle.resize(32, 32);
+  avCircle.fills = [{ type:"SOLID", color: C.red, opacity:0.12 }];
+  nav.appendChild(avCircle);
+  text(nav, "R", W - 44, 19, 13, C.red, "Bold");
+
+  return nav;
+}
+
+// Sidebar (left panel for sub-nav within module)
+function buildSidebar(parent, y, H, items, activeItem) {
+  const sb = card(parent, 0, y, 200, H - y, 0, false);
+  sb.fills = [{ type:"SOLID", color: C.white }];
+  sb.effects = [{
+    type:"DROP_SHADOW",
+    color:{r:0,g:0,b:0,a:0.05},
+    offset:{x:2,y:0}, radius:8, spread:0, visible:true, blendMode:"NORMAL"
+  }];
+
+  let iy = 20;
+  items.forEach(item => {
+    const isActive = item === activeItem;
+    if (isActive) {
+      const bg = figma.createRectangle();
+      bg.x = 8; bg.y = iy - 6;
+      bg.resize(184, 32);
+      bg.cornerRadius = 8;
+      bg.fills = [{ type:"SOLID", color: C.red, opacity:0.10 }];
+      sb.appendChild(bg);
+    }
+    text(sb, item, 20, iy, 13, isActive ? C.red : C.textSub, isActive ? "SemiBold" : "Regular");
+    iy += 40;
+  });
+  return sb;
+}
+
+// Table header row
+function tableHeader(parent, x, y, w, cols) {
+  const rowH = 36;
+  const bg = figma.createRectangle();
+  bg.x = x; bg.y = y; bg.resize(w, rowH);
+  bg.fills = [{ type:"SOLID", color: C.bg }];
+  parent.appendChild(bg);
+
+  let cx = x + 12;
+  cols.forEach(col => {
+    text(parent, col.label, cx, y + 10, 11, C.textSub, "SemiBold");
+    cx += col.w;
+  });
+  return rowH;
+}
+
+// Table data row
+function tableRow(parent, x, y, w, cols, data, alt=false) {
+  const rowH = 40;
+  const bg = figma.createRectangle();
+  bg.x = x; bg.y = y; bg.resize(w, rowH);
+  bg.fills = [{ type:"SOLID", color: alt ? C.cardAlt : C.card }];
+  parent.appendChild(bg);
+
+  line(parent, x, y + rowH - 1, w, C.border);
+
+  let cx = x + 12;
+  cols.forEach((col, ci) => {
+    const val = data[ci] || "";
+    // Status column special render
+    if (col.label === "Status" && typeof val === "object" && val.label) {
+      pill(parent, val.label, cx, y + 9, val.color);
+    } else {
+      text(parent, String(val), cx, y + 12, 12, C.text, "Regular");
+    }
+    cx += col.w;
+  });
+  return rowH;
+}
+
+// Floating modal overlay
+function floatingModal(parent, x, y, w, h, title) {
+  // Overlay
+  const overlay = figma.createRectangle();
+  overlay.x = 0; overlay.y = 56;
+  overlay.resize(parent.width, parent.height - 56);
+  overlay.fills = [{ type:"SOLID", color:{r:0,g:0,b:0}, opacity:0.25 }];
+  parent.appendChild(overlay);
+
+  const modal = card(parent, x, y, w, h, 14, true);
+  modal.effects = [{
+    type:"DROP_SHADOW",
+    color:{r:0,g:0,b:0,a:0.18},
+    offset:{x:0,y:8}, radius:32, spread:0, visible:true, blendMode:"NORMAL"
+  }];
+
+  // Header bar
+  const header = figma.createRectangle();
+  header.x = 0; header.y = 0; header.resize(w, 48);
+  header.cornerRadius = 14;
+  header.fills = [{ type:"SOLID", color: C.red }];
+  modal.appendChild(header);
+
+  text(modal, title, 20, 14, 14, C.white, "SemiBold");
+
+  // Close X
+  text(modal, "x", w - 32, 14, 14, C.white, "Regular");
+
+  return modal;
+}
+
+// Stat card
+function statCard(parent, x, y, w, h, label, value, sub, accentColor) {
+  const c = card(parent, x, y, w, h, 12);
+  // Left accent strip
+  const strip = figma.createRectangle();
+  strip.x = 0; strip.y = 0; strip.resize(4, h);
+  strip.fills = [{ type:"SOLID", color: accentColor }];
+  strip.cornerRadius = 12;
+  c.appendChild(strip);
+
+  text(c, label, 20, 16, 11, C.textSub, "Medium");
+  text(c, value, 20, 32, 26, C.text, "Bold");
+  if (sub) text(c, sub, 20, 62, 11, C.textSub, "Regular");
+  return c;
+}
+
+// Button
+function btn(parent, x, y, w, h, label, color, textColor) {
+  const b = figma.createFrame();
+  b.x = x; b.y = y; b.resize(w, h);
+  b.cornerRadius = 8;
+  b.fills = [{ type:"SOLID", color }];
+  parent.appendChild(b);
+  const t = text(b, label, 0, 0, 13, textColor, "SemiBold");
+  t.x = Math.round((w - t.width) / 2);
+  t.y = Math.round((h - t.height) / 2);
+  return b;
+}
+
+// Input field
+function inputField(parent, x, y, w, placeholder) {
+  const f = figma.createFrame();
+  f.x = x; f.y = y; f.resize(w, 36);
+  f.cornerRadius = 8;
+  f.fills = [{ type:"SOLID", color: C.card }];
+  f.strokes = [{ type:"SOLID", color: C.border }];
+  f.strokeWeight = 1;
+  parent.appendChild(f);
+  text(f, placeholder, 12, 10, 12, C.textHint, "Regular");
+  return f;
+}
+
+// Section label
+function sectionLabel(parent, x, y, label) {
+  text(parent, label.toUpperCase(), x, y, 10, C.textHint, "SemiBold");
+  return 20;
+}
+
+// ============================================================
+// PAGE DIMENSIONS
+// ============================================================
+const PW = 1280;
+const PH = 820;
+const NAV_H = 56;
+const SB_W = 200;
+const CONTENT_X = SB_W + 24;
+const CONTENT_W = PW - SB_W - 48;
+const CONTENT_Y = NAV_H + 24;
+
+// ============================================================
+// PAGE 0: HOME / DASHBOARD
+// ============================================================
+{
+  const pg = frame("Home - Dashboard", PW, PH);
+  pg.x = 0; pg.y = 0;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Home");
+
+  // Greeting
+  text(pg, "Good day, Rancel!", CONTENT_X, CONTENT_Y, 22, C.text, "Bold");
+  text(pg, "Here's what's happening across your fleet today.", CONTENT_X, CONTENT_Y + 30, 13, C.textSub, "Regular");
+
+  // Stat cards row
+  const stats = [
+    { label:"Active Deliveries", val:"24", sub:"+3 from yesterday", color: C.inTransit },
+    { label:"Completed Today",   val:"11", sub:"On-time rate: 91%",  color: C.delivered },
+    { label:"Pending Dispatch",  val:"6",  sub:"Awaiting truck assignment", color: C.pending },
+    { label:"Needs Action",      val:"2",  sub:"Delayed or flagged", color: C.needAction },
+  ];
+  stats.forEach((s, i) => {
+    statCard(pg, CONTENT_X + i * (228 + 12), CONTENT_Y + 70, 228, 90, s.label, s.val, s.sub, s.color);
+  });
+
+  // Recent Transactions table card
+  const tCard = card(pg, CONTENT_X, CONTENT_Y + 182, CONTENT_W, 320, 12);
+  text(tCard, "Recent Transactions", 20, 16, 14, C.text, "SemiBold");
+  btn(tCard, CONTENT_W - 120, 10, 104, 32, "+ Add Transaction", C.red, C.white);
+
+  const cols = [
+    { label:"Plate No.",   w:110 },
+    { label:"Driver",      w:140 },
+    { label:"Client",      w:150 },
+    { label:"Route",       w:160 },
+    { label:"Date",        w:110 },
+    { label:"Status",      w:110 },
+    { label:"Earnings",    w:90  },
+  ];
+  const headerH = tableHeader(tCard, 0, 50, CONTENT_W, cols);
+
+  const rows = [
+    ["ABC-1234", "Juan D. Cruz",    "Robinsons Inc.",  "Trece>Manila",    "May 29",  { label:"In Transit", color:C.inTransit  }, "₱4,500"],
+    ["XYZ-5678", "Pedro Reyes",     "SM Retail Corp",  "Tagaytay>Cavite", "May 29",  { label:"Delivered",  color:C.delivered  }, "₱3,200"],
+    ["DEF-9012", "Maria Santos",    "LBC Express",     "Indang>Pasay",    "May 28",  { label:"Pending",    color:C.pending    }, "₱5,800"],
+    ["GHI-3456", "Carlos Navarro",  "Lazada PH",       "GMA>Pasig",       "May 28",  { label:"Need Action",color:C.needAction }, "₱6,100"],
+    ["JKL-7890", "Rose Villanueva", "Shopee Express",  "Naic>QC",         "May 27",  { label:"Delivered",  color:C.delivered  }, "₱3,750"],
+  ];
+  rows.forEach((r, i) => {
+    tableRow(tCard, 0, 50 + headerH + i * 40, CONTENT_W, cols, r, i % 2 === 1);
+  });
+
+  // Quick summary card (right mini)
+  const sumCard = card(pg, CONTENT_X, CONTENT_Y + 522, CONTENT_W, 110, 12);
+  text(sumCard, "Today's Earnings Summary", 20, 14, 13, C.text, "SemiBold");
+  const summaryItems = [
+    { label:"Total Earnings", val:"₱23,350", color:C.delivered },
+    { label:"No. of Trips",   val:"11",      color:C.inTransit },
+    { label:"Avg per Trip",   val:"₱2,123",  color:C.navy      },
+  ];
+  summaryItems.forEach((s, i) => {
+    text(sumCard, s.label, 20 + i * 310, 40, 11, C.textSub, "Regular");
+    text(sumCard, s.val,   20 + i * 310, 58, 20, s.color, "Bold");
+  });
+}
+
+// ============================================================
+// PAGE 1: TRANSACTION MANAGEMENT
+// ============================================================
+{
+  const pg = frame("Module - Transaction Management", PW, PH);
+  pg.x = 1340; pg.y = 0;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Transactions");
+  buildSidebar(pg, NAV_H, PH, [
+    "All Transactions",
+    "Add Transaction",
+    "Edit Transaction",
+    "Delete Transaction",
+    "Earnings Log",
+    "Delivery Updates",
+  ], "All Transactions");
+
+  // Main content area
+  const cx = CONTENT_X, cy = CONTENT_Y;
+
+  text(pg, "Transaction Management", cx, cy, 20, C.text, "Bold");
+  text(pg, "Record, review, and manage trucking transactions.", cx, cy + 28, 13, C.textSub, "Regular");
+
+  // Filter bar
+  const filterCard = card(pg, cx, cy + 62, CONTENT_W, 52, 10);
+  inputField(filterCard, 12, 10, 200, "Search plate or client...");
+  inputField(filterCard, 224, 10, 130, "From date");
+  inputField(filterCard, 366, 10, 130, "To date");
+  btn(filterCard, 508, 10, 80, 32, "Filter", C.navy, C.white);
+  btn(filterCard, CONTENT_W - 140, 10, 128, 32, "+ Add Transaction", C.red, C.white);
+
+  // Table
+  const tCard = card(pg, cx, cy + 126, CONTENT_W, 420, 12);
+  const cols = [
+    { label:"Plate No.",  w:100 },
+    { label:"Driver",     w:130 },
+    { label:"Client",     w:140 },
+    { label:"Route",      w:150 },
+    { label:"Date",       w:100 },
+    { label:"Status",     w:110 },
+    { label:"Earnings",   w:90  },
+    { label:"Actions",    w:80  },
+  ];
+  tableHeader(tCard, 0, 0, CONTENT_W, cols);
+
+  const rows = [
+    ["ABC-1234","Juan Cruz","Robinsons","Trece>Manila","May 29",{ label:"In Transit",color:C.inTransit  },"₱4,500","Edit"],
+    ["XYZ-5678","Pedro Reyes","SM Retail","Tagaytay>Cavite","May 29",{ label:"Delivered", color:C.delivered  },"₱3,200","Edit"],
+    ["DEF-9012","Maria Santos","LBC Express","Indang>Pasay","May 28",{ label:"Pending",   color:C.pending    },"₱5,800","Edit"],
+    ["GHI-3456","Carlos N.","Lazada PH","GMA>Pasig","May 28",{ label:"Need Action",color:C.needAction },"₱6,100","Edit"],
+    ["JKL-7890","Rose V.","Shopee","Naic>QC","May 27",{ label:"Delivered", color:C.delivered  },"₱3,750","Edit"],
+    ["MNO-2345","Ben Flores","FedEx PH","Indang>BGC","May 27",{ label:"Cancelled",  color:C.cancelled  },"-","Edit"],
+    ["PQR-6789","Ana Lim","GrabExpress","Naic>Makati","May 26",{ label:"Delivered", color:C.delivered  },"₱2,900","Edit"],
+  ];
+  rows.forEach((r, i) => {
+    tableRow(tCard, 0, 36 + i * 40, CONTENT_W, cols, r, i%2===1);
+  });
+
+  // Pagination
+  text(tCard, "Showing 1-7 of 42 transactions", 12, 330, 11, C.textSub, "Regular");
+  btn(tCard, CONTENT_W - 160, 320, 60, 28, "< Prev", C.bg, C.textSub);
+  btn(tCard, CONTENT_W - 90, 320, 60, 28, "Next >", C.red, C.white);
+
+  // FLOATING: Add Transaction Modal
+  const modal = floatingModal(pg, 260, 80, 680, 580, "Add New Transaction");
+  const mFields = [
+    ["Truck Plate Number","Driver Name","Client Name"],
+    ["Origin","Destination","Delivery Date"],
+    ["Goods Description","Transaction Amount",""],
+  ];
+  mFields.forEach((row, ri) => {
+    row.forEach((f, fi) => {
+      if (!f) return;
+      const mx = 20 + fi * 218, my = 60 + ri * 76;
+      text(modal, f, mx, my, 11, C.textSub, "Medium");
+      inputField(modal, mx, my + 16, 200, f + "...");
+    });
+  });
+  text(modal, "Delivery Status", 20, 288, 11, C.textSub, "Medium");
+  inputField(modal, 20, 304, 200, "Select status");
+  text(modal, "Delivery Remarks", 20, 356, 11, C.textSub, "Medium");
+  const remarksBox = figma.createFrame();
+  remarksBox.x = 20; remarksBox.y = 372; remarksBox.resize(640, 72);
+  remarksBox.cornerRadius = 8;
+  remarksBox.fills = [{ type:"SOLID", color: C.card }];
+  remarksBox.strokes = [{ type:"SOLID", color: C.border }];
+  remarksBox.strokeWeight = 1;
+  modal.appendChild(remarksBox);
+  text(remarksBox, "Enter any delivery remarks...", 12, 10, 12, C.textHint, "Regular");
+
+  btn(modal, modal.width - 240, modal.height - 60, 100, 36, "Cancel", C.bg, C.textSub);
+  btn(modal, modal.width - 130, modal.height - 60, 110, 36, "Save Transaction", C.red, C.white);
+}
+
+// ============================================================
+// PAGE 2: SEARCH & RETRIEVAL
+// ============================================================
+{
+  const pg = frame("Module - Search & Retrieval", PW, PH);
+  pg.x = 2680; pg.y = 0;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Search");
+  buildSidebar(pg, NAV_H, PH, [
+    "Quick Search",
+    "Search by Plate",
+    "Search by Date",
+    "Date Range Filter",
+    "Transaction History",
+  ], "Quick Search");
+
+  const cx = CONTENT_X, cy = CONTENT_Y;
+  text(pg, "Search & Retrieval", cx, cy, 20, C.text, "Bold");
+  text(pg, "Find transactions by plate number, date, or date range.", cx, cy+28, 13, C.textSub, "Regular");
+
+  // Big search box hero
+  const heroCard = card(pg, cx, cy+62, CONTENT_W, 100, 14);
+  heroCard.fills = [{ type:"SOLID", color: C.red, opacity:0.05 }];
+  text(heroCard, "What are you looking for?", 20, 14, 13, C.textSub, "Medium");
+  const bigSearch = figma.createFrame();
+  bigSearch.x = 20; bigSearch.y = 38; bigSearch.resize(CONTENT_W-140, 44);
+  bigSearch.cornerRadius = 10;
+  bigSearch.fills = [{ type:"SOLID", color: C.white }];
+  bigSearch.strokes = [{ type:"SOLID", color: C.border }];
+  bigSearch.strokeWeight = 1.5;
+  heroCard.appendChild(bigSearch);
+  text(bigSearch, "Search plate number, driver, client, or route...", 16, 14, 13, C.textHint, "Regular");
+  btn(heroCard, CONTENT_W - 110, 38, 88, 44, "Search", C.red, C.white);
+
+  // Filter tabs
+  const tabs = ["All", "By Plate", "By Date", "Date Range", "History"];
+  tabs.forEach((t, i) => {
+    const isAct = i === 0;
+    const b = figma.createFrame();
+    b.x = cx + i*110; b.y = cy+180;
+    b.resize(104, 32); b.cornerRadius = 8;
+    b.fills = [{ type:"SOLID", color: isAct ? C.red : C.card }];
+    pg.appendChild(b);
+    text(b, t, 16, 8, 12, isAct ? C.white : C.textSub, isAct ? "SemiBold" : "Regular");
+  });
+
+  // Results table
+  const tCard = card(pg, cx, cy+224, CONTENT_W, 380, 12);
+  text(tCard, "Search Results", 16, 14, 13, C.text, "SemiBold");
+  text(tCard, "42 records found", CONTENT_W-140, 16, 12, C.textSub, "Regular");
+
+  const cols = [
+    { label:"Plate No.", w:110 },
+    { label:"Driver",    w:140 },
+    { label:"Client",    w:140 },
+    { label:"Route",     w:150 },
+    { label:"Date",      w:110 },
+    { label:"Status",    w:110 },
+    { label:"Earnings",  w:90  },
+  ];
+  tableHeader(tCard, 0, 42, CONTENT_W, cols);
+
+  const rows = [
+    ["ABC-1234","Juan Cruz","Robinsons","Trece>Manila","May 29",{ label:"In Transit",color:C.inTransit},"₱4,500"],
+    ["ABC-1234","Juan Cruz","Robinsons","Trece>Manila","May 22",{ label:"Delivered",color:C.delivered},"₱4,200"],
+    ["ABC-1234","Pedro Reyes","LBC","Indang>Pasay","May 15",{ label:"Delivered",color:C.delivered},"₱5,100"],
+    ["ABC-1234","Maria S.","SM Retail","GMA>Pasig","May 08",{ label:"Cancelled",color:C.cancelled},"-"],
+    ["ABC-1234","Juan Cruz","Robinsons","Trece>Manila","May 01",{ label:"Delivered",color:C.delivered},"₱4,000"],
+  ];
+  rows.forEach((r,i) => tableRow(tCard, 0, 78+i*40, CONTENT_W, cols, r, i%2===1));
+
+  // FLOATING: Transaction History Detail
+  const modal = floatingModal(pg, 320, 100, 600, 520, "Transaction History - ABC-1234");
+  text(modal, "Plate Number", 20, 58, 11, C.textSub, "Medium");
+  text(modal, "ABC-1234", 20, 74, 16, C.text, "Bold");
+  text(modal, "Assigned Driver", 220, 58, 11, C.textSub, "Medium");
+  text(modal, "Juan D. Cruz", 220, 74, 16, C.text, "Bold");
+  text(modal, "Total Trips: 18", 420, 58, 11, C.textSub, "Medium");
+  text(modal, "18", 420, 74, 16, C.inTransit, "Bold");
+
+  line(modal, 20, 102, 560, C.border);
+
+  text(modal, "Trip History", 20, 114, 13, C.text, "SemiBold");
+  const hcols = [
+    { label:"Date", w:110 }, { label:"Route", w:160 }, { label:"Client", w:130 }, { label:"Status", w:100 }, { label:"Earnings", w:80 }
+  ];
+  tableHeader(modal, 0, 134, 600, hcols);
+  const hrows = [
+    ["May 29","Trece>Manila","Robinsons",{label:"In Transit",color:C.inTransit},"₱4,500"],
+    ["May 22","Trece>Manila","Robinsons",{label:"Delivered",color:C.delivered},"₱4,200"],
+    ["May 15","Indang>Pasay","LBC",{label:"Delivered",color:C.delivered},"₱5,100"],
+    ["May 08","GMA>Pasig","SM Retail",{label:"Cancelled",color:C.cancelled},"-"],
+    ["May 01","Trece>Manila","Robinsons",{label:"Delivered",color:C.delivered},"₱4,000"],
+  ];
+  hrows.forEach((r,i) => tableRow(modal, 0, 170+i*40, 600, hcols, r, i%2===1));
+  btn(modal, modal.width-120, modal.height-52, 100, 36, "Close", C.red, C.white);
+}
+
+// ============================================================
+// PAGE 3: DELIVERY MONITORING
+// ============================================================
+{
+  const pg = frame("Module - Delivery Monitoring", PW, PH);
+  pg.x = 4020; pg.y = 0;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Delivery");
+  buildSidebar(pg, NAV_H, PH, [
+    "Active Deliveries",
+    "Location Updates",
+    "Checkpoint Log",
+    "Status Tracking",
+    "Arrival Records",
+    "Remarks & Incidents",
+  ], "Active Deliveries");
+
+  const cx = CONTENT_X, cy = CONTENT_Y;
+  text(pg, "Delivery Monitoring", cx, cy, 20, C.text, "Bold");
+  text(pg, "Track delivery progress, checkpoints, and status updates in real-time.", cx, cy+28, 13, C.textSub, "Regular");
+
+  // Status overview strip
+  const statusItems = [
+    { label:"In Transit", count:24, color:C.inTransit },
+    { label:"Delivered",  count:11, color:C.delivered },
+    { label:"Pending",    count:6,  color:C.pending   },
+    { label:"Need Action",count:2,  color:C.needAction},
+    { label:"Cancelled",  count:1,  color:C.cancelled },
+  ];
+  statusItems.forEach((s, i) => {
+    const sc = card(pg, cx + i*188, cy+66, 180, 72, 10);
+    const strip = figma.createRectangle();
+    strip.x=0;strip.y=0;strip.resize(4,72);strip.fills=[{type:"SOLID",color:s.color}];strip.cornerRadius=10;
+    sc.appendChild(strip);
+    text(sc, s.label, 16, 14, 11, C.textSub, "Medium");
+    text(sc, String(s.count), 16, 32, 24, s.color, "Bold");
+  });
+
+  // Delivery cards list
+  const deliveries = [
+    { plate:"ABC-1234", driver:"Juan D. Cruz",    client:"Robinsons Inc.",  route:"Trece > Manila",     status:"In Transit",  lastCP:"SLEX Exit",    pct:65, color:C.inTransit },
+    { plate:"XYZ-5678", driver:"Pedro Reyes",     client:"SM Retail Corp",  route:"Tagaytay > Cavite",  status:"Delivered",   lastCP:"Delivered",    pct:100,color:C.delivered  },
+    { plate:"GHI-3456", driver:"Carlos Navarro",  client:"Lazada PH",       route:"GMA > Pasig",        status:"Need Action", lastCP:"Delayed 2hrs", pct:30, color:C.needAction  },
+  ];
+
+  deliveries.forEach((d, i) => {
+    const dc = card(pg, cx, cy + 156 + i * 118, CONTENT_W, 108, 12);
+
+    // Left accent
+    const strip = figma.createRectangle();
+    strip.x=0;strip.y=0;strip.resize(4,108);strip.fills=[{type:"SOLID",color:d.color}];strip.cornerRadius=12;
+    dc.appendChild(strip);
+
+    text(dc, d.plate, 20, 14, 14, C.text, "Bold");
+    text(dc, d.driver + " | " + d.client, 20, 34, 12, C.textSub, "Regular");
+    text(dc, "Route: " + d.route, 20, 52, 12, C.textSub, "Regular");
+    text(dc, "Last checkpoint: " + d.lastCP, 20, 70, 11, C.textHint, "Regular");
+
+    // Progress bar
+    const barBg = figma.createRectangle();
+    barBg.x = 20; barBg.y = 88; barBg.resize(360, 6); barBg.cornerRadius=3;
+    barBg.fills=[{type:"SOLID",color:C.border}];
+    dc.appendChild(barBg);
+    const barFill = figma.createRectangle();
+    barFill.x=20;barFill.y=88;barFill.resize(Math.round(360*d.pct/100),6);barFill.cornerRadius=3;
+    barFill.fills=[{type:"SOLID",color:d.color}];
+    dc.appendChild(barFill);
+    text(dc, d.pct+"%", 388, 82, 11, d.color, "SemiBold");
+
+    pill(dc, d.status, CONTENT_W-160, 14, d.color);
+    btn(dc, CONTENT_W-160, 50, 140, 30, "View Details", C.bg, C.textSub);
+  });
+
+  // FLOATING: Delivery Detail & Update Modal
+  const modal = floatingModal(pg, 240, 80, 740, 600, "Delivery Detail - ABC-1234 | Juan D. Cruz");
+
+  const detailItems = [
+    ["Plate Number","ABC-1234"],["Driver","Juan D. Cruz"],
+    ["Client","Robinsons Inc."],["Route","Trece Martires > Manila"],
+    ["Delivery Date","May 29, 2026"],["Status","In Transit"],
+  ];
+  detailItems.forEach(([lbl, val], i) => {
+    const col = i%2===0?20:380, row = Math.floor(i/2);
+    text(modal, lbl, col, 60+row*52, 10, C.textSub, "Medium");
+    text(modal, val, col, 76+row*52, 13, C.text, "SemiBold");
+  });
+
+  line(modal, 20, 216, 700, C.border);
+  text(modal, "Checkpoint Log", 20, 228, 13, C.text, "SemiBold");
+
+  const checkpoints = [
+    { time:"07:30 AM", location:"Trece Martires Dispatch",  note:"Departed on schedule" },
+    { time:"08:45 AM", location:"Indang Junction",          note:"Checkpoint cleared" },
+    { time:"09:30 AM", location:"SLEX Entry",               note:"On track" },
+    { time:"10:15 AM", location:"SLEX Exit Muntinlupa",     note:"Minor delay - traffic" },
+    { time:"-",        location:"Destination (Pending)",    note:"ETA ~11:00 AM" },
+  ];
+  checkpoints.forEach((cp, i) => {
+    // Timeline dot
+    const dot = figma.createEllipse();
+    dot.x=22; dot.y=256+i*52;
+    dot.resize(10,10);
+    dot.fills=[{type:"SOLID",color:i===checkpoints.length-1?C.textHint:C.red}];
+    modal.appendChild(dot);
+    // Line connector
+    if (i < checkpoints.length-1) {
+      const conn = figma.createLine();
+      conn.x=26;conn.y=266+i*52;conn.resize(0,42);
+      conn.strokes=[{type:"SOLID",color:C.border}];conn.strokeWeight=1.5;
+      modal.appendChild(conn);
+    }
+    text(modal, cp.time, 42, 253+i*52, 11, C.textSub, "Medium");
+    text(modal, cp.location, 120, 253+i*52, 12, C.text, "SemiBold");
+    text(modal, cp.note, 120, 268+i*52, 11, C.textHint, "Regular");
+  });
+
+  line(modal, 20, 524, 700, C.border);
+  text(modal, "Update Delivery Status", 20, 536, 11, C.textSub, "Medium");
+  inputField(modal, 20, 552, 200, "Select new status");
+  inputField(modal, 232, 552, 280, "Remarks / Notes");
+  btn(modal, 524, 552, 88, 36, "Update", C.red, C.white);
+  btn(modal, modal.width-70, modal.height-52, 50, 32, "Close", C.bg, C.textSub);
+}
+
+// ============================================================
+// PAGE 4: REPORTS
+// ============================================================
+{
+  const pg = frame("Module - Reports", PW, PH);
+  pg.x = 5360; pg.y = 0;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Reports");
+  buildSidebar(pg, NAV_H, PH, [
+    "Delivery Activity",
+    "Daily Earnings",
+    "Monthly Summary",
+    "Print / Export",
+  ], "Monthly Summary");
+
+  const cx = CONTENT_X, cy = CONTENT_Y;
+  text(pg, "Reports", cx, cy, 20, C.text, "Bold");
+  text(pg, "Generate delivery activity and earnings reports.", cx, cy+28, 13, C.textSub, "Regular");
+
+  // Report filter bar
+  const filterCard = card(pg, cx, cy+62, CONTENT_W, 52, 10);
+  text(filterCard, "Report Type", 12, 8, 10, C.textSub, "Medium");
+  inputField(filterCard, 12, 20, 160, "Monthly Summary");
+  text(filterCard, "Month", 184, 8, 10, C.textSub, "Medium");
+  inputField(filterCard, 184, 20, 120, "May 2026");
+  text(filterCard, "Truck / All", 316, 8, 10, C.textSub, "Medium");
+  inputField(filterCard, 316, 20, 120, "All Trucks");
+  btn(filterCard, 448, 14, 80, 32, "Generate", C.red, C.white);
+  btn(filterCard, CONTENT_W-130, 14, 118, 32, "Print / Export", C.navy, C.white);
+
+  // KPI row
+  const kpis = [
+    { label:"Total Earnings",  val:"₱184,200", color: C.delivered },
+    { label:"Total Trips",     val:"62",        color: C.inTransit },
+    { label:"Avg per Trip",    val:"₱2,971",    color: C.navy      },
+    { label:"On-Time Rate",    val:"89%",       color: C.pending   },
+  ];
+  kpis.forEach((k,i) => statCard(pg, cx + i*(228+12), cy+126, 228, 80, k.label, k.val, null, k.color));
+
+  // Monthly earnings table (Excel-like)
+  const tableCard = card(pg, cx, cy+220, CONTENT_W, 380, 12);
+  text(tableCard, "Monthly Earnings Summary - May 2026", 16, 14, 13, C.text, "SemiBold");
+
+  // Column freeze effect - week/day column darker
+  const freezeCol = figma.createRectangle();
+  freezeCol.x=0;freezeCol.y=44;freezeCol.resize(100,380-44);
+  freezeCol.fills=[{type:"SOLID",color:C.cardAlt}];
+  tableCard.appendChild(freezeCol);
+
+  const tcols = [
+    { label:"Date",     w:100 },
+    { label:"Trips",    w:70  },
+    { label:"Earnings", w:110 },
+    { label:"On-Time",  w:80  },
+    { label:"Delayed",  w:80  },
+    { label:"Cancelled",w:90  },
+    { label:"Top Truck",w:120 },
+    { label:"Notes",    w:130 },
+  ];
+  tableHeader(tableCard, 0, 44, CONTENT_W, tcols);
+
+  const weekData = [
+    ["May 26 (Mon)","3","₱9,500","3","0","0","ABC-1234","-"],
+    ["May 27 (Tue)","4","₱11,200","3","1","0","XYZ-5678","1 delay SLEX"],
+    ["May 28 (Wed)","5","₱14,800","4","1","0","DEF-9012","-"],
+    ["May 29 (Thu)","6","₱18,300","5","0","1","ABC-1234","1 cancelled"],
+    ["- Week Total-","18","₱53,800","15","2","1","-","-"],
+  ];
+  weekData.forEach((r,i) => {
+    const isTotal = r[0].includes("Total");
+    const rowH = 40;
+    const bg = figma.createRectangle();
+    bg.x=0;bg.y=80+i*rowH;bg.resize(CONTENT_W,rowH);
+    bg.fills=[{type:"SOLID",color:isTotal?C.red:i%2===0?C.card:C.cardAlt,opacity:isTotal?0.1:1}];
+    tableCard.appendChild(bg);
+    if(isTotal){
+      const totalLine = figma.createRectangle();
+      totalLine.x=0;totalLine.y=80+i*rowH;totalLine.resize(CONTENT_W,1);
+      totalLine.fills=[{type:"SOLID",color:C.red,opacity:0.3}];
+      tableCard.appendChild(totalLine);
+    }
+    let rx=12;
+    tcols.forEach((col,ci)=>{
+      const val=r[ci]||"";
+      text(tableCard,String(val),rx,86+i*rowH,12,isTotal?C.red:ci===0?C.textSub:C.text,isTotal?"SemiBold":"Regular");
+      rx+=col.w;
+    });
+    line(tableCard,0,80+(i+1)*rowH-1,CONTENT_W,C.border);
+  });
+
+  // Bar chart area (simplified)
+  const chartCard = card(pg, cx, cy+614, CONTENT_W, 100, 12);
+  text(chartCard, "Daily Earnings - May 26-29", 16, 10, 12, C.text, "SemiBold");
+  const barData = [9500,11200,14800,18300];
+  const maxVal = 20000;
+  barData.forEach((v,i) => {
+    const barH = Math.round((v/maxVal)*60);
+    const bx=cx+i*200-cx;
+    const b=figma.createRectangle();
+    b.x=60+i*180;b.y=82-barH;b.resize(60,barH);
+    b.fills=[{type:"SOLID",color:C.red,opacity:0.7}];b.cornerRadius=4;
+    chartCard.appendChild(b);
+    text(chartCard,"May "+(26+i),66+i*180,88,10,C.textSub,"Regular");
+    text(chartCard,"₱"+(v/1000).toFixed(1)+"k",58+i*180,68-barH,9,C.red,"SemiBold");
+  });
+}
+
+// ============================================================
+// PAGE 5: SECURITY & ADMINISTRATION
+// ============================================================
+{
+  const pg = frame("Module - Security & Administration", PW, PH);
+  pg.x = 6700; pg.y = 0;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Security");
+  buildSidebar(pg, NAV_H, PH, [
+    "User Management",
+    "Create Account",
+    "Role & Access",
+    "Audit Trail",
+    "Activity Logs",
+    "Login History",
+  ], "User Management");
+
+  const cx = CONTENT_X, cy = CONTENT_Y;
+  text(pg, "Security & Administration", cx, cy, 20, C.text, "Bold");
+  text(pg, "Manage user accounts, roles, and system access. Admin only.", cx, cy+28, 13, C.textSub, "Regular");
+
+  // Role legend
+  const roles = [
+    { name:"Admin",   color:C.red,       desc:"Full access" },
+    { name:"Staff",   color:C.navy,      desc:"Record & update" },
+    { name:"Viewer",  color:C.delivered, desc:"View & report only" },
+  ];
+  roles.forEach((r,i) => {
+    const rc = card(pg, cx + i*310, cy+62, 300, 60, 10);
+    const strip = figma.createRectangle();
+    strip.x=0;strip.y=0;strip.resize(4,60);strip.fills=[{type:"SOLID",color:r.color}];strip.cornerRadius=10;
+    rc.appendChild(strip);
+    text(rc, r.name, 20, 12, 14, r.color, "Bold");
+    text(rc, r.desc, 20, 34, 11, C.textSub, "Regular");
+  });
+
+  // User table
+  const tCard = card(pg, cx, cy+140, CONTENT_W, 320, 12);
+  text(tCard, "All Users", 16, 14, 13, C.text, "SemiBold");
+  btn(tCard, CONTENT_W-160, 8, 148, 32, "+ Create Account", C.red, C.white);
+
+  const ucols = [
+    { label:"Name",       w:160 },
+    { label:"Username",   w:130 },
+    { label:"Role",       w:100 },
+    { label:"Last Login", w:140 },
+    { label:"Status",     w:100 },
+    { label:"Actions",    w:90  },
+  ];
+  tableHeader(tCard, 0, 46, CONTENT_W, ucols);
+
+  const users = [
+    ["Reno C. Rosel",      "reno.rosel",    "Admin",  "May 29, 09:01 AM", {label:"Active",color:C.delivered}, "Edit"],
+    ["Renzell R. Gabarda", "renzell.gab",   "Staff",  "May 29, 08:45 AM", {label:"Active",color:C.delivered}, "Edit"],
+    ["Precious Fernandez", "precious.fern", "Staff",  "May 28, 05:30 PM", {label:"Active",color:C.delivered}, "Edit"],
+    ["Althea Bartolay",    "althea.bar",    "Viewer", "May 27, 02:00 PM", {label:"Active",color:C.delivered}, "Edit"],
+    ["Test Account",       "test.user",     "Viewer", "May 10, 10:00 AM", {label:"Inactive",color:C.cancelled},"Edit"],
+  ];
+
+  const roleColors = { Admin:C.red, Staff:C.navy, Viewer:C.delivered };
+  users.forEach((u, i) => {
+    const rowH = 40;
+    const alt = i%2===1;
+    const bg=figma.createRectangle();bg.x=0;bg.y=82+i*rowH;bg.resize(CONTENT_W,rowH);
+    bg.fills=[{type:"SOLID",color:alt?C.cardAlt:C.card}];
+    tCard.appendChild(bg);
+
+    // Role tint row accent
+    const roleName=u[2];
+    const rtint=figma.createRectangle();
+    rtint.x=0;rtint.y=82+i*rowH;rtint.resize(4,rowH);
+    rtint.fills=[{type:"SOLID",color:roleColors[roleName]||C.textSub}];
+    tCard.appendChild(rtint);
+
+    let rx=12;
+    ucols.forEach((col,ci)=>{
+      const val=u[ci]||"";
+      if(col.label==="Status" && typeof val==="object" && val.label){
+        pill(tCard,val.label,rx,86+i*rowH,val.color);
+      } else if(col.label==="Role"){
+        text(tCard,String(val),rx,90+i*rowH,12,roleColors[val]||C.text,"SemiBold");
+      } else {
+        text(tCard,String(val),rx,90+i*rowH,12,C.text,"Regular");
+      }
+      rx+=col.w;
+    });
+    line(tCard,0,82+(i+1)*rowH-1,CONTENT_W,C.border);
+  });
+
+  // FLOATING: Create Account Modal (Admin only)
+  const modal = floatingModal(pg, 280, 80, 640, 520, "Create New Account - Admin Only");
+
+  // Admin-only badge
+  const adminBadge = figma.createFrame();
+  adminBadge.x=modal.width-160;adminBadge.y=56;adminBadge.resize(140,24);
+  adminBadge.cornerRadius=12;adminBadge.fills=[{type:"SOLID",color:C.red,opacity:0.1}];
+  modal.appendChild(adminBadge);
+  text(modal,"[Admin] Restricted Access",modal.width-156,60,10,C.red,"SemiBold");
+
+  const createFields = [
+    ["Full Name","Username"],
+    ["Email Address","Password"],
+    ["Confirm Password","Role"],
+  ];
+  createFields.forEach((row,ri)=>{
+    row.forEach((f,fi)=>{
+      const mx=20+fi*300, my=60+ri*80;
+      text(modal,f,mx,my,11,C.textSub,"Medium");
+      if(f==="Role"){
+        // Dropdown-style
+        const dd=figma.createFrame();
+        dd.x=mx;dd.y=my+16;dd.resize(280,36);dd.cornerRadius=8;
+        dd.fills=[{type:"SOLID",color:C.card}];
+        dd.strokes=[{type:"SOLID",color:C.border}];dd.strokeWeight=1;
+        modal.appendChild(dd);
+        text(modal,"Select role (Admin / Staff / Viewer)",mx+12,my+26,12,C.textHint,"Regular");
+      } else {
+        inputField(modal,mx,my+16,280,f+"...");
+      }
+    });
+  });
+
+  // Role description previews
+  text(modal,"Role Permissions Preview",20,305,11,C.textSub,"SemiBold");
+  const roleDescs=[
+    {role:"Admin",desc:"Full CRUD, user management, audit access",color:C.red},
+    {role:"Staff",desc:"Add/edit transactions and delivery updates",color:C.navy},
+    {role:"Viewer",desc:"View records and reports only",color:C.delivered},
+  ];
+  roleDescs.forEach((rd,i)=>{
+    const rb=figma.createFrame();
+    rb.x=20+i*193;rb.y=324;rb.resize(185,64);rb.cornerRadius=8;
+    rb.fills=[{type:"SOLID",color:rd.color,opacity:0.06}];
+    rb.strokes=[{type:"SOLID",color:rd.color,opacity:0.2}];rb.strokeWeight=1;
+    modal.appendChild(rb);
+    text(modal,rd.role,32+i*193,332,12,rd.color,"Bold");
+    const dt=figma.createText();
+    dt.characters=rd.desc;dt.x=32+i*193;dt.y=350;
+    dt.fontSize=10;dt.fills=[{type:"SOLID",color:C.textSub}];
+    dt.fontName={family:"Readex Pro",style:"Regular"};
+    dt.resize(164,dt.height);
+    modal.appendChild(dt);
+  });
+
+  btn(modal,20,modal.height-56,160,38,"Send Invite / Create",C.red,C.white);
+  btn(modal,192,modal.height-56,80,38,"Cancel",C.bg,C.textSub);
+
+  // Audit trail sub-section (preview on User Management screen)
+  const auditCard = card(pg, cx, cy+476, CONTENT_W, 180, 12);
+  text(auditCard,"Audit Trail - Recent Activity",16,14,13,C.text,"SemiBold");
+  btn(auditCard, CONTENT_W-120, 8, 108, 28, "View Full Log", C.bg, C.textSub);
+
+  const auditCols=[{label:"Timestamp",w:160},{label:"User",w:140},{label:"Action",w:200},{label:"Module",w:130},{label:"IP Address",w:130}];
+  tableHeader(auditCard,0,42,CONTENT_W,auditCols);
+
+  const auditRows=[
+    ["May 29, 09:15 AM","reno.rosel","Deleted transaction TXN-0092","Transaction Mgmt","192.168.1.10"],
+    ["May 29, 08:50 AM","renzell.gab","Updated delivery status ABC-1234","Delivery Monitor","192.168.1.12"],
+    ["May 29, 08:31 AM","precious.fern","Added transaction TXN-0093","Transaction Mgmt","192.168.1.15"],
+    ["May 29, 08:01 AM","reno.rosel","Created user account test.user","Security & Admin","192.168.1.10"],
+  ];
+  auditRows.forEach((r,i)=>tableRow(auditCard,0,78+i*36,CONTENT_W,auditCols,r,i%2===1));
+}
+
+// ============================================================
+// PAGE 5-B: SECURITY - ROLE & ACCESS CONTROL
+// ============================================================
+{
+  const pg = frame("Security - Role & Access Control", PW, PH);
+  pg.x = 6700; pg.y = 900;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Security");
+  buildSidebar(pg, NAV_H, PH, [
+    "User Management",
+    "Create Account",
+    "Role & Access",
+    "Audit Trail",
+    "Activity Logs",
+    "Login History",
+  ], "Role & Access");
+
+  const cx = CONTENT_X, cy = CONTENT_Y;
+  const roleColors = { Admin:C.red, Staff:C.navy, Viewer:C.delivered };
+
+  text(pg, "Role & Access Control", cx, cy, 20, C.text, "Bold");
+  text(pg, "Define what each role can see and do within the system.", cx, cy+28, 13, C.textSub, "Regular");
+
+  // ---- Role Cards Row ----
+  const roleDefs = [
+    {
+      name:"Admin", color:C.red,
+      perms:[
+        "Full access to all modules",
+        "Create, edit, delete users",
+        "Set and change user roles",
+        "View audit trails & activity logs",
+        "Generate and export all reports",
+        "Delete any transaction record",
+      ]
+    },
+    {
+      name:"Staff", color:C.navy,
+      perms:[
+        "Add and edit transactions",
+        "Update delivery monitoring records",
+        "Search and retrieve transaction data",
+        "View delivery reports",
+        "Cannot manage users or roles",
+        "Cannot delete transaction records",
+      ]
+    },
+    {
+      name:"Viewer", color:C.delivered,
+      perms:[
+        "View all transaction records",
+        "View delivery monitoring status",
+        "Generate and view reports",
+        "Search and filter transactions",
+        "Cannot add or edit any records",
+        "Cannot access Security module",
+      ]
+    },
+  ];
+
+  roleDefs.forEach((rd, i) => {
+    const rc = card(pg, cx + i*322, cy+66, 310, 260, 12);
+
+    // Header band
+    const hband = figma.createRectangle();
+    hband.x=0;hband.y=0;hband.resize(310,44);hband.cornerRadius=12;
+    hband.fills=[{type:"SOLID",color:rd.color}];
+    rc.appendChild(hband);
+    text(rc, rd.name, 20, 13, 15, C.white, "Bold");
+    text(rc, "Role", 310-50, 16, 10, C.white, "Regular");
+
+    // Permission list
+    rd.perms.forEach((perm, pi) => {
+      // Checkmark dot
+      const dot = figma.createEllipse();
+      dot.x=16;dot.y=54+pi*32;dot.resize(8,8);
+      dot.fills=[{type:"SOLID",color:rd.color,opacity:0.7}];
+      rc.appendChild(dot);
+      text(rc, perm, 32, 52+pi*32, 11, C.text, "Regular");
+    });
+  });
+
+  // ---- Permission Matrix Table ----
+  const matCard = card(pg, cx, cy+346, CONTENT_W, 300, 12);
+  text(matCard, "Permission Matrix", 16, 14, 13, C.text, "SemiBold");
+  text(matCard, "Overview of capabilities per role", 16, 32, 11, C.textSub, "Regular");
+
+  // Table header
+  const matCols = [
+    { label:"Permission / Action",        w:290 },
+    { label:"Admin",                       w:100 },
+    { label:"Staff",                       w:100 },
+    { label:"Viewer",                      w:100 },
+  ];
+  tableHeader(matCard, 0, 52, CONTENT_W, matCols);
+
+  const matRows = [
+    ["View transaction records",           "Y","Y","Y"],
+    ["Add new transactions",               "Y","Y","N"],
+    ["Edit existing transactions",         "Y","Y","N"],
+    ["Delete transactions",                "Y","N","N"],
+    ["Update delivery monitoring",         "Y","Y","N"],
+    ["Generate & export reports",          "Y","Y","Y"],
+    ["Manage users (create / edit)",       "Y","N","N"],
+    ["Assign or change user roles",        "Y","N","N"],
+    ["View audit trail & activity logs",   "Y","N","N"],
+  ];
+  matRows.forEach((r, i) => {
+    const rowH = 34;
+    const alt = i%2===1;
+    const bg=figma.createRectangle();
+    bg.x=0;bg.y=88+i*rowH;bg.resize(CONTENT_W,rowH);
+    bg.fills=[{type:"SOLID",color:alt?C.cardAlt:C.card}];
+    matCard.appendChild(bg);
+    line(matCard,0,88+(i+1)*rowH-1,CONTENT_W,C.border);
+
+    text(matCard, r[0], 12, 96+i*rowH, 12, C.text, "Regular");
+
+    // Tick/cross cells with color
+    [r[1],r[2],r[3]].forEach((v, ci) => {
+      const cellX = 290 + ci*100 + 38;
+      const isCheck = v === "Y";
+      const cellColor = isCheck
+        ? [C.red, C.navy, C.delivered][ci]
+        : C.textHint;
+      text(matCard, v, cellX, 96+i*rowH, 13, cellColor, "Bold");
+    });
+  });
+
+  // FLOATING: Edit Role modal (partial - right-anchored panel)
+  // Overlay
+  const overlay = figma.createRectangle();
+  overlay.x=0;overlay.y=NAV_H;overlay.resize(PW, PH-NAV_H);
+  overlay.fills=[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0.20}];
+  pg.appendChild(overlay);
+
+  const panel = card(pg, PW-400, NAV_H, 400, PH-NAV_H, 0, true);
+  panel.effects=[{type:"DROP_SHADOW",color:{r:0,g:0,b:0,a:0.18},offset:{x:-4,y:0},radius:24,spread:0,visible:true,blendMode:"NORMAL"}];
+
+  // Panel header
+  const ph = figma.createRectangle();
+  ph.x=0;ph.y=0;ph.resize(400,52);
+  ph.fills=[{type:"SOLID",color:C.red}];
+  panel.appendChild(ph);
+  text(panel,"Edit Role - renzell.gab",16,16,13,C.white,"SemiBold");
+  text(panel,"x",370,18,14,C.white,"Regular");
+
+  text(panel,"Current Role",16,64,10,C.textSub,"Medium");
+  // Current role pill
+  const crPill=figma.createFrame();
+  crPill.x=16;crPill.y=80;crPill.resize(80,26);crPill.cornerRadius=13;
+  crPill.fills=[{type:"SOLID",color:C.navy,opacity:0.12}];
+  panel.appendChild(crPill);
+  text(panel,"Staff",24,87,12,C.navy,"SemiBold");
+
+  text(panel,"Assign New Role",16,124,10,C.textSub,"Medium");
+
+  const roleOptions=[
+    {name:"Admin",color:C.red,desc:"Full system access"},
+    {name:"Staff",color:C.navy,desc:"Record & update"},
+    {name:"Viewer",color:C.delivered,desc:"View & report only"},
+  ];
+  roleOptions.forEach((ro,i)=>{
+    const isSelected = i===1; // Staff currently selected
+    const rb=figma.createFrame();
+    rb.x=16;rb.y=144+i*70;rb.resize(368,60);rb.cornerRadius=10;
+    rb.fills=[{type:"SOLID",color:isSelected?ro.color:C.bg,opacity:isSelected?0.08:1}];
+    rb.strokes=[{type:"SOLID",color:isSelected?ro.color:C.border,opacity:isSelected?1:1}];
+    rb.strokeWeight=isSelected?2:1;
+    panel.appendChild(rb);
+    // Radio dot
+    const radio=figma.createEllipse();
+    radio.x=14;radio.y=20;radio.resize(16,16);
+    radio.strokes=[{type:"SOLID",color:isSelected?ro.color:C.border}];radio.strokeWeight=2;
+    radio.fills=[{type:"SOLID",color:isSelected?ro.color:C.white}];
+    rb.appendChild(radio);
+    if(isSelected){
+      const innerDot=figma.createEllipse();
+      innerDot.x=18;innerDot.y=24;innerDot.resize(8,8);
+      innerDot.fills=[{type:"SOLID",color:C.white}];
+      rb.appendChild(innerDot);
+    }
+    text(panel,ro.name,52,152+i*70,13,ro.color,"Bold");
+    text(panel,ro.desc,52,170+i*70,11,C.textSub,"Regular");
+  });
+
+  line(panel,16,364,368,C.border);
+  text(panel,"This action will be recorded in the audit trail.",16,376,10,C.textHint,"Regular");
+
+  btn(panel,16,PH-NAV_H-64,176,40,"Save Changes",C.red,C.white);
+  btn(panel,204,PH-NAV_H-64,90,40,"Cancel",C.bg,C.textSub);
+}
+
+// ============================================================
+// PAGE 5-C: SECURITY - AUDIT TRAIL (Full)
+// ============================================================
+{
+  const pg = frame("Security - Audit Trail", PW, PH);
+  pg.x = 6700; pg.y = 1800;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Security");
+  buildSidebar(pg, NAV_H, PH, [
+    "User Management",
+    "Create Account",
+    "Role & Access",
+    "Audit Trail",
+    "Activity Logs",
+    "Login History",
+  ], "Audit Trail");
+
+  const cx = CONTENT_X, cy = CONTENT_Y;
+
+  text(pg, "Audit Trail", cx, cy, 20, C.text, "Bold");
+  text(pg, "Complete record of all create, update, and delete actions across the system.", cx, cy+28, 13, C.textSub, "Regular");
+
+  // Stat strip
+  const auditStats=[
+    {label:"Total Actions Today", val:"38", color:C.inTransit},
+    {label:"Deletions",           val:"3",  color:C.cancelled},
+    {label:"Edits",               val:"17", color:C.pending  },
+    {label:"New Records",         val:"18", color:C.delivered},
+  ];
+  auditStats.forEach((s,i)=>statCard(pg, cx+i*234, cy+62, 222, 72, s.label, s.val, null, s.color));
+
+  // Filter bar
+  const fb = card(pg, cx, cy+150, CONTENT_W, 52, 10);
+  inputField(fb, 12, 10, 180, "Search user or action...");
+  inputField(fb, 204, 10, 130, "Module");
+  inputField(fb, 346, 10, 130, "Action type");
+  inputField(fb, 488, 10, 120, "Date");
+  btn(fb, 620, 10, 72, 32, "Filter", C.navy, C.white);
+  btn(fb, CONTENT_W-120, 10, 108, 32, "Export CSV", C.bg, C.textSub);
+
+  // Full audit table
+  const tCard = card(pg, cx, cy+214, CONTENT_W, 480, 12);
+
+  const aCols=[
+    {label:"Timestamp",    w:160},
+    {label:"User",         w:130},
+    {label:"Role",         w:80 },
+    {label:"Action Type",  w:110},
+    {label:"Description",  w:230},
+    {label:"Module",       w:120},
+    {label:"IP Address",   w:110},
+  ];
+  tableHeader(tCard, 0, 0, CONTENT_W, aCols);
+
+  const actionColors = {
+    "CREATE": C.delivered,
+    "UPDATE": C.inTransit,
+    "DELETE": C.cancelled,
+    "LOGIN":  C.pending,
+    "LOGOUT": C.textSub,
+  };
+
+  const aRows=[
+    ["May 29, 09:15 AM","reno.rosel",   "Admin",  "DELETE","Deleted transaction TXN-0092",           "Transaction Mgmt", "192.168.1.10"],
+    ["May 29, 09:02 AM","reno.rosel",   "Admin",  "CREATE","Created user account: test.user",         "Security & Admin", "192.168.1.10"],
+    ["May 29, 08:50 AM","renzell.gab",  "Staff",  "UPDATE","Updated delivery status ABC-1234 > Delivered","Delivery Monitor","192.168.1.12"],
+    ["May 29, 08:31 AM","precious.fern","Staff",  "CREATE","Added transaction TXN-0093 - Lazada PH", "Transaction Mgmt", "192.168.1.15"],
+    ["May 29, 08:20 AM","althea.bar",   "Viewer", "LOGIN", "User logged in",                          "Security & Admin", "192.168.1.18"],
+    ["May 29, 08:10 AM","renzell.gab",  "Staff",  "UPDATE","Edited transaction TXN-0088 route field", "Transaction Mgmt", "192.168.1.12"],
+    ["May 29, 08:05 AM","precious.fern","Staff",  "UPDATE","Added checkpoint - ABC-1234 SLEX Exit",   "Delivery Monitor", "192.168.1.15"],
+    ["May 29, 08:01 AM","reno.rosel",   "Admin",  "LOGIN", "User logged in",                          "Security & Admin", "192.168.1.10"],
+    ["May 29, 07:58 AM","renzell.gab",  "Staff",  "LOGIN", "User logged in",                          "Security & Admin", "192.168.1.12"],
+    ["May 28, 05:44 PM","precious.fern","Staff",  "LOGOUT","User logged out",                          "Security & Admin", "192.168.1.15"],
+    ["May 28, 05:30 PM","althea.bar",   "Viewer", "LOGOUT","User logged out",                          "Security & Admin", "192.168.1.18"],
+  ];
+
+  aRows.forEach((r,i)=>{
+    const rowH=40;
+    const alt=i%2===1;
+    const bg=figma.createRectangle();
+    bg.x=0;bg.y=36+i*rowH;bg.resize(CONTENT_W,rowH);
+    bg.fills=[{type:"SOLID",color:alt?C.cardAlt:C.card}];
+    tCard.appendChild(bg);
+    line(tCard,0,36+(i+1)*rowH-1,CONTENT_W,C.border);
+
+    let rx=12;
+    aCols.forEach((col,ci)=>{
+      const val=r[ci]||"";
+      if(col.label==="Action Type"){
+        // Colored action badge
+        const actColor = actionColors[val]||C.textSub;
+        const badgeF=figma.createFrame();
+        badgeF.x=rx;badgeF.y=36+i*rowH+10;
+        badgeF.resize(86,20);badgeF.cornerRadius=4;
+        badgeF.fills=[{type:"SOLID",color:actColor,opacity:0.12}];
+        tCard.appendChild(badgeF);
+        text(tCard,val,rx+8,36+i*rowH+12,10,actColor,"SemiBold");
+      } else if(col.label==="Role"){
+        const roleC={Admin:C.red,Staff:C.navy,Viewer:C.delivered}[val]||C.textSub;
+        text(tCard,val,rx,36+i*rowH+13,11,roleC,"SemiBold");
+      } else {
+        text(tCard,String(val),rx,36+i*rowH+13,11,ci===0?C.textSub:C.text,"Regular");
+      }
+      rx+=col.w;
+    });
+  });
+
+  // Pagination
+  text(tCard,"Showing 1-11 of 187 entries",12,CONTENT_W-20+12,11,C.textSub,"Regular");
+  btn(tCard,CONTENT_W-180,440,72,28,"< Prev",C.bg,C.textSub);
+  btn(tCard,CONTENT_W-98,440,86,28,"Next >",C.red,C.white);
+
+  // FLOATING: Audit Entry Detail (partial modal)
+  const modal = floatingModal(pg, 300, 100, 620, 420, "Audit Entry Detail");
+
+  const detailPairs=[
+    ["Timestamp","May 29, 2026 - 09:15 AM"],
+    ["User","reno.rosel"],
+    ["Role","Admin"],
+    ["Action Type","DELETE"],
+    ["Module","Transaction Management"],
+    ["IP Address","192.168.1.10"],
+    ["Description","Deleted transaction record TXN-0092 - Robinsons Inc. delivery dated May 27, 2026."],
+  ];
+  detailPairs.forEach(([lbl,val],i)=>{
+    const isLong = i===detailPairs.length-1;
+    const rowY = 60+i*44;
+    text(modal,lbl,20,rowY,10,C.textSub,"Medium");
+    if(lbl==="Action Type"){
+      const ab=figma.createFrame();
+      ab.x=20;ab.y=rowY+14;ab.resize(80,22);ab.cornerRadius=4;
+      ab.fills=[{type:"SOLID",color:C.cancelled,opacity:0.12}];
+      modal.appendChild(ab);
+      text(modal,"DELETE",28,rowY+17,10,C.cancelled,"SemiBold");
+    } else if(lbl==="Role"){
+      text(modal,val,20,rowY+14,13,C.red,"SemiBold");
+    } else {
+      const t=text(modal,val,20,rowY+14,12,C.text,isLong?"Regular":"SemiBold");
+      if(isLong) t.resize(580,t.height);
+    }
+    line(modal,20,rowY+40,580,C.border);
+  });
+
+  btn(modal,modal.width-100,modal.height-52,80,36,"Close",C.bg,C.textSub);
+}
+
+// ============================================================
+// PAGE 5-D: SECURITY - ACTIVITY LOGS
+// ============================================================
+{
+  const pg = frame("Security - Activity Logs", PW, PH);
+  pg.x = 6700; pg.y = 2700;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Security");
+  buildSidebar(pg, NAV_H, PH, [
+    "User Management",
+    "Create Account",
+    "Role & Access",
+    "Audit Trail",
+    "Activity Logs",
+    "Login History",
+  ], "Activity Logs");
+
+  const cx = CONTENT_X, cy = CONTENT_Y;
+
+  text(pg, "Activity Logs", cx, cy, 20, C.text, "Bold");
+  text(pg, "Monitor real-time system usage and actions per user.", cx, cy+28, 13, C.textSub, "Regular");
+
+  // User activity summary cards
+  const userActivity=[
+    {name:"reno.rosel",   role:"Admin",  actions:14, lastActive:"09:15 AM", color:C.red  },
+    {name:"renzell.gab",  role:"Staff",  actions:9,  lastActive:"09:02 AM", color:C.navy },
+    {name:"precious.fern",role:"Staff",  actions:7,  lastActive:"08:50 AM", color:C.navy },
+    {name:"althea.bar",   role:"Viewer", actions:2,  lastActive:"08:20 AM", color:C.delivered},
+  ];
+
+  userActivity.forEach((u,i)=>{
+    const uc=card(pg, cx+i*246, cy+62, 234, 88, 12);
+    const strip=figma.createRectangle();
+    strip.x=0;strip.y=0;strip.resize(4,88);strip.fills=[{type:"SOLID",color:u.color}];strip.cornerRadius=12;
+    uc.appendChild(strip);
+    text(uc,u.name,18,12,12,C.text,"SemiBold");
+    text(uc,u.role,18,30,10,u.color,"Medium");
+    text(uc,String(u.actions),18,50,22,C.text,"Bold");
+    text(uc,"actions today",18,74,10,C.textSub,"Regular");
+    text(uc,"Last: "+u.lastActive,120,74,10,C.textHint,"Regular");
+  });
+
+  // Filter bar
+  const fb=card(pg, cx, cy+166, CONTENT_W, 52, 10);
+  inputField(fb,12,10,180,"Filter by user...");
+  inputField(fb,204,10,130,"Action type");
+  inputField(fb,346,10,130,"Module");
+  inputField(fb,488,10,120,"Date");
+  btn(fb,620,10,72,32,"Apply",C.navy,C.white);
+  btn(fb,CONTENT_W-110,10,98,32,"Export",C.bg,C.textSub);
+
+  // Activity timeline table
+  const tCard=card(pg,cx,cy+230,CONTENT_W,430,12);
+  text(tCard,"Session Activity - May 29, 2026",16,14,13,C.text,"SemiBold");
+
+  // Toggle: Table / Timeline view
+  const toggleBg=figma.createFrame();
+  toggleBg.x=CONTENT_W-200;toggleBg.y=8;toggleBg.resize(188,32);toggleBg.cornerRadius=8;
+  toggleBg.fills=[{type:"SOLID",color:C.bg}];
+  tCard.appendChild(toggleBg);
+  // Table tab (active)
+  const tab1=figma.createFrame();
+  tab1.x=2;tab1.y=2;tab1.resize(90,28);tab1.cornerRadius=6;
+  tab1.fills=[{type:"SOLID",color:C.white}];
+  tab1.effects=[{type:"DROP_SHADOW",color:{r:0,g:0,b:0,a:0.08},offset:{x:0,y:1},radius:4,spread:0,visible:true,blendMode:"NORMAL"}];
+  toggleBg.appendChild(tab1);
+  text(toggleBg,"Table View",8,10,11,C.text,"SemiBold");
+  text(toggleBg,"Timeline",104,10,11,C.textSub,"Regular");
+
+  const actCols=[
+    {label:"Time",      w:110},
+    {label:"User",      w:130},
+    {label:"Role",      w:80 },
+    {label:"Action",    w:100},
+    {label:"Details",   w:250},
+    {label:"Module",    w:120},
+    {label:"Duration",  w:60 },
+  ];
+  tableHeader(tCard,0,46,CONTENT_W,actCols);
+
+  const actionColors2={CREATE:C.delivered,UPDATE:C.inTransit,DELETE:C.cancelled,LOGIN:C.pending,LOGOUT:C.textSub,VIEW:C.textHint};
+
+  const actRows=[
+    ["09:15 AM","reno.rosel",   "Admin", "DELETE","Deleted TXN-0092",                     "Transaction Mgmt","-"  ],
+    ["09:02 AM","reno.rosel",   "Admin", "CREATE","Created user: test.user",               "Security & Admin","2m" ],
+    ["08:50 AM","renzell.gab",  "Staff", "UPDATE","Delivery status ABC-1234 > Delivered",  "Delivery Monitor","1m" ],
+    ["08:40 AM","renzell.gab",  "Staff", "VIEW",  "Viewed transaction list (pg 1)",        "Transaction Mgmt","4m" ],
+    ["08:31 AM","precious.fern","Staff", "CREATE","Added TXN-0093 - Lazada PH",            "Transaction Mgmt","3m" ],
+    ["08:22 AM","precious.fern","Staff", "VIEW",  "Viewed delivery monitoring dashboard",  "Delivery Monitor","6m" ],
+    ["08:20 AM","althea.bar",   "Viewer","LOGIN", "Session started",                       "Security & Admin","-"  ],
+    ["08:15 AM","althea.bar",   "Viewer","VIEW",  "Viewed monthly report May 2026",        "Reports",         "5m" ],
+    ["08:10 AM","renzell.gab",  "Staff", "UPDATE","Edited TXN-0088 route field",           "Transaction Mgmt","2m" ],
+    ["08:05 AM","precious.fern","Staff", "UPDATE","Checkpoint added - ABC-1234",           "Delivery Monitor","1m" ],
+  ];
+
+  actRows.forEach((r,i)=>{
+    const rowH=36;
+    const alt=i%2===1;
+    const bg=figma.createRectangle();
+    bg.x=0;bg.y=82+i*rowH;bg.resize(CONTENT_W,rowH);
+    bg.fills=[{type:"SOLID",color:alt?C.cardAlt:C.card}];
+    tCard.appendChild(bg);
+    line(tCard,0,82+(i+1)*rowH-1,CONTENT_W,C.border);
+
+    const roleC={Admin:C.red,Staff:C.navy,Viewer:C.delivered};
+    let rx=12;
+    actCols.forEach((col,ci)=>{
+      const val=r[ci]||"";
+      if(col.label==="Action"){
+        const ac=actionColors2[val]||C.textSub;
+        const badge=figma.createFrame();
+        badge.x=rx;badge.y=82+i*rowH+9;badge.resize(84,18);badge.cornerRadius=4;
+        badge.fills=[{type:"SOLID",color:ac,opacity:0.12}];
+        tCard.appendChild(badge);
+        text(tCard,val,rx+6,82+i*rowH+11,9,ac,"SemiBold");
+      } else if(col.label==="Role"){
+        text(tCard,val,rx,82+i*rowH+11,11,roleC[val]||C.textSub,"SemiBold");
+      } else {
+        text(tCard,String(val),rx,82+i*rowH+11,11,ci===0?C.textSub:C.text,"Regular");
+      }
+      rx+=col.w;
+    });
+  });
+
+  // Pagination
+  text(tCard,"Showing 1-10 of 32 entries today",12,406,11,C.textSub,"Regular");
+  btn(tCard,CONTENT_W-180,396,72,28,"< Prev",C.bg,C.textSub);
+  btn(tCard,CONTENT_W-98,396,86,28,"Next >",C.red,C.white);
+
+  // FLOATING: User Session Detail (side panel)
+  const overlay=figma.createRectangle();
+  overlay.x=0;overlay.y=NAV_H;overlay.resize(PW,PH-NAV_H);
+  overlay.fills=[{type:"SOLID",color:{r:0,g:0,b:0},opacity:0.18}];
+  pg.appendChild(overlay);
+
+  const panel=card(pg,PW-380,NAV_H,380,PH-NAV_H,0,true);
+  panel.effects=[{type:"DROP_SHADOW",color:{r:0,g:0,b:0,a:0.16},offset:{x:-4,y:0},radius:20,spread:0,visible:true,blendMode:"NORMAL"}];
+
+  const pHeader=figma.createRectangle();
+  pHeader.x=0;pHeader.y=0;pHeader.resize(380,52);
+  pHeader.fills=[{type:"SOLID",color:C.navy}];
+  panel.appendChild(pHeader);
+  text(panel,"Session Detail - renzell.gab",16,16,12,C.white,"SemiBold");
+  text(panel,"x",354,18,14,C.white,"Regular");
+
+  const sessionInfo=[
+    ["User","renzell.gab"],
+    ["Role","Staff"],
+    ["Session Start","08:09 AM"],
+    ["Session End","Active"],
+    ["Duration","53 min (ongoing)"],
+    ["IP Address","192.168.1.12"],
+    ["Browser","Chrome 124"],
+    ["Total Actions","9"],
+  ];
+  sessionInfo.forEach(([lbl,val],i)=>{
+    text(panel,lbl,16,64+i*44,10,C.textSub,"Medium");
+    const isRole=lbl==="Role";
+    const isActive=val==="Active";
+    text(panel,val,16,80+i*44,13,isRole?C.navy:isActive?C.delivered:C.text,isRole||isActive?"SemiBold":"Regular");
+    line(panel,16,108+i*44,348,C.border);
+  });
+
+  text(panel,"Actions in this session",16,420,11,C.textSub,"SemiBold");
+  const sessionActs=["VIEW Transaction List","UPDATE TXN-0088","CREATE TXN-0093","UPDATE Delivery ABC-1234","VIEW Reports"];
+  sessionActs.forEach((a,i)=>{
+    const dot=figma.createEllipse();
+    dot.x=16;dot.y=444+i*36;dot.resize(6,6);
+    dot.fills=[{type:"SOLID",color:C.navy,opacity:0.5}];
+    panel.appendChild(dot);
+    text(panel,a,28,440+i*36,11,C.text,"Regular");
+  });
+}
+
+// ============================================================
+// PAGE 5-E: SECURITY - LOGIN HISTORY
+// ============================================================
+{
+  const pg = frame("Security - Login History", PW, PH);
+  pg.x = 6700; pg.y = 3600;
+  figma.currentPage.appendChild(pg);
+
+  buildTopNav(pg, PW, "Security");
+  buildSidebar(pg, NAV_H, PH, [
+    "User Management",
+    "Create Account",
+    "Role & Access",
+    "Audit Trail",
+    "Activity Logs",
+    "Login History",
+  ], "Login History");
+
+  const cx = CONTENT_X, cy = CONTENT_Y;
+
+  text(pg, "Login History", cx, cy, 20, C.text, "Bold");
+  text(pg, "Track all login and logout events across all user accounts.", cx, cy+28, 13, C.textSub, "Regular");
+
+  // Summary stat cards
+  const loginStats=[
+    {label:"Logins Today",       val:"4",  color:C.inTransit},
+    {label:"Active Sessions",    val:"3",  color:C.delivered},
+    {label:"Failed Attempts",    val:"1",  color:C.cancelled},
+    {label:"Unique IPs Today",   val:"4",  color:C.pending  },
+  ];
+  loginStats.forEach((s,i)=>statCard(pg,cx+i*246,cy+62,234,72,s.label,s.val,null,s.color));
+
+  // Filter bar
+  const fb=card(pg,cx,cy+150,CONTENT_W,52,10);
+  inputField(fb,12,10,180,"Search user...");
+  inputField(fb,204,10,130,"Status (All)");
+  inputField(fb,346,10,130,"Date range");
+  btn(fb,488,10,72,32,"Filter",C.navy,C.white);
+  btn(fb,CONTENT_W-110,10,98,32,"Export",C.bg,C.textSub);
+
+  // Login History Table
+  const tCard=card(pg,cx,cy+214,CONTENT_W,400,12);
+  text(tCard,"Login Events",16,14,13,C.text,"SemiBold");
+
+  const lCols=[
+    {label:"Timestamp",     w:160},
+    {label:"User",          w:140},
+    {label:"Role",          w:90 },
+    {label:"Event",         w:90 },
+    {label:"IP Address",    w:130},
+    {label:"Browser / OS",  w:160},
+    {label:"Status",        w:100},
+  ];
+  tableHeader(tCard,0,44,CONTENT_W,lCols);
+
+  const loginRows=[
+    ["May 29, 09:01 AM","reno.rosel",   "Admin", "LOGIN", "192.168.1.10","Chrome 124 / Win11",  {label:"Success",color:C.delivered}],
+    ["May 29, 08:20 AM","althea.bar",   "Viewer","LOGIN", "192.168.1.18","Edge 122 / Win10",    {label:"Success",color:C.delivered}],
+    ["May 29, 08:09 AM","renzell.gab",  "Staff", "LOGIN", "192.168.1.12","Chrome 124 / Win11",  {label:"Success",color:C.delivered}],
+    ["May 29, 08:01 AM","precious.fern","Staff", "LOGIN", "192.168.1.15","Firefox 124 / Win10", {label:"Success",color:C.delivered}],
+    ["May 29, 07:55 AM","unknown",      "-",     "LOGIN", "203.177.12.54","Chrome 120 / Android",{label:"Failed",color:C.cancelled}],
+    ["May 28, 05:44 PM","precious.fern","Staff", "LOGOUT","192.168.1.15","Firefox 124 / Win10", {label:"Success",color:C.delivered}],
+    ["May 28, 05:30 PM","althea.bar",   "Viewer","LOGOUT","192.168.1.18","Edge 122 / Win10",    {label:"Success",color:C.delivered}],
+    ["May 28, 05:10 PM","renzell.gab",  "Staff", "LOGOUT","192.168.1.12","Chrome 124 / Win11",  {label:"Success",color:C.delivered}],
+    ["May 28, 05:00 PM","reno.rosel",   "Admin", "LOGOUT","192.168.1.10","Chrome 124 / Win11",  {label:"Success",color:C.delivered}],
+  ];
+
+  const roleC2={Admin:C.red,Staff:C.navy,Viewer:C.delivered};
+
+  loginRows.forEach((r,i)=>{
+    const rowH=40;
+    const alt=i%2===1;
+    const bg=figma.createRectangle();
+    bg.x=0;bg.y=80+i*rowH;bg.resize(CONTENT_W,rowH);
+    bg.fills=[{type:"SOLID",color:alt?C.cardAlt:C.card}];
+    tCard.appendChild(bg);
+    line(tCard,0,80+(i+1)*rowH-1,CONTENT_W,C.border);
+
+    // Failed row - very subtle red tint
+    if(typeof r[6]==="object" && r[6].label==="Failed"){
+      bg.fills=[{type:"SOLID",color:C.cancelled,opacity:0.05}];
+    }
+
+    let rx=12;
+    lCols.forEach((col,ci)=>{
+      const val=r[ci]||"";
+      if(col.label==="Status" && typeof val==="object" && val.label){
+        pill(tCard,val.label,rx,84+i*rowH,val.color);
+      } else if(col.label==="Role"){
+        text(tCard,String(val),rx,88+i*rowH,11,roleC2[val]||C.textHint,"SemiBold");
+      } else if(col.label==="Event"){
+        const evColor=val==="LOGIN"?C.delivered:C.textSub;
+        text(tCard,String(val),rx,88+i*rowH,11,evColor,"SemiBold");
+      } else {
+        text(tCard,String(val),rx,88+i*rowH,11,ci===0?C.textSub:C.text,"Regular");
+      }
+      rx+=col.w;
+    });
+  });
+
+  // Pagination
+  text(tCard,"Showing 1-9 of 54 entries",12,366,11,C.textSub,"Regular");
+  btn(tCard,CONTENT_W-180,356,72,28,"< Prev",C.bg,C.textSub);
+  btn(tCard,CONTENT_W-98,356,86,28,"Next >",C.red,C.white);
+
+  // FLOATING: Failed Login Alert Modal (centered)
+  const modal=floatingModal(pg,340,120,560,340,"Security Alert - Failed Login Attempt");
+
+  // Warning band
+  const wBand=figma.createRectangle();
+  wBand.x=20;wBand.y=60;wBand.resize(520,52);wBand.cornerRadius=8;
+  wBand.fills=[{type:"SOLID",color:C.cancelled,opacity:0.08}];
+  modal.appendChild(wBand);
+  wBand.strokes=[{type:"SOLID",color:C.cancelled,opacity:0.2}];wBand.strokeWeight=1;
+  text(modal,"A login attempt was made with an unrecognized account from an",28,70,11,C.cancelled,"Regular");
+  text(modal,"external IP address. Review and take action if necessary.",28,86,11,C.cancelled,"Regular");
+
+  const alertInfo=[
+    ["Timestamp","May 29, 2026 - 07:55 AM"],
+    ["Username Attempted","unknown"],
+    ["IP Address","203.177.12.54 (External)"],
+    ["Browser / OS","Chrome 120 / Android"],
+    ["Result","Login Failed - Account not found"],
+  ];
+  alertInfo.forEach(([lbl,val],i)=>{
+    text(modal,lbl,20,128+i*36,10,C.textSub,"Medium");
+    const isResult=lbl==="Result";
+    const isIP=lbl==="IP Address";
+    text(modal,val,190,128+i*36,12,isResult||isIP?C.cancelled:C.text,isResult?"SemiBold":"Regular");
+    line(modal,20,162+i*36,520,C.border);
+  });
+
+  btn(modal,20,modal.height-52,140,36,"Block This IP",C.cancelled,C.white);
+  btn(modal,172,modal.height-52,100,36,"Dismiss",C.bg,C.textSub);
+  btn(modal,modal.width-120,modal.height-52,100,36,"Close",C.bg,C.textSub);
+}
+
+// ============================================================
+// VIEWPORT
+// ============================================================
+figma.viewport.scrollAndZoomIntoView(figma.currentPage.children);
+figma.notify("Trackify UI - All modules + full Security module generated!", { timeout:4000 });
+
+})();
