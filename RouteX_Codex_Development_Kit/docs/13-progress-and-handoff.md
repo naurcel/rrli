@@ -3,15 +3,15 @@
 Keep this file current so a fresh Codex session can continue without guessing what happened previously. Prefer dated entries with exact file paths and commands.
 
 ## Current snapshot
-- Last updated: 2026-10-24; time not available.
-- Current branch: Not recorded in this session.
+- Last updated: 2026-10-25; time not recorded.
+- Current branch: `main`, tracking `origin/main`.
 - Working tree status: Existing application and knowledge-base changes present; no commit, push, or deployment performed.
-- Actual stack: Next.js 16.4.2 App Router, React 19.3.0, TypeScript, Tailwind CSS v4, npm; no configured lint/test script; no database/auth/storage implementation found.
+- Actual stack: Next.js 16.4.2 App Router, React 19.3.0, TypeScript, Tailwind CSS v4, npm; Node test/typecheck scripts exist; no lint, database, auth, or storage implementation found.
 - Current phase: Part 2 shared design foundation, active visual refinement.
-- Last completed task: Applied the prototype's amber direction and Readex Pro typography, matched the reference sidebar rhythm with a reserved branding spacer and bottom-anchored profile area, replaced the sidebar profile with Shinryu artwork, removed the duplicate top-right profile avatar, applied selective glassmorphism plus stronger neumorphic depth, prototype-style radial glow gradients, and amber gradients to main content headings, locked the app shell so only the main content pane scrolls, added preview rows plus threshold-based draggable sidebar collapse behavior, stabilized resizing with pointer capture and selection suppression, normalized icon sizing plus label truncation across expanded and collapsed states, made table overflow regions explicitly horizontally scrollable, removed the Next.js placeholder indicator, and strengthened the Deliveries page heading.
+- Last completed task: Centralized sidebar width/collapse/resize state across routes, added tested width rules and keyboard resize support to representative handles, improved pointer cancellation and collapse physics, fixed the Deliveries notice dismissal, and improved date-picker focus/escape accessibility without connecting provisional business filtering.
 - Current blocker: Approved schema, access matrix, POD policy, authentication/data boundary, and final design decisions remain open.
 - Next smallest safe task: After approval, review the current Part 2 visual foundation and then proceed to the approved Delivery Management vertical slice or revise Part 2 only.
-- Tests/checks last run: `cmd /c npx tsc --noEmit` PASS; `cmd /c npm run build` PASS.
+- Tests/checks last run: `cmd /c npm run typecheck` PASS; `cmd /c npm test` PASS (5/5); `cmd /c npm run build` PASS; eight production HTTP route checks PASS.
 - Important decisions made:
 - Important decisions still open:
 
@@ -451,6 +451,36 @@ Follow-up: Kept only the reference truck-card layout; restored the existing Flee
 - Next recommended task: Connect the applied range to the approved filtering/data contract after confirming the visual and interaction behavior.
 - Actions explicitly not taken: No backend, database, permissions, commit, push, deploy, or destructive operation changed.
 
+
+## Session log
+### 2026-10-25: Overnight repository audit and roadmap refresh
+- Goal: Prepare an evidence-backed project snapshot, update the page roadmap, run available baseline checks, and preserve existing work.
+- Repository state before changes: Branch `main`, tracking `origin/main`. Existing uncommitted user changes were present in `src/app/globals.css`, `src/app/layout.tsx`, and untracked `src/components/mouse-reactive-shadows.tsx`; preserved as-is.
+- Work completed: Audited live routes, package/lockfile stack, styles/components, preview interactions, data/auth/storage/test infrastructure, and development-kit discrepancies. Added a route-by-route audit and replaced the stale roadmap with current route status and dependency-based stages.
+- Files changed: `RouteX_Codex_Development_Kit/docs/15-overnight-audit.md`, `RouteX_Codex_Development_Kit/docs/14-page-development-roadmap.md`, this handoff document.
+- Schema/migrations: None; no database or migration implementation was found.
+- Commands run: `cmd /c npx tsc --noEmit`; `$env:NODE_OPTIONS='--max-old-space-size=4096'; cmd /c npm run build`; read-only git/file/source inspection.
+- Test results: TypeScript passed. Production build passed and generated all nine static routes. No lint script or project test runner/files were found; neither was run. No browser/visual verification was performed.
+- Decisions resolved: Verified stack is Next.js 16.4.2, React 19.3.0, TypeScript 5.x, Tailwind 4.x, npm. README's proposed Supabase/Auth.js/Next.js 15 stack does not match live dependencies.
+- Decisions still open: Database/auth/storage architecture; canonical delivery/truck data and status rules; POD; financial categories/formulas/corrections/currency/timezone; HR rules; role matrix; reports; dashboard metrics; deployment process. See `docs/12-decisions-and-open-questions.md` and `docs/15-overnight-audit.md`.
+- Risks / blockers: All routes are preview surfaces. No authenticated or server-authorized boundary, persistent data, schema, storage, or connected date filtering exists. Dashboard/Fleet/Transactions display local preview values only. Login form routes directly to `/dashboard` without authentication.
+- Next recommended task: Owner review/approval of Stage 1 architecture and trust-boundary decisions in `docs/14-page-development-roadmap.md` before production data or auth work.
+- Actions explicitly not taken: No application source was changed during the audit; existing source edits were preserved. No dependencies installed, database/migration executed, commit, push, deploy, or destructive cleanup performed.
+
+### 2026-10-25: Safe sidebar foundation and interaction reliability
+- Goal: Make validated, low-risk foundation improvements without resolving provisional business, financial, data, or permission decisions.
+- Repository state before changes: Branch `main`, tracking `origin/main`, with existing application styling, audit-document, Obsidian, layout, and mouse-shadow changes preserved.
+- Work completed: Moved sidebar width, collapsed state, pointer resizing, cancellation cleanup, and keyboard width calculations into a root-level provider that persists across client route changes. Added a pure sidebar width model and five unit tests. During dragging, the visible rail now follows the pointer before settling to the collapsed width. Added focus-visible treatment to the existing resize indicator and exposed keyboard resizing on the Deliveries, Dashboard, and Fleet handles. Fixed the Deliveries preview-notice dismiss control. Removed the duplicate static Deliveries date trigger and improved the global date picker’s dialog relationship, Escape behavior, and focus restoration.
+- Files changed: `package.json`, `tsconfig.json`, `src/app/layout.tsx`, seven application route pages, `src/app/globals.css`, `src/components/global-date-range-picker.tsx`, `src/components/sidebar-state.tsx`, `src/components/sidebar-state-model.ts`, `src/components/sidebar-state-model.test.ts`, and current audit/handoff/roadmap documents.
+- Schema/migrations: None.
+- Commands run: `cmd /c npm test`; `cmd /c npm run typecheck`; `$env:NODE_OPTIONS='--max-old-space-size=4096'; cmd /c npm run build`; production server on port 3107 plus HTTP requests to all eight user-facing routes; `git diff --check`.
+- Test results: Five sidebar model tests passed with zero failures. TypeScript passed. Production build passed and generated all nine static routes including `/_not-found`. `/`, `/dashboard`, `/fleet`, `/transactions`, `/reports`, `/administration`, `/settings`, and `/login` each returned HTTP 200. Diff whitespace check passed.
+- Visual checks: No installed browser automation package was found, so hover, drag, focus, animation, and responsive appearance still require browser review.
+- Decisions resolved: None. Implementation only centralized existing interface behavior.
+- Decisions still open: D-001 through D-020 remain subject to owner approval as recorded; especially backend/auth/storage, canonical delivery/truck fields, POD, financial rules, roles, timezone/currency, reports, and dashboard metrics.
+- Risks / blockers: Sidebar markup is still duplicated across route pages; keyboard attributes have not yet been normalized on every duplicated resize handle. Date range remains local UI state and intentionally does not filter preview data. Login remains a preview shortcut without authentication.
+- Next recommended task: Review the sidebar resizing and route-switch behavior in a browser. Then approve Stage 1 architecture/trust-boundary decisions, or authorize the remaining shared-shell extraction as a separate UI foundation stage.
+- Actions explicitly not taken: No dependency installation, backend, database, migration, auth, permission, financial-rule, commit, push, deploy, or destructive operation.
 
 ## Session entry template
 ### YYYY-MM-DD: [short session title]

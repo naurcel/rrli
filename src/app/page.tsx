@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/route-x-ui";
+import { useSidebarState } from "@/components/sidebar-state";
 
 type Delivery = { id: string; client: string; truck: string; driver: string; completed: string; revenue: string; pod: "Attached" | "Missing" };
 
@@ -55,36 +56,8 @@ function PodStatusDropdown({ value, onChange }: { value: string; onChange: (valu
 export default function Home() {
   const [query, setQuery] = useState("");
   const [podFilter, setPodFilter] = useState("All POD status");
-  const [sidebarWidth, setSidebarWidth] = useState(248);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [resizingSidebar, setResizingSidebar] = useState(false);
-  useEffect(() => {
-    const savedWidth = Number(window.localStorage.getItem("routex-sidebar-width"));
-    const savedCollapsed = window.localStorage.getItem("routex-sidebar-collapsed") === "true";
-    if (savedWidth >= 56 && savedWidth <= 360) setSidebarWidth(savedWidth);
-    setSidebarCollapsed(savedCollapsed || savedWidth < 180);
-  }, []);
-  useEffect(() => {
-    if (!resizingSidebar) return;
-    const move = (event: PointerEvent) => {
-      const nextWidth = Math.min(360, Math.max(56, event.clientX));
-      setSidebarWidth(nextWidth);
-      setSidebarCollapsed(nextWidth < 180);
-      window.localStorage.setItem("routex-sidebar-width", String(nextWidth));
-      window.localStorage.setItem("routex-sidebar-collapsed", String(nextWidth < 180));
-    };
-    const stop = () => setResizingSidebar(false);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop, { once: true });
-    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); document.body.style.userSelect = ""; document.body.style.cursor = ""; };
-  }, [resizingSidebar]);
-  const startSidebarResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "col-resize";
-    setResizingSidebar(true);
-  };
+  const [showPreviewNotice, setShowPreviewNotice] = useState(true);
+  const { width: sidebarWidth, collapsed: sidebarCollapsed, resizing: resizingSidebar, startResize: startSidebarResize, handleResizeKeyDown } = useSidebarState();
   const deliveries = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return allPreviewDeliveries.filter((delivery) => !normalized || Object.values(delivery).some((value) => value.toLowerCase().includes(normalized))).filter((delivery) => podFilter === "All POD status" || delivery.pod === podFilter);
@@ -96,15 +69,15 @@ export default function Home() {
       <div className="workspace-label">WORKSPACE</div>
       <nav aria-label="Primary navigation">{navItems.map(([label, symbol]) => <Link className={label === "Deliveries" ? "nav-item active" : "nav-item"} href={label === "Overview" ? "/dashboard" : label === "Deliveries" ? "/" : label === "Fleet" ? "/fleet" : label === "Transactions" ? "/transactions" : label === "Reports" ? "/reports" : `#${label.toLowerCase()}`} key={label}><Icon>{symbol}</Icon><span className="nav-label">{label}</span></Link>)}</nav>
       <div className="workspace-label lower">MANAGE</div>
-      <nav aria-label="Management navigation"><a className="nav-item" href="#administration"><Icon>◎</Icon><span className="nav-label">Administration</span></a><a className="nav-item" href="#settings"><Icon>⚙</Icon><span className="nav-label">Settings</span></a></nav>
+      <nav aria-label="Management navigation"><Link className="nav-item" href="/administration"><Icon>◎</Icon><span className="nav-label">Administration</span></Link><Link className="nav-item" href="/settings"><Icon>⚙</Icon><span className="nav-label">Settings</span></Link></nav>
       <div className="sidebar-footer"><div className="avatar"><img src="/profiles/shinryu.png" alt="Shinryu" /></div><div><strong>Shinryu</strong><small>Operations</small></div><button className="more-button" aria-label="Account menu">•••</button></div>
-      <div className="sidebar-resize-handle" role="separator" aria-label="Resize sidebar" onPointerDown={startSidebarResize} />
+      <div className="sidebar-resize-handle" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin={72} aria-valuemax={360} aria-valuenow={sidebarCollapsed ? 72 : sidebarWidth} tabIndex={0} onKeyDown={handleResizeKeyDown} onPointerDown={startSidebarResize} />
     </aside>
     <main className="main-content" id="deliveries">
-      <header className="topbar"><div className="breadcrumb"><span>Operations</span><b>/</b><strong>Deliveries</strong></div><button className="global-date-filter" type="button" aria-label="Filter by date">▣&nbsp;&nbsp; Last 7 days&nbsp;&nbsp;⌄</button><div className="topbar-actions"><span className="preview-pill"><i /> Preview workspace</span><button className="help-button" aria-label="Help">?</button></div></header>
+      <header className="topbar"><div className="breadcrumb"><span>Operations</span><b>/</b><strong>Deliveries</strong></div><div className="topbar-actions"><span className="preview-pill"><i /> Preview workspace</span><button className="help-button" aria-label="Help">?</button></div></header>
       <div className="content-wrap">
         <section className="page-intro"><div><p className="eyebrow">OPERATIONS / RECORDS</p><h1>Deliveries</h1><p className="subtitle">Search and review completed delivery records, financial entries, and proof of delivery.</p></div><button className="secondary-button" disabled title="Creation is unavailable until the data and authorization boundary is connected"><Icon>＋</Icon> New delivery <span className="lock">◌</span></button></section>
-        <div className="notice" role="status"><span className="notice-icon">i</span><div><strong>Preview data only</strong><span>This screen is connected to a local preview while the approved data model, authentication, and server authorization boundary are finalized.</span></div><button aria-label="Dismiss notice">×</button></div>
+        {showPreviewNotice && <div className="notice" role="status"><span className="notice-icon">i</span><div><strong>Preview data only</strong><span>This screen is connected to a local preview while the approved data model, authentication, and server authorization boundary are finalized.</span></div><button type="button" aria-label="Dismiss notice" onClick={() => setShowPreviewNotice(false)}>×</button></div>}
         <section className="stat-grid" aria-label="Delivery summary"><div className="stat-card"><span className="stat-label">COMPLETED THIS MONTH</span><strong>24</strong><span className="stat-meta positive">↑ 8.2% <em>vs last month</em></span></div><div className="stat-card"><span className="stat-label">REVENUE RECORDED</span><strong>₱286,410</strong><span className="stat-meta positive">↑ 12.4% <em>vs last month</em></span></div><div className="stat-card"><span className="stat-label">POD FOLLOW-UP</span><strong>3</strong><span className="stat-meta warning">Needs attention <em>in current period</em></span></div></section>
         <section className="records-card"><div className="records-heading"><div><h2>Completed deliveries</h2><p>Showing locally available preview records</p></div><button className="export-button" disabled title="Export permissions and format are not approved"><Icon>⇩</Icon> Export <span className="lock">◌</span></button></div><div className="filters"><label className="search-box"><Icon>⌕</Icon><input aria-label="Search deliveries" placeholder="Search by delivery, client, truck, or driver" value={query} onChange={(event) => setQuery(event.target.value)} /></label><PodStatusDropdown value={podFilter} onChange={setPodFilter} /><button className="filter-button" type="button"><Icon>≡</Icon> More filters</button></div>
           <div className="table-wrap"><table><thead><tr><th>Delivery</th><th>Client</th><th>Truck</th><th>Driver</th><th>Completed</th><th>Revenue</th><th>POD</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{deliveries.map((delivery) => <tr key={delivery.id}><td><a href={`#${delivery.id}`} className="record-link">{delivery.id}</a></td><td>{delivery.client}</td><td><span className="truck-code">{delivery.truck}</span></td><td>{delivery.driver}</td><td>{delivery.completed}</td><td className="money">{delivery.revenue}</td><td><span className={`pod-status ${delivery.pod === "Missing" ? "missing" : "attached"}`}><i />{delivery.pod}</span></td><td><button className="row-menu" aria-label={`Actions for ${delivery.id}`}>•••</button></td></tr>)}</tbody></table>{deliveries.length === 0 && <div className="empty-state"><strong>No deliveries found</strong><span>Try a different search or POD filter.</span></div>}</div>

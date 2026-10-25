@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/route-x-ui";
+import { useSidebarState } from "@/components/sidebar-state";
 
 const trucks = [
   ["NGS 4281", "6-wheeler", "Active", "₱158,300", "₱70,600", "₱87,700"],
@@ -22,38 +22,7 @@ const subcontractedTrucks = [
 const navItems = [["Overview", "⌂"], ["Deliveries", "▤"], ["Fleet", "▱"], ["Transactions", "₱"], ["Reports", "▥"]];
 
 export default function FleetPage() {
-  const [sidebarWidth, setSidebarWidth] = useState(248);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [resizingSidebar, setResizingSidebar] = useState(false);
-  useEffect(() => {
-    const savedWidth = Number(window.localStorage.getItem("routex-sidebar-width"));
-    const savedCollapsed = window.localStorage.getItem("routex-sidebar-collapsed") === "true";
-    if (savedWidth >= 56 && savedWidth <= 360) setSidebarWidth(savedWidth);
-    setSidebarCollapsed(savedCollapsed || savedWidth < 180);
-  }, []);
-
-  useEffect(() => {
-    if (!resizingSidebar) return;
-    const move = (event: PointerEvent) => {
-      const nextWidth = Math.min(360, Math.max(56, event.clientX));
-      setSidebarWidth(nextWidth);
-      setSidebarCollapsed(nextWidth < 180);
-      window.localStorage.setItem("routex-sidebar-width", String(nextWidth));
-      window.localStorage.setItem("routex-sidebar-collapsed", String(nextWidth < 180));
-    };
-    const stop = () => setResizingSidebar(false);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop, { once: true });
-    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); document.body.style.userSelect = ""; document.body.style.cursor = ""; };
-  }, [resizingSidebar]);
-
-  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "col-resize";
-    setResizingSidebar(true);
-  };
+  const { width: sidebarWidth, collapsed: sidebarCollapsed, resizing: resizingSidebar, startResize, handleResizeKeyDown } = useSidebarState();
 
   return <div className="app-shell">
     <aside className={`sidebar${sidebarCollapsed ? " collapsed" : ""}${resizingSidebar ? " resizing" : ""}`} style={{ "--sidebar-width": `${sidebarCollapsed ? 72 : sidebarWidth}px` } as React.CSSProperties}>
@@ -63,7 +32,7 @@ export default function FleetPage() {
       <div className="workspace-label lower">MANAGE</div>
       <nav aria-label="Management navigation"><Link className="nav-item" href="/administration"><Icon>◎</Icon><span className="nav-label">Administration</span></Link><Link className="nav-item" href="/settings"><Icon>⚙</Icon><span className="nav-label">Settings</span></Link></nav>
       <div className="sidebar-footer"><div className="avatar"><img src="/profiles/shinryu.png" alt="Shinryu" /></div><div><strong>Shinryu</strong><small>Operations</small></div><button className="more-button" aria-label="Account menu">•••</button></div>
-      <div className="sidebar-resize-handle" role="separator" aria-label="Resize sidebar" onPointerDown={startResize} />
+      <div className="sidebar-resize-handle" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin={72} aria-valuemax={360} aria-valuenow={sidebarCollapsed ? 72 : sidebarWidth} tabIndex={0} onKeyDown={handleResizeKeyDown} onPointerDown={startResize} />
     </aside>
     <main className="main-content">
       <header className="topbar"><div className="breadcrumb"><span>Operations</span><b>/</b><strong>Fleet</strong></div><div className="topbar-actions"><span className="preview-pill"><i /> Preview workspace</span><button className="help-button" aria-label="Help">?</button></div></header>
