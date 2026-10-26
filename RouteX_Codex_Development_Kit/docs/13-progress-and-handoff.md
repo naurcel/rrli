@@ -2,6 +2,14 @@
 
 Keep this file current so a fresh Codex session can continue without guessing what happened previously. Prefer dated entries with exact file paths and commands.
 
+## 2026-10-27: Safe route fallback hardening
+
+- Added a project-specific root `not-found.tsx`, so unmatched RouteX URLs receive an accessible RouteX fallback and a direct path back to Deliveries instead of the framework default.
+- Added the root route-segment `error.tsx` boundary with a retry action and a safe navigation fallback. It deliberately does not expose error details to users or add logging/infrastructure.
+- Added centralized fallback styles in `src/app/globals.css`, using the existing RouteX token set and responsive behavior.
+- Verification: `cmd /c npm test` passed (5/5); `cmd /c npm run typecheck` passed; `$env:NODE_OPTIONS='--max-old-space-size=4096'; cmd /c npm run build` passed; production HTTP checks returned `200` for `/` and `404` for an invalid URL, with the new fallback content present; `git diff --check` passed.
+- This does not add authentication, persistence, APIs, financial rules, or authorization. The unresolved data and access decisions remain blockers for production workflows.
+
 ## Current snapshot
 - Last updated: 2026-10-25; time not recorded.
 - Current branch: `main`, tracking `origin/main`.
@@ -481,6 +489,45 @@ Follow-up: Kept only the reference truck-card layout; restored the existing Flee
 - Risks / blockers: Sidebar markup is still duplicated across route pages; keyboard attributes have not yet been normalized on every duplicated resize handle. Date range remains local UI state and intentionally does not filter preview data. Login remains a preview shortcut without authentication.
 - Next recommended task: Review the sidebar resizing and route-switch behavior in a browser. Then approve Stage 1 architecture/trust-boundary decisions, or authorize the remaining shared-shell extraction as a separate UI foundation stage.
 - Actions explicitly not taken: No dependency installation, backend, database, migration, auth, permission, financial-rule, commit, push, deploy, or destructive operation.
+
+### 2026-10-25: Add RouteX branding to the sidebar
+- Goal: Use the supplied RouteX logo assets in the existing sidebar branding slot.
+- Work completed: Added the dark-blue RouteX symbol asset. Expanded sidebars show the full RouteX logo already present in `public/branding`; collapsed and narrow-mobile sidebars show the supplied symbol. The two assets crossfade and scale subtly during sidebar collapse/expansion. The expanded branding slot is now non-shrinkable and leaves clear space around the tightly framed source artwork so its circular mark is not visually clipped.
+- Files changed: `public/branding/routex-symbol-dblue.png`, `src/app/globals.css`, and this handoff document.
+- Commands run: `cmd /c npm run typecheck`; `$env:NODE_OPTIONS='--max-old-space-size=4096'; cmd /c npm run build`; `git diff --check`.
+- Test results: TypeScript passed. Production build passed and generated all nine static routes. Diff whitespace check passed.
+- Visual checks: Browser appearance still requires review at expanded, collapsed, and mobile widths.
+- Decisions resolved: None; this applies the user-supplied brand assets only.
+- Next recommended task: Check logo scale and vertical spacing in the browser and adjust only if needed.
+- Actions explicitly not taken: No business logic, backend, dependency, commit, push, or deploy changes.
+
+### 2026-10-25: Normalize sidebar icon alignment
+- Goal: Keep sidebar icons aligned consistently in expanded and automatically collapsed states.
+- Work completed: Replaced the sidebar's font-dependent navigation glyphs with normalized line vectors in a shared 24-by-24 view box. Standardized the icon column and reserved an equal transparent border on inactive navigation rows so active borders no longer shift icon or label positions.
+- Files changed: `src/components/route-x-ui.tsx`, `src/app/globals.css`, and this handoff document.
+- Schema/migrations: None.
+- Decisions resolved: None; this is a visual alignment correction only.
+- Actions explicitly not taken: No route, business logic, backend, commit, push, or deploy changes.
+
+### 2026-10-26: Reduce interaction and rendering lag
+- Goal: Improve pointer, scrolling, and sidebar-resize responsiveness without removing the established glass/neumorphic styling.
+- Work completed: Reworked mouse-reactive shadows to schedule at most one pending animation frame, use event delegation instead of document hit-testing, cache target bounds, skip negligible style writes, and disable the effect for coarse pointers or reduced-motion users. Sidebar dragging now previews width through a CSS custom property and only updates React state when the collapse threshold changes or dragging finishes; local storage writes now occur after the drag rather than on every pointer event. Reduced full-surface blur strength, removed expensive backdrop blur from large records panels, and removed the persistent shadow `will-change` hint.
+- Files changed: `src/components/mouse-reactive-shadows.tsx`, `src/components/sidebar-state.tsx`, `src/app/globals.css`, and this handoff document.
+- Schema/migrations: None.
+- Commands run: `cmd /c npm test`; `cmd /c npm run typecheck`; production build and diff checks.
+- Decisions resolved: None; behavior and visual direction remain unchanged.
+- Visual checks: Browser review should confirm pointer shadows, drag threshold behavior, and scrolling at expanded and collapsed widths.
+- Actions explicitly not taken: No dependency, route, business logic, backend, commit, push, or deploy changes.
+
+### 2026-10-26: Codebase study and development roadmap
+- Goal: Study the live repository, identify what is implemented versus preview-only, and prepare an evidence-based continuation plan without speculative product changes.
+- Work completed: Inspected the complete tracked project tree, dependencies/configuration, route pages, shared components, styling, decisions, module specs, knowledge-base requirements, and existing audit material. Added `docs/16-codebase-study-2026-10-26.md` with the verified architecture map, feature inventory, workflow trace, technical findings, unresolved business decisions, test evidence, and dependency-ordered roadmap.
+- Key finding: The live repository is a Next.js 16/React 19 visual preview with local fixtures and no backend, authentication, authorization, schema/migrations, storage, validation, or domain service. The root README's Supabase/Auth.js/shadcn/Lucide stack describes an intended direction, not installed implementation.
+- Files changed: `RouteX_Codex_Development_Kit/docs/16-codebase-study-2026-10-26.md`, this handoff document.
+- Commands run: `cmd /c npm test`; `cmd /c npm run typecheck`; `$env:NODE_OPTIONS='--max-old-space-size=4096'; cmd /c npm run build`; `git diff --check`.
+- Test results: Five sidebar model tests passed; TypeScript passed; production build passed and generated all static routes; whitespace check passed.
+- Decisions resolved: None. D-002 through D-018 and D-020 remain open; backend/trust-boundary and canonical-data choices block real operational functionality.
+- Actions explicitly not taken: No application, dependency, infrastructure, database, backend, auth, permission, financial-rule, commit, push, deploy, or destructive changes.
 
 ## Session entry template
 ### YYYY-MM-DD: [short session title]
