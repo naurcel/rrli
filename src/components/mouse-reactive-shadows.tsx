@@ -10,11 +10,27 @@ export function MouseReactiveShadows() {
 
   useEffect(() => {
     const sidebar = document.querySelector<HTMLElement>(".sidebar");
-    if (!sidebar) return;
+    document.documentElement.classList.add("route-transition-active");
+    const transitionTimer = window.setTimeout(() => {
+      document.documentElement.classList.remove("route-transition-active");
+    }, 720);
+
+    if (!sidebar) {
+      return () => {
+        window.clearTimeout(transitionTimer);
+        document.documentElement.classList.remove("route-transition-active");
+      };
+    }
+
     sidebar.classList.remove("sidebar-ready");
     let settle = 0;
     const frame = requestAnimationFrame(() => { settle = requestAnimationFrame(() => sidebar.classList.add("sidebar-ready")); });
-    return () => { cancelAnimationFrame(frame); cancelAnimationFrame(settle); };
+    return () => {
+      window.clearTimeout(transitionTimer);
+      document.documentElement.classList.remove("route-transition-active");
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(settle);
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -57,6 +73,11 @@ export function MouseReactiveShadows() {
     };
 
     const move = (event: PointerEvent) => {
+      if (document.documentElement.classList.contains("route-transition-active")) {
+        clearActive();
+        return;
+      }
+
       const eventTarget = event.target instanceof Element ? event.target : null;
       const next = eventTarget?.closest<HTMLElement>(targets) ?? null;
       if (!next) { clearActive(); return; }

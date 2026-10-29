@@ -15,6 +15,8 @@
 - Added dark-mode treatment and immediate navigation for users who prefer reduced motion.
 - Replaced the static city login visual with the supplied animated blue glow GIF at `public/branding/login-glow.gif`.
 - Rendered the GIF as an explicit media element instead of a CSS background so stale generated styles cannot preserve the former city image.
+- Added a dedicated `login-surface-out` keyframe so the entrance animation's fill state cannot override the sign-in fade-and-blur exit.
+- Delayed route replacement to 480 ms, leaving the 420 ms exit animation enough time to finish before Dashboard mounts.
 
 ## Files
 
@@ -30,6 +32,7 @@
 - Live `/login`: HTTP 200 with local preview mode present; the removed interstitial markup is absent.
 - Live GIF asset: HTTP 200; 3,368,739 bytes served.
 - Restarted the verified local development server after confirming its generated CSS bundle was stale; the live bundle now contains the GIF media styles and no `route-city.jpg` reference.
+- Cleared only the generated `.next` cache after a stale Turbopack bundle continued serving the previous exit rule; the rebuilt live CSS contains `login-surface-out` and `/login` contains the GIF asset.
 
 ## Manual review checklist
 

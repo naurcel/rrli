@@ -11,7 +11,7 @@ import { sanitizeReturnPath } from "@/lib/auth/route-policy";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
-const SIGN_IN_TRANSITION_MS = 420;
+const SIGN_IN_TRANSITION_MS = 480;
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);

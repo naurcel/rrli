@@ -2,10 +2,20 @@
 
 Keep this file current so a fresh Codex session can continue without guessing what happened previously. Prefer dated entries with exact file paths and commands.
 
+## 2026-10-29: Normalize route and Dashboard transitions
+- Added a root App Router template remount boundary and a shared content-only fade, blur, and slight vertical entrance across all operational routes; the sidebar is not an animation target.
+- Added a Dashboard-specific stagger for the greeting, summary cards, operational panels, rows, follow-up items, and scope note so login now hands off into visibly animated Dashboard content.
+- Kept the existing login fade-and-blur exit and reduced-motion handling. Used backwards-only fill on new entrances to avoid interfering with card hover behavior after animation completion.
+- Performance follow-up: removed large-area route/Dashboard blur, reduced login blur, paused cursor-shadow work during route entrances, removed summary-card backdrop blur, and limited the border-glow loop to hovered cards.
+- Fleet follow-up: stopped the final owned-truck row from clipping its lower shadows and made the hover highlight more visible with a stable lower shadow and hover-only amber inset pulse.
+- Verification: 17/17 tests passed; TypeScript and production build passed; all eight user-facing routes returned HTTP 200; live CSS contains the shared route, Dashboard, and login keyframes.
+- Full stage report: `docs/reports/29-route-and-dashboard-transition-report-2026-10-29.md`.
+
 ## 2026-10-29: Add sign-in transition animation
 - Added a reduced-motion-aware fade-and-blur transition between successful preview/Supabase sign-in and route replacement, with staggered login-element entrance motion and disabled submit feedback. A first-pass branded interstitial was removed after review in favor of the simpler transition.
 - Replaced the static city login visual with the supplied animated blue glow GIF.
 - Follow-up: Rendered the GIF as an explicit media element and restarted the stale local development server; the live login bundle now contains no city-image reference.
+- Follow-up: Replaced the overridden sign-in exit transition with a dedicated 420 ms `login-surface-out` keyframe and a 480 ms navigation delay. Cleared the generated `.next` cache after confirming the dev server was still serving the previous rule; live CSS now contains the new keyframe.
 - Default navigation remains Dashboard; sanitized explicit internal return paths continue to work.
 - Verification: 17/17 tests passed; TypeScript and production build passed; live `/login` returned HTTP 200 with transition markup.
 - Full stage report: `docs/reports/28-login-transition-animation-report-2026-10-29.md`.
