@@ -13,7 +13,7 @@ This is a living register. Add the owner, status, decision, date, and impacted f
 
 | ID | Topic | Current state | Why it matters | Owner / approver | Status |
 |---|---|---|---|---|---|
-| D-001 | Actual repository stack and conventions | Must inspect live repo | Prevents incompatible implementation | Project owner / developer | Open |
+| D-001 | Actual repository stack and conventions | Live stack verified as Next.js 16.4.2, React 19.3.0, TypeScript, and Tailwind CSS 4; Blueprint v1 proposes Supabase Auth/PostgreSQL/Storage, `@supabase/ssr`, Zod, and Vercel | Prevents incompatible implementation | Project owner / developer | Proposed |
 | D-002 | Canonical delivery fields and statuses | Must verify approved requirements | Drives forms, filters, and eligibility | Operations / owner | Open |
 | D-003 | POD requirements, upload policy, and retention | Not fully defined | Affects storage, completion, and compliance | Operations / owner | Open |
 | D-004 | Truck fields and retirement behavior | Not fully defined | Preserves historical reporting | Operations / owner | Open |
@@ -29,7 +29,7 @@ This is a living register. Add the owner, status, decision, date, and impacted f
 | D-014 | Report catalog, formats, and audiences | Not fully defined | Prevents unauthorized/incorrect reports | Owner / Finance | Open |
 | D-015 | Dashboard metrics and default period | Not fully defined | Prevents fabricated or misleading KPIs | Owner / Finance | Open |
 | D-016 | Timezone, date boundaries, and currency rounding | Must confirm | Affects reconciliation | Finance / owner | Open |
-| D-017 | Account lifecycle and session policy | Not fully defined | Affects security | Admin / owner | Open |
+| D-017 | Account lifecycle and session policy | Supabase email/password sign-in, server-verified route protection, and current-device sign-out are implemented; duration, recovery, invitations, suspension, and account administration remain undefined | Affects security | Admin / owner | Open |
 | D-018 | Audit log retention and backups | Not fully defined | Affects recovery and accountability | Owner / administrator | Open |
 | D-019 | Styling preferences and theme support | Direction documented in style guide | Affects shared tokens and component design | Product owner | Proposed |
 | D-020 | Deployment and release workflow | Must inspect current repo/process | Prevents accidental release | Project owner | Open |

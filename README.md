@@ -1,42 +1,88 @@
 # RouteX
 
-**Developed for Redeemed Route Logistics Inc. (RRLI)**
+RouteX is an internal truck profitability and delivery operations system for
+Redeemed Route Logistics Inc. The repository currently contains a polished,
+static application preview plus the first credential-independent pieces of the
+planned backend foundation.
 
-RouteX is a web-based **Truck Profitability and Delivery Operations Management System** for Redeemed Route Logistics Inc. It provides one place for staff to manage completed-delivery records, truck information, supporting documents, and related financial data.
+## Current state
 
-The goal of RouteX is to make company records easier to organize and retrieve, while giving management a clearer view of profitability across individual deliveries, trucks, and the company as a whole.
+- All operational pages render local preview data.
+- Supabase is not connected and no production schema or migrations exist.
+- The login page uses Supabase email/password authentication when public
+  project configuration is present.
+- Unconfigured development builds retain explicit preview access; unconfigured
+  production builds fail closed and redirect operational routes to Login.
+- Routes verify authentication, but role authorization and Row-Level Security
+  are not implemented yet.
+- Financial calculations and workflow rules remain provisional.
 
-## Main Features
+Do not treat preview values, status options, roles, or profitability figures as
+approved production behavior.
 
-- **Delivery Management** – Maintain completed delivery records, including related client, truck, crew, revenue, expense, and delivery information.
-- **Fleet Management** – Keep truck records and review delivery history associated with each truck.
-- **Proof of Delivery (POD)** – Upload and retrieve delivery documents linked to their records.
-- **Financial Records** – Record delivery-related expenses and company expenses that are not assigned to a specific delivery.
-- **Profitability Analysis** – Review delivery-, truck-, and company-level results using the financial rules approved for the system.
-- **Search and Reports** – Find historical records and review operational and financial reports.
-- **User Access Management** – Restrict system functions and information according to authorized user permissions.
+## Verified stack
 
-## Intended Users
+- Next.js 16.4.2 App Router
+- React 19.3.0
+- TypeScript 5
+- Tailwind CSS 4
+- Supabase JavaScript and SSR clients (foundation only)
+- Zod 4
+- Node's built-in test runner
+- npm
 
-RouteX is designed for internal company use. Operations staff manage completed delivery records and PODs, Finance maintains company-level expenses, HR maintains approved compensation summaries, and management reviews records and profitability reports. Administrators manage user accounts and access settings.
+The target architecture is documented in
+[`RouteX Architecture Blueprint v1.md`](./RouteX%20Architecture%20Blueprint%20v1.md).
+That document is a provisional working specification. Exact database tables,
+permissions, RLS policies, workflows, and financial rules still require owner
+approval before implementation.
 
-## Key Principle
+## Local development
 
-RouteX is intended to make financial results traceable. Management should be able to understand how recorded delivery and expense information contributes to truck-level and company-level results. An expense must not be counted more than once simply because it appears in multiple reports. Exact financial formulas and classifications are subject to the company's approved rules.
+Install dependencies and start the development server:
 
-## Technology Stack
+```bash
+npm install
+npm run dev
+```
 
-- **Application:** Next.js 15 App Router
-- **Frontend:** React, TypeScript, Tailwind CSS, shadcn/ui, Lucide React
-- **Server logic:** Next.js Server Actions and Route Handlers
-- **Database:** PostgreSQL through Supabase
-- **Authentication:** Auth.js
-- **File storage:** Supabase Storage
-- **Deployment:** Vercel
-- **Package manager:** npm
+Open [http://localhost:3000](http://localhost:3000).
 
-## Scope
+The preview UI builds without Supabase credentials. To prepare a local
+Supabase connection, copy `.env.example` to `.env.local` and provide the public
+project URL and publishable key. Never commit `.env.local`, service-role keys,
+access tokens, or passwords.
 
-RouteX supports post-delivery recordkeeping, information retrieval, reporting, and profitability review. It is not intended to provide live GPS tracking, live dispatch, route optimization, a customer portal, a full accounting replacement, or a complete payroll system under the current scope.
+## Validation
 
-> **Note:** RouteX's financial calculations depend on business rules confirmed by Redeemed Route Logistics Inc. Any unresolved rules should be confirmed before being treated as final system behavior.
+```bash
+npm test
+npm run typecheck
+npm run build
+```
+
+There is currently no lint script or browser automation suite.
+
+## Foundation boundaries
+
+- `src/lib/config` validates public runtime configuration.
+- `src/lib/supabase` separates browser and request-scoped server clients.
+- `src/lib/auth` provides a server-only verified-identity primitive based on
+  Supabase JWT claims.
+- `src/lib/errors` defines public-safe error serialization.
+- `src/lib/logging` defines a small server-only structured event boundary.
+
+The authentication boundary is wired through `src/proxy.ts`: it refreshes and
+verifies configured Supabase sessions before operational routes render. The
+login form can establish a configured Supabase session and safely restores an
+internal return path. A shared sidebar account control signs out the current
+device when Supabase is configured and exits the local preview otherwise.
+Password recovery, session-duration preferences, role authorization, database
+access, storage, and RLS remain unimplemented pending their approved contracts.
+
+## Product scope
+
+RouteX is intended for post-delivery records, fleet records, supporting
+documents, approved financial records, retrieval, reporting, and profitability
+review. Live GPS tracking, dispatch optimization, a customer portal, and a full
+accounting or payroll replacement are outside the current scope.

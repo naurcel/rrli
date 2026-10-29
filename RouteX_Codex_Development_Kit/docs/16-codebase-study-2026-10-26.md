@@ -16,11 +16,11 @@ The root README and a working-reference README describe an intended Next 15/Supa
 
 | Area | Verified location | Actual behavior |
 | --- | --- | --- |
-| Root application | `src/app/layout.tsx` | Loads global CSS and Readex Pro, mounts sidebar state, a visual mouse-shadow component, and a portal-based date picker. It also contains a client-side legacy hash-route guard. |
+| Root application | `src/app/layout.tsx` | Loads global CSS and Readex Pro, mounts shared sidebar/date-range state and the visual mouse-shadow component. It also contains a client-side legacy hash-route guard. |
 | Routes | `src/app/page.tsx`, `src/app/{dashboard,fleet,transactions,reports,administration,settings,login}/page.tsx` | Each route renders its own page shell and local preview records. All route pages are Client Components. |
 | Shared UI | `src/components/route-x-ui.tsx` | Small icon renderer with normalized SVG navigation glyphs. |
 | Shared sidebar state | `src/components/sidebar-state.tsx`, `sidebar-state-model.ts` | Width, collapsed state, pointer drag, keyboard resize targets, and local-storage persistence. This is presentation state only. |
-| Global date control | `src/components/global-date-range-picker.tsx` | Portal-mounted, local-only date range picker. It changes its own local range and does not filter pages, update the URL, or call a server. |
+| Global date control | `src/components/global-date-range-picker.tsx` | Shared client date-range provider and top-bar control. It filters dated local preview records but does not update the URL or call a server. |
 | Styling | `src/app/globals.css` | Single global CSS file containing tokens, layouts, effects, responsive styles, animations, login styles, and route-specific overrides. |
 | Static assets | `public/branding`, `public/profiles` | Logo, symbol, city image, and Shinryu profile image. |
 | Tests | `src/components/sidebar-state-model.test.ts` | Five Node test-runner tests for sidebar-width model behavior only. |
@@ -65,7 +65,7 @@ There are no `app/api` routes, route handlers, server actions, ORM/database modu
 
 ### Delivery list and local filtering
 
-`src/app/page.tsx` defines preview deliveries and additional scroll rows. `query` and `podFilter` state feed a `useMemo` filter that searches string values of each local delivery object and matches POD status. The resulting array drives the table and the local empty state. The date picker is not an input to this filter. New delivery and export are disabled; clicking a delivery uses a hash target rather than a details screen.
+`src/app/page.tsx` defines preview deliveries and additional scroll rows. Search, POD, driver, and shared date-range state feed a `useMemo` filter. The resulting array drives the table and the local empty state. New delivery and export are disabled; clicking a delivery uses a hash target rather than a details screen.
 
 ### Shared sidebar behavior
 
@@ -73,7 +73,7 @@ There are no `app/api` routes, route handlers, server actions, ORM/database modu
 
 ### Global date picker
 
-`src/components/global-date-range-picker.tsx` portals a picker into the active route's `.topbar`. It supports month selection, local start/end selection, presets, Escape closing, and focus restoration. Its use of browser-local `Date` values means it is not yet aligned to an approved business timezone. It neither exposes controlled state nor applies a range to any route.
+Updated after this study: `src/components/global-date-range-picker.tsx` exposes shared root state and renders directly inside the operational top bar. It supports month selection, start/end selection, presets, Escape closing, and focus restoration; Overview, Deliveries, and Transactions apply the range to dated local preview records. Its browser-local `Date` values are still not aligned to an approved business timezone.
 
 ### Other route flows
 
@@ -89,7 +89,7 @@ There are no `app/api` routes, route handlers, server actions, ORM/database modu
 2. **Documentation does not match the live stack.** Root `README.md` claims Next 15, Supabase, Auth.js, shadcn/ui, Lucide, Vercel, server actions, and storage; `package.json` contains none of these and verifies Next 16.4.2 instead. This can lead to incompatible implementation choices.
 3. **The application has no real domain model.** Only the home page declares a `Delivery` type. Fleet, transactions, reports, roles, and settings use untyped display tuples inside page modules. There are no reusable domain entities or relations.
 4. **Business fixtures are duplicated and cannot reconcile.** Dashboard recent-delivery and financial figures, Delivery fixtures, Fleet figures, and Transaction fixtures are independently declared. They cannot prove delivery-to-truck-to-transaction traceability or financial reconciliation.
-5. **The route shell is duplicated.** Every operational page repeats sidebar/nav/footer markup and route mapping. `SidebarStateProvider` centralizes state, but markup, accessibility attributes, and navigation rules diverge. For example, keyboard resize attributes appear on Deliveries, Fleet, and Dashboard but not consistently on the remaining pages.
+5. **Resolved after this study: sidebar and top-bar portions of the route shell were duplicated.** As of 2026-10-28 every operational page uses `OperationalSidebar` and `OperationalTopbar`, centralizing navigation, footer, active state, resize accessibility, breadcrumbs, and shared header actions. The outer page-shell composition remains route-local.
 6. **Legacy navigation is fragile.** `src/app/layout.tsx` injects a document-level click handler via `dangerouslySetInnerHTML` to translate selected hash links into routes. Several pages still emit `#overview`, `#administration`, or `#settings` instead of normal route links. This should be retired when the shell is shared; it is a maintainability concern, not evidence of an injection vulnerability in its current static form.
 7. **Global CSS has accumulated conflicting overrides.** `globals.css` is the correct central styling entry point, but it contains repeated selectors and route-specific rules in a single file. This makes visual changes harder to reason about and risks order-dependent regressions.
 8. **Operational UI states are incomplete.** Delivery has a local empty state. No route has data-loading, server-error, permission-denied, conflict/stale-write, or partial-data states because no data boundary exists. Many controls look interactive but are disabled or inert.

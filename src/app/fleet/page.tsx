@@ -1,46 +1,104 @@
 "use client";
 
-import Link from "next/link";
+import { useMemo, useState } from "react";
+
+import { OperationalSidebar } from "@/components/operational-sidebar";
+import { OperationalTopbar } from "@/components/operational-topbar";
+import { RoundedSelect } from "@/components/rounded-select";
 import { Icon } from "@/components/route-x-ui";
-import { useSidebarState } from "@/components/sidebar-state";
 
 const trucks = [
-  ["NGS 4281", "6-wheeler", "Active", "₱158,300", "₱70,600", "₱87,700"],
-  ["DAA 7310", "6-wheeler", "Active", "₱46,800", "₱18,800", "₱28,000"],
-  ["CBZ 1187", "10-wheeler", "Active", "₱48,100", "₱22,100", "₱26,000"],
-  ["NBE 9042", "6-wheeler", "Active", "₱155,600", "₱70,400", "₱85,200"],
-  ["ABX 2201", "6-wheeler", "Active", "₱57,000", "₱27,200", "₱29,800"],
-  ["XCY 6612", "4-wheeler", "Active", "₱44,100", "₱26,200", "₱17,900"],
-];
-const subcontractedTrucks = [
-  ["MMC 6667", "Monde Nissin Logistics", "6-wheeler", "Delivered", "₱29,000"],
-  ["NBE 9042", "San Miguel Food and Beverage", "6-wheeler", "In transit", "₱35,200"],
-  ["CBZ 1187", "Universal Robina Corporation", "10-wheeler", "Delayed", "₱26,000"],
-  ["NGS 4281", "Del Monte Philippines, Inc.", "6-wheeler", "Delivered", "₱31,500"],
-];
+  { id: "NGS 4281", type: "6-wheeler", status: "Active", revenue: "₱158,300", expenses: "₱70,600", margin: "₱87,700" },
+  { id: "DAA 7310", type: "6-wheeler", status: "Active", revenue: "₱46,800", expenses: "₱18,800", margin: "₱28,000" },
+  { id: "CBZ 1187", type: "10-wheeler", status: "Active", revenue: "₱48,100", expenses: "₱22,100", margin: "₱26,000" },
+  { id: "NBE 9042", type: "6-wheeler", status: "Active", revenue: "₱155,600", expenses: "₱70,400", margin: "₱85,200" },
+  { id: "ABX 2201", type: "6-wheeler", status: "Active", revenue: "₱57,000", expenses: "₱27,200", margin: "₱29,800" },
+  { id: "XCY 6612", type: "4-wheeler", status: "Active", revenue: "₱44,100", expenses: "₱26,200", margin: "₱17,900" },
+] as const;
 
-const navItems = [["Overview", "⌂"], ["Deliveries", "▤"], ["Fleet", "▱"], ["Transactions", "₱"], ["Reports", "▥"]];
+const subcontractedTrucks = [
+  { truck: "MMC 6667", company: "Monde Nissin Logistics", type: "6-wheeler", status: "Delivered", margin: "₱29,000" },
+  { truck: "NBE 9042", company: "San Miguel Food and Beverage", type: "6-wheeler", status: "In transit", margin: "₱35,200" },
+  { truck: "CBZ 1187", company: "Universal Robina Corporation", type: "10-wheeler", status: "Delayed", margin: "₱26,000" },
+  { truck: "NGS 4281", company: "Del Monte Philippines, Inc.", type: "6-wheeler", status: "Delivered", margin: "₱31,500" },
+] as const;
+
+const truckTypes = ["All types", ...Array.from(new Set(trucks.map((truck) => truck.type)))] as const;
+const subcontractorStatuses = ["All statuses", ...Array.from(new Set(subcontractedTrucks.map((truck) => truck.status)))] as const;
 
 export default function FleetPage() {
-  const { width: sidebarWidth, collapsed: sidebarCollapsed, resizing: resizingSidebar, startResize, handleResizeKeyDown } = useSidebarState();
+  const [ownedVisible, setOwnedVisible] = useState(true);
+  const [ownedType, setOwnedType] = useState<string>("All types");
+  const [subcontractorQuery, setSubcontractorQuery] = useState("");
+  const [subcontractorStatus, setSubcontractorStatus] = useState<string>("All statuses");
+  const [showSubcontractorFilters, setShowSubcontractorFilters] = useState(false);
 
-  return <div className="app-shell">
-    <aside className={`sidebar${sidebarCollapsed ? " collapsed" : ""}${resizingSidebar ? " resizing" : ""}`} style={{ "--sidebar-width": `${sidebarCollapsed ? 72 : sidebarWidth}px` } as React.CSSProperties}>
-      <div className="sidebar-brand-space" aria-hidden="true" />
-      <div className="workspace-label">WORKSPACE</div>
-      <nav aria-label="Primary navigation">{navItems.map(([label, symbol]) => <Link className={label === "Fleet" ? "nav-item active" : "nav-item"} href={label === "Overview" ? "/dashboard" : label === "Deliveries" ? "/" : label === "Fleet" ? "/fleet" : label === "Transactions" ? "/transactions" : label === "Reports" ? "/reports" : `#${label.toLowerCase()}`} key={label}><Icon>{symbol}</Icon><span className="nav-label">{label}</span></Link>)}</nav>
-      <div className="workspace-label lower">MANAGE</div>
-      <nav aria-label="Management navigation"><Link className="nav-item" href="/administration"><Icon>◎</Icon><span className="nav-label">Administration</span></Link><Link className="nav-item" href="/settings"><Icon>⚙</Icon><span className="nav-label">Settings</span></Link></nav>
-      <div className="sidebar-footer"><div className="avatar"><img src="/profiles/shinryu.png" alt="Shinryu" /></div><div><strong>Shinryu</strong><small>Operations</small></div><button className="more-button" aria-label="Account menu">•••</button></div>
-      <div className="sidebar-resize-handle" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin={72} aria-valuemax={360} aria-valuenow={sidebarCollapsed ? 72 : sidebarWidth} tabIndex={0} onKeyDown={handleResizeKeyDown} onPointerDown={startResize} />
-    </aside>
-    <main className="main-content">
-      <header className="topbar"><div className="breadcrumb"><span>Operations</span><b>/</b><strong>Fleet</strong></div><div className="topbar-actions"><span className="preview-pill"><i /> Preview workspace</span><button className="help-button" aria-label="Help">?</button></div></header>
-      <div className="content-wrap">
-        <section className="page-intro fleet-intro"><div><p className="eyebrow">OPERATIONS / ASSETS</p><h1>Fleet</h1><p className="subtitle">Truck profitability by ownership and status.</p></div><button className="secondary-button" disabled title="Creation is unavailable until the data and authorization boundary is connected"><Icon>＋</Icon> Add vehicle <span className="lock">◌</span></button></section>
-        <section className="fleet-section"><div className="fleet-section-heading"><strong>Owned trucks · 6</strong><button type="button">HIDE　⌄</button></div><div className="fleet-card-grid">{trucks.map(([id, type, status, revenue, expenses, margin]) => <article className="fleet-card" key={id}><div className="fleet-photo">No photo yet</div><div className="fleet-card-body"><div className="fleet-card-title"><div><h2>{id}</h2><p>{type}</p></div><span className="fleet-status">{status}</span></div><dl><div><dt>Revenue</dt><dd>{revenue}</dd></div><div><dt>Expenses</dt><dd>{expenses}</dd></div><div><dt>Margin</dt><dd>{margin}</dd></div></dl></div></article>)}</div></section><p className="scope-note"><span>●</span> Fleet profitability preview · Ownership, status, and financial figures are locally available sample records.</p>
-        <section className="fleet-subcontracted records-card"><div className="records-heading"><div><h2>Subcontracted trucks</h2><p>Showing locally available preview records</p></div><button className="export-button" disabled title="Export permissions are not approved"><Icon>⇩</Icon> Export <span className="lock">◌</span></button></div><div className="filters"><label className="search-box"><Icon>⌕</Icon><input aria-label="Search subcontracted trucks" placeholder="Search by truck, company, or status" /></label><button className="filter-button" type="button"><Icon>≡</Icon> More filters</button></div><div className="table-wrap"><table><thead><tr><th>Truck</th><th>Company</th><th>Type</th><th>Status</th><th>Margin</th></tr></thead><tbody>{subcontractedTrucks.map(([truck, company, type, status, margin]) => <tr key={`${truck}-${company}`}><td><a href={`#${truck}`} className="record-link">{truck}</a></td><td>{company}</td><td>{type}</td><td><span className={`pod-status ${status === "Delayed" ? "missing" : "attached"}`}><i />{status}</span></td><td className="money">{margin}</td></tr>)}</tbody></table></div><div className="table-footer"><span>{subcontractedTrucks.length} of 12 preview trucks</span><div className="pagination"><button disabled aria-label="Previous page">‹</button><span>1</span><button disabled aria-label="Next page">›</button></div></div></section>
-      </div>
-    </main>
-  </div>;
+  const filteredOwnedTrucks = useMemo(
+    () => trucks.filter((truck) => ownedType === "All types" || truck.type === ownedType),
+    [ownedType],
+  );
+
+  const filteredSubcontractedTrucks = useMemo(() => {
+    const query = subcontractorQuery.trim().toLowerCase();
+    return subcontractedTrucks.filter((truck) => {
+      const matchesQuery = !query || Object.values(truck).some((value) => value.toLowerCase().includes(query));
+      const matchesStatus = subcontractorStatus === "All statuses" || truck.status === subcontractorStatus;
+      return matchesQuery && matchesStatus;
+    });
+  }, [subcontractorQuery, subcontractorStatus]);
+
+  return (
+    <div className="app-shell">
+      <OperationalSidebar />
+      <main className="main-content">
+        <OperationalTopbar />
+        <div className="content-wrap">
+          <section className="page-intro fleet-intro">
+            <div>
+              <p className="eyebrow">OPERATIONS / ASSETS</p>
+              <h1>Fleet</h1>
+              <p className="subtitle">Truck profitability by ownership and status.</p>
+            </div>
+            <div className="fleet-intro-actions">
+              <RoundedSelect ariaLabel="Filter owned trucks by type" className="fleet-type-filter" options={truckTypes} value={ownedType} onChange={setOwnedType} />
+              <button className="secondary-button" disabled title="Creation is unavailable until the data and authorization boundary is connected"><Icon>＋</Icon> Add vehicle <span className="lock">◌</span></button>
+            </div>
+          </section>
+
+          <section className="fleet-section">
+            <div className="fleet-section-heading">
+              <strong>Owned trucks · {filteredOwnedTrucks.length}</strong>
+              <button className="fleet-section-toggle" type="button" aria-expanded={ownedVisible} aria-controls="owned-truck-grid" onClick={() => setOwnedVisible((visible) => !visible)}>
+                <span>{ownedVisible ? "Hide" : "Show"}</span><span className="dropdown-chevron" aria-hidden="true" />
+              </button>
+            </div>
+            <div id="owned-truck-grid" className={`fleet-card-grid${ownedVisible ? "" : " collapsed"}`} aria-hidden={!ownedVisible}>
+              {filteredOwnedTrucks.map((truck) => (
+                <article className="fleet-card" key={truck.id}>
+                  <div className="fleet-photo">No photo yet</div>
+                  <div className="fleet-card-body">
+                    <div className="fleet-card-title"><div><h2>{truck.id}</h2><p>{truck.type}</p></div><span className="fleet-status">{truck.status}</span></div>
+                    <dl><div><dt>Revenue</dt><dd>{truck.revenue}</dd></div><div><dt>Expenses</dt><dd>{truck.expenses}</dd></div><div><dt>Margin</dt><dd>{truck.margin}</dd></div></dl>
+                  </div>
+                </article>
+              ))}
+              {filteredOwnedTrucks.length === 0 && <div className="empty-state fleet-empty-state"><strong>No owned trucks found</strong><span>Choose a different truck type.</span></div>}
+            </div>
+          </section>
+          <p className="scope-note"><span>●</span> Fleet profitability preview · Ownership, status, and financial figures are locally available sample records.</p>
+
+          <section className="fleet-subcontracted records-card">
+            <div className="records-heading"><div><h2>Subcontracted trucks</h2><p>Showing locally available preview records</p></div><button className="export-button" disabled title="Export permissions are not approved"><Icon>⇩</Icon> Export <span className="lock">◌</span></button></div>
+            <div className="filters">
+              <label className="search-box"><Icon>⌕</Icon><input aria-label="Search subcontracted trucks" placeholder="Search by truck, company, or status" value={subcontractorQuery} onChange={(event) => setSubcontractorQuery(event.target.value)} /></label>
+              {showSubcontractorFilters && <RoundedSelect ariaLabel="Filter subcontracted trucks by status" className="inline-filter" options={subcontractorStatuses} value={subcontractorStatus} onChange={setSubcontractorStatus} />}
+              <button className="filter-button" type="button" aria-expanded={showSubcontractorFilters} onClick={() => setShowSubcontractorFilters((visible) => !visible)}><Icon>≡</Icon> {showSubcontractorFilters ? "Hide filters" : "More filters"}</button>
+            </div>
+            <div className="table-wrap"><table><thead><tr><th>Truck</th><th>Company</th><th>Type</th><th>Status</th><th>Margin</th></tr></thead><tbody>{filteredSubcontractedTrucks.map((item) => <tr key={`${item.truck}-${item.company}`}><td><a href={`#${item.truck}`} className="record-link">{item.truck}</a></td><td>{item.company}</td><td>{item.type}</td><td><span className={`pod-status ${item.status === "Delayed" ? "missing" : "attached"}`}><i />{item.status}</span></td><td className="money">{item.margin}</td></tr>)}</tbody></table>{filteredSubcontractedTrucks.length === 0 && <div className="empty-state"><strong>No subcontracted trucks found</strong><span>Try a different search or status filter.</span></div>}</div>
+            <div className="table-footer"><span>{filteredSubcontractedTrucks.length} of {subcontractedTrucks.length} preview trucks</span><div className="pagination"><button disabled aria-label="Previous page">‹</button><span>1</span><button disabled aria-label="Next page">›</button></div></div>
+          </section>
+        </div>
+      </main>
+    </div>
+  );
 }

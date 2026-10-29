@@ -55,9 +55,9 @@ The root `README.md` describes Next.js 15, shadcn/ui, Lucide, PostgreSQL/Supabas
 - Root document and metadata: `src/app/layout.tsx`.
 - Global tokens, app shell styles, page styles, responsive rules, effects, and controls: `src/app/globals.css`.
 - Shared icon wrapper: `src/components/route-x-ui.tsx`.
-- Global date picker: `src/components/global-date-range-picker.tsx`, mounted through a client component in the root layout and portaled into `.topbar`.
+- Updated after this audit: `src/components/global-date-range-picker.tsx` now provides shared root date state and renders directly in `OperationalTopbar`, avoiding portal placement drift. Dated local preview records consume the selected range on Overview, Deliveries, and Transactions.
 - Mouse-reactive shadows: `src/components/mouse-reactive-shadows.tsx` (uncommitted at audit start).
-- Page route components still duplicate much of the sidebar, topbar, and shell markup. Sidebar width/collapse persistence and pointer/keyboard resize behavior are now centralized in `src/components/sidebar-state.tsx`, with pure width rules in `src/components/sidebar-state-model.ts`; the provider persists across client route navigation.
+- Resolved after this audit: sidebar and top-bar markup are now centralized in `src/components/operational-sidebar.tsx` and `src/components/operational-topbar.tsx`. The outer page-shell composition remains route-local. Sidebar width/collapse persistence and pointer/keyboard resize behavior remain centralized in `src/components/sidebar-state.tsx`, with pure width rules in `src/components/sidebar-state-model.ts`; the provider persists across client route navigation.
 - `globals.css` has accumulated appended overrides and repeated selectors from visual iteration. This is confirmed duplication/maintenance debt, but broad cleanup is not recommended until visual baselines and representative route checks exist.
 - Light mode is implemented. No theme switch or dark theme implementation was found.
 - No centralized component library beyond the small icon wrapper and global date picker was found. Utility CSS is available but the page styling is predominantly plain CSS.
@@ -96,7 +96,7 @@ The kit’s decisions D-002 through D-018 remain open or partially unresolved. E
 - Responsive CSS breakpoints exist in the global stylesheet; no browser/device verification was run in this audit.
 - Some controls are intentionally disabled and labelled as preview-only. Several displayed controls (global search/date on Dashboard, Fleet table search/filter, row action buttons) are visual affordances without implemented behavior.
 - The date picker now restores trigger focus on Escape/selection and focuses its selected date when opened. Full calendar arrow-key navigation is not implemented.
-- The sidebar state is shared across routes. Its resizer supports pointer cancellation and keyboard resizing on the routes whose current handle markup exposes focus; remaining duplicated shell markup should be consolidated before claiming uniform keyboard support.
+- Resolved 2026-10-28: all operational routes now use one shared sidebar, and its resizer exposes uniform pointer, keyboard, focus, and ARIA behavior.
 - A visual screenshot/browser review was not performed as part of this audit.
 
 ## Automated checks available
@@ -136,7 +136,7 @@ Implement only after their sensitive-field permissions, formulas, report definit
 
 ### Safe foundational follow-ups
 
-- Finish extracting the duplicated sidebar/page shell after adding representative route-level regression coverage. The state model is centralized, but markup remains duplicated.
+- Sidebar and top-bar extraction were completed on 2026-10-28 with route-level HTTP, active-state, breadcrumb, and Dashboard-header checks. Responsive/accessibility review is the next frontend target before any broader shell extraction.
 - Add date-picker interaction tests after specifying timezone/week-start semantics and controlled/apply behavior.
 - Replace inert visual controls with either implemented interactions or clear disabled states, without inventing business workflows.
 - Review and consolidate CSS overrides in a dedicated, visually verified styling task.

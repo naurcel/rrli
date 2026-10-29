@@ -2,6 +2,117 @@
 
 Keep this file current so a fresh Codex session can continue without guessing what happened previously. Prefer dated entries with exact file paths and commands.
 
+## 2026-10-29: Add sign-in transition animation
+- Added a reduced-motion-aware fade-and-blur transition between successful preview/Supabase sign-in and route replacement, with staggered login-element entrance motion and disabled submit feedback. A first-pass branded interstitial was removed after review in favor of the simpler transition.
+- Replaced the static city login visual with the supplied animated blue glow GIF.
+- Follow-up: Rendered the GIF as an explicit media element and restarted the stale local development server; the live login bundle now contains no city-image reference.
+- Default navigation remains Dashboard; sanitized explicit internal return paths continue to work.
+- Verification: 17/17 tests passed; TypeScript and production build passed; live `/login` returned HTTP 200 with transition markup.
+- Full stage report: `docs/reports/28-login-transition-animation-report-2026-10-29.md`.
+
+## 2026-10-29: Make Dashboard the default route
+- Moved Deliveries from `/` to `/deliveries`, made `/` redirect to `/dashboard`, and updated shared sidebar and Dashboard links.
+- Confirmed both preview sign-in and default authenticated sign-in resolve to Dashboard; explicit safe return paths such as `/deliveries` remain supported.
+- Verification: 17/17 tests passed; TypeScript and production build passed; live route checks returned `/` → 307 `/dashboard`, with `/login`, `/dashboard`, and `/deliveries` returning HTTP 200.
+- Full stage report: `docs/reports/27-dashboard-default-and-login-navigation-report-2026-10-29.md`.
+
+## 2026-10-29: Repair Settings preview
+- Rebuilt `/settings` as a responsive, read-only configuration-readiness page with explicit unavailable states, corrected provisional values, and no irrelevant global date filter.
+- Preserved the approval boundary: no persistence, role authorization, backend connection, or unapproved setting behavior was added.
+- Verification: `/settings` returned HTTP 200; 17/17 tests passed; TypeScript and the production build passed.
+- Full stage report: `docs/reports/26-settings-page-repair-report-2026-10-29.md`.
+
+## 2026-10-29: Remove shared top-bar breadcrumb
+- Removed the `Operations / page` and `Manage / page` breadcrumb from the shared top bar while preserving the left-aligned global date filter and right-side workspace controls.
+- Verification: 17/17 tests passed; TypeScript passed; no shared breadcrumb source remains.
+- Full stage report: `docs/reports/25-topbar-breadcrumb-removal-report-2026-10-29.md`.
+
+## 2026-10-29: Unified rounded filter dropdowns
+- Goal: Make filter dropdowns visually and behaviorally consistent with the approved rounded POD menu.
+- Work completed: Added one reusable rounded dropdown component and applied it to Fleet type/status, Delivery POD/driver, and Transaction status filters. Standardized menu surfaces, chevrons, selected/hover states, animation, dark-mode treatment, outside-click closing, and Escape closing without changing filter semantics.
+- Files changed: `src/components/rounded-select.tsx`, `src/app/page.tsx`, `src/app/fleet/page.tsx`, `src/app/transactions/page.tsx`, `src/app/globals.css`, the reports index, and this handoff document.
+- Verification: 17/17 tests passed; TypeScript passed; production build passed and generated all application routes.
+- Visual checks: Browser review remains required for pixel-level comparison in light/dark mode and at narrow widths.
+- Full stage report: `docs/reports/24-unified-rounded-dropdowns-report-2026-10-29.md`.
+
+## 2026-10-28: Functional preview filters and Fleet disclosure
+
+- Removed the date picker's portal and rendered it directly inside the shared left-side top-bar slot, eliminating stale portal placement and right-edge calendar clipping.
+- Added root-level date-range state that persists across client route navigation and filters dated preview records on Overview, Deliveries, and Transactions.
+- Made Fleet's Owned Trucks Hide/Show control functional with an animated collapse, correct label/chevron state, and ARIA relationships.
+- Added a working owned-truck type filter, subcontractor search/status filters, Delivery driver filter, and Transaction search/status filter. Existing POD filtering remains active.
+- Kept Fleet aggregate figures and Dashboard summary cards as explicit preview totals because approved calculation/date semantics remain unresolved.
+- Verification: 17/17 tests passed; TypeScript passed; production build passed after moving browser-clock reads into hydration effects required by Next.js 16; four live operational routes returned HTTP 200 with the direct date control and functional-control markup.
+- Full stage report: `docs/reports/23-functional-preview-filters-report-2026-10-28.md`.
+
+## 2026-10-28: Left-aligned global filter, chevrons, and dark shadows
+
+- Moved the global date-range filter from absolute right positioning into a dedicated left-side slot beside the shared breadcrumb, eliminating its overlap with right-side workspace actions.
+- Replaced font-dependent down-arrow glyphs in the date filter, POD dropdown, and Fleet disclosure with one reusable CSS chevron that rotates from `aria-expanded` state.
+- Reworked dark-mode shadow tokens and added explicit control, hover, inset, avatar, and Fleet-section overrides so light-mode white highlights do not leak into dark surfaces.
+- Verification: 17/17 tests passed; TypeScript passed; production build passed; live Fleet and Deliveries routes returned HTTP 200 with the filter slot and shared chevron markup present.
+- Manual dark-mode visual review remains recommended because no browser automation runner is configured.
+- Full stage report: `docs/reports/22-filter-chevron-dark-shadow-report-2026-10-28.md`.
+
+## 2026-10-28: Shared operational top bar and report organization
+
+- Added `src/components/operational-topbar.tsx` and replaced duplicated top-bar markup across all seven operational pages.
+- Centralized route-aware breadcrumb labels, preview-workspace state, and the help-control placement while preserving the existing global date-picker and theme-toggle portal targets.
+- Removed the Dashboard-only global-search header and obsolete CSS-generated breadcrumb/preview controls, bringing Dashboard onto the same header structure as the other operational pages.
+- Moved dated engineering reports into `docs/reports/`, added a report index, and updated existing documentation references.
+- Verification: 17/17 tests passed; TypeScript passed; production build passed; all seven operational routes returned HTTP 200 and rendered the shared header; Dashboard no longer rendered the removed global-search control.
+- Browser-level visual and keyboard interaction still require manual review because no browser automation runner is configured.
+- Full stage report: `docs/reports/21-shared-topbar-and-report-organization-2026-10-28.md`.
+
+## 2026-10-28: Shared operational sidebar frontend foundation
+
+- Paused backend tooling at the owner's direction and resumed frontend finalization.
+- Added `src/components/operational-sidebar.tsx` and replaced sidebar markup duplicated across all seven operational pages.
+- Centralized route mappings, pathname-driven active states, branding, account control, collapsed behavior, and pointer/keyboard resizing with complete separator ARIA values.
+- Corrected stale hash-based Administration/Settings navigation on pages that had diverged.
+- Verification: 17/17 tests passed; TypeScript passed; production build passed; all seven operational routes returned HTTP 200 from a temporary development server and rendered the shared sidebar with one `aria-current="page"` item.
+- Visual browser interaction remains pending because no browser automation runner is configured.
+- Full stage report: `docs/reports/20-shared-sidebar-frontend-report-2026-10-28.md`.
+
+## 2026-10-28: Shared current-device sign-out control
+
+- Added one reusable account control across all seven operational page sidebars, removing duplicated account-footer behavior while preserving each page layout.
+- Added accessible avatar/overflow triggers, outside-click and Escape dismissal, trigger-aware focus restoration, safe error feedback, and collapsed-sidebar menu positioning.
+- Configured mode signs out only the current Supabase device/session (`scope: "local"`) and returns to Login. Development preview mode exits to Login without claiming a backend revocation.
+- Verification: existing 17 tests passed; TypeScript passed; production build passed with all routes and Proxy; the running development `/dashboard` returned HTTP 200 and included the shared account trigger.
+- Real provider sign-out and visual interaction remain unverified because no Supabase test account or browser automation is configured.
+- Full stage report: `docs/reports/19-account-session-exit-report-2026-10-28.md`.
+
+## 2026-10-28: Supabase authentication and fail-closed route boundary
+
+- Replaced Login's unconditional preview redirect with explicit Supabase, development-preview, and unavailable authentication modes.
+- Added Zod credential validation, safe provider-error handling, submission state, and sanitized internal return paths.
+- Added the Next.js 16 `src/proxy.ts` boundary. Configured requests verify Supabase JWT claims and propagate refresh cookies/no-cache headers; unauthenticated operational requests redirect to Login.
+- Preserved unconfigured preview access only under `NODE_ENV=development`. Verified an unconfigured production server returns Login normally and redirects operational routes with HTTP 307, preventing silent production exposure.
+- Disabled the still-unimplemented Remember me and password-recovery controls rather than presenting them as functional.
+- Added six authentication/route-policy tests; total suite now passes 17/17. TypeScript and production build pass, with the build detecting Proxy. Local production HTTP checks passed for Login, root, and a query-bearing Fleet return path.
+- Real remote sign-in remains unverified because no Supabase development project or test account is configured. Current-device sign-out was added in the following stage; role authorization, RLS, recovery, and the broader account lifecycle remain pending.
+- Full stage report: `docs/reports/18-authentication-boundary-report-2026-10-28.md`.
+
+## 2026-10-28: Credential-independent backend foundation
+
+- Reviewed the newly added provisional `RouteX Architecture Blueprint v1.md` against the live repository and current Next.js 16 documentation.
+- Added the selected Supabase SSR/JavaScript and Zod dependencies plus an explicit `server-only` boundary package.
+- Added a safe public environment contract, separate browser and request-scoped server Supabase client factories, verified-claims identity helpers, public-safe error serialization, and constrained structured server logging.
+- Kept authentication mutations, Proxy/session refresh, protected routes, database schema/migrations, RLS, storage, roles, and business rules unwired because their exact contracts remain unapproved or no project credentials exist.
+- Corrected the root README so it reports the verified live stack and preview-only system state instead of the stale Next.js 15/Auth.js plan.
+- Added `docs/reports/17-overnight-engineering-report-2026-10-28.md` with findings, scope, validation, risks, decisions, and the recommended next stage.
+- Verification: `cmd /c npm test` passed (11/11); `cmd /c npm run typecheck` passed; `$env:NODE_OPTIONS='--max-old-space-size=4096'; cmd /c npm run build` passed and generated all nine routes; dependency installation reported 0 vulnerabilities.
+- No visual browser check, Supabase connectivity test, commit, push, deployment, database mutation, or destructive operation was performed.
+
+## 2026-10-28: Shared dark-mode preference
+
+- Added a dependency-free, browser-local light/dark preference that applies through root `data-theme` tokens. Light remains the default; an explicit dark choice persists in `localStorage`.
+- Added a shared accessible theme toggle that portals into every operational top bar and floats on Login and fallback pages, avoiding duplicated page-level controls.
+- Added dark semantic token overrides and component-level coverage for navigation, tables, filters, date picker, fleet/report/settings cards, login, and fallback surfaces.
+- Verification: `cmd /c npm test` passed (5/5); `cmd /c npm run typecheck` passed; `$env:NODE_OPTIONS='--max-old-space-size=4096'; cmd /c npm run build` passed. Browser visual verification remains pending because no browser test runner is configured.
+- No product data, authentication, access, financial rules, or backend behavior changed.
+
 ## 2026-10-27: Safe route fallback hardening
 
 - Added a project-specific root `not-found.tsx`, so unmatched RouteX URLs receive an accessible RouteX fallback and a direct path back to Deliveries instead of the framework default.
@@ -11,17 +122,17 @@ Keep this file current so a fresh Codex session can continue without guessing wh
 - This does not add authentication, persistence, APIs, financial rules, or authorization. The unresolved data and access decisions remain blockers for production workflows.
 
 ## Current snapshot
-- Last updated: 2026-10-25; time not recorded.
+- Last updated: 2026-10-28; time not recorded.
 - Current branch: `main`, tracking `origin/main`.
 - Working tree status: Existing application and knowledge-base changes present; no commit, push, or deployment performed.
-- Actual stack: Next.js 16.4.2 App Router, React 19.3.0, TypeScript, Tailwind CSS v4, npm; Node test/typecheck scripts exist; no lint, database, auth, or storage implementation found.
-- Current phase: Part 2 shared design foundation, active visual refinement.
-- Last completed task: Centralized sidebar width/collapse/resize state across routes, added tested width rules and keyboard resize support to representative handles, improved pointer cancellation and collapse physics, fixed the Deliveries notice dismissal, and improved date-picker focus/escape accessibility without connecting provisional business filtering.
-- Current blocker: Approved schema, access matrix, POD policy, authentication/data boundary, and final design decisions remain open.
-- Next smallest safe task: After approval, review the current Part 2 visual foundation and then proceed to the approved Delivery Management vertical slice or revise Part 2 only.
-- Tests/checks last run: `cmd /c npm run typecheck` PASS; `cmd /c npm test` PASS (5/5); `cmd /c npm run build` PASS; eight production HTTP route checks PASS.
-- Important decisions made:
-- Important decisions still open:
+- Actual stack: Next.js 16.4.2 App Router, React 19.3.0, TypeScript, Tailwind CSS v4, Supabase JavaScript/SSR client libraries, Zod, `server-only`, and npm. Supabase remains unconfigured; there is no database schema, migration, connected authentication, RLS, or storage implementation.
+- Current phase: Frontend finalization; backend tooling is intentionally paused.
+- Last completed task: Added the animated RouteX transition from successful sign-in to the Dashboard or another approved internal return path.
+- Current blocker: Blueprint v1 is provisional. Exact account/profile schema, permission matrix, protected-route policy, canonical operational schema, RLS, audit rules, POD policy, and financial rules still require approval; no Supabase project is configured.
+- Next smallest safe task: Perform a desktop/tablet/mobile frontend consistency and accessibility pass, then consolidate only the remaining page-shell composition that is proven safe to share.
+- Tests/checks last run: `cmd /c npm run typecheck` PASS; `cmd /c npm test` PASS (17/17); `cmd /c npm run build` PASS with all nine routes and Proxy generated; unconfigured production route checks PASS.
+- Important decisions made: D-001 now records the verified live stack and proposed Blueprint v1 target stack; it remains Proposed rather than Approved.
+- Important decisions still open: D-002 through D-020 remain subject to owner approval, including the exact schema, roles, workflows, financial rules, audit policy, and deployment process.
 
 ## Module status
 

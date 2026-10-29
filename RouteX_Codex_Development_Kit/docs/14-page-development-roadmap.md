@@ -10,24 +10,26 @@
 
 - Next.js 16.4.2 App Router, React/React DOM 19.3.0, TypeScript 5.x, Tailwind CSS 4.x, npm.
 - Main styles/tokens live in `src/app/globals.css`; Readex Pro is loaded in `src/app/layout.tsx`.
-- No shadcn/ui, Lucide, database, authentication, authorization, upload/storage, validation, or test framework dependency is installed.
-- `dev`, `build`, `start`, `typecheck`, and dependency-free `test` scripts exist. Type checking, five sidebar state tests, the production build, and HTTP route smoke checks currently pass.
+- Supabase browser/server clients, Zod validation, and a server route-protection boundary are installed. Local preview mode remains available when Supabase environment values are absent; no production database schema or storage workflow is connected.
+- No shadcn/ui or Lucide dependency is installed.
+- `dev`, `build`, `start`, `typecheck`, and dependency-free `test` scripts exist. Type checking, 17 unit tests, the production build, and HTTP route smoke checks currently pass.
 
 ### Live routes
 
 | Route | Current verified implementation | Status |
 |---|---|---|
-| `/` | Delivery listing preview with local search and POD filter, static preview records, empty state, disabled create/export | Preview exists; production data/workflows blocked |
+| `/` | Server redirect to `/dashboard` | Dashboard is the default application entry |
 | `/dashboard` | Dashboard preview with local summary fixtures, recent delivery rows, attention items | Preview exists; approved metrics and source integration blocked |
+| `/deliveries` | Delivery listing preview with local search, POD/driver/date filters, preview records, empty state, disabled create/export | Preview exists; production data/workflows blocked |
 | `/fleet` | Owned truck cards and subcontracted truck table with preview figures | Preview exists; canonical fleet/data integration blocked |
 | `/transactions` | Static financial record preview table | Preview exists; financial definitions/data integration blocked |
 | `/reports` | Static report definition cards | Preview exists; report queries/exports blocked |
 | `/administration` | Static member/role preview table | Preview exists; authentication and authorization blocked |
 | `/settings` | Static settings preview cards | Preview exists; persistence and permissions blocked |
-| `/login` | Login visual/form preview; submit navigates to `/dashboard` | UI only; there is no authentication |
+| `/login` | Email/password sign-in when Supabase is configured; local development preview sign-in otherwise; defaults to `/dashboard` | Session duration, recovery, invitation, and production environment configuration remain open |
 | `/_not-found` | Next-generated fallback | Framework default |
 
-Shared code includes the root layout, global styles, a small icon wrapper, date-range picker, mouse-reactive shadow component, persistent sidebar state provider, and tested sidebar width model. Sidebar markup and page-shell composition remain duplicated across client route components, but width/collapse/resize state no longer reinitializes per route. The date picker currently has local state only: it is not passed into page filters, metrics, or the URL. No database schema or migration exists in this repository.
+Shared code includes the root layout, global styles, icon wrapper, shared date-range state/control, mouse-reactive shadow component, persistent sidebar state provider, tested sidebar width model, shared account control, operational sidebar, and operational top bar. Sidebar and top-bar duplication were resolved on 2026-10-28; the outer page-shell composition remains route-local. The date range filters dated local preview records on Overview, Deliveries, and Transactions but is not stored in the URL or connected to a server. No database schema or migration exists in this repository.
 
 The top-level README’s Next 15/Supabase/Auth.js/shadcn/Vercel stack is not the live stack. Those technologies remain unselected until explicitly approved.
 
@@ -57,11 +59,11 @@ Acceptance: decisions are recorded in the kit; a minimal trust-boundary diagram 
 
 ### Stage 2 — Shared application foundation and visual primitives
 
-**Status:** In progress; sidebar state is centralized and tested, while shell markup and route-level coverage remain incomplete.
+**Status:** In progress; sidebar and top-bar structure are centralized and verified, while responsive/accessibility review and the remaining shell composition are incomplete.
 
 **Expected files:** `src/app/layout.tsx`, `src/app/globals.css`, new shared shell/components only if approved.
 
-Scope: assess/extract one consistent shell/sidebar/header, shared field/table/status/empty/error patterns, and tokens. The date picker already exists and needs controlled/apply semantics; do not create a duplicate. Preserve current RouteX visual direction. Address CSS duplication only with route-level regression checks.
+Scope: the shared sidebar, top bar, and client-side date-range state are complete. Next, verify responsive and keyboard behavior before assessing whether the remaining page-shell composition and field/table/status/empty/error patterns should be extracted. Date filtering currently applies only to dated local preview records; server/timezone semantics remain unresolved. Preserve current RouteX visual direction. Address CSS duplication only with route-level regression checks.
 
 Prerequisites: Stage 1 decisions; establish a minimal test/verification approach.
 

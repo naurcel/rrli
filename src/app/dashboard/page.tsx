@@ -1,11 +1,38 @@
 "use client";
-import Link from "next/link";
-import { Icon } from "@/components/route-x-ui";
-import { useSidebarState } from "@/components/sidebar-state";
 
-const navItems = [["Overview", "⌂"], ["Deliveries", "▤"], ["Fleet", "▱"], ["Transactions", "₱"], ["Reports", "▥"]];
-const recent = [["DLV-0248", "Northstar Retail", "Attached", "₱18,420"], ["DLV-0247", "Harbor Foods Co.", "Attached", "₱12,860"], ["DLV-0246", "Evergreen Supply", "Missing", "₱9,740"], ["DLV-0245", "Metro Buildworks", "Attached", "₱21,110"]];
+import { useMemo } from "react";
+import Link from "next/link";
+
+import { formatDateRange, isDateInRange, useGlobalDateRange } from "@/components/global-date-range-picker";
+import { OperationalSidebar } from "@/components/operational-sidebar";
+import { OperationalTopbar } from "@/components/operational-topbar";
+
+const recent = [
+  { id: "DLV-0248", client: "Northstar Retail", pod: "Attached", revenue: "₱18,420", completed: "Oct 21, 2026" },
+  { id: "DLV-0247", client: "Harbor Foods Co.", pod: "Attached", revenue: "₱12,860", completed: "Oct 20, 2026" },
+  { id: "DLV-0246", client: "Evergreen Supply", pod: "Missing", revenue: "₱9,740", completed: "Oct 18, 2026" },
+  { id: "DLV-0245", client: "Metro Buildworks", pod: "Attached", revenue: "₱21,110", completed: "Oct 17, 2026" },
+] as const;
+
 export default function DashboardPage() {
-  const { width, collapsed, resizing, startResize, handleResizeKeyDown } = useSidebarState();
-  return <div className="app-shell"><aside className={`sidebar${collapsed ? " collapsed" : ""}${resizing ? " resizing" : ""}`} style={{ "--sidebar-width": `${collapsed ? 72 : width}px` } as React.CSSProperties}><div className="sidebar-brand-space" aria-hidden="true" /><div className="workspace-label">WORKSPACE</div><nav aria-label="Primary navigation">{navItems.map(([label, symbol]) => <Link className={label === "Overview" ? "nav-item active" : "nav-item"} href={label === "Overview" ? "/dashboard" : label === "Deliveries" ? "/" : label === "Fleet" ? "/fleet" : label === "Transactions" ? "/transactions" : "/reports"} key={label}><Icon>{symbol}</Icon><span className="nav-label">{label}</span></Link>)}</nav><div className="workspace-label lower">MANAGE</div><nav aria-label="Management navigation"><Link className="nav-item" href="/administration"><Icon>◎</Icon><span className="nav-label">Administration</span></Link><Link className="nav-item" href="/settings"><Icon>⚙</Icon><span className="nav-label">Settings</span></Link></nav><div className="sidebar-footer"><div className="avatar"><img src="/profiles/shinryu.png" alt="Shinryu" /></div><div><strong>Shinryu</strong><small>Operations</small></div><button className="more-button" aria-label="Account menu">•••</button></div><div className="sidebar-resize-handle" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin={72} aria-valuemax={360} aria-valuenow={collapsed ? 72 : width} tabIndex={0} onKeyDown={handleResizeKeyDown} onPointerDown={startResize} /></aside><main className="main-content"><header className="topbar"><label className="global-search"><Icon>⌕</Icon><input aria-label="Search globally" placeholder="Search globally" /></label><div className="dashboard-date">▣　Last 7 days　⌄</div><div className="topbar-actions"><button className="help-button" aria-label="Notifications">♧</button><button className="help-button" aria-label="Tools">⚒</button></div></header><div className="content-wrap"><section className="dashboard-welcome"><p className="eyebrow">OPERATIONS / OVERVIEW</p><h1>Good morning, Shinryu!</h1><p className="subtitle">Oct 18, 2026 – Oct 24, 2026 · 15 deliveries</p></section><section className="stat-grid dashboard-stats"><div className="stat-card"><span className="stat-label">REVENUE</span><strong>₱559,600</strong><span className="stat-meta positive">↑ 8.2% <em>vs last period</em></span></div><div className="stat-card"><span className="stat-label">EXPENSES</span><strong>₱256,000</strong><span className="stat-meta warning">↑ 4.1% <em>vs last period</em></span></div><div className="stat-card"><span className="stat-label">NET MARGIN</span><strong>₱303,600</strong><span className="stat-meta positive">54.3% <em>current margin</em></span></div><div className="stat-card"><span className="stat-label">DELIVERED</span><strong>5</strong><span className="stat-meta positive">↑ 2 <em>this period</em></span></div></section><div className="dashboard-columns"><section className="records-card"><div className="records-heading"><div><h2>Recent deliveries</h2><p>Showing locally available preview records</p></div><Link className="record-link" href="/">View all</Link></div><div className="table-wrap"><table><thead><tr><th>Delivery</th><th>Client</th><th>POD</th><th>Revenue</th></tr></thead><tbody>{recent.map(([id, client, pod, revenue]) => <tr key={id}><td className="record-link">{id}</td><td>{client}</td><td><span className={`pod-status ${pod === "Missing" ? "missing" : "attached"}`}><i />{pod}</span></td><td className="money">{revenue}</td></tr>)}</tbody></table></div></section><section className="records-card dashboard-actions"><div className="records-heading"><div><h2>Attention needed</h2><p>Current operational follow-up</p></div></div><div className="attention-item"><strong>Missing POD</strong><span>3 deliveries need proof attached</span></div><div className="attention-item"><strong>Maintenance due</strong><span>3 vehicles need review</span></div></section></div><p className="scope-note"><span>●</span> Dashboard preview · Summary values are derived from local preview records.</p></div></main></div>;
+  const { range } = useGlobalDateRange();
+  const filteredRecent = useMemo(() => recent.filter((delivery) => isDateInRange(delivery.completed, range)), [range]);
+
+  return (
+    <div className="app-shell">
+      <OperationalSidebar />
+      <main className="main-content">
+        <OperationalTopbar />
+        <div className="content-wrap">
+          <section className="dashboard-welcome"><p className="eyebrow">OPERATIONS / OVERVIEW</p><h1>Good morning, Shinryu!</h1><p className="subtitle">{formatDateRange(range)} · {filteredRecent.length} deliveries</p></section>
+          <section className="stat-grid dashboard-stats"><div className="stat-card"><span className="stat-label">REVENUE</span><strong>₱559,600</strong><span className="stat-meta positive">↑ 8.2% <em>vs last period</em></span></div><div className="stat-card"><span className="stat-label">EXPENSES</span><strong>₱256,000</strong><span className="stat-meta warning">↑ 4.1% <em>vs last period</em></span></div><div className="stat-card"><span className="stat-label">NET MARGIN</span><strong>₱303,600</strong><span className="stat-meta positive">54.3% <em>current margin</em></span></div><div className="stat-card"><span className="stat-label">DELIVERED</span><strong>5</strong><span className="stat-meta positive">↑ 2 <em>this period</em></span></div></section>
+          <div className="dashboard-columns">
+            <section className="records-card"><div className="records-heading"><div><h2>Recent deliveries</h2><p>Showing locally available preview records</p></div><Link className="record-link" href="/deliveries">View all</Link></div><div className="table-wrap"><table><thead><tr><th>Delivery</th><th>Client</th><th>POD</th><th>Revenue</th></tr></thead><tbody>{filteredRecent.map((delivery) => <tr key={delivery.id}><td className="record-link">{delivery.id}</td><td>{delivery.client}</td><td><span className={`pod-status ${delivery.pod === "Missing" ? "missing" : "attached"}`}><i />{delivery.pod}</span></td><td className="money">{delivery.revenue}</td></tr>)}</tbody></table>{filteredRecent.length === 0 && <div className="empty-state"><strong>No recent deliveries in this range</strong><span>Choose a wider date range to view preview records.</span></div>}</div></section>
+            <section className="records-card dashboard-actions"><div className="records-heading"><div><h2>Attention needed</h2><p>Current operational follow-up</p></div></div><div className="attention-item"><strong>Missing POD</strong><span>3 deliveries need proof attached</span></div><div className="attention-item"><strong>Maintenance due</strong><span>3 vehicles need review</span></div></section>
+          </div>
+          <p className="scope-note"><span>●</span> Recent deliveries follow the selected date range · Summary cards remain local preview totals.</p>
+        </div>
+      </main>
+    </div>
+  );
 }
