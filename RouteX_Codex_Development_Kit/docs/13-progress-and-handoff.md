@@ -2,6 +2,68 @@
 
 Keep this file current so a fresh Codex session can continue without guessing what happened previously. Prefer dated entries with exact file paths and commands.
 
+## 2026-10-29: Add browser-local truck-profile creation
+
+- Replaced Fleet’s disabled Add vehicle control with `/fleet/new`, a focused profile-creation flow that captures only a plate number and one supported vehicle type.
+- A created profile is stored only in the current browser, appears in the Fleet owned-truck grid, and opens its own dynamic truck-profile route with the existing photo upload/crop tool available.
+- Deliberately did not infer financial values, maintenance history, ownership lifecycle rules, permissions, audit events, or a server-side fleet schema. New browser-preview profiles display unavailable financial figures instead.
+- Verification: `npm.cmd run typecheck` and `npm.cmd run build` passed; `git diff --check` found no whitespace errors (only existing line-ending warnings).
+
+## 2026-10-29: Simplify subcontracted Fleet filters
+
+- Reorganized the subcontracted-truck toolbar so search and assignment status stay in the primary row, while vehicle type and provider live in a clearly labeled optional refinement row.
+- Replaced the partial reset with one `Clear all` action that resets the search, status, type, and provider filters together and closes the refinement row.
+- Verification: `npm.cmd run typecheck` and `npm.cmd run build` passed; `git diff --check` found no whitespace errors (only existing line-ending warnings).
+
+## 2026-10-29: Define supported Fleet vehicle types
+
+- Centralized the local Fleet preview vehicle-type set as 4-wheeler, 6-wheeler, and 10-wheeler.
+- Owned and subcontracted Fleet filters now use that consistent ordered set instead of deriving a potentially inconsistent order from fixture records.
+- Verification: `npm.cmd run typecheck` and `npm.cmd run build` passed.
+
+## 2026-10-29: Prevent rounded dropdown clipping
+
+- Rounded dropdowns now expose their containing card only while open, so longer option menus can layer over the associated table instead of being clipped by its rounded overflow boundary.
+- Retained normal card clipping and table styling while menus are closed.
+- Verification: `npm.cmd run typecheck` and `npm.cmd run build` passed.
+
+## 2026-10-29: Smooth record-detail workspace resizing
+
+- Reworked the right-side detail-panel layout transition so the main workspace interpolates between explicit available widths when details open or close, rather than snapping from flexible layout sizing.
+- Kept the detail panel as a real workspace column; at narrow viewport widths, the existing compact behavior remains in place without forcing a desktop width transition.
+- Verification: `npm.cmd run typecheck` and `npm.cmd run build` passed.
+
+## 2026-10-29: Generate owned-truck profile pages
+
+- Expanded the dynamic `/fleet/[truckId]` route for all owned Fleet preview records into a complete, responsive profile layout rather than a basic detail view.
+- Added reusable profile cards for vehicle identity, preview availability, financial snapshot, explicit preview boundaries, and links to other owned-truck profiles.
+- Added a no-dependency photo tool to each truck profile: choose, replace, remove, zoom, frame, and apply a client-side crop. Cropped photos are intentionally stored only in browser preview storage until an approved asset backend exists.
+- Normalized the completed-delivery preview fixture to use the existing plate-number identifiers (`NGS 4281`, `NBE 9042`, and so on), removing the remaining internal-style `TRK-###` display values.
+- Kept the information boundary explicit: the pages use only existing local Fleet fields and do not fabricate maintenance, trip, document, ownership-history, or profitability-rule data.
+- Verification: `npm.cmd run typecheck` and `npm.cmd run build` passed; the build generated all six static owned-truck profile paths.
+
+## 2026-10-29: Add date-aware Transaction KPI cards
+
+- Added the same three-card summary pattern used by Deliveries and the Dashboard to the Transactions preview.
+- Revenue entries, expense entries, and pending-review counts derive only from the existing local transaction fixture and respect the global date range.
+- Did not introduce a net-margin/profitability calculation, posting workflow, approval action, or backend dependency.
+- Normalized the Transactions page into maintainable multiline JSX while retaining its local filters, sorting, keyboard-accessible row details, drawer, and preview-state messaging.
+
+## 2026-10-29: Complete date-aware Dashboard preview
+- Replaced the static Dashboard figures and four-record list with a central local-preview delivery dataset covering September 30 through October 29, 2026. Revenue, expenses, net margin, delivery count, prior-period comparison, recent deliveries, POD follow-up, truck rankings, and the native SVG revenue trend all derive from the selected global date range.
+- Added a clear revenue-chart legend, period context, y-axis values, date ticks, accessible point labels, and Revenue / Net margin / Deliveries ranking controls for the Top trucks panel.
+- Added a role-ready Quick actions model. All action links intentionally remain visible while D-012 (the permission matrix) is open; no client-side role restriction is presented as enforcement.
+- Boundary: these are explicitly local preview records and preview calculations. They must be replaced by approved metric definitions, authoritative data, and server-side authorization before production use.
+- Verification: TypeScript passed; production build passed; 22/22 tests passed, including Dashboard date-boundary filtering, derived metrics/rankings, revenue-series, and comparison-range tests; the live `/dashboard` response contained the chart, Top trucks, and Quick actions sections.
+
+## 2026-10-29: Add temporary hosted-preview login
+- Added a server-side temporary preview-access mode for deployments without Supabase configuration. It accepts `admin` / `admin`, creates a 12-hour Secure/HttpOnly/SameSite=Lax cookie in production, and protects hosted operational routes through the existing Next Proxy.
+- Login and account exit now create and clear that temporary hosted-preview session. Configured Supabase deployments retain their actual Supabase sign-in; local development retains its existing unrestricted preview mode.
+- Follow-up: logout now uses a full document replacement after session changes in all modes, avoiding a stale client-route response that could leave Login blank until manually refreshed.
+- Boundary: this is an intentionally temporary UI-preview gate, not production identity, role authorization, or an approved backend.
+- Verification: 19/19 tests passed; TypeScript and build passed; production-server checks returned 307 for anonymous Dashboard, 401 for invalid credentials, 200 plus secure session cookie for valid credentials, and 200 for Dashboard with that session.
+- Full stage report: `docs/reports/30-hosted-preview-login-report-2026-10-29.md`.
+
 ## 2026-10-29: Normalize route and Dashboard transitions
 - Added a root App Router template remount boundary and a shared content-only fade, blur, and slight vertical entrance across all operational routes; the sidebar is not an animation target.
 - Added a Dashboard-specific stagger for the greeting, summary cards, operational panels, rows, follow-up items, and scope note so login now hands off into visibly animated Dashboard content.
@@ -651,6 +713,68 @@ Follow-up: Kept only the reference truck-card layout; restored the existing Flee
 - Actions explicitly not taken: No application, dependency, infrastructure, database, backend, auth, permission, financial-rule, commit, push, deploy, or destructive changes.
 
 ## Session entry template
+### 2026-10-30: Living documentation synchronization
+- Goal: Align the living documentation with the verified frontend implementation without converting local UI behavior into unapproved production claims.
+- Work completed: Added the repository-level `docs/CURRENT_IMPLEMENTATION_STATE.md` as the present-state source of truth. Updated the root README, project study, architecture discovery note, decision register, Knowledge Base indexes/architecture/development/testing summaries, screen inventory, issue log, and changelog to distinguish current frontend behavior from planned backend/RBAC/domain work.
+- Verified state recorded: Next.js 16.4.2/React 19.3.0/Tailwind 4 custom UI; local delivery/transaction/truck creation; local truck-photo crop; 50 synthetic subcontracted trucks; local dashboard/report calculations; temporary hosted preview gate; no database, migrations, server CRUD, RLS, storage, RBAC, or approved financial engine.
+- Validation evidence referenced: `npm.cmd run typecheck`, `npm.cmd test` (28 tests), and `npm.cmd run build` passed during the current frontend work. No browser automation or configured remote environment was available.
+- Decision still open: D-021 records the proposed central synthetic mock-data boundary. It is intentionally not implemented until owner approval.
+- Actions explicitly not taken: No application behavior, backend, database, dependency, migration, commit, push, deploy, or destructive cleanup was performed for this documentation-only update.
+
+### 2026-10-29: Date-aware report document preview
+- Goal: Replace the Reports definition-card view with an in-system document preview that follows RouteX's existing compact glass/neumorphic design while preserving report/export boundaries.
+- Work completed: Rebuilt `/reports` as a centered preview-document workspace with Revenue, Expenses, Profitability, and Operations tabs. It derives all visible figures and grouped rows from the Dashboard's existing local delivery fixture and shared global date range. Added document metadata, summary metrics, an empty range state, print-focused styling, and a native `Print / Save PDF` action. Export remains explicitly disabled pending approved formats, permissions, and backend support.
+- Data boundary: The document is a local preview, not an official accounting/tax report or generated file. It has no report persistence, export route, schedule, authorization enforcement, retention, or additional financial source.
+- Files changed: `src/app/reports/page.tsx`, `src/features/reports/report-preview-data.ts`, `src/features/reports/report-preview-data.test.ts`, `src/app/globals.css`, `package.json`, and this handoff document.
+- Validation: `npm.cmd run typecheck` passed; `npm.cmd test` passed all 28 tests; `npm.cmd run build` passed; `git diff --check` found no whitespace errors (only existing line-ending warnings).
+- Decisions still open: Approved report audiences/definitions, source reconciliation, field visibility, official-document language, allowed export formats/limits, authorization, and retention.
+- Actions explicitly not taken: No report generation service, backend/export endpoint, file storage, scheduler, authorization enforcement, migration, dependency, commit, push, deploy, or destructive cleanup.
+
+### 2026-10-29: Audit trail preview
+- Goal: Provide a reviewable audit-trail interface without falsely representing it as a production audit system before the event schema, retention, and trust boundary are approved.
+- Work completed: Added `/administration/audit-trail` and an Audit trail Management navigation item. The page follows the shared records-table pattern: global date range, search, filters for outcome and area, advanced actor/action filters, clear controls, sortable headers, keyboard-accessible rows, and the reusable detail drawer. Added six local sample events and a fixture integrity test.
+- Data boundary: This is read-only, local sample activity. It does not record current UI interactions, retain events, enforce access, support export, or provide immutable/tamper-resistant server auditing.
+- Files changed: `src/app/administration/audit-trail/page.tsx`, `src/features/audit/audit-preview-data.ts`, `src/features/audit/audit-preview-data.test.ts`, `src/components/operational-sidebar.tsx`, `src/components/route-x-ui.tsx`, `package.json`, and this handoff document.
+- Validation: `npm.cmd run typecheck` passed; `npm.cmd test` passed all 27 tests; `npm.cmd run build` passed and generated `/administration/audit-trail`. `git diff --check` found no whitespace errors (only existing line-ending warnings).
+- Decisions still open: Audit-event schema, actor identity source, sensitive-data redaction, access/review permissions, retention, export, tamper resistance, and backup policy.
+- Actions explicitly not taken: No event persistence, backend, database, RBAC enforcement, migration, dependency, commit, push, deploy, or destructive cleanup.
+
+### 2026-10-29: Specific preview filters and three-state table sorting
+- Goal: Make local preview records easier to narrow and inspect without asserting server-side query, authorization, or canonical business behavior.
+- Work completed: Added a reusable sortable table header with an accessible ascending → descending → default-order cycle. Applied it to Deliveries, Transactions, subcontracted Fleet, workspace members, and the Dashboard's recent-deliveries snapshot. Expanded filters using only fields present in the corresponding fixtures: Deliveries now supports POD, driver, client, and truck; Transactions supports status, category, and revenue/expense flow; subcontracted Fleet supports status, vehicle type, and provider; Administration supports status and team. Each advanced filter group has a clear action.
+- Data boundary: All filtering and ordering is client-side against existing local preview records. Default delivery/transaction order remains the original newest-first fixture order. No API filters, pagination, financial formulas, or permission rules were added.
+- Files changed: `src/components/table-sorting.ts`, `src/components/sortable-table-header.tsx`, `src/components/sortable-table-header.test.ts`, `src/app/deliveries/page.tsx`, `src/app/transactions/page.tsx`, `src/app/fleet/page.tsx`, `src/app/administration/page.tsx`, `src/app/dashboard/page.tsx`, `src/app/globals.css`, `package.json`, and this handoff document.
+- Validation: `npm.cmd run typecheck` passed; `npm.cmd test` passed all 26 tests; `npm.cmd run build` passed and generated the application routes.
+- Decisions resolved: None. Canonical sorting/filtering semantics, server pagination/query behavior, RBAC, and financial definitions remain pending.
+- Actions explicitly not taken: No backend, schema, database query, authorization enforcement, dependency, migration, commit, push, deploy, or destructive cleanup.
+
+### 2026-10-29: Preview record details and Fleet drill-down
+- Goal: Make the existing preview records easier to inspect without introducing backend behavior or unapproved operating rules.
+- Work completed: Added a reusable accessible right-side record-detail drawer. Delivery, transaction, dashboard recent-delivery, subcontracted-fleet, and administration rows now open their available preview fields via click, Enter, or Space; Escape and the backdrop close the drawer. Owned Fleet cards now link to shareable `/fleet/[truckId]` detail routes generated from the same central Fleet fixture, with a return link and an explicit preview-data boundary.
+- Data boundary: The drawer deliberately shows only fields already available locally. Where a financial breakdown, trip history, permissions, documents, or workflow state is absent, it says so instead of fabricating it.
+- Files changed: `src/components/record-detail-drawer.tsx`, `src/features/fleet/fleet-preview-data.ts`, `src/features/fleet/fleet-preview-data.test.ts`, `src/app/fleet/page.tsx`, `src/app/fleet/[truckId]/page.tsx`, `src/app/deliveries/page.tsx`, `src/app/transactions/page.tsx`, `src/app/administration/page.tsx`, `src/app/dashboard/page.tsx`, `src/app/globals.css`, `package.json`, and this handoff document.
+- Validation: `npm.cmd run typecheck` passed; `npm.cmd test` passed all 24 tests; `npm.cmd run build` passed and generated the six static owned-truck detail routes. Authenticated HTTP checks returned 200 for the existing table routes and the Fleet drill-down route. `git diff --check` found no whitespace errors (only existing line-ending warnings).
+- Visual verification: No browser automation is installed. The drawer open/close behavior, row focus treatment, dark mode, and responsive sizing require a manual browser check. A pre-existing development server on port 3000 did not discover the newly created dynamic route until restart; restart `npm run dev` before manually testing `/fleet/NGS%204281`.
+- Decisions resolved: None. RBAC, canonical delivery fields/statuses, financial definitions, and backend persistence remain open.
+- Actions explicitly not taken: No backend, database, authorization rule, migration, dependency, commit, push, deploy, or destructive cleanup.
+
+### 2026-10-29: Non-modal record detail workspace
+- Goal: Keep the operational sidebar part of the visible application shell while preview-record details are open.
+- Work completed: Converted the reusable record-details UI from a modal/backdrop treatment into a right-hand workspace column. Opening details now contracts the main content area beside a fixed detail column, leaves the sidebar fully visible and interactive, preserves Escape-to-close, and removes the page-dimming backdrop. Narrow screens retain the compact overlay fallback.
+- Files changed: `src/components/record-detail-drawer.tsx`, `src/app/globals.css`, and this handoff document.
+- Validation: `npm.cmd run typecheck` passed; `npm.cmd run build` passed and generated all 21 routes; `git diff --check` reported only existing line-ending warnings.
+- Visual checks: No browser automation is installed; verify a delivery, transaction, audit, dashboard, or administration row manually at desktop and narrow widths.
+- Decisions resolved: None. This is a layout/accessibility treatment only; record fields and data boundaries are unchanged.
+- Actions explicitly not taken: No backend, database, authorization rule, migration, dependency, commit, push, deploy, or destructive cleanup.
+
+### 2026-10-29: Administration audit-trail integration
+- Goal: Keep member access review and preview activity together in a single Administration workspace.
+- Work completed: Extracted the interactive audit table into a reusable Administration section with its existing date range, search, filters, sorting, and record-detail behavior. Removed the separate Audit trail sidebar item. The former `/administration/audit-trail` URL now redirects to the in-page `#audit-trail` section to preserve existing links.
+- Files changed: `src/components/audit-trail-preview.tsx`, `src/app/administration/page.tsx`, `src/app/administration/audit-trail/page.tsx`, `src/components/operational-sidebar.tsx`, `src/app/globals.css`, and this handoff document.
+- Validation: `npm.cmd run typecheck` passed; `npm.cmd run build` passed and generated all 21 routes; `git diff --check` reported only existing line-ending warnings.
+- Decisions still open: Audit-event schema, retention, tamper resistance, permissions, export, and backend persistence.
+- Actions explicitly not taken: No backend, database, audit-event capture, authorization enforcement, migration, dependency, commit, push, deploy, or destructive cleanup.
+
 ### YYYY-MM-DD: [short session title]
 - Goal:
 - Repository state before changes:

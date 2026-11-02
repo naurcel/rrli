@@ -6,6 +6,14 @@
 
 This repository is the working knowledge base for the RouteX project. It is intended for human readers, Obsidian, and AI coding agents. Markdown links are relative; Obsidian wikilinks are not used.
 
+## Current implementation
+
+The current live repository is a frontend-first, local-data application rather
+than the intended production system. Read the repository-level
+[Current Implementation State](../docs/CURRENT_IMPLEMENTATION_STATE.md) before
+using architecture, screen, or implementation documents as evidence of what is
+working today. Dated reports and agent-session logs remain historical evidence.
+
 ## Start here
 - [Project overview](00-Project-Core/Project-Overview.md)
 - [Requirements index](01-Requirements/Requirements-Index.md)

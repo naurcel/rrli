@@ -4,6 +4,12 @@
 **Branch:** `main`  
 **Purpose:** Snapshot the live repository and identify the safest next implementation sequence. This is an evidence-based audit, not a production-readiness certification.
 
+> **Historical snapshot:** This audit records the repository on 2026-10-25. Later
+> frontend work added browser-local create flows, truck profiles/photo editing, a
+> temporary hosted-preview login gate, and additional screen interactions. It is not
+> the current implementation inventory; see
+> [Current Implementation State](../../docs/CURRENT_IMPLEMENTATION_STATE.md).
+
 ## Executive summary
 
 RouteX currently runs as a Next.js preview application with eight user-facing routes and shared visual behavior. Its pages use local, hardcoded preview records and interface-only controls. There is no database, authentication provider, authorization enforcement, file storage, server API, migration history, broad application test suite, or lint script in the live project. A small dependency-free unit suite now covers the shared sidebar state model. The current pages demonstrate layout and some client-side filtering, but they are not production workflows.

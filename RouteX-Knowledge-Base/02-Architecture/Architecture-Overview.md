@@ -1,7 +1,23 @@
 # Architecture Overview
 
+## Current verified implementation
+
+RouteX currently runs as one Next.js 16.4.2 App Router frontend using React
+19.3.0, TypeScript, Tailwind CSS 4, and custom shared components. It has local
+fixtures and selected browser-local writes only. Supabase client libraries and
+a route-authentication boundary are present, but there is no configured
+Supabase project, database schema, migration, server CRUD, storage, RLS, or
+role enforcement. The temporary hosted preview gate is not production
+authentication.
+
+The intended architecture below remains a target, not a statement that these
+services are running. See [Current Implementation State](../../docs/CURRENT_IMPLEMENTATION_STATE.md).
+
 ## Intended architecture
-A single Next.js web application handles the interface and server-side application logic. PostgreSQL via Supabase stores structured records; Supabase Storage stores POD documents; Auth.js provides authentication; Vercel is the proposed deployment platform.
+A single Next.js web application is the intended application boundary.
+PostgreSQL via Supabase is the proposed structured-record store; Supabase
+Storage is proposed for POD documents; Supabase Auth is the selected future
+authentication direction; Vercel remains the proposed deployment platform.
 
 ```text
 Authorized browser
@@ -30,4 +46,6 @@ Vercel deployment
 - Use one shared financial calculation path for UI, reports, and exports.
 
 ## Validation spike
-Auth.js + Supabase integration and session/authorization boundaries must be verified in a small technical spike before relying on assumptions. The exact schema, migrations approach, connection strategy, deployment configuration, and storage policy are not finalized here.
+Supabase session and authorization boundaries still need verification against a
+real project. The exact schema, migrations approach, connection strategy,
+deployment configuration, and storage policy are not finalized here.

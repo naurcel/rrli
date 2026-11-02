@@ -4,6 +4,11 @@
 **Scope:** Read-only architecture, product, workflow, and test study of the live repository.  
 **Status:** Evidence report. It does not approve requirements or add application behavior.
 
+> **Historical snapshot:** This report describes the repository on 2026-10-26. Its
+> route count, dependency, and static-preview observations have been superseded by
+> later frontend work. For the living implementation inventory, see
+> [Current Implementation State](../../docs/CURRENT_IMPLEMENTATION_STATE.md).
+
 ## A. Project Overview
 
 RouteX is currently a static Next.js preview of a truck profitability and delivery-operations system for RRLI. The product direction is to trace company performance through trucks, completed deliveries, and source financial records. That traceability is documented as an intended outcome; it is not implemented in the live application.

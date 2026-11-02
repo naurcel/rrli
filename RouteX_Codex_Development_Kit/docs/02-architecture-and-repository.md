@@ -1,22 +1,32 @@
 # Architecture and Repository Discovery
 
+> **Current implementation note (2026-10-30):** The verified application uses
+> Next.js 16.4.2, React 19.3.0, TypeScript 5, Tailwind CSS 4, custom shared
+> UI components, and Node's built-in test runner. Supabase client packages are
+> present but no database/schema/storage/RLS integration exists. See the
+> repository [Current Implementation State](../../docs/CURRENT_IMPLEMENTATION_STATE.md)
+> before relying on older discovery findings.
+
 ## Purpose
 This document helps Codex work with the actual repository rather than assuming a preferred stack is already present.
 
-## Expected stack to verify, not blindly impose
-The currently expected direction has been described as:
+## Legacy target stack — not an implementation assumption
+Older planning material described the following target direction:
 - Next.js App Router
 - React and TypeScript
 - Tailwind CSS
-- shadcn/ui and Lucide icons
+- custom shared components (not shadcn/ui or Lucide; neither is installed)
 - Next.js Server Actions and Route Handlers
 - PostgreSQL through Supabase
-- Auth.js
+- Supabase Auth when a real backend is approved and configured; the current app also
+  retains a temporary hosted-preview login gate
 - Supabase Storage
 - Vercel deployment
 - npm
 
-These are expectations only. Confirm them from repository files and approved project decisions before changing code. Do not migrate the project to this stack just because it appears here.
+These are planning directions only. Confirm them from repository files and approved
+project decisions before changing code. Do not migrate the project to this stack just
+because it appears here.
 
 ## Repository inspection checklist
 - [ ] Root files and existing agent instructions inspected.

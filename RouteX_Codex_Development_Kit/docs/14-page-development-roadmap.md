@@ -1,5 +1,12 @@
 # RouteX Page Development Roadmap
 
+> **Current implementation update (2026-10-30):** The Dashboard, Deliveries,
+> Fleet, Transactions, Reports, Administration, Settings, Login, and Truck
+> Profile routes now exist as interactive local-data surfaces. This does not
+> advance the production stages below: their database, authorization, domain,
+> storage, and reporting prerequisites remain open. See
+> [Current Implementation State](../../docs/CURRENT_IMPLEMENTATION_STATE.md).
+
 **Reviewed:** 2026-10-25
 
 **Source of truth:** live repository plus approved RouteX requirements. The roadmap is a proposal; statuses describe verified code, not approval to start a stage.

@@ -33,6 +33,7 @@ This is a living register. Add the owner, status, decision, date, and impacted f
 | D-018 | Audit log retention and backups | Not fully defined | Affects recovery and accountability | Owner / administrator | Open |
 | D-019 | Styling preferences and theme support | Direction documented in style guide | Affects shared tokens and component design | Product owner | Proposed |
 | D-020 | Deployment and release workflow | Must inspect current repo/process | Prevents accidental release | Project owner | Open |
+| D-021 | Central synthetic mock-data boundary | Current fixtures and browser-local writes are split between Dashboard, Deliveries, Transactions, Fleet, Administration, and Audit. A `mock-db.json` plus seed/store/selectors/async API proposal is prepared but not approved or implemented. | Affects cross-screen consistency, local persistence, audit writes, and future backend replacement. | Project owner | Open |
 
 ## Decision record template
 For each decision, record:

@@ -2,15 +2,19 @@
 
 | Layer | Intended technology | Status |
 |---|---|---|
-| App framework | Next.js 15 App Router | Current project constraint |
-| UI | React, TypeScript | Current project constraint |
-| Styling/components | Tailwind CSS, shadcn/ui, Lucide React | Current project constraint |
+| App framework | Next.js 16.4.2 App Router | Implemented in the repository |
+| UI | React 19.3.0, TypeScript 5 | Implemented in the repository |
+| Styling/components | Tailwind CSS 4 and custom shared components | Implemented; shadcn/ui and Lucide are not installed |
 | Server logic | Next.js Server Actions + Route Handlers | Current project constraint |
 | Database | PostgreSQL via Supabase | Current project constraint |
-| Authentication | Auth.js (formerly NextAuth.js naming in older docs) | Integration validation required |
+| Authentication | Supabase Auth boundary plus temporary hosted preview gate | SDK/boundary implemented; no configured provider or RBAC |
 | File storage | Supabase Storage | Intended for POD documents |
 | Hosting/deployment | Vercel | Proposed; account owner/payer TBD |
-| Package manager | npm | Current project constraint |
+| Package manager | npm | Implemented |
+
+The database, storage, and deployment rows describe target architecture, not
+running services. See [Current Implementation State](../../docs/CURRENT_IMPLEMENTATION_STATE.md)
+for the active local-data boundary.
 
 Do not introduce Prisma, a separate backend app, or unapproved third-party integrations without an explicit decision and scope review.
 

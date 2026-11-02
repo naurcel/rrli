@@ -1,7 +1,8 @@
 # Implementation Roadmap
 
 1. **Source and rule freeze:** reconcile requirements, confirm open financial rules, access matrix, and acceptance examples.
-2. **Technical spike:** validate Auth.js + Supabase integration, server-side role checks, database access, and private storage access.
+2. **Technical spike:** validate Supabase Auth integration, server-side role checks,
+   database access, and private storage access.
 3. **Data foundation:** finalize ERD/schema, migrations, reference entities, and audit event model.
 4. **Core records:** completed deliveries, truck/client/crew references, delivery financial entries, company expenses, compensation summaries, POD.
 5. **Financial engine:** implement only approved formulas with test fixtures and reconciliation.
@@ -11,6 +12,10 @@
 9. **Deployment and turnover:** verify deployment, data export, documentation, training, and acceptance.
 
 The dates are constrained by the project deadline; see [Project Timeline](../00-Project-Core/Project-Timeline-and-Deliverables.md). Reorder only with documented rationale and stakeholder agreement.
+
+> **Current-state boundary:** This is the production roadmap, not a claim that its
+> backend stages are complete. The current app remains frontend-first with browser-local
+> preview interactions. See [Current Implementation State](../../docs/CURRENT_IMPLEMENTATION_STATE.md).
 
 ## Frontend execution method
 

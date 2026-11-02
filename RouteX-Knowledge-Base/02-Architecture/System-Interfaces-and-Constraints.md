@@ -6,7 +6,8 @@ Web application accessed by authorized internal users using a modern browser and
 ## Data services
 - PostgreSQL via Supabase for structured records.
 - Supabase Storage for POD files, with private access and server-side checks.
-- Auth.js for sign-in/session handling, pending validation of exact integration details.
+- Supabase Auth for production sign-in/session handling when backend configuration is
+  approved. The current frontend uses a temporary preview login boundary instead.
 
 ## Explicitly absent interfaces
 No live GPS/telematics, dispatch, route optimization, customer portal, automatic bank payment, BIR/tax filing, or other external integration is in current scope unless formally approved.

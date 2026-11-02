@@ -2,23 +2,27 @@
 
 RouteX is an internal truck profitability and delivery operations system for
 Redeemed Route Logistics Inc. The repository currently contains a polished,
-static application preview plus the first credential-independent pieces of the
-planned backend foundation.
+frontend-first application preview with working browser-local interactions and
+a future backend integration boundary.
 
 ## Current state
 
-- All operational pages render local preview data.
+- All operational pages render synthetic local data and client-side interactions.
 - Supabase is not connected and no production schema or migrations exist.
 - The login page uses Supabase email/password authentication when public
   project configuration is present.
-- Unconfigured development builds retain explicit preview access; unconfigured
-  production builds fail closed and redirect operational routes to Login.
+- Unconfigured development builds retain direct local access; unconfigured
+  hosted builds use the temporary `admin / admin` preview gate.
 - Routes verify authentication, but role authorization and Row-Level Security
   are not implemented yet.
 - Financial calculations and workflow rules remain provisional.
 
 Do not treat preview values, status options, roles, or profitability figures as
 approved production behavior.
+
+For the route-by-route implementation inventory, browser-local persistence
+boundary, and latest validated checks, see
+[Current Implementation State](docs/CURRENT_IMPLEMENTATION_STATE.md).
 
 ## Verified stack
 

@@ -75,9 +75,15 @@ Counts reflect the existing issue labels in this file; KB-017 is a resolved dire
 
 ## Technical implementation and operations
 
-### KB-012: Auth.js + Supabase integration spike
+### KB-012: Supabase authentication and authorization integration spike
 - **Status:** VERIFY
-- **Need:** Validate session/auth flow, server-side authorization, database access pattern, and secure file access with the chosen versions.
+- **Known:** The repository has Supabase browser/server client factories and a
+  three-mode route gate. A hosted unconfigured build can use a temporary
+  `admin / admin` preview session; local development can enter the preview
+  directly. This is not RBAC or production authentication.
+- **Need:** Validate a real Supabase project/session, server-side authorization,
+  database access pattern, secure file access, recovery policy, and deployment
+  configuration with the chosen versions.
 
 ### KB-013: Hosting account ownership and billing
 - **Status:** OPEN
@@ -120,8 +126,8 @@ Counts reflect the existing issue labels in this file; KB-017 is a resolved dire
 
 ### KB-020: Timeline and current progress
 - **Status:** VERIFY
-- **Known:** Stated project window is Aug 10-Dec 4, 2026; active development was stated to begin Oct 19; deadline remains Dec 4 unless written amendment.
-- **Need:** Confirm actual completed work, current schedule, client feedback/UAT availability, and any written amendments. Do not claim a task is complete without evidence.
+- **Known:** Stated project window is Aug 10-Dec 4, 2026; active development was stated to begin Oct 19; deadline remains Dec 4 unless written amendment. The current source contains interactive local frontend pages for Login, Dashboard, Deliveries, Fleet, Truck Profiles, Transactions, Reports, Administration, and Settings. The current boundary is recorded in `docs/CURRENT_IMPLEMENTATION_STATE.md`.
+- **Need:** Confirm schedule, client feedback/UAT availability, written amendments, and which local frontend behavior graduates to approved production scope. Do not claim a task is complete without evidence.
 
 ### KB-021: Team development ownership
 - **Status:** OPEN
@@ -141,8 +147,8 @@ Counts reflect the existing issue labels in this file; KB-017 is a resolved dire
 
 ### KB-024: Implementation status versus prototype
 - **Status:** VERIFY
-- **Known:** HTML prototype uses sample/mock data and does not prove production persistence, secure authorization, or every feature.
-- **Need:** Verify each feature in the actual repository/deployed app and link to code/test evidence before marking implemented.
+- **Known:** HTML prototype uses sample/mock data and does not prove production persistence, secure authorization, or every feature. The repository now has local interactive implementations for the main operational surfaces, but no connected database/RBAC/production audit implementation.
+- **Need:** Verify each feature in the actual repository/deployed app and link to code/test evidence before marking production-ready. The central mock-data migration is proposed but not implemented.
 
 - **Update Thursday, October 22, 2026 — 13:53 UTC:** The frontend loop manual now documents the current 11-entry screen inventory and marks the final information architecture/mockup mapping as unresolved. See [Frontend Loop Engineering](../04-Development/Frontend-Loop-Engineering.md) and [session log](Agent-Sessions/2026-10-22-Frontend-Loop-Engineering-Setup.md).
 - **Update Thursday, October 22, 2026 — 13:53 UTC:** The available workspace did not include the live application repository or branch history; no production implementation claims or Build/Audit ticks were made.
