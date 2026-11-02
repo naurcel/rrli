@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 import { RoundedSelect } from "@/components/rounded-select";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery-repository";
+import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
+import { saveBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
 import type { ExpenseResolutionStatus } from "@/features/deliveries/delivery-domain";
 import { formatPeso } from "@/lib/format";
 
@@ -184,10 +186,12 @@ export default function NewCompletedDeliveryPage() {
         ok?: boolean;
         message?: string;
         deliveryId?: string;
+        previewRecord?: DeliveryLedgerItem;
       };
       if (!response.ok || !result.ok) {
         throw new Error(result.message ?? "Unable to record the completed delivery.");
       }
+      if (result.previewRecord) saveBrowserPreviewDelivery(result.previewRecord);
       router.push(`/deliveries?created=${encodeURIComponent(result.deliveryId ?? "")}`);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to record the completed delivery.");

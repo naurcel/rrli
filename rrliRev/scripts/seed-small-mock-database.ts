@@ -209,11 +209,11 @@ async function run(): Promise<void> {
       size_bytes: document.sizeBytes,
       verification_notes: document.verificationNotes,
       uploaded_by: document.status === "Missing" ? null : seedActor.id,
-      uploaded_at: document.status === "Missing" ? null : "2026-06-07T15:00:00+08:00",
+      uploaded_at: document.status === "Missing" ? null : "2026-11-02T15:00:00+09:00",
       verified_by: document.status === "Verified" || document.status === "Rejected" ? seedActor.id : null,
       verified_at:
         document.status === "Verified" || document.status === "Rejected"
-          ? "2026-06-07T16:00:00+08:00"
+          ? "2026-11-02T16:00:00+09:00"
           : null,
     })),
     { onConflict: "id" },
@@ -241,7 +241,7 @@ async function run(): Promise<void> {
         delivery.delivery_date >= SMALL_MOCK_PERIOD.start &&
         delivery.delivery_date <= SMALL_MOCK_PERIOD.end,
     ),
-    "A seeded delivery falls outside June 1–7, 2026.",
+    "A seeded delivery falls outside October 27–November 2, 2026.",
   );
   ensure(
     seededDeliveries.data.filter((delivery) => delivery.financial_state === "incomplete").length === 1,

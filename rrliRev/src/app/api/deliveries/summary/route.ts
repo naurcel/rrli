@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as z from "zod";
 
 import { verifyServerPermission } from "@/lib/auth/server-session";
+import { getSmallMockProfitabilitySummary } from "@/features/deliveries/small-mock-repository";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -15,12 +16,6 @@ export async function GET(request: Request) {
   if (!auth.ok) {
     return NextResponse.json({ ok: false, code: auth.code, message: auth.message }, { status: auth.status });
   }
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json(
-      { ok: false, code: "DATABASE_NOT_CONFIGURED", message: "Profitability requires Supabase." },
-      { status: 503 },
-    );
-  }
   const params = new URL(request.url).searchParams;
   const parsed = querySchema.safeParse({
     dateFrom: params.get("dateFrom"),
@@ -28,6 +23,13 @@ export async function GET(request: Request) {
   });
   if (!parsed.success || (parsed.data.dateFrom && parsed.data.dateTo && parsed.data.dateFrom > parsed.data.dateTo)) {
     return NextResponse.json({ ok: false, code: "INVALID_QUERY", message: "Invalid reporting date range." }, { status: 400 });
+  }
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({
+      ok: true,
+      source: "bundled-mock",
+      summary: getSmallMockProfitabilitySummary(parsed.data),
+    });
   }
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.rpc("delivery_profitability_summary", {

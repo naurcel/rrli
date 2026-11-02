@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 
 import type { DateRange } from "@/components/global-date-range-picker";
+import {
+  BROWSER_PREVIEW_DELIVERIES_CHANGED,
+  mergeBrowserPreviewSummary,
+} from "@/features/deliveries/browser-preview-deliveries";
 
 export type PersistedTruckSummary = {
   truck_id: string;
@@ -42,11 +46,13 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
     if (end) params.set("dateTo", end);
     setLoading(true);
     setError(null);
-    fetch(`/api/deliveries/summary?${params}`, { signal: controller.signal })
+    const load = () => fetch(`/api/deliveries/summary?${params}`, { signal: controller.signal })
       .then(async (response) => {
-        const payload = await response.json() as { ok?: boolean; message?: string; summary?: PersistedProfitabilitySummary };
+        const payload = await response.json() as { ok?: boolean; message?: string; source?: string; summary?: PersistedProfitabilitySummary };
         if (!response.ok || !payload.ok || !payload.summary) throw new Error(payload.message ?? "Unable to load profitability summary.");
-        setSummary(payload.summary);
+        setSummary(payload.source === "bundled-mock"
+          ? mergeBrowserPreviewSummary(payload.summary, start, end)
+          : payload.summary);
       })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
@@ -54,7 +60,15 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
         setError(reason instanceof Error ? reason.message : "Unable to load profitability summary.");
       })
       .finally(() => setLoading(false));
-    return () => controller.abort();
+    void load();
+    const reload = () => { if (!controller.signal.aborted) void load(); };
+    window.addEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
+      window.removeEventListener("storage", reload);
+      controller.abort();
+    };
   }, [end, start]);
 
   return { summary, loading, error } as const;

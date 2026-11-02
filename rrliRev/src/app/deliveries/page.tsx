@@ -23,6 +23,7 @@ import {
   canMutateDeliveryRecords,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
+import { selectBrowserPreviewDeliveries } from "@/features/deliveries/browser-preview-deliveries";
 
 function toDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -81,13 +82,28 @@ export default function DeliveriesPage() {
               clients?: DeliveryFilterOption[];
               trucks?: DeliveryFilterOption[];
             };
+            source?: string;
           };
           if (!response.ok || !data.ok) {
             throw new Error(data.message ?? "Unable to load delivery records.");
           }
-          setDeliveries(data.items ?? []);
-          setTotal(data.total ?? 0);
-          setPageCount(data.pageCount ?? 1);
+          const local = data.source === "bundled-mock" && page === 1
+            ? selectBrowserPreviewDeliveries({
+                search: searchQuery,
+                clientId: selectedClient || undefined,
+                truckId: selectedTruck || undefined,
+                status: selectedStatus || undefined,
+                podStatus: selectedPodStatus || undefined,
+                dateFrom: range.startDate ? toDateKey(range.startDate) : undefined,
+                dateTo: range.endDate ? toDateKey(range.endDate) : undefined,
+              })
+            : [];
+          const remote = data.items ?? [];
+          const remoteIds = new Set(remote.map((item) => item.id));
+          setDeliveries([...local.filter((item) => !remoteIds.has(item.id)), ...remote]);
+          const combinedTotal = (data.total ?? 0) + local.length;
+          setTotal(combinedTotal);
+          setPageCount(Math.max(data.pageCount ?? 1, Math.ceil(combinedTotal / 25)));
           setClients(data.filters?.clients ?? []);
           setTrucks(data.filters?.trucks ?? []);
         })

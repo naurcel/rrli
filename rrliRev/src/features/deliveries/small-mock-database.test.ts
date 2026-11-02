@@ -28,7 +28,7 @@ test("keeps the RouteX mock database intentionally small and internally related"
   );
 });
 
-test("returns exactly two deliveries per client and honors the June date filter", () => {
+test("returns exactly two deliveries per client and honors the current seven-day filter", () => {
   for (const client of SMALL_MOCK_DATABASE.clients) {
     assert.equal(filterSmallMockDeliveries({ clientId: client.id }).length, 2);
   }
@@ -41,21 +41,21 @@ test("returns exactly two deliveries per client and honors the June date filter"
     6,
   );
   assert.equal(
-    filterSmallMockDeliveries({ dateFrom: "2026-06-03", dateTo: "2026-06-05" }).length,
+    filterSmallMockDeliveries({ dateFrom: "2026-10-29", dateTo: "2026-10-31" }).length,
     3,
   );
   assert.equal(
-    filterSmallMockDeliveries({ dateFrom: "2026-06-08", dateTo: "2026-06-30" }).length,
+    filterSmallMockDeliveries({ dateFrom: "2026-10-01", dateTo: "2026-10-26" }).length,
     0,
   );
 });
 
 test("preserves confirmed zero, not applicable, unknown, low-margin, and incomplete scenarios", () => {
   const records = SMALL_MOCK_DATABASE.deliveries.map((delivery) => delivery.record);
-  const confirmedZero = records.find((record) => record.waybillNumber === "WB-MOCK-260602");
-  const notApplicable = records.find((record) => record.waybillNumber === "WB-MOCK-260603");
-  const lowMargin = records.find((record) => record.waybillNumber === "WB-MOCK-260604");
-  const incomplete = records.find((record) => record.waybillNumber === "WB-MOCK-260607");
+  const confirmedZero = records.find((record) => record.waybillNumber === "WB-MOCK-261028");
+  const notApplicable = records.find((record) => record.waybillNumber === "WB-MOCK-261029");
+  const lowMargin = records.find((record) => record.waybillNumber === "WB-MOCK-261030");
+  const incomplete = records.find((record) => record.waybillNumber === "WB-MOCK-261102");
 
   assert.equal(confirmedZero?.expenses.otherExpenses, 0);
   assert.equal(confirmedZero?.expenseStates.otherExpenses, "confirmed");

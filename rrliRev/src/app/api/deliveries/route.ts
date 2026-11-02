@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import * as z from "zod";
 
 import { parseDeliveryListQuery } from "@/features/deliveries/delivery-query";
+import { buildDeliveryTripRecord } from "@/features/deliveries/delivery-domain";
+import { SMALL_MOCK_DATABASE } from "@/features/deliveries/small-mock-database";
+import { listSmallMockDeliveryRecords } from "@/features/deliveries/small-mock-repository";
 import { listDeliveryRecords } from "@/features/deliveries/server/delivery-repository";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
@@ -120,24 +123,20 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json(
-      {
-        ok: false,
-        code: "DATABASE_NOT_CONFIGURED",
-        message:
-          "Delivery records require Supabase. Configure .env.local and apply the RouteX migrations.",
-      },
-      { status: 503 },
-    );
-  }
-
   const parsedQuery = parseDeliveryListQuery(new URL(request.url).searchParams);
   if (!parsedQuery.ok) {
     return NextResponse.json(
       { ok: false, code: "INVALID_QUERY", message: parsedQuery.message },
       { status: 400 },
     );
+  }
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({
+      ok: true,
+      source: "bundled-mock",
+      ...listSmallMockDeliveryRecords(parsedQuery.value),
+    });
   }
 
   try {
@@ -164,17 +163,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json(
-      {
-        ok: false,
-        code: "DATABASE_NOT_CONFIGURED",
-        message: "Delivery creation requires a configured Supabase database.",
-      },
-      { status: 503 },
-    );
-  }
-
   const rawBody = await request.json().catch(() => null);
   const parsed = createDeliverySchema.safeParse(rawBody);
   if (!parsed.success) {
@@ -190,6 +178,75 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  if (!isSupabaseConfigured()) {
+    const client = SMALL_MOCK_DATABASE.clients.find((item) => item.name === parsed.data.clientName);
+    const truck = SMALL_MOCK_DATABASE.trucks.find((item) => item.plateNumber === parsed.data.plateNumber);
+    if (!client || !truck) {
+      return NextResponse.json(
+        { ok: false, code: !client ? "INVALID_CLIENT" : "INVALID_TRUCK", message: !client ? "Select an available client." : "Select an available Fleet truck." },
+        { status: 400 },
+      );
+    }
+    if (SMALL_MOCK_DATABASE.deliveries.some((item) => item.record.waybillNumber === parsed.data.waybillNumber)) {
+      return NextResponse.json(
+        { ok: false, code: "DUPLICATE_WAYBILL", message: `Waybill ${parsed.data.waybillNumber} already exists.` },
+        { status: 409 },
+      );
+    }
+
+    const record = buildDeliveryTripRecord({
+      id: parsed.data.idempotencyKey,
+      waybillNumber: parsed.data.waybillNumber,
+      deliveryDate: parsed.data.deliveryDate,
+      clientName: client.name,
+      plateNumber: truck.plateNumber,
+      truckType: truck.truckType,
+      truckTemperature: truck.truckTemperature,
+      origin: parsed.data.origin,
+      distanceKm: parsed.data.distanceKm,
+      fuelRate: parsed.data.fuelRate,
+      deliveryRate: parsed.data.deliveryRate,
+      expenses: {
+        dieselExpenses: parsed.data.dieselExpenses,
+        tollGateExpenses: parsed.data.tollGateExpenses,
+        tollGateBreakdown: parsed.data.tollGateBreakdown,
+        driverAllowance: parsed.data.driverAllowance,
+        driverDailyRate: parsed.data.driverDailyRate,
+        helperAllowance: parsed.data.helperAllowance,
+        helperDailyRate: parsed.data.helperDailyRate,
+        otherExpenses: parsed.data.otherExpenses,
+      },
+      expenseStates: {
+        dieselExpenses: parsed.data.dieselExpensesStatus,
+        tollGateExpenses: parsed.data.tollGateExpensesStatus,
+        driverAllowance: parsed.data.driverAllowanceStatus,
+        driverDailyRate: parsed.data.driverDailyRateStatus,
+        helperAllowance: parsed.data.helperAllowanceStatus,
+        helperDailyRate: parsed.data.helperDailyRateStatus,
+        otherExpenses: parsed.data.otherExpensesStatus,
+      },
+      dropoffs: parsed.data.dropoffs.map((dropoff, index) => ({
+        ...dropoff,
+        id: `${parsed.data.idempotencyKey}-stop-${index + 1}`,
+        sequence: index + 1,
+      })),
+    });
+    return NextResponse.json({
+      ok: true,
+      source: "browser-local",
+      deliveryId: record.id,
+      previewRecord: {
+        ...record,
+        clientId: client.id,
+        truckId: truck.id,
+        deliveryStatus: "Completed",
+        driverName: null,
+        helperName: null,
+      },
+      recordedBy: { id: auth.actor.id, email: auth.actor.email, role: auth.actor.role },
+    }, { status: 201 });
   }
 
   const supabase = await createServerSupabaseClient();

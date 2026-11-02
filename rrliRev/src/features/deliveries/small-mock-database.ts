@@ -7,8 +7,8 @@ import {
 } from "./delivery-domain.ts";
 
 export const SMALL_MOCK_PERIOD = {
-  start: "2026-06-01",
-  end: "2026-06-07",
+  start: "2026-10-27",
+  end: "2026-11-02",
 } as const;
 
 export type SmallMockClient = {
@@ -134,8 +134,8 @@ const DELIVERIES = [
     scenario: "LANDERS warehouse-to-store retail replenishment with one destination.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000001",
-      waybillNumber: "WB-MOCK-260601",
-      deliveryDate: "2026-06-01",
+      waybillNumber: "WB-MOCK-261027",
+      deliveryDate: "2026-10-27",
       clientName: CLIENTS[0].name,
       plateNumber: TRUCKS[0].plateNumber,
       truckType: TRUCKS[0].truckType,
@@ -174,8 +174,8 @@ const DELIVERIES = [
     scenario: "LANDERS groceries and household-goods replenishment for two sample branches.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000002",
-      waybillNumber: "WB-MOCK-260602",
-      deliveryDate: "2026-06-02",
+      waybillNumber: "WB-MOCK-261028",
+      deliveryDate: "2026-10-28",
       clientName: CLIENTS[0].name,
       plateNumber: TRUCKS[2].plateNumber,
       truckType: TRUCKS[2].truckType,
@@ -226,8 +226,8 @@ const DELIVERIES = [
     scenario: "MCCI chilled commissary-to-restaurant delivery to one fictional branch.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000003",
-      waybillNumber: "WB-MOCK-260603",
-      deliveryDate: "2026-06-03",
+      waybillNumber: "WB-MOCK-261029",
+      deliveryDate: "2026-10-29",
       clientName: CLIENTS[1].name,
       plateNumber: TRUCKS[1].plateNumber,
       truckType: TRUCKS[1].truckType,
@@ -267,8 +267,8 @@ const DELIVERIES = [
     scenario: "MCCI temperature-controlled food distribution to two fictional restaurant branches.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000004",
-      waybillNumber: "WB-MOCK-260604",
-      deliveryDate: "2026-06-04",
+      waybillNumber: "WB-MOCK-261030",
+      deliveryDate: "2026-10-30",
       clientName: CLIENTS[1].name,
       plateNumber: TRUCKS[1].plateNumber,
       truckType: TRUCKS[1].truckType,
@@ -319,8 +319,8 @@ const DELIVERIES = [
     scenario: "VANGUARD general distribution delivery to one fictional destination.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000005",
-      waybillNumber: "WB-MOCK-260605",
-      deliveryDate: "2026-06-05",
+      waybillNumber: "WB-MOCK-261031",
+      deliveryDate: "2026-10-31",
       clientName: CLIENTS[2].name,
       plateNumber: TRUCKS[0].plateNumber,
       truckType: TRUCKS[0].truckType,
@@ -359,8 +359,8 @@ const DELIVERIES = [
     scenario: "VANGUARD general distribution trip with two fictional drop-offs and an unknown toll expense.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000006",
-      waybillNumber: "WB-MOCK-260607",
-      deliveryDate: "2026-06-07",
+      waybillNumber: "WB-MOCK-261102",
+      deliveryDate: "2026-11-02",
       clientName: CLIENTS[2].name,
       plateNumber: TRUCKS[2].plateNumber,
       truckType: TRUCKS[2].truckType,

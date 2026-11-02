@@ -4,10 +4,15 @@ import { useEffect, useState } from "react";
 
 import type { DateRange } from "@/components/global-date-range-picker";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
+import {
+  BROWSER_PREVIEW_DELIVERIES_CHANGED,
+  selectBrowserPreviewDeliveries,
+} from "@/features/deliveries/browser-preview-deliveries";
 
 type DeliveryPagePayload = {
   ok?: boolean;
   message?: string;
+  source?: string;
   items?: DeliveryLedgerItem[];
   pageCount?: number;
 };
@@ -54,7 +59,7 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
 
     setLoading(true);
     setError(null);
-    fetchDeliveryPage(1, activeRange, controller.signal)
+    const load = () => fetchDeliveryPage(1, activeRange, controller.signal)
       .then(async (firstPage) => {
         const pageCount = firstPage.pageCount ?? 1;
         const remaining = options.allPages === false ? [] : await Promise.all(
@@ -62,10 +67,18 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
             fetchDeliveryPage(index + 2, activeRange, controller.signal),
           ),
         );
-        setDeliveries([
+        const persisted = [
           ...(firstPage.items ?? []),
           ...remaining.flatMap((page) => page.items ?? []),
-        ]);
+        ];
+        const local = firstPage.source === "bundled-mock"
+          ? selectBrowserPreviewDeliveries({
+              dateFrom: activeRange.startDate ? toDateKey(activeRange.startDate) : undefined,
+              dateTo: activeRange.endDate ? toDateKey(activeRange.endDate) : undefined,
+            })
+          : [];
+        const ids = new Set(persisted.map((item) => item.id));
+        setDeliveries([...local.filter((item) => !ids.has(item.id)), ...persisted]);
       })
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
@@ -78,7 +91,16 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
       })
       .finally(() => setLoading(false));
 
-    return () => controller.abort();
+    void load();
+    const reload = () => { if (!controller.signal.aborted) void load(); };
+    window.addEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
+    window.addEventListener("storage", reload);
+
+    return () => {
+      window.removeEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
+      window.removeEventListener("storage", reload);
+      controller.abort();
+    };
   }, [endTime, options.allPages, startTime]);
 
   return { deliveries, loading, error } as const;
