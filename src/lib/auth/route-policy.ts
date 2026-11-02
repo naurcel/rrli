@@ -1,4 +1,4 @@
-const publicRoutes = new Set(["/login"]);
+const publicRoutes = new Set(["/login", "/api/preview-session"]);
 
 export function isPublicRoute(pathname: string): boolean {
   return publicRoutes.has(pathname);

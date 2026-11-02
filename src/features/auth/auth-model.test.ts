@@ -19,7 +19,7 @@ test("signInSchema rejects malformed or empty credentials", () => {
   );
 });
 
-test("authentication mode is explicit and fails closed outside development", () => {
+test("authentication mode uses a credential-gated preview outside development when Supabase is absent", () => {
   assert.equal(
     getAuthenticationMode({
       isSupabaseConfigured: true,
@@ -39,6 +39,6 @@ test("authentication mode is explicit and fails closed outside development", () 
       isSupabaseConfigured: false,
       nodeEnvironment: "production",
     }),
-    "unavailable",
+    "preview-login",
   );
 });

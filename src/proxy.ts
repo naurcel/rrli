@@ -3,6 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getAuthenticationMode } from "@/features/auth/auth-model";
 import {
+  isPreviewSession,
+  PREVIEW_SESSION_COOKIE,
+} from "@/lib/auth/preview-session";
+import {
   getLoginRedirectUrl,
   isPublicRoute,
 } from "@/lib/auth/route-policy";
@@ -21,14 +25,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  if (authenticationMode === "unavailable") {
-    if (isPublicRoute(request.nextUrl.pathname)) {
+  if (authenticationMode === "preview-login") {
+    const pathname = request.nextUrl.pathname;
+    const hasPreviewSession = isPreviewSession(
+      request.cookies.get(PREVIEW_SESSION_COOKIE)?.value,
+    );
+
+    if (pathname === "/login" && hasPreviewSession) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
+    if (isPublicRoute(pathname) || hasPreviewSession) {
       return NextResponse.next({ request });
     }
 
-    const loginUrl = getLoginRedirectUrl(request.url);
-    loginUrl.searchParams.set("configuration", "missing");
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(getLoginRedirectUrl(request.url));
   }
 
   const { supabaseUrl, supabasePublishableKey } = getPublicEnvironment();

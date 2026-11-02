@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 export type DateRange = { startDate: Date | null; endDate: Date | null };
-type Preset = "all" | "today" | "week" | "month" | "last7" | "last15" | "last30";
+type Preset = "all" | "today" | "week" | "month" | "year" | "last7" | "last15" | "last30";
 type DateRangeContextValue = { range: DateRange; setRange: (range: DateRange) => void };
 
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -33,6 +33,7 @@ function presetRange(preset: Preset): DateRange {
   if (preset === "today") return { startDate: today, endDate: today };
   if (preset === "week") { const start = addDays(today, -today.getDay()); return { startDate: start, endDate: today }; }
   if (preset === "month") return { startDate: new Date(today.getFullYear(), today.getMonth(), 1), endDate: today };
+  if (preset === "year") return { startDate: new Date(today.getFullYear(), 0, 1), endDate: today };
   const days = preset === "last15" ? 15 : preset === "last30" ? 30 : 7;
   return { startDate: addDays(today, -(days - 1)), endDate: today };
 }
@@ -56,10 +57,18 @@ export function GlobalDateRangePicker() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [month, setMonth] = useState(() => new Date(2000, 0, 1));
+  const [viewMode, setViewMode] = useState<"days" | "months">("days");
   const { range, setRange } = useGlobalDateRange();
   const [draftStart, setDraftStart] = useState<Date | null>(range.startDate);
   const [draftEnd, setDraftEnd] = useState<Date | null>(range.endDate);
+
+  const closePopover = (restoreFocus = false) => {
+    setOpen(false);
+    setIsClosing(true);
+    if (restoreFocus) triggerRef.current?.focus();
+  };
 
   useEffect(() => { setMonth(startOfDay(new Date())); }, []);
   useEffect(() => {
@@ -69,12 +78,17 @@ export function GlobalDateRangePicker() {
   }, [range]);
 
   useEffect(() => {
+    if (!isClosing) return;
+    const timeout = window.setTimeout(() => setIsClosing(false), 180);
+    return () => window.clearTimeout(timeout);
+  }, [isClosing]);
+
+  useEffect(() => {
     if (!open) return;
-    const close = (event: MouseEvent) => { if (!(event.target instanceof Element) || !event.target.closest(".global-date-picker")) setOpen(false); };
+    const close = (event: MouseEvent) => { if (!(event.target instanceof Element) || !event.target.closest(".global-date-picker")) closePopover(); };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setOpen(false);
-      triggerRef.current?.focus();
+      closePopover(true);
     };
     document.addEventListener("mousedown", close); document.addEventListener("keydown", escape);
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", escape); };
@@ -98,24 +112,27 @@ export function GlobalDateRangePicker() {
   const chooseDate = (date: Date) => {
     if (!draftStart || (draftStart && draftEnd)) { setDraftStart(date); setDraftEnd(null); return; }
     const nextRange = date < draftStart ? { startDate: date, endDate: draftStart } : { startDate: draftStart, endDate: date };
-    setDraftStart(nextRange.startDate); setDraftEnd(nextRange.endDate); setRange(nextRange); setOpen(false); triggerRef.current?.focus();
+    setDraftStart(nextRange.startDate); setDraftEnd(nextRange.endDate); setRange(nextRange); closePopover(true);
   };
 
-  const choosePreset = (preset: Preset) => { const next = presetRange(preset); setRange(next); setDraftStart(next.startDate); setDraftEnd(next.endDate); setOpen(false); triggerRef.current?.focus(); };
+  const choosePreset = (preset: Preset) => { const next = presetRange(preset); setRange(next); setDraftStart(next.startDate); setDraftEnd(next.endDate); closePopover(true); };
+  const chooseMonth = (monthIndex: number) => { setMonth(new Date(month.getFullYear(), monthIndex, 1)); setViewMode("days"); };
   const label = range.startDate && !range.endDate ? `${formatShort(range.startDate)} – Select end` : formatDateRange(range);
 
   return <div className="global-date-picker">
-    <button ref={triggerRef} className="global-date-filter" type="button" aria-label={`Date range: ${label}`} aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+    <button ref={triggerRef} className="global-date-filter" type="button" aria-label={`Date range: ${label}`} aria-haspopup="dialog" aria-controls={dialogId} aria-expanded={open} onClick={() => { if (open) closePopover(); else { setIsClosing(false); setOpen(true); } }}>
       <svg className="global-date-filter-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></svg>
       <span>{label}</span>
       <span className="dropdown-chevron" aria-hidden="true" />
     </button>
-    {open && <div ref={dialogRef} id={dialogId} className="date-picker-popover" role="dialog" aria-label="Select date range" tabIndex={-1}>
+    {(open || isClosing) && <div ref={dialogRef} id={dialogId} className={`date-picker-popover${isClosing ? " is-closing" : ""}`} role="dialog" aria-label="Select date range" tabIndex={-1} onAnimationEnd={() => { if (isClosing) setIsClosing(false); }}>
+      {viewMode === "months" ? <div className="date-picker-month-selector"><div className="date-picker-month"><button type="button" aria-label="Previous year" onClick={() => setMonth(new Date(month.getFullYear() - 1, month.getMonth(), 1))}>‹</button><strong aria-live="polite">{month.getFullYear()}</strong><button type="button" aria-label="Next year" onClick={() => setMonth(new Date(month.getFullYear() + 1, month.getMonth(), 1))}>›</button></div><div className="date-picker-months" role="group" aria-label={`Choose a month in ${month.getFullYear()}`}>{monthNames.map((name, index) => <button key={name} className={index === month.getMonth() ? "selected" : ""} type="button" onClick={() => chooseMonth(index)}>{name}</button>)}</div></div> : <>
       <div className="date-picker-month"><button type="button" aria-label="Previous month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</button><strong aria-live="polite">{monthNames[month.getMonth()]} {month.getFullYear()}</strong><button type="button" aria-label="Next month" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button></div>
+      <button className="date-picker-month-mode-toggle" type="button" aria-label="Choose month and year" onClick={() => setViewMode("months")} />
       <div className="date-picker-weekdays" aria-hidden="true">{weekDays.map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}</div>
-      <div className="date-picker-grid" role="group" aria-label={`${monthNames[month.getMonth()]} ${month.getFullYear()}`}>{days.map((date) => { const current = date.getMonth() === month.getMonth(); const selected = Boolean((draftStart && dayKey(date) === dayKey(draftStart)) || (draftEnd && dayKey(date) === dayKey(draftEnd))); return <button type="button" key={dayKey(date)} className={`${current ? "" : "outside-month "}${selected ? "selected " : ""}${isBetween(date, { startDate: draftStart, endDate: draftEnd }) ? "in-range" : ""}`} aria-label={date.toDateString()} aria-pressed={selected} onClick={() => chooseDate(date)}>{date.getDate()}</button>; })}</div>
+      <div className="date-picker-grid" role="group" aria-label={`${monthNames[month.getMonth()]} ${month.getFullYear()}`}>{days.map((date) => { const current = date.getMonth() === month.getMonth(); const selected = Boolean((draftStart && dayKey(date) === dayKey(draftStart)) || (draftEnd && dayKey(date) === dayKey(draftEnd))); return <button type="button" key={dayKey(date)} className={`${current ? "" : "outside-month "}${selected ? "selected " : ""}${isBetween(date, { startDate: draftStart, endDate: draftEnd }) ? "in-range" : ""}`} aria-label={date.toDateString()} aria-pressed={selected} onClick={() => chooseDate(date)}>{date.getDate()}</button>; })}</div></>}
       <p className="date-picker-summary">{draftStart && !draftEnd ? "Select an end date" : range.startDate ? `${formatShort(range.startDate)}${range.endDate ? ` – ${formatShort(range.endDate)}` : ""}` : "Select a start and end date"}</p>
-      <div className="date-picker-presets" aria-label="Date range presets">{(["all", "today", "week", "month", "last7", "last15", "last30"] as Preset[]).map((preset) => <button type="button" key={preset} onClick={() => choosePreset(preset)}>{({ all: "All time", today: "Today", week: "This Week", month: "This Month", last7: "Last 7 Days", last15: "Last 15 Days", last30: "Last 30 Days" }[preset])}</button>)}</div>
+      <div className="date-picker-presets" aria-label="Date range presets">{(["all", "today", "week", "month", "year", "last7", "last15", "last30"] as Preset[]).map((preset) => <button type="button" key={preset} onClick={() => choosePreset(preset)}>{({ all: "All time", today: "Today", week: "This Week", month: "This Month", year: "This Year", last7: "Last 7 Days", last15: "Last 15 Days", last30: "Last 30 Days" }[preset])}</button>)}</div>
     </div>}
   </div>;
 }

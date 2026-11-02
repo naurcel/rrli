@@ -1,0 +1,11 @@
+{
+  "/api/deliveries/summary/route": "app/api/deliveries/summary/route.js",
+  "/api/deliveries/route": "app/api/deliveries/route.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/user-management/page": "app/user-management/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/pod-documents/page": "app/pod-documents/page.js",
+  "/reports/page": "app/reports/page.js",
+  "/deliveries/page": "app/deliveries/page.js",
+  "/truck-profitability/page": "app/truck-profitability/page.js"
+}

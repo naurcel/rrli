@@ -7,8 +7,9 @@ import {
   sanitizeReturnPath,
 } from "./route-policy.ts";
 
-test("only the login route is public", () => {
+test("login and the temporary preview session route are public", () => {
   assert.equal(isPublicRoute("/login"), true);
+  assert.equal(isPublicRoute("/api/preview-session"), true);
   assert.equal(isPublicRoute("/"), false);
   assert.equal(isPublicRoute("/fleet"), false);
 });

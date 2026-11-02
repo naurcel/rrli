@@ -6,7 +6,7 @@ export const signInSchema = z.object({
 });
 
 export type SignInFields = z.infer<typeof signInSchema>;
-export type AuthenticationMode = "supabase" | "preview" | "unavailable";
+export type AuthenticationMode = "supabase" | "preview" | "preview-login";
 
 export function getAuthenticationMode(options: {
   isSupabaseConfigured: boolean;
@@ -16,5 +16,5 @@ export function getAuthenticationMode(options: {
     return "supabase";
   }
 
-  return options.nodeEnvironment === "development" ? "preview" : "unavailable";
+  return options.nodeEnvironment === "development" ? "preview" : "preview-login";
 }

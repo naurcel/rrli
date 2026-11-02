@@ -1,0 +1,32 @@
+name: Financial integrity
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  postgres-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase init
+      - run: supabase start
+      - run: supabase db reset
+      - name: Verify TypeScript/Postgres financial parity
+        run: psql postgresql://postgres:postgres@127.0.0.1:54322/postgres --set ON_ERROR_STOP=1 --file supabase/tests/financial_integrity_parity.sql

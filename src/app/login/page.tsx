@@ -47,14 +47,38 @@ export default function LoginPage() {
       return;
     }
 
-    if (authenticationMode === "unavailable") {
-      setErrorMessage(
-        "Authentication is unavailable because the server is not configured.",
-      );
+    const formData = new FormData(event.currentTarget);
+
+    if (authenticationMode === "preview-login") {
+      setIsSubmitting(true);
+
+      try {
+        const response = await fetch("/api/preview-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: formData.get("email"),
+            password: formData.get("password"),
+          }),
+        });
+
+        if (!response.ok) {
+          setErrorMessage("Use the temporary credentials to sign in.");
+          return;
+        }
+
+        const returnPath = sanitizeReturnPath(
+          new URLSearchParams(window.location.search).get("next"),
+        );
+        await finishSignIn(returnPath);
+      } catch {
+        setErrorMessage("Sign-in could not be completed. Please try again.");
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
 
-    const formData = new FormData(event.currentTarget);
     const parsed = signInSchema.safeParse({
       email: formData.get("email"),
       password: formData.get("password"),
@@ -93,7 +117,6 @@ export default function LoginPage() {
         <img className="login-visual-media" src="/branding/login-glow.gif" alt="" aria-hidden="true" />
         <div className="login-visual-overlay" />
         <div className="login-visual-content">
-          <p className="login-visual-kicker">ROUTEX OPERATIONS</p>
           <h1>Excellence in motion,<br />your logistics redemption.</h1>
           <p>Redeemed Route Logistics Inc.</p>
         </div>
@@ -108,8 +131,8 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} noValidate>
             <label>
-              Email address
-              <input name="email" type="email" placeholder="you@company.com" autoComplete="email" required />
+              {authenticationMode === "supabase" ? "Email address" : "Temporary username"}
+              <input name="email" type={authenticationMode === "supabase" ? "email" : "text"} placeholder={authenticationMode === "supabase" ? "you@company.com" : "admin"} autoComplete={authenticationMode === "supabase" ? "email" : "username"} required />
             </label>
 
             <label>
@@ -142,13 +165,13 @@ export default function LoginPage() {
             <span>i</span>
             <p>
               <strong>
-                {authenticationMode === "supabase" ? "Secure sign-in" : "Preview sign-in"}
+                {authenticationMode === "supabase" ? "Secure sign-in" : "Temporary sign-in"}
               </strong>
               {authenticationMode === "supabase"
                 ? " Use your authorized RouteX account."
                 : authenticationMode === "preview"
                   ? " Local development access is enabled."
-                  : " Authentication configuration is required."}
+                  : " Temporary hosted access: use admin / admin."}
             </p>
           </div>
         </div>

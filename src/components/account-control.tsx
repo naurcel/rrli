@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { getAuthenticationMode } from "@/features/auth/auth-model";
 import { isSupabaseConfigured } from "@/lib/config/env";
@@ -16,7 +15,6 @@ export function AccountControl() {
   const menuRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLButtonElement | null>(null);
   const menuId = useId();
-  const router = useRouter();
   const authenticationMode = getAuthenticationMode({
     isSupabaseConfigured: isSupabaseConfigured(),
     nodeEnvironment: process.env.NODE_ENV,
@@ -66,9 +64,9 @@ export function AccountControl() {
       return;
     }
 
-    if (authenticationMode !== "supabase") {
+    if (authenticationMode === "preview") {
       setIsOpen(false);
-      router.push("/login");
+      window.location.replace("/login");
       return;
     }
 
@@ -76,6 +74,22 @@ export function AccountControl() {
     setErrorMessage(null);
 
     try {
+      if (authenticationMode === "preview-login") {
+        const response = await fetch("/api/preview-session", { method: "DELETE" });
+
+        if (!response.ok) {
+          setErrorMessage("Sign-out could not be completed. Please try again.");
+          return;
+        }
+
+        setIsOpen(false);
+        // A document navigation waits for the browser to apply the deleted
+        // HttpOnly cookie before the proxy evaluates /login. Client-router
+        // navigation can otherwise briefly reuse the protected route payload.
+        window.location.replace("/login");
+        return;
+      }
+
       const supabase = createBrowserSupabaseClient();
       const { error } = await supabase.auth.signOut({ scope: "local" });
 
@@ -85,8 +99,7 @@ export function AccountControl() {
       }
 
       setIsOpen(false);
-      router.replace("/login");
-      router.refresh();
+      window.location.replace("/login");
     } catch {
       setErrorMessage("Sign-out could not be completed. Please try again.");
     } finally {
@@ -137,7 +150,9 @@ export function AccountControl() {
             <small>
               {authenticationMode === "supabase"
                 ? "Authenticated session"
-                : "Development preview"}
+                : authenticationMode === "preview-login"
+                  ? "Hosted temporary session"
+                  : "Development session"}
             </small>
           </div>
           <button
@@ -150,7 +165,7 @@ export function AccountControl() {
               ? "Signing out…"
               : authenticationMode === "supabase"
                 ? "Sign out"
-                : "Exit preview"}
+                : "Sign out"}
           </button>
           {errorMessage ? <p role="alert">{errorMessage}</p> : null}
         </div>

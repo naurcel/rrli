@@ -9,9 +9,7 @@ export function OperationalTopbar({ showDateFilter = true }: { showDateFilter?: 
         {showDateFilter && <div className="topbar-filter-slot"><GlobalDateRangePicker /></div>}
       </div>
       <div className="topbar-actions">
-        <span className="preview-pill">
-          <i aria-hidden="true" /> Preview workspace
-        </span>
+        <span className="draft-po-label">draft po hehe</span>
         <button
           className="help-button"
           type="button"

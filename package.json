@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/components/sidebar-state-model.test.ts src/features/auth/auth-model.test.ts src/lib/auth/route-policy.test.ts src/lib/config/env.test.ts src/lib/errors/app-error.test.ts"
+    "test": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/components/sidebar-state-model.test.ts src/components/sortable-table-header.test.ts src/features/audit/audit-preview-data.test.ts src/features/auth/auth-model.test.ts src/features/dashboard/dashboard-preview-data.test.ts src/features/deliveries/completion/delivery-completion-financials.test.ts src/features/deliveries/completion/delivery-completion-service.test.ts src/features/fleet/fleet-preview-data.test.ts src/features/reports/report-preview-data.test.ts src/lib/auth/preview-session.test.ts src/lib/auth/route-policy.test.ts src/lib/config/env.test.ts src/lib/errors/app-error.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

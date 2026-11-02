@@ -58,7 +58,7 @@ export function RoundedSelect({ ariaLabel, className = "", onChange, options, va
   };
 
   return (
-    <div className={`rounded-select${className ? ` ${className}` : ""}`} ref={dropdownRef}>
+    <div className={`rounded-select${open || closing ? " is-open" : ""}${className ? ` ${className}` : ""}`} ref={dropdownRef}>
       <button
         type="button"
         className="rounded-select-trigger"

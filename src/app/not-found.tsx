@@ -8,17 +8,11 @@ export const metadata: Metadata = {
 
 export default function NotFound() {
   return (
-    <main className="fallback-page" aria-labelledby="not-found-title">
-      <div className="fallback-panel">
-        <p className="fallback-code" aria-hidden="true">404</p>
-        <p className="eyebrow">ROUTEX OPERATIONS</p>
-        <h1 id="not-found-title">This page is not available.</h1>
-        <p>
-          The address may be incorrect, or this preview page may have moved.
-        </p>
-        <Link className="fallback-action" href="/">
-          Return to deliveries
-        </Link>
+    <main className="fallback-page minimal-not-found" aria-labelledby="not-found-title">
+      <div className="minimal-not-found-copy">
+        <h1 id="not-found-title">Uh-oh!</h1>
+        <p>This route took a wrong turn.</p>
+        <Link href="/dashboard">Head back to the dashboard</Link>
       </div>
     </main>
   );
