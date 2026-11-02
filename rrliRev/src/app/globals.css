@@ -2499,3 +2499,171 @@ p[role="alert"] {
     scroll-behavior: auto !important;
   }
 }
+
+/* =========================================================
+   Motion performance pass
+   Keep motion on compositor-friendly opacity and transforms. Large blur,
+   backdrop and shadow interpolation caused visible frame drops while
+   navigating, scrolling, and moving across the revenue chart.
+   ========================================================= */
+
+/* A route gets one entrance animation. Nested wrappers no longer replay it. */
+.route-template,
+.route-template .content-wrap,
+.route-template .main-content > .content-wrap,
+.main-content > .route-template,
+.main-content > .content-wrap {
+  animation: none;
+}
+
+.main-content > .content-wrap { animation: none; }
+
+/* Older browsers keep a lightweight entrance fallback. Modern browsers use
+   the coordinated enter/exit snapshots below instead of replaying both. */
+@supports not (view-transition-name: none) {
+  .main-content > .content-wrap {
+    animation: route-content-performant 180ms var(--motion-ease-smooth) both;
+  }
+}
+
+@keyframes route-content-performant {
+  from { opacity: .78; transform: translate3d(0, 5px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Universal route handoff. The application chrome is captured separately so
+   it remains a stable visual anchor while only route content changes. */
+.sidebar { view-transition-name: routex-sidebar; }
+.topbar { view-transition-name: routex-topbar; }
+
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-old(.routex-page-exit) {
+  animation: routex-page-out 120ms ease-in both;
+}
+
+::view-transition-new(.routex-page-enter) {
+  animation: routex-page-in 180ms var(--motion-ease-smooth) 70ms both;
+}
+
+::view-transition-group(routex-sidebar),
+::view-transition-group(routex-topbar) {
+  z-index: 100;
+  animation: none;
+}
+
+::view-transition-old(routex-sidebar),
+::view-transition-old(routex-topbar) {
+  display: none;
+}
+
+::view-transition-new(routex-sidebar),
+::view-transition-new(routex-topbar) {
+  animation: none;
+}
+
+@keyframes routex-page-out {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(0, -3px, 0); }
+}
+
+@keyframes routex-page-in {
+  from { opacity: 0; transform: translate3d(0, 5px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Date-range feedback remains visible without blurring the entire dashboard. */
+.main-content > .content-wrap.dashboard-range-refresh {
+  animation: dashboard-range-refresh-performant 160ms ease-out both;
+}
+
+@keyframes dashboard-range-refresh-performant {
+  from { opacity: .82; transform: translate3d(0, 2px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Loading states pulse opacity only; filter blur repainted large page regions. */
+.is-page-loading,
+.is-loading,
+[data-loading="true"],
+.empty-state[role="status"],
+.page-loading-skeleton {
+  filter: none !important;
+  animation: loading-opacity-pulse 1.35s ease-in-out infinite !important;
+  transition: opacity 180ms ease !important;
+}
+
+@keyframes loading-opacity-pulse {
+  0%, 100% { opacity: .72; }
+  50% { opacity: .48; }
+}
+
+/* Preserve the glass palette while avoiding full-surface backdrop recomputes. */
+.sidebar,
+.topbar,
+.notice,
+.stat-card,
+.secondary-button,
+.export-button,
+.filter-button,
+.filters select,
+.search-box,
+.preview-pill,
+.help-button,
+.rounded-select-menu,
+.more-filters-popover,
+.account-menu-popover,
+.record-detail-drawer,
+.page-loading-pill {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Hover feedback stays prominent without running an infinite shadow animation. */
+.fleet-card {
+  transition: transform 220ms var(--motion-ease-smooth), border-color 180ms ease;
+}
+
+.fleet-card:hover {
+  box-shadow: 7px 10px 20px rgba(148,158,173,.2), -5px -5px 16px rgba(255,255,255,.84);
+}
+
+.fleet-card:hover::after {
+  animation: none;
+  opacity: 1;
+}
+
+/* Let the browser interpolate the SVG tooltip instead of scheduling React
+   state updates on every animation frame. */
+.chart-point-tooltip {
+  transition: transform 150ms var(--motion-ease-smooth), opacity 100ms ease;
+  transform-box: view-box;
+  will-change: transform;
+}
+
+/* Width changes still communicate collapse/detail state, but finish quickly
+   and do not interpolate costly shadows. */
+.sidebar,
+.sidebar.collapsed,
+.main-content,
+body.record-detail-open .main-content {
+  transition-duration: 220ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-content > .content-wrap,
+  .main-content > .content-wrap.dashboard-range-refresh,
+  .chart-point-tooltip {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}

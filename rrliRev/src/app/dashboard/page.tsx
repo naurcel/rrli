@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
@@ -85,8 +85,7 @@ function RevenueChart({
   periodLabel: string;
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
-  const tooltipPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const chartBoundsRef = useRef<DOMRect | null>(null);
   const width = 720;
   const height = 232;
   const padding = { top: 22, right: 22, bottom: 40, left: 54 };
@@ -113,41 +112,6 @@ function RevenueChart({
     : 0;
   const tooltipY = selectedPoint ? Math.max(7, selectedPoint.y - tooltipHeight - 12) : 0;
 
-  useEffect(() => {
-    if (activeIndex === null || !selectedPoint) {
-      tooltipPositionRef.current = null;
-      setTooltipPosition(null);
-      return;
-    }
-
-    const target = { x: tooltipX, y: tooltipY };
-    const start = tooltipPositionRef.current;
-    if (!start) {
-      tooltipPositionRef.current = target;
-      setTooltipPosition(target);
-      return;
-    }
-
-    const duration = 180;
-    const startedAt = performance.now();
-    let frameId = 0;
-
-    const animate = (now: number) => {
-      const progress = Math.min((now - startedAt) / duration, 1);
-      const easedProgress = 1 - (1 - progress) ** 3;
-      const next = {
-        x: start.x + (target.x - start.x) * easedProgress,
-        y: start.y + (target.y - start.y) * easedProgress,
-      };
-      tooltipPositionRef.current = next;
-      setTooltipPosition(next);
-      if (progress < 1) frameId = requestAnimationFrame(animate);
-    };
-
-    frameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frameId);
-  }, [activeIndex, selectedPoint, tooltipX, tooltipY]);
-
   const selectClosestPoint = (clientX: number, chartBounds: DOMRect) => {
     const x = ((clientX - chartBounds.left) / chartBounds.width) * width;
     let closestIndex = 0;
@@ -159,7 +123,7 @@ function RevenueChart({
         closestIndex = index;
       }
     });
-    setActiveIndex(closestIndex);
+    setActiveIndex((currentIndex) => currentIndex === closestIndex ? currentIndex : closestIndex);
   };
 
   return (
@@ -181,10 +145,19 @@ function RevenueChart({
             viewBox={`0 0 ${width} ${height}`}
             role="img"
             aria-label={`Revenue over time for ${periodLabel}`}
-            onPointerMove={(event) =>
-              selectClosestPoint(event.clientX, event.currentTarget.getBoundingClientRect())
-            }
-            onPointerLeave={() => setActiveIndex(null)}
+            onPointerEnter={(event) => {
+              chartBoundsRef.current = event.currentTarget.getBoundingClientRect();
+              selectClosestPoint(event.clientX, chartBoundsRef.current);
+            }}
+            onPointerMove={(event) => {
+              const chartBounds = chartBoundsRef.current ?? event.currentTarget.getBoundingClientRect();
+              chartBoundsRef.current = chartBounds;
+              selectClosestPoint(event.clientX, chartBounds);
+            }}
+            onPointerLeave={() => {
+              chartBoundsRef.current = null;
+              setActiveIndex(null);
+            }}
           >
             <defs>
               <linearGradient id="revenue-chart-fill" x1="0" x2="0" y1="0" y2="1">
@@ -227,11 +200,11 @@ function RevenueChart({
                 </g>
               );
             })}
-            {selectedPoint && tooltipPosition && (
+            {selectedPoint && (
               <g
                 className="chart-point-tooltip"
                 pointerEvents="none"
-                transform={`translate(${tooltipPosition.x}, ${tooltipPosition.y})`}
+                style={{ transform: `translate(${tooltipX}px, ${tooltipY}px)` }}
               >
                 <rect width={tooltipWidth} height={tooltipHeight} rx="8" />
                 <text className="chart-tooltip-label" x="11" y="16">

@@ -160,9 +160,18 @@ export function buildDeliveryTripRecord(input: {
     ...stop,
     entryFeeStatus: stop.entryFeeStatus ?? "confirmed",
   }));
-  const dropoffEntryFees = normalizedDropoffs.every((stop) => stop.entryFeeStatus !== "unknown")
-    ? normalizedDropoffs.reduce((sum, stop) => sum + (stop.entryFee ?? 0), 0)
-    : null;
+  const allEntryFeesNotApplicable = normalizedDropoffs.every(
+    (stop) => stop.entryFeeStatus === "not_applicable",
+  );
+  const dropoffEntryFees =
+    normalizedDropoffs.some((stop) => stop.entryFeeStatus === "unknown") ||
+    allEntryFeesNotApplicable
+      ? null
+      : normalizedDropoffs.reduce(
+          (sum, stop) =>
+            stop.entryFeeStatus === "confirmed" ? sum + (stop.entryFee ?? 0) : sum,
+          0,
+        );
   const entryFees = input.expenses.entryFees ?? dropoffEntryFees;
   const fullExpenses: TripExpenseBreakdown = {
     ...input.expenses,
@@ -173,7 +182,7 @@ export function buildDeliveryTripRecord(input: {
     ...input.expenseStates,
     entryFees: normalizedDropoffs.some((stop) => stop.entryFeeStatus === "unknown")
       ? "unknown"
-      : normalizedDropoffs.every((stop) => stop.entryFeeStatus === "not_applicable")
+      : allEntryFeesNotApplicable
         ? "not_applicable"
         : input.expenseStates?.entryFees ?? "confirmed",
   } satisfies TripExpenseStates;

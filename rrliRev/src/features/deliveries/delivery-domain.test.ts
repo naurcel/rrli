@@ -43,6 +43,38 @@ test("distinguishes confirmed zero, not applicable, and unknown expenses", () =>
   );
 });
 
+test("preserves a not-applicable aggregate entry fee as null", () => {
+  const trip = buildDeliveryTripRecord({
+    id: "dlv-na-entry-fee",
+    waybillNumber: "WB-NA-ENTRY",
+    deliveryDate: "2026-06-03",
+    clientName: "Test Client Corp.",
+    plateNumber: "AAA 1001",
+    truckType: "6-Wheeler",
+    truckTemperature: "Ambient",
+    origin: "Test Hub",
+    distanceKm: 10,
+    fuelRate: 60,
+    deliveryRate: 1000,
+    expenses: { ...expenses, entryFees: null },
+    dropoffs: [{
+      id: "stop-na-entry",
+      sequence: 1,
+      storeName: "Sample Store",
+      destinationArea: "Sample Area",
+      entryFee: null,
+      entryFeeStatus: "not_applicable",
+      podSubmitted: false,
+      supportingDocsComplete: false,
+      documentRef: "",
+    }],
+  });
+
+  assert.equal(trip.expenses.entryFees, null);
+  assert.equal(trip.expenseStates.entryFees, "not_applicable");
+  assert.equal(trip.totalExpenses, 0);
+});
+
 test("returns N/A-compatible null margin for zero revenue and preserves losses", () => {
   assert.equal(calculateProfitMargin(0, 0), null);
   assert.equal(calculateProfitMargin(1000, -250), -25);
