@@ -22,6 +22,11 @@ Open `http://localhost:3000/login`.
 - [**Stage 2 Delivery Management Progress (`docs/STAGE_2_DELIVERY_MANAGEMENT_PROGRESS.md`)**](./docs/STAGE_2_DELIVERY_MANAGEMENT_PROGRESS.md)
 - [**Supabase PostgreSQL Migration & RLS Policies (`supabase/migrations/20261101000000_routex_revised_foundation.sql`)**](./supabase/migrations/20261101000000_routex_revised_foundation.sql)
 - [**Stage 2 Delivery Migration (`supabase/migrations/20261101010000_stage2_delivery_management.sql`)**](./supabase/migrations/20261101010000_stage2_delivery_management.sql)
+- [**Small Local/Test Mock Database (`docs/SMALL_MOCK_DATABASE.md`)**](./docs/SMALL_MOCK_DATABASE.md)
+
+## Small mock database
+
+After applying all migrations to a local or disposable test Supabase project, run `npm.cmd run seed:small-mock` to upsert the guarded six-delivery fixture. See the [small mock database guide](./docs/SMALL_MOCK_DATABASE.md) for its exact records, safety checks, and required server-only environment variable.
 
 ## Design System Documentation (`docs/design/`)
 
