@@ -1,1 +1,0 @@
-globalThis.__RSC_MANIFEST=(globalThis.__RSC_MANIFEST||{});globalThis.__RSC_MANIFEST["/api/auth/me/route"]={"moduleLoading":{"prefix":"/_next/"},"ssrModuleMapping":{},"edgeSSRModuleMapping":{},"clientModules":{},"entryCSSFiles":{"c:\\Users\\suchi\\Documents\\rrli\\rrliRev\\src\\app\\api\\auth\\me\\route":[]},"rscModuleMapping":{},"edgeRscModuleMapping":{}};
