@@ -6,6 +6,8 @@ RouteX includes a deliberately small, deterministic dataset for local developmen
 
 The canonical fixture lives in `src/features/deliveries/small-mock-database.ts`.
 
+When Supabase is not configured, the delivery list and profitability-summary route handlers read this fixture directly. This makes a Vercel frontend deployment usable without a database. New delivery records in that mode are validated by the route handler and stored in browser-local storage, so they are demo-only and are neither shared nor durable server records. Configuring Supabase automatically selects the persisted repository path.
+
 | Record type | Count | Notes |
 | --- | ---: | --- |
 | Clients | 3 | LANDERS, Manila Comisario Central Inc. (MCCI), VANGUARD |
@@ -15,18 +17,18 @@ The canonical fixture lives in `src/features/deliveries/small-mock-database.ts`.
 | Completed deliveries | 6 | Exactly two per client |
 | Drop-offs | 9 | Three single-destination trips and three two-stop trips |
 
-All deliveries occur from June 1 through June 7, 2026. Waybills, routes, personnel, storage paths, and filenames are fictional. Sample filenames include `SAMPLE-NOT-SIGNED` so they cannot be mistaken for operational documents.
+All deliveries occur within the current seven-day window of October 27 through November 2, 2026. Waybills, routes, personnel, storage paths, and filenames are fictional. Sample filenames include `SAMPLE-NOT-SIGNED` so they cannot be mistaken for operational documents.
 
 ## Scenarios covered
 
 | Date | Client | Stops | Financial/POD scenario |
 | --- | --- | ---: | --- |
-| June 1 | LANDERS | 1 | Normal finalized trip; POD verified |
-| June 2 | LANDERS | 2 | Confirmed zero other expense; POD submitted |
-| June 3 | MCCI | 1 | Entry fee explicitly not applicable; POD missing |
-| June 4 | MCCI | 2 | Low but positive margin; POD rejected |
-| June 5 | VANGUARD | 1 | Confirmed zero toll; POD verified |
-| June 7 | VANGUARD | 2 | Unknown toll keeps finances incomplete; POD submitted |
+| October 27 | LANDERS | 1 | Normal finalized trip; POD verified |
+| October 28 | LANDERS | 2 | Confirmed zero other expense; POD submitted |
+| October 29 | MCCI | 1 | Entry fee explicitly not applicable; POD missing |
+| October 30 | MCCI | 2 | Low but positive margin; POD rejected |
+| October 31 | VANGUARD | 1 | Confirmed zero toll; POD verified |
+| November 2 | VANGUARD | 2 | Unknown toll keeps finances incomplete; POD submitted |
 
 Revenue remains trip-level. Store entry fees are derived from the delivery's child drop-offs. Total expenses, net income, and profit margin are calculated by the centralized delivery-domain functions and are checked again against database-generated values after seeding. The incomplete trip is excluded from confirmed profitability summaries.
 
@@ -57,3 +59,11 @@ Never expose the service-role key through a `NEXT_PUBLIC_*` variable, commit it,
 - The command validates fixture counts, date boundaries, per-client delivery counts, drop-offs, POD states, generated financial totals, and the profitability summary before reporting success.
 
 The seed requires a migrated database and valid credentials, so unit tests validate the fixture without making a network connection. Live seed verification must be run against the intended disposable environment.
+
+## Database-free demo limitations
+
+- Bundled records are reset by a deployment only when the source fixture changes.
+- User-created records belong to one browser profile and are not synchronized.
+- Clearing site data removes browser-created records.
+- POD verification, audited corrections, and other database transactions remain unavailable until Supabase is configured.
+- This mode is appropriate for interface review and demonstrations, not operational data.

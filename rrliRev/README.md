@@ -28,6 +28,12 @@ Open `http://localhost:3000/login`.
 
 After applying all migrations to a local or disposable test Supabase project, run `npm.cmd run seed:small-mock` to upsert the guarded six-delivery fixture. See the [small mock database guide](./docs/SMALL_MOCK_DATABASE.md) for its exact records, safety checks, and required server-only environment variable.
 
+### Database-free Vercel demo
+
+Supabase is optional for the current frontend demo. When its environment variables are absent, RouteX serves the same six-delivery fixture from the application bundle, including delivery filters and profitability summaries. Delivery records created in this mode are validated by the API and financial domain functions, then stored only in that browser's `localStorage`. They are not shared between browsers, devices, or users and can disappear when browser storage is cleared.
+
+When valid Supabase variables are present, RouteX uses the Supabase repository instead; browser-local records are not created. Database-dependent POD mutations and audited server workflows still require Supabase.
+
 ## Design System Documentation (`docs/design/`)
 
 - [**Design Documentation Index (`docs/design/README.md`)**](./docs/design/README.md)
