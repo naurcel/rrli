@@ -16,6 +16,15 @@ test("keeps the RouteX mock database intentionally small and internally related"
     ["Landers", "Manila Comisario Central Inc. (MCCI)", "Vanguard"],
   );
   assert.equal(SMALL_MOCK_DATABASE.trucks.length, 6);
+  assert.deepEqual(
+    Object.fromEntries(
+      ["4-Wheeler", "6-Wheeler", "10-Wheeler"].map((type) => [
+        type,
+        SMALL_MOCK_DATABASE.trucks.filter((truck) => truck.truckType === type).length,
+      ]),
+    ),
+    { "4-Wheeler": 3, "6-Wheeler": 2, "10-Wheeler": 1 },
+  );
   assert.equal(SMALL_MOCK_DATABASE.drivers.length, 2);
   assert.equal(SMALL_MOCK_DATABASE.helpers.length, 2);
   assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 9);

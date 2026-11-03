@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { use, useMemo } from "react";
+import { use, useMemo, useState } from "react";
 
 import {
   formatDateRange,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
+import { TruckPhoto } from "@/components/truck-photo";
 import { summarizeTruckProfitability } from "@/features/deliveries/delivery-domain";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import { formatPercent, formatPeso } from "@/lib/format";
@@ -27,6 +29,7 @@ export default function TruckProfilePage({
   const normalizedPlate = decodedPlate.replace(/\+/g, " ").trim().replace(/\s+/g, " ").toUpperCase();
   const { range } = useGlobalDateRange();
   const { deliveries, loading, error } = usePersistedDeliveries(range);
+  const [historySort, setHistorySort] = useState<{ key: string; direction: TableSortDirection }>({ key: "date", direction: "desc" });
 
   const truckTrips = useMemo(
     () =>
@@ -43,6 +46,27 @@ export default function TruckProfilePage({
       ) ?? null,
     [deliveries, normalizedPlate],
   );
+
+  const sortedTruckTrips = useMemo(() => {
+    const multiplier = historySort.direction === "asc" ? 1 : -1;
+    return [...truckTrips].sort((left, right) => {
+      const values: Record<string, [string | number, string | number]> = {
+        date: [left.deliveryDate, right.deliveryDate],
+        client: [left.clientName, right.clientName],
+        dropoffs: [left.dropoffs.length, right.dropoffs.length],
+        distance: [left.distanceKm, right.distanceKm],
+        revenue: [left.deliveryRate ?? Number.NEGATIVE_INFINITY, right.deliveryRate ?? Number.NEGATIVE_INFINITY],
+        expenses: [left.totalExpenses ?? Number.NEGATIVE_INFINITY, right.totalExpenses ?? Number.NEGATIVE_INFINITY],
+        netIncome: [left.netIncome ?? Number.NEGATIVE_INFINITY, right.netIncome ?? Number.NEGATIVE_INFINITY],
+        pod: [left.podStatus, right.podStatus],
+      };
+      const [leftValue, rightValue] = values[historySort.key] ?? values.date;
+      const compared = typeof leftValue === "number" && typeof rightValue === "number"
+        ? leftValue - rightValue
+        : String(leftValue).localeCompare(String(rightValue));
+      return compared * multiplier || left.id.localeCompare(right.id);
+    });
+  }, [historySort, truckTrips]);
 
   return (
     <>
@@ -75,50 +99,45 @@ export default function TruckProfilePage({
               <div>
                 <h1>{truck.plateNumber}</h1>
                 <p className="subtitle">
-                  {truck.truckType} · {truck.truckTemperature} · {formatDateRange(range)}
+                  {truck.truckType} · {formatDateRange(range)}
                 </p>
               </div>
             </header>
 
             <section className="truck-profile-hero" aria-label="Truck profile overview">
               <article className="records-card truck-profile-visual">
-                <div className="fleet-photo"><span>No photo yet</span></div>
-                <div className="truck-profile-visual-copy">
-                  <strong>{truck.plateNumber}</strong>
-                  <p>{truck.truckType} · {truck.truckTemperature}</p>
-                </div>
-              </article>
-
-              <article className="records-card truck-profile-card">
-                <div className="records-heading">
-                  <div>
-                    <h2>Truck Details</h2>
-                    <p>Identity and operational information from current delivery records.</p>
-                  </div>
-                </div>
-                <dl className="truck-profile-list">
-                  <div><dt>Plate number</dt><dd>{truck.plateNumber}</dd></div>
-                  <div><dt>Vehicle type</dt><dd>{truck.truckType}</dd></div>
-                  <div><dt>Temperature</dt><dd>{truck.truckTemperature}</dd></div>
-                  <div><dt>Store drop-offs</dt><dd>{truck.totalStoresServed}</dd></div>
-                  <div><dt>Total distance</dt><dd>{truck.totalDistanceKm} km</dd></div>
-                </dl>
+                <TruckPhoto plateNumber={truck.plateNumber} editable />
               </article>
 
               <article className="records-card truck-profile-card truck-profile-availability">
                 <div className="records-heading">
                   <div>
                     <h2>Operational Summary</h2>
-                    <p>Finalized delivery performance in the selected range.</p>
+                    <p>Performance for the selected period.</p>
                   </div>
                 </div>
                 <div className="truck-performance-kpis" aria-label="Truck performance metrics">
                   <div><span>Total deliveries</span><strong>{truck.completedTrips}</strong></div>
                   <div><span>Revenue</span><strong>{formatPeso(truck.totalEarnings)}</strong></div>
                   <div><span>Total expenses</span><strong>{formatPeso(truck.totalExpenses)}</strong></div>
-                  <div><span>Net income</span><strong className={truck.netProfit < 0 ? "warning" : undefined}>{formatPeso(truck.netProfit)}</strong></div>
+                  <div><span>Net profit</span><strong className={truck.netProfit < 0 ? "warning" : undefined}>{formatPeso(truck.netProfit)}</strong></div>
                   <div><span>Profit margin</span><strong className={truck.netProfit < 0 ? "warning" : undefined}>{formatPercent(truck.marginPercent)}</strong></div>
                 </div>
+              </article>
+
+              <article className="records-card truck-profile-card truck-profile-details">
+                <div className="records-heading">
+                  <div>
+                    <h2>Truck Details</h2>
+                    <p>Vehicle details from delivery records.</p>
+                  </div>
+                </div>
+                <dl className="truck-profile-list">
+                  <div><dt>Plate number</dt><dd>{truck.plateNumber}</dd></div>
+                  <div><dt>Vehicle type</dt><dd>{truck.truckType}</dd></div>
+                  <div><dt>Store drop-offs</dt><dd>{truck.totalStoresServed}</dd></div>
+                  <div><dt>Total distance</dt><dd>{truck.totalDistanceKm} km</dd></div>
+                </dl>
               </article>
             </section>
 
@@ -126,25 +145,25 @@ export default function TruckProfilePage({
               <div className="records-heading">
                 <div>
                   <h2>Delivery History</h2>
-                  <p>{truckTrips.length} record{truckTrips.length === 1 ? "" : "s"} for this truck in the selected range</p>
+                  <p>{truckTrips.length} deliver{truckTrips.length === 1 ? "y" : "ies"} in this period.</p>
                 </div>
               </div>
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Waybill & Date</th>
-                      <th>Client</th>
-                      <th>Drop-offs</th>
-                      <th>Distance</th>
-                      <th>Revenue</th>
-                      <th>Expenses</th>
-                      <th>Net Income</th>
-                      <th>POD Status</th>
+                      <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Client" sortKey="client" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="POD Status" sortKey="pod" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
                     </tr>
                   </thead>
                   <tbody>
-                    {truckTrips.map((trip) => (
+                    {sortedTruckTrips.map((trip) => (
                       <tr key={trip.id}>
                         <td><strong>{trip.waybillNumber}</strong><br /><small>{trip.deliveryDate}</small></td>
                         <td>{trip.clientName}</td>

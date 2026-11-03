@@ -16,8 +16,7 @@ export default function SettingsPage() {
           <div>
             <h1>Settings</h1>
             <p className="subtitle">
-              Review RouteX scope boundaries, active authentication posture, and the server-enforced
-              role permission matrix.
+              Review system scope and access settings.
             </p>
           </div>
           <span className={`access-pill ${actor.accessLevel}`}>
@@ -32,7 +31,7 @@ export default function SettingsPage() {
           <div className="records-heading">
             <div>
               <h2>Revised RouteX System Posture</h2>
-              <p>Focused exclusively on Delivery Operations and Trucks</p>
+              <p>Delivery operations and trucks.</p>
             </div>
           </div>
 
@@ -78,7 +77,7 @@ export default function SettingsPage() {
           <div className="records-heading">
             <div>
               <h2>Role & Access Level Reference</h2>
-              <p>Three access levels across six canonical company roles</p>
+              <p>Access for six company roles.</p>
             </div>
           </div>
 

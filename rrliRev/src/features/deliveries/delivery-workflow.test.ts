@@ -114,7 +114,7 @@ test("dynamic batch deliveries are queryable without corrupting the 9 base seed 
     clientName: "Landers",
     plateNumber: "CBL-4412",
     truckType: "4-Wheeler",
-    truckTemperature: "Ambient",
+    truckTemperature: "18°C–25°C",
     origin: "Laguna Hub",
     distanceKm: 85,
     fuelRate: 58.5,

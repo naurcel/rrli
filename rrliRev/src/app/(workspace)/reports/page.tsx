@@ -8,6 +8,7 @@ import {
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import {
   summarizeTruckProfitability,
 } from "@/features/deliveries/delivery-domain";
@@ -42,11 +43,24 @@ function financialShare(value: number, total: number): string {
   return formatPercent(total === 0 ? null : (value / total) * 100);
 }
 
+function sortRows<T>(rows: readonly T[], key: string, direction: TableSortDirection, valueFor: (row: T, key: string) => string | number): T[] {
+  const multiplier = direction === "asc" ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    const leftValue = valueFor(left, key);
+    const rightValue = valueFor(right, key);
+    const compared = typeof leftValue === "number" && typeof rightValue === "number"
+      ? leftValue - rightValue
+      : String(leftValue).localeCompare(String(rightValue));
+    return compared * multiplier;
+  });
+}
+
 export default function ReportsPage() {
   const actor = useAuthenticatedActor();
   const { range } = useGlobalDateRange();
   const { deliveries: filteredDeliveries, loading, error } = usePersistedDeliveries(range);
   const [activeTab, setActiveTab] = useState<ReportTab>("revenue");
+  const [reportSort, setReportSort] = useState<{ key: string; direction: TableSortDirection }>({ key: "revenue", direction: "desc" });
 
   useEffect(() => {
     try {
@@ -65,6 +79,11 @@ export default function ReportsPage() {
       // Ignore
     }
   }, []);
+
+  useEffect(() => {
+    const defaultKeys: Record<ReportTab, string> = { revenue: "revenue", expenses: "expenses", profitability: "netIncome", activity: "deliveries" };
+    setReportSort({ key: defaultKeys[activeTab], direction: "desc" });
+  }, [activeTab]);
 
   const truckRows = useMemo(
     () => summarizeTruckProfitability(filteredDeliveries),
@@ -149,6 +168,12 @@ export default function ReportsPage() {
     return { earnings, expenses, netIncome, totalStops };
   }, [filteredDeliveries, financialDeliveries]);
 
+  const displayedClientRows = sortRows(clientFinancialRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.label : key === "deliveries" ? row.deliveries : row.revenue);
+  const displayedExpenseRows = sortRows(expenseRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.plateNumber : key === "deliveries" ? row.completedTrips : row.totalExpenses);
+  const displayedTruckRows = sortRows(truckRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.plateNumber : key === "deliveries" ? row.completedTrips : key === "revenue" ? row.totalEarnings : key === "expenses" ? row.totalExpenses : key === "margin" ? row.marginPercent ?? Number.NEGATIVE_INFINITY : row.netProfit);
+  const displayedActivityRows = sortRows(activityRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.label : key === "verified" ? row.verifiedPods : key === "followup" ? row.followUpPods : row.deliveries);
+  const changeReportSort = (key: string, direction: TableSortDirection) => setReportSort({ key, direction });
+
   const activeReport = {
     revenue: {
       title: "Revenue Report",
@@ -162,7 +187,7 @@ export default function ReportsPage() {
     },
     profitability: {
       title: "Profitability Report",
-      heading: "Revenue, Expenses & Net Income by Truck",
+      heading: "Revenue, Expenses & Net Profit by Truck",
       rowCount: truckRows.length,
     },
     activity: {
@@ -181,8 +206,7 @@ export default function ReportsPage() {
           <div>
             <h1>Reports</h1>
             <p className="subtitle">
-              Generate printable revenue, expense, profitability, and delivery activity
-              summaries from the selected period.
+              Create printable delivery and financial reports.
             </p>
           </div>
           <div className="report-actions">
@@ -263,7 +287,7 @@ export default function ReportsPage() {
                 <em>Diesel, tolls, crew & entry</em>
               </div>
               <div>
-                <span>Net Truck Income</span>
+                <span>Net Profit</span>
                 <strong>{formatPeso(totals.netIncome)}</strong>
                 <em>
                   {formatPercent(
@@ -292,14 +316,14 @@ export default function ReportsPage() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Client</th>
-                        <th>Deliveries</th>
-                        <th>Revenue</th>
-                        <th>Share</th>
+                        <SortableTableHeader label="Client" sortKey="label" activeSortKey={reportSort.key} direction={reportSort.direction} onSort={changeReportSort} />
+                        <SortableTableHeader label="Deliveries" sortKey="deliveries" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Share" sortKey="share" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
                       </tr>
                     </thead>
                     <tbody>
-                      {clientFinancialRows.map((row) => (
+                      {displayedClientRows.map((row) => (
                         <tr key={row.label}>
                           <td>{row.label}</td>
                           <td>{row.deliveries}</td>
@@ -313,14 +337,14 @@ export default function ReportsPage() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Truck</th>
-                        <th>Deliveries</th>
-                        <th>Expenses</th>
-                        <th>Share</th>
+                        <SortableTableHeader label="Truck" sortKey="label" activeSortKey={reportSort.key} direction={reportSort.direction} onSort={changeReportSort} />
+                        <SortableTableHeader label="Deliveries" sortKey="deliveries" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Share" sortKey="share" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
                       </tr>
                     </thead>
                     <tbody>
-                      {expenseRows.map((row) => (
+                      {displayedExpenseRows.map((row) => (
                         <tr key={row.plateNumber}>
                           <td>{row.plateNumber}</td>
                           <td>{row.completedTrips}</td>
@@ -334,16 +358,16 @@ export default function ReportsPage() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Truck</th>
-                        <th>Deliveries</th>
-                        <th>Revenue</th>
-                        <th>Expenses</th>
-                        <th>Net Income</th>
-                        <th>Profit Margin</th>
+                        <SortableTableHeader label="Truck" sortKey="label" activeSortKey={reportSort.key} direction={reportSort.direction} onSort={changeReportSort} />
+                        <SortableTableHeader label="Deliveries" sortKey="deliveries" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Profit Margin" sortKey="margin" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
                       </tr>
                     </thead>
                     <tbody>
-                      {truckRows.map((row) => (
+                      {displayedTruckRows.map((row) => (
                         <tr key={row.plateNumber}>
                           <td>{row.plateNumber}</td>
                           <td>{row.completedTrips}</td>
@@ -359,14 +383,14 @@ export default function ReportsPage() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Client</th>
-                        <th>Deliveries</th>
-                        <th>POD Verified</th>
-                        <th>Follow-up</th>
+                        <SortableTableHeader label="Client" sortKey="label" activeSortKey={reportSort.key} direction={reportSort.direction} onSort={changeReportSort} />
+                        <SortableTableHeader label="Deliveries" sortKey="deliveries" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="POD Verified" sortKey="verified" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Follow-up" sortKey="followup" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
                       </tr>
                     </thead>
                     <tbody>
-                      {activityRows.map((row) => (
+                      {displayedActivityRows.map((row) => (
                         <tr key={row.label}>
                           <td>{row.label}</td>
                           <td>{row.deliveries}</td>

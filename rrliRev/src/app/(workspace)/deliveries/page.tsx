@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
+import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
 import {
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
@@ -13,6 +14,7 @@ import {
   type DetailSection,
 } from "@/components/record-detail-drawer";
 import { RoundedSelect } from "@/components/rounded-select";
+import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import type {
   ExpenseResolutionStatus,
 } from "@/features/deliveries/delivery-domain";
@@ -23,6 +25,7 @@ import type {
 import {
   canImportAndReviewExcel,
   canMutateDeliveryRecords,
+  canVerifyPodDocuments,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 import { selectBrowserPreviewDeliveries } from "@/features/deliveries/browser-preview-deliveries";
@@ -281,6 +284,8 @@ export default function DeliveriesPage() {
 
   const canWrite = canMutateDeliveryRecords(actor.role);
   const canImport = canImportAndReviewExcel(actor.role);
+  const [activeSortKey, activeSortDirection] = sort.split(":") as [string, TableSortDirection];
+  const updateTableSort = (key: string, direction: TableSortDirection) => setSort(`${key}:${direction}`);
 
   async function finalizeFinancials() {
     if (!selectedTrip || financialActionPending) return;
@@ -366,10 +371,23 @@ export default function DeliveriesPage() {
               ? ("success" as const)
               : ("warning" as const),
         })),
+      },
+      {
+        title: "POD & Supporting Documents",
+        eyebrow: "Stop-level files and review status",
+        fullWidth: true,
+        description: "Select a drop-off to inspect its document, upload a replacement, or perform an authorized review action.",
         customContent: (
-          <Link className="record-detail-document-link" href="/pod-documents">
-            Open POD &amp; supporting documents
-          </Link>
+          <DeliveryPodDocuments
+            trip={selectedTrip}
+            canVerify={canVerifyPodDocuments(actor.role)}
+            roleLabel={actor.roleLabel}
+            onTripChange={(nextTrip) => {
+              const updated = { ...selectedTrip, ...nextTrip };
+              setSelectedTrip(updated);
+              setDeliveries((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
+            }}
+          />
         ),
       },
       {
@@ -426,7 +444,7 @@ export default function DeliveriesPage() {
           },
           { label: "Total Expenses", value: formatPeso(selectedTrip.totalExpenses) },
           {
-            label: "Net Income",
+            label: "Net Profit",
             value: `${formatPeso(selectedTrip.netIncome)} (${formatPercent(selectedTrip.marginPercent)})`,
             tone: selectedTrip.netIncome !== null && selectedTrip.netIncome >= 0 ? "success" : "warning",
           },
@@ -459,7 +477,7 @@ export default function DeliveriesPage() {
         ),
       },
     ];
-  }, [canWrite, financialActionMessage, financialActionPending, selectedTrip]);
+  }, [actor.role, actor.roleLabel, canWrite, financialActionMessage, financialActionPending, selectedTrip]);
 
   return (
     <>
@@ -470,8 +488,7 @@ export default function DeliveriesPage() {
           <div>
             <h1>Deliveries</h1>
             <p className="subtitle">
-              Organize completed deliveries by client, waybill number, truck, and multi-store
-              drop-offs with itemized trip expenses from the Daily Trip Report.
+              Review completed trips, costs, drop-offs, and POD status.
             </p>
           </div>
           <div className="fleet-intro-actions">
@@ -486,24 +503,14 @@ export default function DeliveriesPage() {
               </Link>
             ) : null}
             {canWrite ? (
-              <>
-                <Link
-                  className="secondary-button page-intro-action"
-                  href="/pod-documents"
-                  aria-label="Review and verify proof of delivery documents"
-                  data-tooltip="Review and verify proof of delivery documents"
-                >
-                  Verify PODs
-                </Link>
-                <Link
-                  className="primary-action-button page-intro-action"
-                  href="/deliveries/new"
-                  aria-label="Record a completed delivery and its trip details"
-                  data-tooltip="Record a completed delivery and its trip details"
-                >
-                  Record delivery
-                </Link>
-              </>
+              <Link
+                className="primary-action-button page-intro-action"
+                href="/deliveries/new"
+                aria-label="Record a completed delivery and its trip details"
+                data-tooltip="Record a completed delivery and its trip details"
+              >
+                Record delivery
+              </Link>
             ) : (
               <span className="settings-readonly-pill">
                 View-Only ({actor.roleLabel})
@@ -528,10 +535,10 @@ export default function DeliveriesPage() {
             </span>
           </article>
           <article className="stat-card">
-            <span className="stat-label">NET INCOME</span>
+            <span className="stat-label">NET PROFIT</span>
             <strong>{formatPeso(summary.netTotal)}</strong>
             <span className="stat-meta positive">
-              Net profitability for the records shown below
+              Profit for the records shown below
             </span>
           </article>
         </section>
@@ -543,10 +550,7 @@ export default function DeliveriesPage() {
           <div className="records-heading">
             <div>
               <h2>Completed Delivery Ledger</h2>
-              <p>
-                Filter by client, truck, or POD verification status. Each delivery groups all store
-                drop-offs served on that trip.
-              </p>
+              <p>Filter and open completed delivery records.</p>
             </div>
           </div>
 
@@ -614,7 +618,7 @@ export default function DeliveriesPage() {
                 { value: "delivery_date:asc", label: "Oldest delivery" },
                 { value: "client:asc", label: "Client A–Z" },
                 { value: "delivery_rate:desc", label: "Highest revenue" },
-                { value: "net_income:desc", label: "Highest net income" },
+                { value: "net_income:desc", label: "Highest net profit" },
                 { value: "profit_margin:desc", label: "Highest profit margin" },
               ]}
               onChange={setSort}
@@ -644,16 +648,17 @@ export default function DeliveriesPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Waybill</th>
-                    <th>Date</th>
-                    <th>Client</th>
-                    <th>Truck & Temp</th>
-                    <th>Origin & Store Drop-offs</th>
-                    <th>Distance</th>
-                    <th>Delivery Rate</th>
-                    <th>Total Expenses</th>
-                    <th>Net Income</th>
-                    <th>POD Status</th>
+                    <SortableTableHeader label="Waybill" sortKey="waybill" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
+                    <SortableTableHeader label="Date" sortKey="delivery_date" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
+                    <SortableTableHeader label="Client" sortKey="client" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
+                    <SortableTableHeader label="Truck" sortKey="truck" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
+                    <SortableTableHeader label="Temperature" sortKey="temperature" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
+                    <SortableTableHeader label="Origin & Store Drop-offs" sortKey="origin" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
+                    <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
+                    <SortableTableHeader label="Delivery Rate" sortKey="delivery_rate" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
+                    <SortableTableHeader label="Total Expenses" sortKey="total_expenses" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
+                    <SortableTableHeader label="Net Profit" sortKey="net_income" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
+                    <SortableTableHeader label="POD Status" sortKey="pod_status" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
                   </tr>
                 </thead>
                 <tbody>
@@ -679,9 +684,8 @@ export default function DeliveriesPage() {
                       </td>
                       <td className="truck-code">
                         <strong>{trip.plateNumber}</strong> ({trip.truckType})
-                        <br />
-                        <small>{trip.truckTemperature}</small>
                       </td>
+                      <td>{trip.truckTemperature}</td>
                       <td>
                         <span>{trip.origin} → </span>
                         <span className="dropoff-count-badge">

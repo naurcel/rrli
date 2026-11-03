@@ -3,6 +3,9 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const distDir = process.env.NEXT_DIST_DIR || ".next";
+const turbopackRoot = fs.existsSync(path.join(__dirname, "node_modules", "next", "package.json"))
+  ? __dirname
+  : path.resolve(__dirname, "..");
 
 if (process.argv.includes("build")) {
   try {
@@ -47,12 +50,13 @@ if (process.argv.includes("build")) {
 }
 
 const nextConfig: NextConfig = {
-  // rrliRev is intentionally nested inside the existing RouteX repository.
-  // Keep Turbopack from traversing to the parent application's proxy/routes.
+  // Vercel installs from rrliRev, while this local workspace currently hoists
+  // dependencies one directory up. Turbopack needs the dependency directory
+  // inside its root, so choose the narrowest root that contains both.
   cleanDistDir: false,
   distDir,
   turbopack: {
-    root: __dirname,
+    root: turbopackRoot,
   },
 };
 

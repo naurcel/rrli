@@ -171,7 +171,20 @@ export async function listDeliveryRecords(
   if (input.dateFrom) query = query.gte("delivery_date", input.dateFrom);
   if (input.dateTo) query = query.lte("delivery_date", input.dateTo);
 
-  const sortColumn = input.sort === "client" ? "client_name" : input.sort;
+  const sortColumn = {
+    waybill: "waybill_number",
+    client: "client_name",
+    truck: "plate_number",
+    temperature: "truck_temperature_snapshot",
+    origin: "origin",
+    distance: "distance_km",
+    delivery_date: "delivery_date",
+    delivery_rate: "delivery_rate",
+    total_expenses: "total_expenses",
+    net_income: "net_income",
+    profit_margin: "profit_margin",
+    pod_status: "pod_status",
+  }[input.sort];
   const response = await query
     .order(sortColumn, {
       ascending: input.direction === "asc",

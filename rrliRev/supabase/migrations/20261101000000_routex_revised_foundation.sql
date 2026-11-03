@@ -165,7 +165,7 @@ create table if not exists public.trucks (
   id uuid primary key default gen_random_uuid(),
   plate_number text not null unique,
   truck_type text not null,              -- e.g. 4-Wheeler, 6-Wheeler, 10-Wheeler
-  truck_temperature text not null default 'Chilled / Frozen', -- e.g. Ambient, Chilled, Frozen, Multi-Temp
+  truck_temperature text not null default '2°C–4°C', -- Celsius reading or range
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

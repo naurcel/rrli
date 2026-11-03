@@ -29,6 +29,16 @@ test("mock repository filters, sorts, and paginates with the persisted API shape
   const searched = listSmallMockDeliveryRecords(query("q=Popeyes%20-%20SM%20Mall%20of%20Asia&pageSize=10"));
   assert.equal(searched.total, 1);
   assert.equal(searched.items[0]?.clientName, "Manila Comisario Central Inc. (MCCI)");
+
+  const byExpense = listSmallMockDeliveryRecords(query("sort=total_expenses&direction=desc&pageSize=10"));
+  const knownExpenses = byExpense.items.flatMap((item) => item.totalExpenses == null ? [] : [item.totalExpenses]);
+  assert.deepEqual(knownExpenses, [...knownExpenses].sort((left, right) => right - left));
+
+  const byTruck = listSmallMockDeliveryRecords(query("sort=truck&direction=asc&pageSize=10"));
+  assert.deepEqual(
+    byTruck.items.map((item) => item.plateNumber),
+    [...byTruck.items].map((item) => item.plateNumber).sort((left, right) => left.localeCompare(right)),
+  );
 });
 
 test("mock profitability honors dates and excludes financially incomplete trips", () => {

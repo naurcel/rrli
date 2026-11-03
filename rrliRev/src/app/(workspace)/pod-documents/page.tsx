@@ -320,8 +320,7 @@ export default function PodDocumentsPage() {
           <div>
             <h1>POD & Supporting Documents</h1>
             <p className="subtitle">
-              Verify store-by-store Proof of Delivery (POD) slips and supporting documents across
-              every completed trip.
+              Review PODs and supporting documents by store.
             </p>
           </div>
           {canVerify ? (
@@ -382,10 +381,7 @@ export default function PodDocumentsPage() {
           <div className="records-heading">
             <div>
               <h2>Store-Level Document Verification Queue</h2>
-              <p>
-                Each store drop-off within a delivery is checked for both POD submission and
-                supporting document completeness.
-              </p>
+              <p>Review documents for each store drop-off.</p>
             </div>
             <RoundedSelect
               value={filterStatus}

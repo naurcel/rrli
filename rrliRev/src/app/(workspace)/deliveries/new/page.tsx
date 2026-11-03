@@ -10,7 +10,7 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery-repository";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import { saveBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
-import type { ExpenseResolutionStatus } from "@/features/deliveries/delivery-domain";
+import type { ExpenseResolutionStatus, TruckTemperature } from "@/features/deliveries/delivery-domain";
 import { formatPeso } from "@/lib/format";
 
 type DropoffDraft = {
@@ -54,6 +54,7 @@ export default function NewCompletedDeliveryPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [clientName, setClientName] = useState("");
   const [plateNumber, setPlateNumber] = useState("");
+  const [truckTemperature, setTruckTemperature] = useState<TruckTemperature>("18°C–25°C");
   const [dropoffs, setDropoffs] = useState<DropoffDraft[]>([initialDropoff]);
   const [expenseStatuses, setExpenseStatuses] = useState({
     dieselExpenses: "unknown",
@@ -154,6 +155,7 @@ export default function NewCompletedDeliveryPage() {
       idempotencyKey: crypto.randomUUID(),
       clientName,
       plateNumber,
+      truckTemperature,
       distanceKm: numberValue(values.distanceKm),
       fuelRate: numberValue(values.fuelRate),
       deliveryRate: numberValue(values.deliveryRate),
@@ -211,7 +213,7 @@ export default function NewCompletedDeliveryPage() {
           <Link className="back-link" href="/deliveries">← Back to completed deliveries</Link>
           <h1>Record delivery</h1>
           <p className="subtitle">
-            Encode one completed trip. Multiple stores remain part of this single delivery and do not duplicate its revenue.
+            Record one completed trip and all store drop-offs.
           </p>
         </div>
       </header>
@@ -221,12 +223,13 @@ export default function NewCompletedDeliveryPage() {
         {submitError ? <div className="delivery-form-alert" role="alert">{submitError}</div> : null}
 
         <section className="delivery-form-section">
-          <FormHeading number="01" title="Trip information" description="Use the actual trip date and issued waybill number." />
+          <FormHeading number="01" title="Trip information" description="Enter the trip date and waybill." />
           <div className="delivery-field-grid">
             <label>Waybill number<input required value={values.waybillNumber} onChange={(event) => updateValue("waybillNumber", event.target.value)} placeholder="WB-2026-0001" /></label>
             <label>Actual delivery date<input required type="date" value={values.deliveryDate} onChange={(event) => updateValue("deliveryDate", event.target.value)} /></label>
             <label>Client<RoundedSelect value={clientName} options={references.clients.map((option) => ({ value: option.label, label: option.label }))} onChange={setClientName} ariaLabel="Select active client" /></label>
             <label>Truck / plate number<RoundedSelect value={plateNumber} options={references.trucks.map((option) => ({ value: option.label, label: option.label }))} onChange={setPlateNumber} ariaLabel="Select active truck" /></label>
+            <label>Delivery temperature<RoundedSelect value={truckTemperature} options={["-18°C", "2°C–4°C", "18°C–25°C", "-18°C / 2°C–4°C"].map((temperature) => ({ value: temperature, label: temperature }))} onChange={(value) => setTruckTemperature(value as TruckTemperature)} ariaLabel="Select delivery temperature in degrees Celsius" /></label>
             <label className="wide">Origin<input required value={values.origin} onChange={(event) => updateValue("origin", event.target.value)} placeholder="Warehouse or dispatch origin" /></label>
             <label>Distance travelled (km)<input required min="0" step="0.01" type="number" value={values.distanceKm} onChange={(event) => updateValue("distanceKm", event.target.value)} /></label>
             <label>Fuel rate per litre<input required min="0" step="0.01" type="number" value={values.fuelRate} onChange={(event) => updateValue("fuelRate", event.target.value)} /></label>
@@ -234,7 +237,7 @@ export default function NewCompletedDeliveryPage() {
         </section>
 
         <section className="delivery-form-section">
-          <FormHeading number="02" title="Stores and drop-offs" description="Add every store served by this completed trip." />
+          <FormHeading number="02" title="Stores and drop-offs" description="Add every store served." />
           <div className="dropoff-editor">
             {dropoffs.map((dropoff, index) => (
               <fieldset key={dropoff.id} className="dropoff-row">
@@ -250,7 +253,7 @@ export default function NewCompletedDeliveryPage() {
         </section>
 
         <section className="delivery-form-section">
-          <FormHeading number="03" title="Revenue and expenses" description="Entry fees come from the stores above. Final totals are calculated by the server." />
+          <FormHeading number="03" title="Revenue and expenses" description="Confirm the trip's financial details." />
           <div className="delivery-field-grid">
             <MoneyField label="Delivery rate / revenue" value={values.deliveryRate} required onChange={(value) => updateValue("deliveryRate", value)} />
             {(Object.keys(expenseStatuses) as (keyof typeof expenseStatuses)[]).map((key) => (
@@ -262,12 +265,12 @@ export default function NewCompletedDeliveryPage() {
             <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
             <div><span>Store entry fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
             <div><span>Total expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
-            <div className={financialReview.netIncome != null && financialReview.netIncome < 0 ? "negative" : "positive"}><span>Net income</span><strong>{formatPeso(financialReview.netIncome)}</strong></div>
+            <div className={financialReview.netIncome != null && financialReview.netIncome < 0 ? "negative" : "positive"}><span>Net profit</span><strong>{formatPeso(financialReview.netIncome)}</strong></div>
           </div>
         </section>
 
         <section className="delivery-form-section delivery-document-note">
-          <FormHeading number="04" title="POD and supporting documents" description="The trip is saved with documents pending. Upload and verify each store document after creation." />
+          <FormHeading number="04" title="POD and supporting documents" description="Upload documents after saving the trip." />
         </section>
 
         <div className="delivery-form-actions">

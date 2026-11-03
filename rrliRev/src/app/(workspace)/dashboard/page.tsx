@@ -4,17 +4,18 @@ import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
+import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
 import {
   formatDateRange,
   useGlobalDateRange,
   type DateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import {
   RecordDetailDrawer,
   type DetailSection,
 } from "@/components/record-detail-drawer";
-import { Icon } from "@/components/route-x-ui";
 import type { DeliveryTripRecord } from "@/features/deliveries/delivery-domain";
 import {
   useDeliveryProfitabilitySummary,
@@ -32,7 +33,7 @@ type TruckRankingMetric = "revenue" | "netIncome" | "profitMargin";
 
 const truckRankingLabels: Record<TruckRankingMetric, string> = {
   revenue: "Revenue",
-  netIncome: "Net income",
+  netIncome: "Net profit",
   profitMargin: "Profit margin",
 };
 
@@ -349,8 +350,26 @@ export default function DashboardPage() {
   const [accessNoticeDismissed, setAccessNoticeDismissed] = useState(false);
   const [truckRankingMetric, setTruckRankingMetric] =
     useState<TruckRankingMetric>("netIncome");
+  const [deliverySort, setDeliverySort] = useState<{ key: string; direction: TableSortDirection }>({ key: "date", direction: "desc" });
 
   const filteredDeliveries = deliveries;
+  const sortedDeliveries = useMemo(() => {
+    const multiplier = deliverySort.direction === "asc" ? 1 : -1;
+    return [...filteredDeliveries].sort((left, right) => {
+      const values: Record<string, [string | number, string | number]> = {
+        date: [left.deliveryDate, right.deliveryDate],
+        client: [left.clientName, right.clientName],
+        truck: [left.plateNumber, right.plateNumber],
+        netIncome: [left.netIncome ?? Number.NEGATIVE_INFINITY, right.netIncome ?? Number.NEGATIVE_INFINITY],
+        pod: [left.podStatus, right.podStatus],
+      };
+      const [leftValue, rightValue] = values[deliverySort.key] ?? values.date;
+      const compared = typeof leftValue === "number" && typeof rightValue === "number"
+        ? leftValue - rightValue
+        : String(leftValue).localeCompare(String(rightValue));
+      return compared * multiplier || left.id.localeCompare(right.id);
+    });
+  }, [deliverySort, filteredDeliveries]);
 
   const rangeKey = `${range.startDate?.getTime() ?? "all"}-${range.endDate?.getTime() ?? "all"}`;
 
@@ -401,7 +420,6 @@ export default function DashboardPage() {
 
   const canWrite = canMutateDeliveryRecords(actor.role);
   const canImport = canImportAndReviewExcel(actor.role);
-  const canVerifyPod = canVerifyPodDocuments(actor.role);
 
   const drawerSections: DetailSection[] = useMemo(() => {
     if (!selectedTrip) {
@@ -439,6 +457,19 @@ export default function DashboardPage() {
         })),
       },
       {
+        title: "POD & Supporting Documents",
+        fullWidth: true,
+        description: "Select a drop-off to inspect its stored document and review status.",
+        customContent: (
+          <DeliveryPodDocuments
+            trip={selectedTrip}
+            canVerify={canVerifyPodDocuments(actor.role)}
+            roleLabel={actor.roleLabel}
+            onTripChange={setSelectedTrip}
+          />
+        ),
+      },
+      {
         title: "Daily Trip Report Financials",
         rows: [
           { label: "Delivery Rate (Earnings)", value: formatPeso(selectedTrip.deliveryRate), tone: "success" },
@@ -459,33 +490,25 @@ export default function DashboardPage() {
           { label: "Other Expenses", value: formatPeso(selectedTrip.expenses.otherExpenses) },
           { label: "Total Trip Expenses", value: formatPeso(selectedTrip.totalExpenses) },
           {
-            label: "Net Truck Income",
+            label: "Net Profit",
             value: `${formatPeso(selectedTrip.netIncome)} (${formatPercent(selectedTrip.marginPercent)})`,
             tone: selectedTrip.netIncome !== null && selectedTrip.netIncome >= 0 ? "success" : "warning",
           },
         ],
       },
     ];
-  }, [selectedTrip]);
+  }, [actor.role, actor.roleLabel, selectedTrip]);
 
   return (
     <>
-      <OperationalTopbar
-        contextLabel="Delivery Operations & Trucks"
-        alert={totals.unverifiedTrips > 0 ? {
-          count: totals.unverifiedTrips,
-          href: "/pod-documents",
-          label: `${totals.unverifiedTrips} ${totals.unverifiedTrips === 1 ? "delivery needs" : "deliveries need"} POD review`,
-        } : undefined}
-      />
+      <OperationalTopbar contextLabel="Delivery Operations & Trucks" />
 
       <div key={rangeKey} className="content-wrap dashboard-range-refresh">
         <header className="page-intro dashboard-welcome">
           <div>
             <h1>Welcome back, {actor.fullName.split(" ")[0]}</h1>
             <p className="subtitle">
-              Track completed client deliveries, multi-store drop-offs, itemized trip expenses,
-              POD verification, and per-truck net profitability.
+              Monitor deliveries, PODs, expenses, and truck profitability.
             </p>
           </div>
           {canWrite ? (
@@ -593,9 +616,9 @@ export default function DashboardPage() {
             <Link
               className="stat-card stat-card-link"
               href="/truck-profitability"
-              title="View trucks and net income performance"
+              title="View truck net profit performance"
             >
-              <span className="stat-label">NET TRUCK INCOME</span>
+              <span className="stat-label">NET PROFIT</span>
               <strong>{formatPeso(totals.netIncome)}</strong>
               <span
                 className={`stat-meta ${
@@ -610,31 +633,19 @@ export default function DashboardPage() {
                   ? `${formatPercent(totals.margin)} overall truck profit margin`
                   : totals.netIncome < 0 && totals.margin !== null
                     ? `${formatPercent(totals.margin)} net loss margin`
-                    : "Net profitability after trip costs"}
+                    : "Profit after trip expenses"}
               </span>
             </Link>
 
             <Link
               className="stat-card stat-card-link"
-              href="/pod-documents"
-              title="View store drop-offs & POD document verification showcase"
+              href="/deliveries"
+              title="View completed deliveries"
             >
-              <span className="stat-label">STORE DROP-OFFS & PODS</span>
-              <strong>{totals.totalStops} stores</strong>
-              <span
-                className={`stat-meta ${
-                  totals.totalTrips === 0
-                    ? ""
-                    : totals.unverifiedTrips > 0
-                      ? "warning"
-                      : "positive"
-                }`}
-              >
-                {totals.totalTrips === 0
-                  ? "Across 0 completed deliveries"
-                  : totals.unverifiedTrips > 0
-                    ? `${totals.unverifiedTrips} ${totals.unverifiedTrips === 1 ? "trip" : "trips"} pending POD check`
-                    : "All store documents verified"}
+              <span className="stat-label">TOTAL DELIVERIES</span>
+              <strong>{totals.totalTrips}</strong>
+              <span className="stat-meta">
+                {totals.totalTrips === 1 ? "1 trip in this period" : `${totals.totalTrips} trips in this period`}
               </span>
             </Link>
           </section>
@@ -645,7 +656,7 @@ export default function DashboardPage() {
             <div className="records-heading">
               <div>
                 <h2>Recent Completed Deliveries</h2>
-                <p>Click any trip row to inspect its multi-store drop-offs and expense breakdown</p>
+                <p>Select a delivery to view details.</p>
               </div>
               <Link className="secondary-button" href="/deliveries">
                 View all deliveries
@@ -656,15 +667,15 @@ export default function DashboardPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Waybill & Date</th>
-                    <th>Client</th>
-                    <th>Truck</th>
-                    <th>Net Income</th>
-                    <th>POD Status</th>
+                    <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={deliverySort.key} direction={deliverySort.direction} defaultDirection="desc" onSort={(key, direction) => setDeliverySort({ key, direction })} />
+                    <SortableTableHeader label="Client" sortKey="client" activeSortKey={deliverySort.key} direction={deliverySort.direction} onSort={(key, direction) => setDeliverySort({ key, direction })} />
+                    <SortableTableHeader label="Truck" sortKey="truck" activeSortKey={deliverySort.key} direction={deliverySort.direction} onSort={(key, direction) => setDeliverySort({ key, direction })} />
+                    <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={deliverySort.key} direction={deliverySort.direction} defaultDirection="desc" onSort={(key, direction) => setDeliverySort({ key, direction })} />
+                    <SortableTableHeader label="POD Status" sortKey="pod" activeSortKey={deliverySort.key} direction={deliverySort.direction} onSort={(key, direction) => setDeliverySort({ key, direction })} />
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredDeliveries.map((trip) => (
+                  {sortedDeliveries.map((trip) => (
                     <tr
                       key={trip.id}
                       className="record-row"
@@ -710,10 +721,9 @@ export default function DashboardPage() {
             <section className="records-card top-trucks-card" aria-label="Truck profitability rankings">
               <div className="records-heading">
                 <div>
-                  <h2>Trucks</h2>
+                  <h2>Top Trucks</h2>
                   <p>
-                    Ranked by {truckRankingLabels[truckRankingMetric].toLowerCase()}
-                    {truckRankingMetric === "netIncome" ? " after trip expenses" : ""}
+                    Sorted by {truckRankingLabels[truckRankingMetric].toLowerCase()}
                   </p>
                 </div>
               </div>
@@ -746,7 +756,7 @@ export default function DashboardPage() {
                         <span>
                           {truck.deliveries} finalized trip{truck.deliveries === 1 ? "" : "s"}
                           {truckRankingMetric === "profitMargin"
-                            ? ` · ${formatPeso(truck.net_income)} net income`
+                            ? ` · ${formatPeso(truck.net_income)} net profit`
                             : ` · ${formatPercent(truck.profit_margin)} margin`}
                         </span>
                       </div>
@@ -760,51 +770,39 @@ export default function DashboardPage() {
               </Link>
             </section>
 
-            <section className="records-card" aria-label="Operational workflows">
+            <section className="records-card dashboard-attention-card" aria-label="Attention needed">
               <div className="records-heading">
                 <div>
-                  <h2>Operational Workflows</h2>
-                  <p>Role-authorized actions for {actor.roleLabel}</p>
+                  <h2>Attention Needed</h2>
+                  <p>Follow-up items for this period.</p>
                 </div>
               </div>
-              <div className="quick-action-list">
-                <Link className="quick-action" href="/deliveries">
-                  <Icon>{"\u25a4"}</Icon>
+              {totals.unverifiedTrips > 0 ? (
+                <button
+                  type="button"
+                  className="dashboard-attention-item"
+                  onClick={() => setSelectedTrip(
+                    filteredDeliveries.find((delivery) => delivery.podStatus !== "Verified") ?? null,
+                  )}
+                >
+                  <span className="dashboard-attention-indicator" aria-hidden="true" />
                   <span>
-                    <strong>Client Delivery Records</strong>
-                    <small>
-                      {canWrite
-                        ? "Create, edit, and sort deliveries by client & waybill"
-                        : "Browse deliveries by client, waybill, and store drop-offs"}
-                    </small>
+                    <strong>
+                      {totals.unverifiedTrips} {totals.unverifiedTrips === 1 ? "delivery needs" : "deliveries need"} POD review
+                    </strong>
+                    <small>Review receiving slips and supporting documents.</small>
                   </span>
-                  <b>›</b>
-                </Link>
-
-                {canImport ? (
-                  <Link className="quick-action" href="/deliveries/import">
-                    <Icon>{"\u25a5"}</Icon>
-                    <span>
-                      <strong>Excel Daily Trip Report Import</strong>
-                      <small>Stage, inspect, and edit imported rows before saving</small>
-                    </span>
-                    <b>›</b>
-                  </Link>
-                ) : null}
-
-                <Link className="quick-action" href="/pod-documents">
-                  <Icon>{"\u2713"}</Icon>
-                  <span>
-                    <strong>POD & Supporting Documents</strong>
-                    <small>
-                      {canVerifyPod
-                        ? "Verify store receiving slips and supporting documents"
-                        : "Inspect POD verification status across store drop-offs"}
-                    </small>
-                  </span>
-                  <b>›</b>
-                </Link>
-              </div>
+                  <b aria-hidden="true">›</b>
+                </button>
+              ) : (
+                <div className="dashboard-attention-empty">
+                  <span aria-hidden="true">✓</span>
+                  <div>
+                    <strong>All caught up</strong>
+                    <small>No delivery records need POD review in this range.</small>
+                  </div>
+                </div>
+              )}
             </section>
           </div>
         </div>

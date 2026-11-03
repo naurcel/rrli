@@ -54,9 +54,16 @@ function ledgerItems(): DeliveryLedgerItem[] {
 
 function sortableValue(item: DeliveryLedgerItem, sort: DeliveryListQuery["sort"]): string | number | null {
   if (sort === "client") return item.clientName.toLocaleLowerCase();
+  if (sort === "waybill") return item.waybillNumber.toLocaleLowerCase();
+  if (sort === "truck") return item.plateNumber.toLocaleLowerCase();
+  if (sort === "temperature") return item.truckTemperature;
+  if (sort === "origin") return item.origin.toLocaleLowerCase();
+  if (sort === "distance") return item.distanceKm;
   if (sort === "delivery_rate") return item.deliveryRate;
+  if (sort === "total_expenses") return item.totalExpenses;
   if (sort === "net_income") return item.netIncome;
   if (sort === "profit_margin") return item.marginPercent;
+  if (sort === "pod_status") return item.podStatus;
   return item.deliveryDate;
 }
 

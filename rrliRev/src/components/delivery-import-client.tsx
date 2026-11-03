@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import type { TruckTemperature } from "@/features/deliveries/delivery-domain";
 import { formatPeso } from "@/lib/format";
 
 type ParsedImportRow = {
@@ -10,6 +11,7 @@ type ParsedImportRow = {
   deliveryDate: string;
   clientName: string;
   plateNumber: string;
+  truckTemperature: TruckTemperature;
   origin: string;
   distanceKm: number;
   fuelRate: number;
@@ -30,10 +32,59 @@ type ParsedImportRow = {
   validationIssue?: string;
 };
 
-const SAMPLE_CSV_DATA = `Delivery Date,Waybill Number,Client Name,Truck Plate,Origin,Distance Km,Fuel Rate,Delivery Rate,Diesel,Tolls,Driver Rate,Driver Allowance,Helper Rate,Helper Allowance,Store Name,Destination Area,Entry Fee
-2026-11-01,WB-2611-9001,Landers,NGS 4281,Marilao Depot,85,62.5,23000,3800,950,950,300,700,200,Landers Balintawak,Quezon City,150
-2026-11-01,WB-2611-9002,Manila Comisario Central Inc. (MCCI),NFO 8324,FTI Taguig Hub,110,61.0,26500,4200,1200,1000,350,750,250,MCCI Alabang Center,Muntinlupa,0
-2026-11-02,WB-2611-9003,Vanguard,CBC 5519,North Harbor Terminal,65,63.0,19500,2900,450,900,250,650,200,Vanguard Pasig Hub,Pasig City,100`;
+const SAMPLE_CSV_DATA = `Delivery Date,Waybill Number,Client Name,Truck Plate,Temperature,Origin,Distance Km,Fuel Rate,Delivery Rate,Diesel,Tolls,Driver Rate,Driver Allowance,Helper Rate,Helper Allowance,Store Name,Destination Area,Entry Fee
+2026-11-01,WB-2611-9001,Landers,NGS 4281,-18°C / 2°C–4°C,Marilao Depot,85,62.5,23000,3800,950,950,300,700,200,Landers Balintawak,Quezon City,150
+2026-11-01,WB-2611-9002,Manila Comisario Central Inc. (MCCI),NFO 8324,2°C–4°C,FTI Taguig Hub,110,61.0,26500,4200,1200,1000,350,750,250,MCCI Alabang Center,Muntinlupa,0
+2026-11-02,WB-2611-9003,Vanguard,CBC 5519,18°C–25°C,North Harbor Terminal,65,63.0,19500,2900,450,900,250,650,200,Vanguard Pasig Hub,Pasig City,100`;
+
+const DELIVERY_TEMPERATURES: readonly TruckTemperature[] = [
+  "-18°C",
+  "2°C–4°C",
+  "18°C–25°C",
+  "-18°C / 2°C–4°C",
+];
+
+type ImportIconName = "arrow" | "check" | "download" | "sample" | "spreadsheet" | "warning";
+
+function ImportIcon({ name, className = "" }: { name: ImportIconName; className?: string }) {
+  return (
+    <svg
+      className={`import-vector-icon ${className}`.trim()}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      {name === "download" ? (
+        <>
+          <path d="M12 3v11" />
+          <path d="m8 10 4 4 4-4" />
+          <path d="M5 18h14v3H5z" />
+        </>
+      ) : name === "sample" ? (
+        <>
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <path d="M8 9h8M8 13h5M8 17h7" />
+        </>
+      ) : name === "spreadsheet" ? (
+        <>
+          <path d="M6 3h9l4 4v14H6z" />
+          <path d="M15 3v5h4M9 12h7M9 16h7M12 10v8" />
+        </>
+      ) : name === "check" ? (
+        <path d="m5 12 4 4L19 6" />
+      ) : name === "warning" ? (
+        <>
+          <path d="M12 3 2.8 20h18.4z" />
+          <path d="M12 9v5M12 17.5v.1" />
+        </>
+      ) : (
+        <>
+          <path d="M5 12h14" />
+          <path d="m14 7 5 5-5 5" />
+        </>
+      )}
+    </svg>
+  );
+}
 
 export function DeliveryExcelImportClient({
   actorRoleLabel,
@@ -73,6 +124,7 @@ export function DeliveryExcelImportClient({
     const wbIdx = header.findIndex((h) => h.includes("waybill"));
     const clientIdx = header.findIndex((h) => h.includes("client"));
     const plateIdx = header.findIndex((h) => h.includes("plate") || h.includes("truck"));
+    const temperatureIdx = header.findIndex((h) => h.includes("temperature") || h === "temp");
     const rateIdx = header.findIndex((h) => h.includes("rate") || h.includes("revenue") || h.includes("earnings"));
     const dieselIdx = header.findIndex((h) => h.includes("diesel"));
     const tollIdx = header.findIndex((h) => h.includes("toll"));
@@ -90,6 +142,10 @@ export function DeliveryExcelImportClient({
       const deliveryDate = dateIdx >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(cols[dateIdx]) ? cols[dateIdx] : new Date().toISOString().slice(0, 10);
       const clientName = clientIdx >= 0 && cols[clientIdx] ? cols[clientIdx] : "Landers";
       const plateNumber = plateIdx >= 0 && cols[plateIdx] ? cols[plateIdx] : "NGS 4281";
+      const rawTemperature = temperatureIdx >= 0 ? cols[temperatureIdx] : "";
+      const truckTemperature = DELIVERY_TEMPERATURES.includes(rawTemperature as TruckTemperature)
+        ? rawTemperature as TruckTemperature
+        : "18°C–25°C";
       const deliveryRate = rateIdx >= 0 ? Number(cols[rateIdx]) || 20000 : 20000;
       const dieselExpenses = dieselIdx >= 0 && cols[dieselIdx] ? Number(cols[dieselIdx]) || null : 3500;
       const tollGateExpenses = tollIdx >= 0 && cols[tollIdx] ? Number(cols[tollIdx]) || null : 800;
@@ -110,6 +166,7 @@ export function DeliveryExcelImportClient({
         deliveryDate,
         clientName,
         plateNumber,
+        truckTemperature,
         origin: "Main Hub",
         distanceKm: 75,
         fuelRate: 62.0,
@@ -212,6 +269,7 @@ export function DeliveryExcelImportClient({
           deliveryDate: r.deliveryDate,
           clientName: r.clientName,
           plateNumber: r.plateNumber,
+          truckTemperature: r.truckTemperature,
           origin: r.origin,
           distanceKm: r.distanceKm,
           fuelRate: r.fuelRate,
@@ -297,7 +355,9 @@ export function DeliveryExcelImportClient({
 
       {importResult ? (
         <section className="notice" role="status" style={{ borderLeftColor: "#22c55e" }}>
-          <span className="notice-icon" aria-hidden="true" style={{ color: "#22c55e" }}>✓</span>
+          <span className="notice-icon" aria-hidden="true" style={{ color: "#22c55e" }}>
+            <ImportIcon name="check" />
+          </span>
           <div>
             <strong>Import Batch Committed Successfully:</strong>
             <span>
@@ -308,7 +368,7 @@ export function DeliveryExcelImportClient({
             </span>
           </div>
           <Link className="secondary-button" href="/deliveries" style={{ marginLeft: "auto" }}>
-            View Deliveries →
+            View Deliveries <ImportIcon name="arrow" />
           </Link>
         </section>
       ) : null}
@@ -317,14 +377,14 @@ export function DeliveryExcelImportClient({
         <div className="records-heading">
           <div>
             <h2>1. Upload Daily Trip Report Spreadsheet</h2>
-            <p>Upload a .csv or .xlsx export from the field. Rows are staged below for inspection before saving.</p>
+            <p>Upload a CSV or XLSX file for review.</p>
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
             <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
-              📥 Download CSV Template
+              <ImportIcon name="download" /> Download CSV Template
             </button>
             <button type="button" className="secondary-button" onClick={loadSampleData}>
-              ⚡ Load Sample DTR Rows
+              <ImportIcon name="sample" /> Load Sample DTR Rows
             </button>
           </div>
         </div>
@@ -343,7 +403,7 @@ export function DeliveryExcelImportClient({
               cursor: "pointer",
             }}
           >
-            <span style={{ fontSize: "24px", marginBottom: "8px" }}>📊</span>
+            <ImportIcon name="spreadsheet" className="import-upload-icon" />
             <strong style={{ fontSize: "14px", color: "var(--ink)" }}>Choose CSV or Daily Trip Report Spreadsheet</strong>
             <small style={{ color: "var(--muted)", marginTop: "4px" }}>Accepts .csv, .tsv, and structured spreadsheet exports</small>
             <input
@@ -361,11 +421,17 @@ export function DeliveryExcelImportClient({
           <div className="records-heading">
             <div>
               <h2>2. Staged Review Table ({rows.length} trips parsed)</h2>
-              <p>Review and edit values inline before committing. Rows with missing waybills or zero rates are flagged.</p>
+              <p>Review rows before import.</p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span className="stat-meta positive">✓ {validCount} Ready</span>
-              {issueCount > 0 ? <span className="stat-meta warning">⚠ {issueCount} Need Review</span> : null}
+              <span className="stat-meta positive import-status-label">
+                <ImportIcon name="check" /> {validCount} Ready
+              </span>
+              {issueCount > 0 ? (
+                <span className="stat-meta warning import-status-label">
+                  <ImportIcon name="warning" /> {issueCount} Need Review
+                </span>
+              ) : null}
               <button
                 type="button"
                 className="filter-button"
@@ -394,6 +460,7 @@ export function DeliveryExcelImportClient({
                   <th>Waybill Number</th>
                   <th>Client Name</th>
                   <th>Truck Plate</th>
+                  <th>Temperature</th>
                   <th>Delivery Rate</th>
                   <th>Diesel</th>
                   <th>Toll</th>
@@ -440,6 +507,15 @@ export function DeliveryExcelImportClient({
                         onChange={(e) => updateRowField(row.id, "plateNumber", e.target.value)}
                         style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "100px" }}
                       />
+                    </td>
+                    <td>
+                      <select
+                        value={row.truckTemperature}
+                        onChange={(e) => updateRowField(row.id, "truckTemperature", e.target.value as TruckTemperature)}
+                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "145px" }}
+                      >
+                        {DELIVERY_TEMPERATURES.map((temperature) => <option key={temperature} value={temperature}>{temperature}</option>)}
+                      </select>
                     </td>
                     <td className="money">
                       <input

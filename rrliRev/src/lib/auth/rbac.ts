@@ -218,13 +218,6 @@ export const WORKSPACE_NAVIGATION_ITEMS: readonly NavigationItem[] = [
     requiredPermission: "profitability:view",
   },
   {
-    label: "POD / Documents",
-    href: "/pod-documents",
-    symbol: "\u2713",
-    section: "primary",
-    requiredPermission: "pod:view",
-  },
-  {
     label: "Reports",
     href: "/reports",
     symbol: "\u25a5",

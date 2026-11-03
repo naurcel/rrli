@@ -27,9 +27,7 @@ export default async function DeliveryExcelImportPage() {
           <div>
             <h1>Excel Import & Review Staging</h1>
             <p className="subtitle">
-              Authorized for {actor.roleLabel}. Imported Daily Trip Report spreadsheets are staged
-              for row-by-row inspection, inline editing, and validation before any delivery record
-              is committed.
+              Review and validate Daily Trip Report rows before import.
             </p>
           </div>
           <span className="access-pill operations">

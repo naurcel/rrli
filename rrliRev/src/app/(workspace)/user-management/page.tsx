@@ -1,10 +1,11 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RoundedSelect } from "@/components/rounded-select";
+import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import {
   ROLE_METADATA,
   USER_ROLES,
@@ -37,6 +38,7 @@ export default function UserManagementPage() {
   const [password, setPassword] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("operations");
   const [isCreating, setIsCreating] = useState(false);
+  const [userSort, setUserSort] = useState<{ key: string; direction: TableSortDirection }>({ key: "name", direction: "asc" });
   const [feedback, setFeedback] = useState<{
     tone: "success" | "error";
     text: string;
@@ -54,6 +56,24 @@ export default function UserManagementPage() {
         // Ignore fetch error
       });
   }, []);
+
+  const sortedUsers = useMemo(() => {
+    const multiplier = userSort.direction === "asc" ? 1 : -1;
+    return [...users].sort((left, right) => {
+      const values: Record<string, [string | number, string | number]> = {
+        name: [left.fullName, right.fullName],
+        email: [left.email, right.email],
+        access: [left.accessLevelLabel, right.accessLevelLabel],
+        role: [left.roleLabel, right.roleLabel],
+        status: [Number(left.isActive), Number(right.isActive)],
+      };
+      const [leftValue, rightValue] = values[userSort.key] ?? values.name;
+      const compared = typeof leftValue === "number" && typeof rightValue === "number"
+        ? leftValue - rightValue
+        : String(leftValue).localeCompare(String(rightValue));
+      return compared * multiplier || left.id.localeCompare(right.id);
+    });
+  }, [userSort, users]);
 
   async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -191,9 +211,7 @@ export default function UserManagementPage() {
           <div>
             <h1>User Management</h1>
             <p className="subtitle">
-              Provision staff accounts and assign roles across Admin, Operations, and View-Only
-              personnel (Finance, HR, Secretary, Customer Representative). Public self-registration
-              is disabled.
+              Manage staff accounts and access.
             </p>
           </div>
           <span className="access-pill admin">Admin Only ({actor.fullName})</span>
@@ -228,7 +246,7 @@ export default function UserManagementPage() {
           <div className="records-heading">
             <div>
               <h2>Provision Staff Account</h2>
-              <p>Create an authorized RouteX user account with an explicit server-enforced role</p>
+              <p>Create a staff account and assign access.</p>
             </div>
           </div>
 
@@ -321,9 +339,7 @@ export default function UserManagementPage() {
           <div className="records-heading">
             <div>
               <h2>Authorized Personnel & Role Assignments</h2>
-              <p>
-                Role changes take effect immediately on server-side route and API permission checks
-              </p>
+              <p>Manage staff access and account status.</p>
             </div>
           </div>
 
@@ -331,16 +347,16 @@ export default function UserManagementPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Staff Member</th>
-                  <th>Email Address</th>
-                  <th>Access Level</th>
-                  <th>Assigned Role</th>
-                  <th>Status</th>
+                  <SortableTableHeader label="Staff Member" sortKey="name" activeSortKey={userSort.key} direction={userSort.direction} onSort={(key, direction) => setUserSort({ key, direction })} />
+                  <SortableTableHeader label="Email Address" sortKey="email" activeSortKey={userSort.key} direction={userSort.direction} onSort={(key, direction) => setUserSort({ key, direction })} />
+                  <SortableTableHeader label="Access Level" sortKey="access" activeSortKey={userSort.key} direction={userSort.direction} onSort={(key, direction) => setUserSort({ key, direction })} />
+                  <SortableTableHeader label="Assigned Role" sortKey="role" activeSortKey={userSort.key} direction={userSort.direction} onSort={(key, direction) => setUserSort({ key, direction })} />
+                  <SortableTableHeader label="Status" sortKey="status" activeSortKey={userSort.key} direction={userSort.direction} defaultDirection="desc" onSort={(key, direction) => setUserSort({ key, direction })} />
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {sortedUsers.map((user) => (
                   <tr key={user.id}>
                     <td>
                       <strong>{user.fullName}</strong>

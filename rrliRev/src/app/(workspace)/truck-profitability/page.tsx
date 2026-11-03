@@ -7,6 +7,7 @@ import {
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { TruckPhoto } from "@/components/truck-photo";
 import { summarizeTruckProfitability } from "@/features/deliveries/delivery-domain";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import { formatPercent, formatPeso } from "@/lib/format";
@@ -29,15 +30,14 @@ export default function TruckProfitabilityPage() {
 
   return (
     <>
-      <OperationalTopbar contextLabel="Truck Earnings, Expenses & Net Profitability" />
+      <OperationalTopbar contextLabel="Truck Revenue, Expenses & Profitability" />
 
       <div className="content-wrap">
         <header className="page-intro">
           <div>
-            <h1>Trucks</h1>
+            <h1>Truck Performance</h1>
             <p className="subtitle">
-              Evaluate how much each truck earns from completed deliveries against its diesel,
-              toll gate, store entry, and driver/helper costs.
+              Compare truck revenue, expenses, and net profit.
             </p>
           </div>
         </header>
@@ -70,7 +70,7 @@ export default function TruckProfitabilityPage() {
             </span>
           </article>
           <article className="stat-card">
-            <span className="stat-label">NET FLEET CONTRIBUTION</span>
+            <span className="stat-label">NET FLEET PROFIT</span>
             <strong>{formatPeso(fleetTotals.netProfit)}</strong>
             <span className="stat-meta positive">
               {formatPercent(
@@ -89,8 +89,8 @@ export default function TruckProfitabilityPage() {
         >
           <div className="records-heading">
             <div>
-              <h2>Truck Performance</h2>
-              <p>Choose a truck to inspect its cost categories and completed client trips</p>
+              <h2>Trucks</h2>
+              <p>Select a truck to view details.</p>
             </div>
           </div>
 
@@ -107,25 +107,21 @@ export default function TruckProfitabilityPage() {
                   href={`/truck-profitability/${truck.plateNumber}`}
                   key={truck.plateNumber}
                 >
-                  <div className="fleet-photo">No photo yet</div>
+                  <TruckPhoto plateNumber={truck.plateNumber} />
                   <div className="fleet-card-body">
                     <div className="fleet-card-title">
                       <div>
                         <h2>{truck.plateNumber}</h2>
-                        <p>{truck.truckType} · {truck.truckTemperature}</p>
+                        <p>{truck.truckType}</p>
                       </div>
                       <span className="fleet-status">
                         {truck.completedTrips} trip{truck.completedTrips === 1 ? "" : "s"}
                       </span>
                     </div>
-                    <div className="truck-card-operational-meta">
-                      <span>{truck.totalStoresServed} store drop-offs</span>
-                      <span>{truck.totalDistanceKm} km</span>
-                    </div>
                     <dl>
-                      <div><dt>Revenue</dt><dd>{formatPeso(truck.totalEarnings)}</dd></div>
+                      <div className="truck-card-revenue"><dt>Revenue</dt><dd>{formatPeso(truck.totalEarnings)}</dd></div>
                       <div><dt>Total expenses</dt><dd>{formatPeso(truck.totalExpenses)}</dd></div>
-                      <div><dt>Net income</dt><dd>{formatPeso(truck.netProfit)}</dd></div>
+                      <div><dt>Net profit</dt><dd>{formatPeso(truck.netProfit)}</dd></div>
                       <div><dt>Profit margin</dt><dd>{formatPercent(truck.marginPercent)}</dd></div>
                     </dl>
                     <span className="fleet-card-detail-link">View details <b>›</b></span>

@@ -259,7 +259,7 @@ begin
     other_expenses, other_expenses_status, delivery_rate, pod_status, financial_state, created_by
   ) values (
     trim(p_record->>'waybillNumber'), (p_record->>'deliveryDate')::date,
-    v_client_id, v_truck.id, v_truck.truck_type, v_truck.truck_temperature,
+    v_client_id, v_truck.id, v_truck.truck_type, trim(p_record->>'truckTemperature'),
     trim(p_record->>'origin'), (p_record->>'distanceKm')::numeric,
     (p_record->>'fuelRate')::numeric,
     (p_record->>'dieselExpenses')::numeric,

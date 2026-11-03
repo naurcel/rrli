@@ -4,10 +4,17 @@ export const DELIVERY_PAGE_SIZES = [10, 25, 50, 100] as const;
 
 export const DELIVERY_SORT_FIELDS = [
   "delivery_date",
+  "waybill",
   "client",
+  "truck",
+  "temperature",
+  "origin",
+  "distance",
   "delivery_rate",
+  "total_expenses",
   "net_income",
   "profit_margin",
+  "pod_status",
 ] as const;
 
 export type DeliverySortField = (typeof DELIVERY_SORT_FIELDS)[number];
