@@ -11,7 +11,7 @@ export default function NotFoundPage() {
           Page Not Found
         </h1>
         <p className="rx-subtitle" style={{ marginTop: 8 }}>
-          The requested RouteX route does not exist or has been retired under the Delivery Operations & Truck Profitability scope.
+          The requested RouteX route does not exist or has been retired under the Delivery Operations & Trucks scope.
         </p>
         <div style={{ marginTop: 18 }}>
           <Link href="/dashboard" className="rx-btn rx-btn-primary">

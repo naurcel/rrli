@@ -4,9 +4,9 @@ import "./globals.css";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "RouteX | Delivery Operations & Truck Profitability",
+  title: "RouteX | Delivery Operations & Trucks",
   description:
-    "RouteX delivery operations, multi-store drop-off tracking, POD verification, and truck profitability system for Redeemed Route Logistics Inc.",
+    "RouteX delivery operations, multi-store drop-off tracking, POD verification, and truck performance system for Redeemed Route Logistics Inc.",
 };
 
 const themeInitScript = `

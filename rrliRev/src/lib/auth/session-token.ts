@@ -12,11 +12,16 @@ export type SignedSessionPayload = {
 };
 
 function getSigningSecret(overrideSecret?: string): string {
-  return (
-    overrideSecret ??
-    process.env.ROUTEX_SESSION_SECRET ??
-    "routex-server-only-hmac-secret-2026-delivery-profitability"
-  );
+  const secret = overrideSecret ?? process.env.ROUTEX_SESSION_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "SECURITY_VIOLATION: ROUTEX_SESSION_SECRET environment variable is required in production.",
+      );
+    }
+    return "routex-server-only-hmac-secret-2026-delivery-profitability";
+  }
+  return secret;
 }
 
 function base64UrlEncode(input: string): string {

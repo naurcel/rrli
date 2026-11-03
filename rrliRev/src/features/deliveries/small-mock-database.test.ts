@@ -13,24 +13,24 @@ test("keeps the RouteX mock database intentionally small and internally related"
   assert.deepEqual(validateSmallMockDatabase(), []);
   assert.deepEqual(
     SMALL_MOCK_DATABASE.clients.map((client) => client.name),
-    ["LANDERS", "Manila Comisario Central Inc. (MCCI)", "VANGUARD"],
+    ["Landers", "Manila Comisario Central Inc. (MCCI)", "Vanguard"],
   );
-  assert.equal(SMALL_MOCK_DATABASE.trucks.length, 3);
+  assert.equal(SMALL_MOCK_DATABASE.trucks.length, 6);
   assert.equal(SMALL_MOCK_DATABASE.drivers.length, 2);
   assert.equal(SMALL_MOCK_DATABASE.helpers.length, 2);
-  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 6);
+  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 9);
   assert.equal(
     SMALL_MOCK_DATABASE.deliveries.reduce(
       (count, delivery) => count + delivery.record.dropoffs.length,
       0,
     ),
-    9,
+    12,
   );
 });
 
-test("returns exactly two deliveries per client and honors the current seven-day filter", () => {
+test("returns exactly three deliveries per client and honors the current seven-day filter", () => {
   for (const client of SMALL_MOCK_DATABASE.clients) {
-    assert.equal(filterSmallMockDeliveries({ clientId: client.id }).length, 2);
+    assert.equal(filterSmallMockDeliveries({ clientId: client.id }).length, 3);
   }
 
   assert.equal(
@@ -38,7 +38,7 @@ test("returns exactly two deliveries per client and honors the current seven-day
       dateFrom: SMALL_MOCK_PERIOD.start,
       dateTo: SMALL_MOCK_PERIOD.end,
     }).length,
-    6,
+    9,
   );
   assert.equal(
     filterSmallMockDeliveries({ dateFrom: "2026-10-29", dateTo: "2026-10-31" }).length,
@@ -52,10 +52,10 @@ test("returns exactly two deliveries per client and honors the current seven-day
 
 test("preserves confirmed zero, not applicable, unknown, low-margin, and incomplete scenarios", () => {
   const records = SMALL_MOCK_DATABASE.deliveries.map((delivery) => delivery.record);
-  const confirmedZero = records.find((record) => record.waybillNumber === "WB-MOCK-261028");
-  const notApplicable = records.find((record) => record.waybillNumber === "WB-MOCK-261029");
-  const lowMargin = records.find((record) => record.waybillNumber === "WB-MOCK-261030");
-  const incomplete = records.find((record) => record.waybillNumber === "WB-MOCK-261102");
+  const confirmedZero = records.find((record) => record.waybillNumber === "WB-261028");
+  const notApplicable = records.find((record) => record.waybillNumber === "WB-261029");
+  const lowMargin = records.find((record) => record.waybillNumber === "WB-261030");
+  const incomplete = records.find((record) => record.waybillNumber === "WB-261102");
 
   assert.equal(confirmedZero?.expenses.otherExpenses, 0);
   assert.equal(confirmedZero?.expenseStates.otherExpenses, "confirmed");
@@ -74,8 +74,8 @@ test("excludes the incomplete trip from confirmed truck profitability", () => {
   const records = SMALL_MOCK_DATABASE.deliveries.map((delivery) => delivery.record);
   const summaries = summarizeTruckProfitability(records);
 
-  assert.equal(summaries.length, 3);
-  assert.equal(summaries.reduce((count, truck) => count + truck.completedTrips, 0), 5);
+  assert.equal(summaries.length, 6);
+  assert.equal(summaries.reduce((count, truck) => count + truck.completedTrips, 0), 8);
   for (const summary of summaries) {
     assert.equal(summary.netProfit, summary.totalEarnings - summary.totalExpenses);
   }

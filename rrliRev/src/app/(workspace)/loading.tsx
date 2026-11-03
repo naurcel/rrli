@@ -1,6 +1,10 @@
-export default function Loading() {
+export default function WorkspaceLoading() {
   return (
-    <div className="content-wrap page-loading-container" role="status" aria-label="Loading page">
+    <div
+      className="content-wrap page-loading-container"
+      role="status"
+      aria-label="Loading page"
+    >
       <div className="page-loading-pill">
         <span className="page-loading-dot" />
         <span>Loading RouteX workspace…</span>
@@ -18,4 +22,3 @@ export default function Loading() {
     </div>
   );
 }
-

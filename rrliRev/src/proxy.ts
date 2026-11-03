@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { findServerAccountById } from "@/lib/auth/server-account-store";
+import { isValidUserRole } from "@/lib/auth/rbac";
 import {
   canRoleAccessPath,
   getLoginRedirectUrl,
@@ -49,10 +50,35 @@ export async function proxy(request: NextRequest) {
       );
     }
 
-    if (isAuthenticated && pathname === "/login") {
-      return applySessionUpdates(
-        NextResponse.redirect(new URL("/dashboard", request.url)),
-      );
+    if (isAuthenticated) {
+      if (pathname === "/login") {
+        return applySessionUpdates(
+          NextResponse.redirect(new URL("/dashboard", request.url)),
+        );
+      }
+
+      const role = isValidUserRole(user?.app_metadata?.role)
+        ? user.app_metadata.role
+        : null;
+
+      if (role && !canRoleAccessPath(role, pathname)) {
+        if (pathname.startsWith("/api/")) {
+          return applySessionUpdates(
+            NextResponse.json(
+              {
+                ok: false,
+                code: "FORBIDDEN",
+                message: `Access denied for role '${role}'.`,
+              },
+              { status: 403 },
+            ),
+          );
+        }
+
+        const deniedUrl = new URL("/dashboard", request.url);
+        deniedUrl.searchParams.set("access", "restricted");
+        return applySessionUpdates(NextResponse.redirect(deniedUrl));
+      }
     }
 
     return applySessionUpdates(NextResponse.next({ request }));

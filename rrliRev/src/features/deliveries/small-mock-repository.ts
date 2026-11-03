@@ -1,13 +1,21 @@
 import {
   calculateProfitMargin,
+  calculateTripExpenseTotal,
+  derivePodVerificationStatus,
   summarizeTruckProfitability,
 } from "./delivery-domain.ts";
 import type { DeliveryListQuery } from "./delivery-query.ts";
-import { SMALL_MOCK_DATABASE } from "./small-mock-database.ts";
+import { SMALL_MOCK_DATABASE, type SmallMockDelivery } from "./small-mock-database.ts";
 import type {
   DeliveryLedgerItem,
   DeliveryListResult,
 } from "./server/delivery-repository.ts";
+
+export const dynamicMockDeliveries: SmallMockDelivery[] = [];
+
+export function getAllMockDeliveries(): SmallMockDelivery[] {
+  return [...SMALL_MOCK_DATABASE.deliveries, ...dynamicMockDeliveries];
+}
 
 export type SmallMockProfitabilitySummary = {
   deliveries: number;
@@ -27,14 +35,14 @@ export type SmallMockProfitabilitySummary = {
 };
 
 function ledgerItems(): DeliveryLedgerItem[] {
-  const drivers = new Map(
+  const drivers = new Map<string, string>(
     SMALL_MOCK_DATABASE.drivers.map((employee) => [employee.id, employee.fullName]),
   );
-  const helpers = new Map(
+  const helpers = new Map<string, string>(
     SMALL_MOCK_DATABASE.helpers.map((employee) => [employee.id, employee.fullName]),
   );
 
-  return SMALL_MOCK_DATABASE.deliveries.map((delivery) => ({
+  return getAllMockDeliveries().map((delivery) => ({
     ...delivery.record,
     clientId: delivery.clientId,
     truckId: delivery.truckId,
@@ -124,7 +132,7 @@ export function getSmallMockProfitabilitySummary(input: {
   dateFrom: string | null;
   dateTo: string | null;
 }): SmallMockProfitabilitySummary {
-  const eligible = SMALL_MOCK_DATABASE.deliveries
+  const eligible = getAllMockDeliveries()
     .map((delivery) => delivery.record)
     .filter((delivery) =>
       delivery.financialState === "finalized" &&
@@ -154,4 +162,132 @@ export function getSmallMockProfitabilitySummary(input: {
       profit_margin: truck.marginPercent,
     })),
   };
+}
+
+export function updateSmallMockPodState(input: {
+  deliveryId: string;
+  dropoffId: string;
+  expectedVersion: number;
+  podSubmitted: boolean;
+  supportingDocsComplete: boolean;
+  documentRef?: string;
+}): { ok: true; version: number; podStatus: string } | { ok: false; error: string } {
+  const delivery = getAllMockDeliveries().find(
+    (item) => item.record.id === input.deliveryId,
+  );
+  if (!delivery) {
+    return { ok: false, error: "DELIVERY_NOT_FOUND" };
+  }
+  if (delivery.record.version !== input.expectedVersion) {
+    return { ok: false, error: "VERSION_CONFLICT: Expected version does not match current version." };
+  }
+
+  const dropoff = delivery.record.dropoffs.find((stop) => stop.id === input.dropoffId);
+  if (!dropoff) {
+    return { ok: false, error: "DROPOFF_NOT_FOUND" };
+  }
+
+  dropoff.podSubmitted = input.podSubmitted;
+  dropoff.supportingDocsComplete = input.supportingDocsComplete;
+  if (input.documentRef !== undefined) {
+    dropoff.documentRef = input.documentRef;
+  }
+
+  const existingDoc = SMALL_MOCK_DATABASE.documents.find(
+    (doc) => doc.deliveryId === input.deliveryId && doc.dropoffId === input.dropoffId,
+  );
+  if (existingDoc) {
+    (existingDoc as { status: string; originalFilename: string | null }).status = input.podSubmitted && input.supportingDocsComplete
+      ? "Verified"
+      : input.podSubmitted
+        ? "Submitted"
+        : "Missing";
+    (existingDoc as { status: string; originalFilename: string | null }).originalFilename = input.documentRef ?? null;
+  }
+
+  delivery.record.podStatus = derivePodVerificationStatus(delivery.record.dropoffs);
+  delivery.record.version += 1;
+
+  return {
+    ok: true,
+    version: delivery.record.version,
+    podStatus: delivery.record.podStatus,
+  };
+}
+
+export function finalizeSmallMockDelivery(input: {
+  deliveryId: string;
+  expectedVersion: number;
+}): { ok: true; version: number } | { ok: false; error: string } {
+  const delivery = getAllMockDeliveries().find(
+    (item) => item.record.id === input.deliveryId,
+  );
+  if (!delivery) {
+    return { ok: false, error: "DELIVERY_NOT_FOUND" };
+  }
+  if (delivery.record.version !== input.expectedVersion) {
+    return { ok: false, error: "VERSION_CONFLICT: Expected version does not match current version." };
+  }
+  if (delivery.record.financialIntegrityIssues.length > 0) {
+    return { ok: false, error: "FINANCIALS_INCOMPLETE: Cannot finalize delivery with unresolved expenses." };
+  }
+
+  delivery.record.financialState = "finalized";
+  delivery.record.version += 1;
+
+  return { ok: true, version: delivery.record.version };
+}
+
+export function correctSmallMockDelivery(input: {
+  deliveryId: string;
+  expectedVersion: number;
+  changes: Record<string, unknown>;
+  reason: string;
+}): { ok: true; version: number } | { ok: false; error: string } {
+  const delivery = getAllMockDeliveries().find(
+    (item) => item.record.id === input.deliveryId,
+  );
+  if (!delivery) {
+    return { ok: false, error: "DELIVERY_NOT_FOUND" };
+  }
+  if (delivery.record.version !== input.expectedVersion) {
+    return { ok: false, error: "VERSION_CONFLICT: Expected version does not match current version." };
+  }
+
+  const rec = delivery.record;
+  if (typeof input.changes.deliveryRate === "number") {
+    rec.deliveryRate = input.changes.deliveryRate;
+  }
+  if (input.changes.expenses && typeof input.changes.expenses === "object") {
+    Object.assign(rec.expenses, input.changes.expenses);
+  }
+  if (input.changes.expenseStates && typeof input.changes.expenseStates === "object") {
+    Object.assign(rec.expenseStates, input.changes.expenseStates);
+  }
+
+  rec.totalExpenses = calculateTripExpenseTotal(rec.expenses, rec.expenseStates);
+  rec.netIncome = rec.totalExpenses == null || rec.deliveryRate == null ? null : rec.deliveryRate - rec.totalExpenses;
+  rec.marginPercent = calculateProfitMargin(rec.deliveryRate, rec.netIncome);
+
+  const expenseKeys = [
+    "dieselExpenses",
+    "tollGateExpenses",
+    "entryFees",
+    "driverAllowance",
+    "driverDailyRate",
+    "helperAllowance",
+    "helperDailyRate",
+    "otherExpenses",
+  ] as const;
+  rec.financialIntegrityIssues = expenseKeys.flatMap((key) => {
+    if (rec.expenseStates[key] === "unknown") return [`${key} is unknown`];
+    if (rec.expenseStates[key] === "confirmed" && rec.expenses[key] == null) {
+      return [`${key} has no confirmed amount`];
+    }
+    return [];
+  });
+  rec.financialState = rec.financialIntegrityIssues.length === 0 ? "finalized" : "incomplete";
+  rec.version += 1;
+
+  return { ok: true, version: rec.version };
 }

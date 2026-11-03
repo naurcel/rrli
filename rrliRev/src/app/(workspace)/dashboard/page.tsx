@@ -16,7 +16,10 @@ import {
 } from "@/components/record-detail-drawer";
 import { Icon } from "@/components/route-x-ui";
 import type { DeliveryTripRecord } from "@/features/deliveries/delivery-domain";
-import { useDeliveryProfitabilitySummary } from "@/features/deliveries/use-delivery-profitability-summary";
+import {
+  useDeliveryProfitabilitySummary,
+  type PersistedTruckSummary,
+} from "@/features/deliveries/use-delivery-profitability-summary";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import {
   canImportAndReviewExcel,
@@ -24,6 +27,33 @@ import {
   canVerifyPodDocuments,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
+
+type TruckRankingMetric = "revenue" | "netIncome" | "profitMargin";
+
+const truckRankingLabels: Record<TruckRankingMetric, string> = {
+  revenue: "Revenue",
+  netIncome: "Net income",
+  profitMargin: "Profit margin",
+};
+
+function truckRankingValue(
+  truck: PersistedTruckSummary,
+  metric: TruckRankingMetric,
+): number {
+  if (metric === "revenue") return truck.revenue;
+  if (metric === "profitMargin") {
+    return truck.profit_margin ?? Number.NEGATIVE_INFINITY;
+  }
+  return truck.net_income;
+}
+
+function formatTruckRankingValue(
+  truck: PersistedTruckSummary,
+  metric: TruckRankingMetric,
+): string {
+  if (metric === "profitMargin") return formatPercent(truck.profit_margin);
+  return formatPeso(metric === "revenue" ? truck.revenue : truck.net_income);
+}
 
 function parseDateParts(dateString: string): Date | null {
   const parts = dateString.split("-").map(Number);
@@ -77,6 +107,41 @@ function buildRevenueSeries(
     .map(([date, revenue]) => ({ date, revenue }));
 }
 
+function buildSmoothPath(
+  points: Array<{ x: number; y: number }>,
+  bounds?: { minY: number; maxY: number },
+): string {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
+  if (points.length === 2) {
+    return `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)} L ${points[1].x.toFixed(2)},${points[1].y.toFixed(2)}`;
+  }
+
+  const clampY = (val: number) => {
+    if (!bounds) return val;
+    return Math.min(Math.max(val, bounds.minY), bounds.maxY);
+  };
+
+  let path = `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? 0 : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2 < points.length ? i + 2 : points.length - 1];
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = clampY(p1.y + (p2.y - p0.y) / 6);
+
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = clampY(p2.y - (p3.y - p1.y) / 6);
+
+    path += ` C ${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  }
+
+  return path;
+}
+
 function RevenueChart({
   series,
   periodLabel,
@@ -99,7 +164,10 @@ function RevenueChart({
     x: padding.left + (series.length <= 1 ? innerWidth / 2 : (index / (series.length - 1)) * innerWidth),
     y: padding.top + innerHeight - (point.revenue / ceiling) * innerHeight,
   }));
-  const line = coordinates.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
+  const line = buildSmoothPath(coordinates, {
+    minY: padding.top,
+    maxY: padding.top + innerHeight,
+  });
   const area = coordinates.length
     ? `${line} L ${coordinates.at(-1)?.x ?? padding.left},${padding.top + innerHeight} L ${coordinates[0]?.x ?? padding.left},${padding.top + innerHeight} Z`
     : "";
@@ -164,6 +232,19 @@ function RevenueChart({
                 <stop offset="0%" stopColor="var(--color-accent-highlight)" stopOpacity=".32" />
                 <stop offset="100%" stopColor="var(--color-accent-highlight)" stopOpacity="0" />
               </linearGradient>
+              <radialGradient id="revenue-chart-fluid-warm">
+                <stop offset="0%" stopColor="var(--color-focus)" stopOpacity=".72" />
+                <stop offset="44%" stopColor="var(--color-accent-highlight)" stopOpacity=".34" />
+                <stop offset="100%" stopColor="var(--color-accent-highlight)" stopOpacity="0" />
+              </radialGradient>
+              <radialGradient id="revenue-chart-fluid-deep">
+                <stop offset="0%" stopColor="var(--color-accent)" stopOpacity=".58" />
+                <stop offset="52%" stopColor="var(--color-accent-highlight)" stopOpacity=".2" />
+                <stop offset="100%" stopColor="var(--color-accent-highlight)" stopOpacity="0" />
+              </radialGradient>
+              <clipPath id="revenue-chart-area-clip">
+                <path d={area} />
+              </clipPath>
             </defs>
             {gridValues.map((value) => {
               const y = padding.top + innerHeight - (value / ceiling) * innerHeight;
@@ -183,6 +264,24 @@ function RevenueChart({
               );
             })}
             <path className="chart-area" d={area} />
+            <g clipPath="url(#revenue-chart-area-clip)" aria-hidden="true">
+              <ellipse
+                className="chart-area-fluid chart-area-fluid-warm"
+                cx="130"
+                cy="92"
+                rx="245"
+                ry="122"
+                fill="url(#revenue-chart-fluid-warm)"
+              />
+              <ellipse
+                className="chart-area-fluid chart-area-fluid-deep"
+                cx="570"
+                cy="148"
+                rx="270"
+                ry="138"
+                fill="url(#revenue-chart-fluid-deep)"
+              />
+            </g>
             <path className="chart-line" d={line} />
             {coordinates.map((point, index) => {
               const isActive = activeIndex === index;
@@ -248,6 +347,8 @@ export default function DashboardPage() {
   const { summary: persistedSummary } = useDeliveryProfitabilitySummary(range);
   const [selectedTrip, setSelectedTrip] = useState<DeliveryTripRecord | null>(null);
   const [accessNoticeDismissed, setAccessNoticeDismissed] = useState(false);
+  const [truckRankingMetric, setTruckRankingMetric] =
+    useState<TruckRankingMetric>("netIncome");
 
   const filteredDeliveries = deliveries;
 
@@ -282,7 +383,21 @@ export default function DashboardPage() {
     [filteredDeliveries, range],
   );
 
-  const truckRankings = persistedSummary?.trucks ?? [];
+  const truckRankings = useMemo(
+    () =>
+      [...(persistedSummary?.trucks ?? [])]
+        .sort((left, right) => {
+          const leftValue = truckRankingValue(left, truckRankingMetric);
+          const rightValue = truckRankingValue(right, truckRankingMetric);
+          if (leftValue !== rightValue) return rightValue > leftValue ? 1 : -1;
+          if (right.net_income !== left.net_income) {
+            return right.net_income - left.net_income;
+          }
+          return left.plate_number.localeCompare(right.plate_number);
+        })
+        .slice(0, 3),
+    [persistedSummary?.trucks, truckRankingMetric],
+  );
 
   const canWrite = canMutateDeliveryRecords(actor.role);
   const canImport = canImportAndReviewExcel(actor.role);
@@ -355,12 +470,18 @@ export default function DashboardPage() {
 
   return (
     <>
-      <OperationalTopbar contextLabel="Delivery Operations & Truck Profitability" />
+      <OperationalTopbar
+        contextLabel="Delivery Operations & Trucks"
+        alert={totals.unverifiedTrips > 0 ? {
+          count: totals.unverifiedTrips,
+          href: "/pod-documents",
+          label: `${totals.unverifiedTrips} ${totals.unverifiedTrips === 1 ? "delivery needs" : "deliveries need"} POD review`,
+        } : undefined}
+      />
 
       <div key={rangeKey} className="content-wrap dashboard-range-refresh">
         <header className="page-intro dashboard-welcome">
           <div>
-            <p className="eyebrow">DELIVERY OPERATIONS & TRUCK PROFITABILITY</p>
             <h1>Welcome back, {actor.fullName.split(" ")[0]}</h1>
             <p className="subtitle">
               Track completed client deliveries, multi-store drop-offs, itemized trip expenses,
@@ -369,11 +490,21 @@ export default function DashboardPage() {
           </div>
           {canWrite ? (
             <div className="fleet-intro-actions">
-              <Link className="secondary-button" href="/deliveries/import">
-                Import Excel Trip Report
+              <Link
+                className="secondary-button page-intro-action"
+                href="/deliveries/import"
+                aria-label="Import an Excel trip report"
+                data-tooltip="Import an Excel trip report"
+              >
+                Import
               </Link>
-              <Link className="primary-action-button" href="/deliveries">
-                + Record Delivery
+              <Link
+                className="primary-action-button page-intro-action"
+                href="/deliveries/new"
+                aria-label="Record a completed delivery and its trip details"
+                data-tooltip="Record a completed delivery and its trip details"
+              >
+                Record delivery
               </Link>
             </div>
           ) : (
@@ -404,7 +535,7 @@ export default function DashboardPage() {
               <strong>View-Only Access ({actor.roleLabel}):</strong>
               <span>
                 You can inspect all delivery records, store drop-offs, POD verification statuses,
-                truck profitability metrics, and reports. Creating, editing, or importing records
+                truck performance metrics, and reports. Creating, editing, or importing records
                 is restricted to Operations and Admin personnel.
               </span>
             </div>
@@ -462,7 +593,7 @@ export default function DashboardPage() {
             <Link
               className="stat-card stat-card-link"
               href="/truck-profitability"
-              title="View truck profitability & net income showcase"
+              title="View trucks and net income performance"
             >
               <span className="stat-label">NET TRUCK INCOME</span>
               <strong>{formatPeso(totals.netIncome)}</strong>
@@ -509,53 +640,6 @@ export default function DashboardPage() {
           </section>
         </section>
 
-        {totals.unverifiedTrips > 0 ? (
-          <section
-            className="records-card dashboard-attention"
-            aria-label="Attention needed"
-          >
-            <div className="records-heading">
-              <div>
-                <h2>Attention Needed</h2>
-                <p>Document verification and trip profitability follow-ups</p>
-              </div>
-            </div>
-            <div className="attention-grid">
-              <Link
-                href="/pod-documents"
-                className="attention-item attention-link"
-              >
-                <strong>
-                  {totals.unverifiedTrips} deliveries with incomplete POD or supporting docs
-                </strong>
-                <span>
-                  Verify stamped store receiving slips and waybill attachments in POD / Documents
-                </span>
-              </Link>
-              <Link
-                href="/deliveries"
-                className="attention-item attention-link"
-              >
-                <strong>Multi-store client trip review</strong>
-                <span>
-                  Organize completed deliveries by client, waybill, and store drop-off sequence
-                </span>
-              </Link>
-              <Link
-                href="/truck-profitability"
-                className="attention-item attention-link"
-              >
-                <strong>
-                  {truckRankings.length} trucks tracked for net profitability
-                </strong>
-                <span>
-                  Compare delivery rate earnings against diesel, toll gate, and crew expenses
-                </span>
-              </Link>
-            </div>
-          </section>
-        ) : null}
-
         <div className={`dashboard-columns${loading ? " is-page-loading" : ""}`}>
           <section className="records-card" aria-label="Recent completed deliveries">
             <div className="records-heading">
@@ -569,15 +653,12 @@ export default function DashboardPage() {
             </div>
 
             <div className="table-wrap">
-              <table style={{ minWidth: "860px" }}>
+              <table>
                 <thead>
                   <tr>
                     <th>Waybill & Date</th>
                     <th>Client</th>
                     <th>Truck</th>
-                    <th>Store Drop-offs</th>
-                    <th>Delivery Rate</th>
-                    <th>Expenses</th>
                     <th>Net Income</th>
                     <th>POD Status</th>
                   </tr>
@@ -607,13 +688,6 @@ export default function DashboardPage() {
                         <br />
                         <small>{trip.truckType}</small>
                       </td>
-                      <td>
-                        <span className="dropoff-count-badge">
-                          {trip.dropoffs.length} stores
-                        </span>
-                      </td>
-                      <td className="money">{formatPeso(trip.deliveryRate)}</td>
-                      <td>{formatPeso(trip.totalExpenses)}</td>
                       <td className="money">{formatPeso(trip.netIncome)}</td>
                       <td>
                         <span
@@ -636,28 +710,53 @@ export default function DashboardPage() {
             <section className="records-card top-trucks-card" aria-label="Truck profitability rankings">
               <div className="records-heading">
                 <div>
-                  <h2>Truck Profitability</h2>
-                  <p>Ranked by net income after trip expenses</p>
+                  <h2>Trucks</h2>
+                  <p>
+                    Ranked by {truckRankingLabels[truckRankingMetric].toLowerCase()}
+                    {truckRankingMetric === "netIncome" ? " after trip expenses" : ""}
+                  </p>
                 </div>
               </div>
+              <div className="metric-tabs truck-ranking-tabs" role="group" aria-label="Rank trucks by">
+                {(Object.keys(truckRankingLabels) as TruckRankingMetric[]).map((metric) => (
+                  <button
+                    className={truckRankingMetric === metric ? "active" : ""}
+                    type="button"
+                    aria-pressed={truckRankingMetric === metric}
+                    onClick={() => setTruckRankingMetric(metric)}
+                    key={metric}
+                  >
+                    {truckRankingLabels[metric]}
+                  </button>
+                ))}
+              </div>
               <ol className="top-truck-list">
+                {truckRankings.length === 0 ? (
+                  <li className="top-truck-empty">No finalized truck records in this range.</li>
+                ) : null}
                 {truckRankings.map((truck, idx) => (
-                  <li key={truck.plate_number}>
-                    <span className="truck-rank">{idx + 1}</span>
-                    <div>
-                      <strong>
-                        {truck.plate_number}
-                      </strong>
-                      <span>
-                        {truck.deliveries} finalized trips · {formatPercent(truck.profit_margin)} margin
-                      </span>
-                    </div>
-                    <b>{formatPeso(truck.net_income)}</b>
+                  <li className={idx === 0 ? "is-top-truck" : undefined} key={truck.plate_number}>
+                    <Link
+                      className="top-truck-link"
+                      href={`/truck-profitability/${truck.plate_number}`}
+                    >
+                      <span className="truck-rank">{idx + 1}</span>
+                      <div>
+                        <strong>{truck.plate_number}</strong>
+                        <span>
+                          {truck.deliveries} finalized trip{truck.deliveries === 1 ? "" : "s"}
+                          {truckRankingMetric === "profitMargin"
+                            ? ` · ${formatPeso(truck.net_income)} net income`
+                            : ` · ${formatPercent(truck.profit_margin)} margin`}
+                        </span>
+                      </div>
+                      <b>{formatTruckRankingValue(truck, truckRankingMetric)}</b>
+                    </Link>
                   </li>
                 ))}
               </ol>
               <Link className="dashboard-card-link" href="/truck-profitability">
-                Open Truck Profitability breakdown →
+                Open trucks →
               </Link>
             </section>
 
@@ -713,7 +812,7 @@ export default function DashboardPage() {
         <p className="scope-note">
           <span aria-hidden="true">●</span>
           RouteX is focused exclusively on Delivery Operations, Multi-Store Drop-offs, POD
-          Verification, and Truck Profitability.
+          Verification, and Trucks.
         </p>
       </div>
 

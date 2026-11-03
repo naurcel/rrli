@@ -192,4 +192,29 @@ test("rejects direct mutation requests from all View-Only roles with 403 Forbidd
   }
 });
 
+test("production environment requires explicit ROUTEX_SESSION_SECRET and rejects default fallback", () => {
+  const originalEnv = process.env.NODE_ENV;
+  const originalSecret = process.env.ROUTEX_SESSION_SECRET;
+
+  try {
+    delete process.env.ROUTEX_SESSION_SECRET;
+    // @ts-expect-error mutating NODE_ENV for test assertion
+    process.env.NODE_ENV = "production";
+
+    assert.throws(
+      () => {
+        createSignedSessionToken({ userId: "usr-admin-001" });
+      },
+      /SECURITY_VIOLATION.*ROUTEX_SESSION_SECRET.*production/,
+    );
+  } finally {
+    // @ts-expect-error restoring NODE_ENV
+    process.env.NODE_ENV = originalEnv;
+    if (originalSecret) {
+      process.env.ROUTEX_SESSION_SECRET = originalSecret;
+    }
+  }
+});
+
+
 

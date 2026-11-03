@@ -73,7 +73,7 @@ a.stat-card:focus-visible, .stat-card-link:focus-visible { outline: 2px solid va
 .sidebar nav { display: flex; flex-direction: column; gap: 3px; }
 .sidebar-footer { margin-top: auto; }
 .main-content { height: 100vh; overflow-x: hidden; overflow-y: auto; }
-.sidebar { position: relative; }
+.sidebar { position: relative; z-index: 300; }
 .sidebar { transition: width .2s cubic-bezier(.22, 1, .36, 1); }
 .sidebar.resizing { transition: none; }
 .sidebar.resizing { width: var(--sidebar-drag-width, var(--sidebar-width)); flex-basis: var(--sidebar-drag-width, var(--sidebar-width)); }
@@ -149,30 +149,6 @@ a.stat-card:focus-visible, .stat-card-link:focus-visible { outline: 2px solid va
   text-shadow: 0 0 14px color-mix(in srgb, var(--color-accent) 55%, transparent);
   transform: scale(1.15);
 }
-.sidebar.collapsed {
-  transition: width .28s cubic-bezier(.22, 1, .36, 1), flex-basis .28s cubic-bezier(.22, 1, .36, 1);
-}
-.sidebar.collapsed .sidebar-header {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 60px;
-  min-height: 60px;
-  padding: 0;
-  margin-bottom: 8px;
-  gap: 0;
-  overflow: visible;
-  transition: padding .28s cubic-bezier(.22, 1, .36, 1), gap .28s cubic-bezier(.22, 1, .36, 1);
-}
-.sidebar.collapsed .sidebar-brand-space {
-  position: relative;
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
-  margin: 0 auto;
-  transition: margin .28s cubic-bezier(.22, 1, .36, 1), transform .28s cubic-bezier(.22, 1, .36, 1);
-}
 .sidebar.collapsed .sidebar-brand-space::before {
   opacity: 0;
   transform: scale(.88);
@@ -181,57 +157,6 @@ a.stat-card:focus-visible, .stat-card-link:focus-visible { outline: 2px solid va
   opacity: 1;
   transform: scale(1);
   background-position: center;
-}
-.sidebar.collapsed .sidebar-collapse-toggle {
-  position: absolute;
-  right: 12px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-accent);
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-4px) scale(.85);
-  transition: opacity .2s ease, transform .28s cubic-bezier(.22, 1, .36, 1), background-color .15s ease, color .15s ease;
-}
-.sidebar.collapsed .sidebar-collapse-toggle .icon {
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1;
-}
-.sidebar.collapsed.collapsed-hovered,
-.sidebar.collapsed:has(.sidebar-header:hover) {
-  width: 108px !important;
-  flex-basis: 108px !important;
-}
-.sidebar.collapsed.collapsed-hovered .sidebar-header,
-.sidebar.collapsed:has(.sidebar-header:hover) .sidebar-header {
-  padding: 0 14px;
-  gap: 8px;
-  justify-content: center;
-}
-.sidebar.collapsed.collapsed-hovered .sidebar-brand-space,
-.sidebar.collapsed:has(.sidebar-header:hover) .sidebar-brand-space {
-  margin: 0;
-}
-.sidebar.collapsed.collapsed-hovered .sidebar-collapse-toggle,
-.sidebar.collapsed:has(.sidebar-header:hover) .sidebar-collapse-toggle {
-  position: static;
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(0) scale(1);
-}
-.sidebar.collapsed .sidebar-collapse-toggle:hover {
-  background: var(--color-accent-soft);
-  color: var(--color-accent-deep);
 }
 .sidebar nav { gap: 2px; }
 .nav-item { min-height: 38px; }
@@ -264,8 +189,19 @@ a.stat-card:focus-visible, .stat-card-link:focus-visible { outline: 2px solid va
   display: none !important;
 }
 
+.sidebar.collapsed {
+  z-index: 300;
+}
+
 .sidebar.collapsed nav .nav-item {
   overflow: visible !important;
+  position: relative;
+}
+
+.sidebar.collapsed nav .nav-item:hover,
+.sidebar.collapsed nav .nav-item:focus-visible {
+  position: relative;
+  z-index: 50;
 }
 
 .sidebar.collapsed .nav-tooltip {
@@ -635,7 +571,6 @@ html[data-theme="dark"] .sidebar.collapsed .nav-tooltip::after {
 .sidebar.collapsed .sidebar-footer > div:not(.avatar) { display: block !important; }
 .sidebar.collapsed .sidebar-footer { width: 100%; padding-inline: 0 !important; align-items: center; }
 .sidebar.collapsed .sidebar-footer .avatar { flex: 0 0 31px !important; width: 31px !important; height: 31px !important; min-width: 31px; min-height: 31px; margin-inline: auto !important; border-radius: 50% !important; transform: none !important; }
-.sidebar:not(.sidebar-ready), .sidebar:not(.sidebar-ready) * { transition: none !important; }
 .global-date-filter:hover, .fleet-card:hover, .report-card:hover, .settings-card:hover { box-shadow: var(--mouse-shadow-x) var(--mouse-shadow-y) 18px rgba(148, 158, 173, .24), calc(var(--mouse-shadow-x) * -0.7) calc(var(--mouse-shadow-y) * -0.7) 12px rgba(255, 255, 255, .7); }
 .fleet-card:hover { box-shadow: 0 15px 28px rgba(91, 108, 129, .16), var(--mouse-shadow-x) var(--mouse-shadow-y) 16px rgba(148, 158, 173, .18), calc(var(--mouse-shadow-x) * -0.6) calc(var(--mouse-shadow-y) * -0.6) 11px rgba(255, 255, 255, .64); }
 .search-box:hover, .global-search:hover { box-shadow: inset var(--mouse-shadow-x) var(--mouse-shadow-y) 10px rgba(120, 136, 158, .28), inset calc(var(--mouse-shadow-x) * -0.65) calc(var(--mouse-shadow-y) * -0.65) 10px rgba(255, 255, 255, .7); transform: none; transition-duration: .1s; }
@@ -1136,22 +1071,25 @@ body.record-detail-open .content-wrap { width: 100%; padding-right: 30px; }
    ========================================================= */
 
 .sidebar.collapsed {
-  width: 76px;
-  flex: 0 0 76px;
+  width: 76px !important;
+  flex: 0 0 76px !important;
+  flex-basis: 76px !important;
   padding: 20px 12px 14px;
-  transition: width .32s cubic-bezier(.22, 1, .36, 1), flex-basis .32s cubic-bezier(.22, 1, .36, 1), box-shadow .32s cubic-bezier(.22, 1, .36, 1);
+  transition: width .32s cubic-bezier(.22, 1, .36, 1), flex-basis .32s cubic-bezier(.22, 1, .36, 1), box-shadow .32s cubic-bezier(.22, 1, .36, 1) !important;
+  will-change: width, flex-basis;
 }
 
 .sidebar.collapsed.collapsed-hovered,
-.sidebar.collapsed:hover {
+.sidebar.collapsed:has(.sidebar-header:hover) {
   width: 108px !important;
+  flex: 0 0 108px !important;
   flex-basis: 108px !important;
-  box-shadow: 8px 0 28px rgba(148, 158, 173, 0.28);
+  box-shadow: 8px 0 28px rgba(148, 158, 173, 0.28) !important;
 }
 
 html[data-theme="dark"] .sidebar.collapsed.collapsed-hovered,
-html[data-theme="dark"] .sidebar.collapsed:hover {
-  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.5);
+html[data-theme="dark"] .sidebar.collapsed:has(.sidebar-header:hover) {
+  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* Header: Logo stays fixed at center 38px, chevron animates into the expanded room */
@@ -1170,7 +1108,7 @@ html[data-theme="dark"] .sidebar.collapsed:hover {
 }
 
 .sidebar.collapsed.collapsed-hovered .sidebar-header,
-.sidebar.collapsed:hover .sidebar-header {
+.sidebar.collapsed:has(.sidebar-header:hover) .sidebar-header {
   padding: 0 0 0 10px;
   gap: 8px;
   justify-content: flex-start;
@@ -1182,16 +1120,14 @@ html[data-theme="dark"] .sidebar.collapsed:hover {
   width: 32px;
   height: 32px;
   margin: 0;
-  transition: transform .28s var(--motion-ease-spring);
-}
-
-.sidebar.collapsed:hover .sidebar-brand-space {
-  transform: scale(1.05);
+  transform-origin: center center;
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1) !important;
 }
 
 .sidebar.collapsed.collapsed-hovered .sidebar-brand-space,
-.sidebar.collapsed:hover .sidebar-brand-space {
+.sidebar.collapsed:has(.sidebar-header:hover) .sidebar-brand-space {
   margin: 0;
+  transform: scale(1.06);
 }
 
 .sidebar.collapsed .sidebar-collapse-toggle {
@@ -1210,8 +1146,8 @@ html[data-theme="dark"] .sidebar.collapsed:hover {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-8px) scale(.8);
-  transition: opacity .24s ease, transform .28s cubic-bezier(.22, 1, .36, 1), background-color .15s ease, color .15s ease;
+  transform: translateX(-10px) scale(.75);
+  transition: opacity .22s ease, transform .28s cubic-bezier(.22, 1, .36, 1), background-color .15s ease, color .15s ease !important;
 }
 
 .sidebar.collapsed .sidebar-collapse-toggle .icon {
@@ -1221,12 +1157,13 @@ html[data-theme="dark"] .sidebar.collapsed:hover {
 }
 
 .sidebar.collapsed.collapsed-hovered .sidebar-collapse-toggle,
-.sidebar.collapsed:hover .sidebar-collapse-toggle {
+.sidebar.collapsed:has(.sidebar-header:hover) .sidebar-collapse-toggle {
   position: static;
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0) scale(1);
-}
+  transition: opacity .28s ease 40ms, transform .32s cubic-bezier(.22, 1, .36, 1) 40ms, background-color .15s ease, color .15s ease !important;
+k}
 
 .sidebar.collapsed .sidebar-collapse-toggle:hover {
   background: var(--color-accent-soft);

@@ -209,7 +209,6 @@ export default function NewCompletedDeliveryPage() {
       <header className="page-intro">
         <div>
           <Link className="back-link" href="/deliveries">← Back to completed deliveries</Link>
-          <p className="eyebrow">COMPLETED DELIVERY RECORD</p>
           <h1>Record delivery</h1>
           <p className="subtitle">
             Encode one completed trip. Multiple stores remain part of this single delivery and do not duplicate its revenue.

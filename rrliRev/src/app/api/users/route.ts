@@ -4,7 +4,7 @@ import {
   createUserAccountSchema,
   updateUserRoleSchema,
 } from "@/lib/auth/auth-schemas";
-import { getRoleMetadata, isValidUserRole } from "@/lib/auth/rbac";
+import { getRoleMetadata, isValidUserRole, type UserRole } from "@/lib/auth/rbac";
 import {
   createServerAccountProfile,
   listServerAccountProfiles,
@@ -31,28 +31,38 @@ export async function GET() {
         .select("id, email, full_name, role, is_active, created_at, updated_at")
         .order("created_at", { ascending: true });
 
-      if (!error && data && data.length > 0) {
-        const users = data
-          .filter((row) => isValidUserRole(row.role))
-          .map((row) => {
-            const meta = getRoleMetadata(row.role);
-            return {
-              id: row.id,
-              email: row.email,
-              fullName: row.full_name,
-              role: row.role,
-              roleLabel: meta.label,
-              accessLevel: meta.accessLevel,
-              accessLevelLabel: meta.accessLevelLabel,
-              isActive: row.is_active,
-              createdAt: row.created_at,
-            };
-          });
-
-        return NextResponse.json({ ok: true, users });
+      if (error) {
+        throw new Error(error.message);
       }
-    } catch {
-      // Fall back to server account registry if user_profiles table is not yet migrated
+
+      const users = (data ?? [])
+        .filter((row) => isValidUserRole(row.role))
+        .map((row) => {
+          const meta = getRoleMetadata(row.role);
+          return {
+            id: row.id,
+            email: row.email,
+            fullName: row.full_name,
+            role: row.role,
+            roleLabel: meta.label,
+            accessLevel: meta.accessLevel,
+            accessLevelLabel: meta.accessLevelLabel,
+            isActive: row.is_active,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          };
+        });
+
+      return NextResponse.json({ ok: true, users });
+    } catch (err) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "USER_QUERY_FAILED",
+          message: err instanceof Error ? err.message : "Unable to load user accounts.",
+        },
+        { status: 500 },
+      );
     }
   }
 
@@ -90,6 +100,69 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = await createServerSupabaseClient();
+      const newId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .insert({
+          id: newId,
+          email: parsed.data.email.trim().toLowerCase(),
+          full_name: parsed.data.fullName.trim(),
+          role: parsed.data.role,
+          is_active: true,
+          created_at: now,
+          updated_at: now,
+        })
+        .select("id, email, full_name, role, is_active, created_at")
+        .single();
+
+      if (error) {
+        const isConflict = error.code === "23505" || error.message.includes("unique");
+        return NextResponse.json(
+          {
+            ok: false,
+            code: isConflict ? "CONFLICT" : "USER_CREATION_FAILED",
+            message: isConflict
+              ? "An account with this email address already exists."
+              : error.message,
+          },
+          { status: isConflict ? 409 : 400 },
+        );
+      }
+
+      const meta = getRoleMetadata(data.role as UserRole);
+      return NextResponse.json(
+        {
+          ok: true,
+          user: {
+            id: data.id,
+            email: data.email,
+            fullName: data.full_name,
+            role: data.role,
+            roleLabel: meta.label,
+            accessLevel: meta.accessLevel,
+            accessLevelLabel: meta.accessLevelLabel,
+            isActive: data.is_active,
+            createdAt: data.created_at,
+          },
+        },
+        { status: 201 },
+      );
+    } catch (err) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "USER_CREATION_FAILED",
+          message: err instanceof Error ? err.message : "Unable to create user.",
+        },
+        { status: 500 },
+      );
+    }
   }
 
   const created = createServerAccountProfile(parsed.data);
@@ -162,9 +235,52 @@ export async function PATCH(request: Request) {
       if (parsed.data.role) updates.role = parsed.data.role;
       if (typeof parsed.data.isActive === "boolean") updates.is_active = parsed.data.isActive;
 
-      await supabase.from("user_profiles").update(updates).eq("id", parsed.data.userId);
-    } catch {
-      // Also synchronize server account registry
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .update(updates)
+        .eq("id", parsed.data.userId)
+        .select("id, email, full_name, role, is_active, created_at, updated_at")
+        .maybeSingle();
+
+      if (error) {
+        return NextResponse.json(
+          { ok: false, code: "USER_UPDATE_FAILED", message: error.message },
+          { status: 400 },
+        );
+      }
+
+      if (!data) {
+        return NextResponse.json(
+          { ok: false, code: "NOT_FOUND", message: "The specified user account was not found." },
+          { status: 404 },
+        );
+      }
+
+      const meta = getRoleMetadata(data.role as UserRole);
+      return NextResponse.json({
+        ok: true,
+        user: {
+          id: data.id,
+          email: data.email,
+          fullName: data.full_name,
+          role: data.role,
+          roleLabel: meta.label,
+          accessLevel: meta.accessLevel,
+          accessLevelLabel: meta.accessLevelLabel,
+          isActive: data.is_active,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+        },
+      });
+    } catch (err) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "USER_UPDATE_FAILED",
+          message: err instanceof Error ? err.message : "Unable to update user profile.",
+        },
+        { status: 500 },
+      );
     }
   }
 

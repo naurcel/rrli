@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AccountControl } from "@/components/account-control";
 import { useAuthenticatedActor } from "@/components/auth-context";
@@ -22,7 +22,13 @@ export function OperationalSidebar() {
   const actor = useAuthenticatedActor();
   const { width, collapsed, toggleCollapsed } = useSidebarState();
   const [headerHovered, setHeaderHovered] = useState(false);
+  const [sidebarReady, setSidebarReady] = useState(false);
   const navigation = getAuthorizedNavigationForRole(actor.role);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setSidebarReady(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   function renderNavigationItem(item: NavigationItem) {
     const active = isActiveRoute(pathname, item.href);
@@ -44,7 +50,7 @@ export function OperationalSidebar() {
 
   return (
     <aside
-      className={`sidebar${collapsed ? " collapsed" : ""}${collapsed && headerHovered ? " collapsed-hovered" : ""}`}
+      className={`sidebar${sidebarReady ? " sidebar-ready" : ""}${collapsed ? " collapsed" : ""}${collapsed && headerHovered ? " collapsed-hovered" : ""}`}
       style={{ "--sidebar-width": `${width}px` } as React.CSSProperties}
     >
       <div

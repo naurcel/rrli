@@ -17,7 +17,6 @@ import {
   type UserRole,
 } from "./rbac";
 import {
-  findServerAccountByEmail,
   findServerAccountById,
 } from "./server-account-store";
 import {
@@ -121,18 +120,7 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
         });
       }
 
-      // 3. Fallback email match in server account registry if migrating initial accounts
-      const matchedSeed = findServerAccountByEmail(user.email);
-      if (matchedSeed && matchedSeed.isActive) {
-        return buildAuthenticatedActor({
-          id: user.id,
-          email: user.email,
-          fullName: matchedSeed.fullName,
-          role: matchedSeed.role,
-          providerMode: "supabase",
-        });
-      }
-
+      // No valid role profile or app_metadata found — deny access by default
       return null;
     } catch {
       return null;

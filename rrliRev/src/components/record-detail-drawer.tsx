@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 
 export type DetailSection = {
   title: string;
+  eyebrow?: string;
+  fullWidth?: boolean;
   rows?: readonly {
     label: string;
     value: string;
@@ -20,6 +22,7 @@ export function RecordDetailDrawer({
   statusLabel,
   statusTone = "success",
   sections,
+  footer,
   onClose,
 }: {
   open: boolean;
@@ -28,9 +31,17 @@ export function RecordDetailDrawer({
   statusLabel?: string;
   statusTone?: "success" | "warning";
   sections: readonly DetailSection[];
+  footer?: ReactNode;
   onClose: () => void;
 }) {
   const headingId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) {
@@ -39,10 +50,31 @@ export function RecordDetailDrawer({
     }
 
     document.body.classList.add("record-detail-open");
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
+        return;
+      }
+
+      if (event.key === "Tab") {
+        const focusable = Array.from(
+          dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ) ?? [],
+        );
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (!first || !last) return;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     }
 
@@ -50,8 +82,9 @@ export function RecordDetailDrawer({
     return () => {
       document.body.classList.remove("record-detail-open");
       window.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) {
     return null;
@@ -65,10 +98,11 @@ export function RecordDetailDrawer({
         aria-label="Close record details"
         onClick={onClose}
       />
-      <aside
+      <article
+        ref={dialogRef}
         className="record-detail-drawer"
         role="dialog"
-        aria-modal="false"
+        aria-modal="true"
         aria-labelledby={headingId}
       >
         <header className="record-detail-header">
@@ -83,6 +117,7 @@ export function RecordDetailDrawer({
               </span>
             ) : null}
             <button
+              ref={closeButtonRef}
               type="button"
               className="record-detail-close"
               aria-label="Close details"
@@ -95,7 +130,11 @@ export function RecordDetailDrawer({
 
         <div className="record-detail-content">
           {sections.map((section) => (
-            <section className="record-detail-section" key={section.title}>
+            <section
+              className={`record-detail-section${section.fullWidth ? " full-width" : ""}`}
+              key={section.title}
+            >
+              {section.eyebrow ? <p className="record-detail-section-eyebrow">{section.eyebrow}</p> : null}
               <h3>{section.title}</h3>
               {section.rows ? (
                 <dl>
@@ -112,7 +151,13 @@ export function RecordDetailDrawer({
             </section>
           ))}
         </div>
-      </aside>
+        <footer className="record-detail-footer">
+          <button type="button" className="secondary-button" onClick={onClose}>
+            Close
+          </button>
+          {footer ? <div className="record-detail-footer-actions">{footer}</div> : null}
+        </footer>
+      </article>
     </div>
   );
 }

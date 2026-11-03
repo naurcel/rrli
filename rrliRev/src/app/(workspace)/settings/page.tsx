@@ -14,7 +14,6 @@ export default function SettingsPage() {
       <div className="content-wrap">
         <header className="page-intro">
           <div>
-            <p className="eyebrow">SYSTEM CONFIGURATION & GOVERNANCE</p>
             <h1>Settings</h1>
             <p className="subtitle">
               Review RouteX scope boundaries, active authentication posture, and the server-enforced
@@ -33,7 +32,7 @@ export default function SettingsPage() {
           <div className="records-heading">
             <div>
               <h2>Revised RouteX System Posture</h2>
-              <p>Focused exclusively on Delivery Operations and Truck Profitability</p>
+              <p>Focused exclusively on Delivery Operations and Trucks</p>
             </div>
           </div>
 
@@ -42,12 +41,12 @@ export default function SettingsPage() {
               <div className="settings-card-icon">✓</div>
               <div className="settings-card-content">
                 <span className="settings-category">CORE SCOPE</span>
-                <h3>Delivery Operations & Truck Profitability</h3>
+                <h3>Delivery Operations & Trucks</h3>
                 <strong>Completed Trips, Multi-Store Drop-offs & PODs</strong>
                 <p>
                   Tracks client deliveries, store drop-offs per trip, itemized trip expenses
                   (diesel, tolls, entry fees, driver/helper rates & allowances), Excel import
-                  review, and truck profitability.
+                  review, and truck performance.
                 </p>
               </div>
               <span className="settings-card-state">Active</span>

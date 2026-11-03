@@ -100,7 +100,7 @@ export const ROLE_METADATA: Readonly<Record<UserRole, RoleMetadata>> = {
     accessLevelLabel: "Full Access",
     badgeTone: "success",
     summary:
-      "Full system access: manage user accounts and roles, import and review Excel trip reports, manage deliveries, multi-store drop-offs, PODs, and truck profitability.",
+      "Full system access: manage user accounts and roles, import and review Excel trip reports, manage deliveries, multi-store drop-offs, PODs, and truck performance.",
   },
   operations: {
     role: "operations",
@@ -109,7 +109,7 @@ export const ROLE_METADATA: Readonly<Record<UserRole, RoleMetadata>> = {
     accessLevelLabel: "Operations Write Access",
     badgeTone: "success",
     summary:
-      "Create and manage deliveries, manage multi-store drop-offs, import and review Excel trip reports before saving, verify PODs, and view truck profitability.",
+      "Create and manage deliveries, manage multi-store drop-offs, import and review Excel trip reports before saving, verify PODs, and view truck performance.",
   },
   finance: {
     role: "finance",
@@ -118,7 +118,7 @@ export const ROLE_METADATA: Readonly<Record<UserRole, RoleMetadata>> = {
     accessLevelLabel: "View-Only Access",
     badgeTone: "neutral",
     summary:
-      "View-only access to completed deliveries, trip expenses, truck profitability, POD verification status, and operational reports.",
+      "View-only access to completed deliveries, trip expenses, truck performance, POD verification status, and operational reports.",
   },
   hr: {
     role: "hr",
@@ -136,7 +136,7 @@ export const ROLE_METADATA: Readonly<Record<UserRole, RoleMetadata>> = {
     accessLevelLabel: "View-Only Access",
     badgeTone: "neutral",
     summary:
-      "View-only access to delivery records, POD document completeness, truck profitability summaries, and operational reports.",
+      "View-only access to delivery records, POD document completeness, truck performance summaries, and operational reports.",
   },
   customer_representative: {
     role: "customer_representative",
@@ -211,7 +211,7 @@ export const WORKSPACE_NAVIGATION_ITEMS: readonly NavigationItem[] = [
     requiredPermission: "deliveries:view",
   },
   {
-    label: "Truck Profitability",
+    label: "Trucks",
     href: "/truck-profitability",
     symbol: "\u25b1",
     section: "primary",

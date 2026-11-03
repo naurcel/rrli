@@ -58,6 +58,41 @@ function getDashboardDeliverySections(delivery: DashboardDelivery): RecordDetail
   ];
 }
 
+function buildSmoothPath(
+  points: Array<{ x: number; y: number }>,
+  bounds?: { minY: number; maxY: number },
+): string {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
+  if (points.length === 2) {
+    return `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)} L ${points[1].x.toFixed(2)},${points[1].y.toFixed(2)}`;
+  }
+
+  const clampY = (val: number) => {
+    if (!bounds) return val;
+    return Math.min(Math.max(val, bounds.minY), bounds.maxY);
+  };
+
+  let path = `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? 0 : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2 < points.length ? i + 2 : points.length - 1];
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = clampY(p1.y + (p2.y - p0.y) / 6);
+
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = clampY(p2.y - (p3.y - p1.y) / 6);
+
+    path += ` C ${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  }
+
+  return path;
+}
+
 function RevenueChart({ series, periodLabel }: { series: Array<{ date: string; revenue: number }>; periodLabel: string }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
@@ -75,7 +110,10 @@ function RevenueChart({ series, periodLabel }: { series: Array<{ date: string; r
     x: padding.left + (series.length <= 1 ? innerWidth / 2 : (index / (series.length - 1)) * innerWidth),
     y: padding.top + innerHeight - (point.revenue / ceiling) * innerHeight,
   }));
-  const line = coordinates.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
+  const line = buildSmoothPath(coordinates, {
+    minY: padding.top,
+    maxY: padding.top + innerHeight,
+  });
   const area = coordinates.length ? `${line} L ${coordinates.at(-1)?.x ?? padding.left},${padding.top + innerHeight} L ${coordinates[0]?.x ?? padding.left},${padding.top + innerHeight} Z` : "";
   const tickIndexes = Array.from(new Set([0, Math.floor((series.length - 1) / 2), series.length - 1])).filter((index) => index >= 0);
   const selectedPoint = activeIndex === null ? null : coordinates[activeIndex];

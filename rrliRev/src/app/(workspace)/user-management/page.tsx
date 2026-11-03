@@ -189,7 +189,6 @@ export default function UserManagementPage() {
       <div className="content-wrap">
         <header className="page-intro">
           <div>
-            <p className="eyebrow">ADMINISTRATION · RBAC GOVERNANCE</p>
             <h1>User Management</h1>
             <p className="subtitle">
               Provision staff accounts and assign roles across Admin, Operations, and View-Only

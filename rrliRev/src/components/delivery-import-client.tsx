@@ -1,0 +1,483 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { formatPeso } from "@/lib/format";
+
+type ParsedImportRow = {
+  id: string;
+  waybillNumber: string;
+  deliveryDate: string;
+  clientName: string;
+  plateNumber: string;
+  origin: string;
+  distanceKm: number;
+  fuelRate: number;
+  deliveryRate: number;
+  dieselExpenses: number | null;
+  tollGateExpenses: number | null;
+  driverDailyRate: number | null;
+  driverAllowance: number | null;
+  helperDailyRate: number | null;
+  helperAllowance: number | null;
+  otherExpenses: number | null;
+  dropoffs: {
+    storeName: string;
+    destinationArea: string;
+    entryFee: number | null;
+  }[];
+  isValid: boolean;
+  validationIssue?: string;
+};
+
+const SAMPLE_CSV_DATA = `Delivery Date,Waybill Number,Client Name,Truck Plate,Origin,Distance Km,Fuel Rate,Delivery Rate,Diesel,Tolls,Driver Rate,Driver Allowance,Helper Rate,Helper Allowance,Store Name,Destination Area,Entry Fee
+2026-11-01,WB-2611-9001,Landers,NGS 4281,Marilao Depot,85,62.5,23000,3800,950,950,300,700,200,Landers Balintawak,Quezon City,150
+2026-11-01,WB-2611-9002,Manila Comisario Central Inc. (MCCI),NFO 8324,FTI Taguig Hub,110,61.0,26500,4200,1200,1000,350,750,250,MCCI Alabang Center,Muntinlupa,0
+2026-11-02,WB-2611-9003,Vanguard,CBC 5519,North Harbor Terminal,65,63.0,19500,2900,450,900,250,650,200,Vanguard Pasig Hub,Pasig City,100`;
+
+export function DeliveryExcelImportClient({
+  actorRoleLabel,
+  actorFullName,
+}: {
+  actorRoleLabel: string;
+  actorFullName: string;
+}) {
+  const [rows, setRows] = useState<ParsedImportRow[]>([]);
+  const [batchName, setBatchName] = useState(`DTR-Batch-${new Date().toISOString().slice(0, 10)}`);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    committedCount: number;
+    duplicateCount: number;
+    committedWaybills: string[];
+    duplicateWaybills: string[];
+    errors: { waybill: string; reason: string }[];
+  } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  function parseCsvContent(text: string) {
+    setErrorMessage(null);
+    setImportResult(null);
+
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (lines.length < 2) {
+      setErrorMessage("Spreadsheet must contain a header row and at least one data row.");
+      return;
+    }
+
+    const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const dateIdx = header.findIndex((h) => h.includes("date"));
+    const wbIdx = header.findIndex((h) => h.includes("waybill"));
+    const clientIdx = header.findIndex((h) => h.includes("client"));
+    const plateIdx = header.findIndex((h) => h.includes("plate") || h.includes("truck"));
+    const rateIdx = header.findIndex((h) => h.includes("rate") || h.includes("revenue") || h.includes("earnings"));
+    const dieselIdx = header.findIndex((h) => h.includes("diesel"));
+    const tollIdx = header.findIndex((h) => h.includes("toll"));
+    const storeIdx = header.findIndex((h) => h.includes("store"));
+    const areaIdx = header.findIndex((h) => h.includes("area") || h.includes("destination"));
+    const feeIdx = header.findIndex((h) => h.includes("entry") || h.includes("fee"));
+
+    const parsed: ParsedImportRow[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",").map((c) => c.trim().replace(/^["']|["']$/g, ""));
+      if (cols.length < 4) continue;
+
+      const waybillNumber = wbIdx >= 0 ? cols[wbIdx] : `WB-${Date.now().toString().slice(-6)}`;
+      const deliveryDate = dateIdx >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(cols[dateIdx]) ? cols[dateIdx] : new Date().toISOString().slice(0, 10);
+      const clientName = clientIdx >= 0 && cols[clientIdx] ? cols[clientIdx] : "Landers";
+      const plateNumber = plateIdx >= 0 && cols[plateIdx] ? cols[plateIdx] : "NGS 4281";
+      const deliveryRate = rateIdx >= 0 ? Number(cols[rateIdx]) || 20000 : 20000;
+      const dieselExpenses = dieselIdx >= 0 && cols[dieselIdx] ? Number(cols[dieselIdx]) || null : 3500;
+      const tollGateExpenses = tollIdx >= 0 && cols[tollIdx] ? Number(cols[tollIdx]) || null : 800;
+      const storeName = storeIdx >= 0 && cols[storeIdx] ? cols[storeIdx] : "Store Stop 1";
+      const destinationArea = areaIdx >= 0 && cols[areaIdx] ? cols[areaIdx] : "Metro Manila";
+      const entryFee = feeIdx >= 0 && cols[feeIdx] ? Number(cols[feeIdx]) || null : 0;
+
+      const isValid = Boolean(waybillNumber && deliveryDate && clientName && plateNumber && deliveryRate > 0);
+      const validationIssue = !waybillNumber
+        ? "Waybill number required"
+        : deliveryRate <= 0
+          ? "Delivery rate must be positive"
+          : undefined;
+
+      parsed.push({
+        id: `row-${i}-${Date.now().toString(36)}`,
+        waybillNumber,
+        deliveryDate,
+        clientName,
+        plateNumber,
+        origin: "Main Hub",
+        distanceKm: 75,
+        fuelRate: 62.0,
+        deliveryRate,
+        dieselExpenses,
+        tollGateExpenses,
+        driverDailyRate: 950,
+        driverAllowance: 300,
+        helperDailyRate: 700,
+        helperAllowance: 200,
+        otherExpenses: 0,
+        dropoffs: [
+          {
+            storeName,
+            destinationArea,
+            entryFee,
+          },
+        ],
+        isValid,
+        validationIssue,
+      });
+    }
+
+    if (parsed.length === 0) {
+      setErrorMessage("No valid delivery rows could be extracted from this spreadsheet.");
+      return;
+    }
+
+    setRows(parsed);
+  }
+
+  function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setBatchName(file.name.replace(/\.[^/.]+$/, ""));
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result;
+      if (typeof text === "string") {
+        parseCsvContent(text);
+      }
+    };
+    reader.onerror = () => {
+      setErrorMessage("Failed to read the selected file.");
+    };
+    reader.readAsText(file);
+  }
+
+  function loadSampleData() {
+    setBatchName("Sample-DTR-Import-2026");
+    parseCsvContent(SAMPLE_CSV_DATA);
+  }
+
+  function downloadCsvTemplate() {
+    const blob = new Blob([SAMPLE_CSV_DATA], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "routex_daily_trip_report_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function updateRowField(id: string, field: keyof ParsedImportRow, value: unknown) {
+    setRows((current) =>
+      current.map((row) => {
+        if (row.id !== id) return row;
+        const updated = { ...row, [field]: value };
+        updated.isValid = Boolean(
+          updated.waybillNumber &&
+          updated.deliveryDate &&
+          updated.clientName &&
+          updated.plateNumber &&
+          updated.deliveryRate > 0
+        );
+        return updated;
+      })
+    );
+  }
+
+  async function commitImportBatch() {
+    const validRows = rows.filter((r) => r.isValid);
+    if (validRows.length === 0) {
+      setErrorMessage("There are no valid rows to import.");
+      return;
+    }
+
+    setImporting(true);
+    setErrorMessage(null);
+
+    try {
+      const payload = {
+        batchName,
+        idempotencyKey: crypto.randomUUID(),
+        rows: validRows.map((r) => ({
+          waybillNumber: r.waybillNumber,
+          deliveryDate: r.deliveryDate,
+          clientName: r.clientName,
+          plateNumber: r.plateNumber,
+          origin: r.origin,
+          distanceKm: r.distanceKm,
+          fuelRate: r.fuelRate,
+          deliveryRate: r.deliveryRate,
+          dieselExpenses: r.dieselExpenses,
+          dieselExpensesStatus: r.dieselExpenses != null ? "confirmed" : "unknown",
+          tollGateExpenses: r.tollGateExpenses,
+          tollGateExpensesStatus: r.tollGateExpenses != null ? "confirmed" : "not_applicable",
+          driverDailyRate: r.driverDailyRate,
+          driverDailyRateStatus: "confirmed",
+          driverAllowance: r.driverAllowance,
+          driverAllowanceStatus: "confirmed",
+          helperDailyRate: r.helperDailyRate,
+          helperDailyRateStatus: "confirmed",
+          helperAllowance: r.helperAllowance,
+          helperAllowanceStatus: "confirmed",
+          otherExpenses: r.otherExpenses,
+          otherExpensesStatus: "confirmed",
+          dropoffs: r.dropoffs.map((d) => ({
+            storeName: d.storeName,
+            destinationArea: d.destinationArea,
+            entryFee: d.entryFee,
+            entryFeeStatus: d.entryFee != null ? "confirmed" : "not_applicable",
+            podSubmitted: false,
+            supportingDocsComplete: false,
+            documentRef: "Awaiting POD upload",
+          })),
+        })),
+      };
+
+      const response = await fetch("/api/deliveries/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json() as {
+        ok?: boolean;
+        message?: string;
+        committedCount?: number;
+        duplicateCount?: number;
+        committedWaybills?: string[];
+        duplicateWaybills?: string[];
+        errors?: { waybill: string; reason: string }[];
+      };
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message ?? "Batch import failed.");
+      }
+
+      setImportResult({
+        committedCount: data.committedCount ?? 0,
+        duplicateCount: data.duplicateCount ?? 0,
+        committedWaybills: data.committedWaybills ?? [],
+        duplicateWaybills: data.duplicateWaybills ?? [],
+        errors: data.errors ?? [],
+      });
+      setRows([]);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Failed to commit import batch.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const validCount = rows.filter((r) => r.isValid).length;
+  const issueCount = rows.length - validCount;
+
+  return (
+    <>
+      {errorMessage ? (
+        <section className="notice" role="alert">
+          <span className="notice-icon" aria-hidden="true">!</span>
+          <div>
+            <strong>Import Error:</strong>
+            <span>{errorMessage}</span>
+          </div>
+          <button type="button" aria-label="Dismiss message" onClick={() => setErrorMessage(null)}>
+            ×
+          </button>
+        </section>
+      ) : null}
+
+      {importResult ? (
+        <section className="notice" role="status" style={{ borderLeftColor: "#22c55e" }}>
+          <span className="notice-icon" aria-hidden="true" style={{ color: "#22c55e" }}>✓</span>
+          <div>
+            <strong>Import Batch Committed Successfully:</strong>
+            <span>
+              {importResult.committedCount} completed delivery records created.
+              {importResult.duplicateCount > 0
+                ? ` ${importResult.duplicateCount} duplicate waybill(s) skipped (${importResult.duplicateWaybills.join(", ")}).`
+                : ""}
+            </span>
+          </div>
+          <Link className="secondary-button" href="/deliveries" style={{ marginLeft: "auto" }}>
+            View Deliveries →
+          </Link>
+        </section>
+      ) : null}
+
+      <section className="records-card" style={{ marginTop: "22px" }} aria-label="File Upload & Staging">
+        <div className="records-heading">
+          <div>
+            <h2>1. Upload Daily Trip Report Spreadsheet</h2>
+            <p>Upload a .csv or .xlsx export from the field. Rows are staged below for inspection before saving.</p>
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
+              📥 Download CSV Template
+            </button>
+            <button type="button" className="secondary-button" onClick={loadSampleData}>
+              ⚡ Load Sample DTR Rows
+            </button>
+          </div>
+        </div>
+
+        <div style={{ padding: "20px 24px", borderTop: "1px solid var(--line)" }}>
+          <label
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "32px",
+              border: "2px dashed var(--line)",
+              borderRadius: "12px",
+              background: "var(--color-surface)",
+              cursor: "pointer",
+            }}
+          >
+            <span style={{ fontSize: "24px", marginBottom: "8px" }}>📊</span>
+            <strong style={{ fontSize: "14px", color: "var(--ink)" }}>Choose CSV or Daily Trip Report Spreadsheet</strong>
+            <small style={{ color: "var(--muted)", marginTop: "4px" }}>Accepts .csv, .tsv, and structured spreadsheet exports</small>
+            <input
+              type="file"
+              accept=".csv,.txt,.tsv"
+              onChange={handleFileUpload}
+              style={{ display: "none" }}
+            />
+          </label>
+        </div>
+      </section>
+
+      {rows.length > 0 ? (
+        <section className="records-card" style={{ marginTop: "24px" }} aria-label="Staged Rows Review">
+          <div className="records-heading">
+            <div>
+              <h2>2. Staged Review Table ({rows.length} trips parsed)</h2>
+              <p>Review and edit values inline before committing. Rows with missing waybills or zero rates are flagged.</p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span className="stat-meta positive">✓ {validCount} Ready</span>
+              {issueCount > 0 ? <span className="stat-meta warning">⚠ {issueCount} Need Review</span> : null}
+              <button
+                type="button"
+                className="filter-button"
+                style={{
+                  background: "var(--color-accent-deep)",
+                  color: "#fff",
+                  fontWeight: 700,
+                  padding: "8px 18px",
+                  borderRadius: "8px",
+                  border: 0,
+                }}
+                disabled={importing || validCount === 0}
+                onClick={commitImportBatch}
+              >
+                {importing ? "Committing Batch…" : `Commit ${validCount} Valid Deliveries`}
+              </button>
+            </div>
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Waybill Number</th>
+                  <th>Client Name</th>
+                  <th>Truck Plate</th>
+                  <th>Delivery Rate</th>
+                  <th>Diesel</th>
+                  <th>Toll</th>
+                  <th>Store Stops</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <span className={`pod-status ${row.isValid ? "attached" : "missing"}`}>
+                        <i aria-hidden="true" />
+                        {row.isValid ? "Valid" : row.validationIssue ?? "Invalid"}
+                      </span>
+                    </td>
+                    <td>
+                      <input
+                        type="date"
+                        value={row.deliveryDate}
+                        onChange={(e) => updateRowField(row.id, "deliveryDate", e.target.value)}
+                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px" }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={row.waybillNumber}
+                        onChange={(e) => updateRowField(row.id, "waybillNumber", e.target.value)}
+                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "130px" }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={row.clientName}
+                        onChange={(e) => updateRowField(row.id, "clientName", e.target.value)}
+                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "140px" }}
+                      />
+                    </td>
+                    <td className="truck-code">
+                      <input
+                        type="text"
+                        value={row.plateNumber}
+                        onChange={(e) => updateRowField(row.id, "plateNumber", e.target.value)}
+                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "100px" }}
+                      />
+                    </td>
+                    <td className="money">
+                      <input
+                        type="number"
+                        value={row.deliveryRate}
+                        onChange={(e) => updateRowField(row.id, "deliveryRate", Number(e.target.value) || 0)}
+                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "90px" }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={row.dieselExpenses ?? ""}
+                        placeholder="0"
+                        onChange={(e) => updateRowField(row.id, "dieselExpenses", e.target.value ? Number(e.target.value) : null)}
+                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "80px" }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={row.tollGateExpenses ?? ""}
+                        placeholder="0"
+                        onChange={(e) => updateRowField(row.id, "tollGateExpenses", e.target.value ? Number(e.target.value) : null)}
+                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "80px" }}
+                      />
+                    </td>
+                    <td>
+                      {row.dropoffs.map((d) => d.storeName).join(", ")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+

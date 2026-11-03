@@ -138,16 +138,123 @@ export function presetRange(
   return { startDate: addDays(today, -(days - 1)), endDate: today };
 }
 
+const DATE_RANGE_STORAGE_KEY = "routex.global-date-range.v1";
+const DATE_RANGE_CHANGED_EVENT = "routex:date-range-changed";
+
+let memoryCachedRange: DateRange | null = null;
+let memoryInitialized = false;
+
+function serializeDateRange(range: DateRange): string {
+  return JSON.stringify({
+    startDate: range.startDate ? range.startDate.toISOString() : null,
+    endDate: range.endDate ? range.endDate.toISOString() : null,
+    isAllTime: !range.startDate && !range.endDate,
+  });
+}
+
+function parseStoredDateRange(raw: string): DateRange | null {
+  try {
+    const parsed = JSON.parse(raw) as {
+      startDate?: string | null;
+      endDate?: string | null;
+      isAllTime?: boolean;
+    };
+    if (parsed.isAllTime) {
+      return { startDate: null, endDate: null };
+    }
+    const start = parsed.startDate ? new Date(parsed.startDate) : null;
+    const end = parsed.endDate ? new Date(parsed.endDate) : null;
+    if (start && isNaN(start.getTime())) return null;
+    if (end && isNaN(end.getTime())) return null;
+    if (start || end) {
+      return { startDate: start, endDate: end };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getStoredDateRange(): DateRange | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(DATE_RANGE_STORAGE_KEY);
+    if (!raw) return null;
+    return parseStoredDateRange(raw);
+  } catch {
+    return null;
+  }
+}
+
 const DateRangeContext = createContext<DateRangeContextValue | null>(null);
 
 export function GlobalDateRangeProvider({ children }: { children: ReactNode }) {
-  const [range, setRange] = useState<DateRange>({
-    startDate: null,
-    endDate: null,
+  const [range, setRangeState] = useState<DateRange>(() => {
+    if (memoryCachedRange) {
+      return memoryCachedRange;
+    }
+    const stored = getStoredDateRange();
+    if (stored) {
+      memoryCachedRange = stored;
+      memoryInitialized = true;
+      return stored;
+    }
+    const fallback = presetRange("last7");
+    memoryCachedRange = fallback;
+    return fallback;
   });
 
+  const setRange = (next: DateRange | ((prev: DateRange) => DateRange)) => {
+    setRangeState((prev) => {
+      const resolved = typeof next === "function" ? next(prev) : next;
+      memoryCachedRange = resolved;
+      memoryInitialized = true;
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(DATE_RANGE_STORAGE_KEY, serializeDateRange(resolved));
+          window.dispatchEvent(new CustomEvent(DATE_RANGE_CHANGED_EVENT, { detail: resolved }));
+        } catch {
+          // Ignore storage errors
+        }
+      }
+      return resolved;
+    });
+  };
+
   useEffect(() => {
-    setRange(presetRange("last7"));
+    if (!memoryInitialized) {
+      const stored = getStoredDateRange();
+      if (stored) {
+        memoryCachedRange = stored;
+        memoryInitialized = true;
+        setRangeState(stored);
+      }
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === DATE_RANGE_STORAGE_KEY && event.newValue) {
+        const parsed = parseStoredDateRange(event.newValue);
+        if (parsed) {
+          memoryCachedRange = parsed;
+          setRangeState(parsed);
+        }
+      }
+    };
+
+    const handleCustomEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<DateRange>;
+      if (customEvent.detail) {
+        setRangeState(customEvent.detail);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(DATE_RANGE_CHANGED_EVENT, handleCustomEvent);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(DATE_RANGE_CHANGED_EVENT, handleCustomEvent);
+    };
   }, []);
 
   return (

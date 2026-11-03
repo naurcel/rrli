@@ -102,7 +102,19 @@ export async function POST(request: Request) {
     }
   }
 
-  // Server-verified authentication against server-side account registry
+  if (process.env.NODE_ENV === "production" && !isSupabaseConfigured()) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "PRODUCTION_AUTH_UNCONFIGURED",
+        message:
+          "Production authentication service is not configured. External Supabase connection is required.",
+      },
+      { status: 503 },
+    );
+  }
+
+  // Server-verified authentication against server-side account registry (development/testing only)
   const verification = verifyServerAccountCredentials(email, password);
 
   if (!verification.ok) {

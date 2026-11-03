@@ -4,7 +4,12 @@ import * as z from "zod";
 import { parseDeliveryListQuery } from "@/features/deliveries/delivery-query";
 import { buildDeliveryTripRecord } from "@/features/deliveries/delivery-domain";
 import { SMALL_MOCK_DATABASE } from "@/features/deliveries/small-mock-database";
-import { listSmallMockDeliveryRecords } from "@/features/deliveries/small-mock-repository";
+import {
+  correctSmallMockDelivery,
+  finalizeSmallMockDelivery,
+  listSmallMockDeliveryRecords,
+  updateSmallMockPodState,
+} from "@/features/deliveries/small-mock-repository";
 import { listDeliveryRecords } from "@/features/deliveries/server/delivery-repository";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
@@ -94,16 +99,16 @@ const verifyPodStopSchema = z.object({
 
 const finalizeFinancialsSchema = z.object({
   action: z.literal("finalize_financials"),
-  deliveryId: z.string().uuid(),
+  deliveryId: z.string().trim().min(1),
   expectedVersion: z.number().int().positive(),
-  idempotencyKey: z.string().uuid(),
+  idempotencyKey: z.string().trim().default(() => crypto.randomUUID()),
 });
 
 const correctFinancialsSchema = z.object({
   action: z.literal("correct_financials"),
-  deliveryId: z.string().uuid(),
+  deliveryId: z.string().trim().min(1),
   expectedVersion: z.number().int().positive(),
-  idempotencyKey: z.string().uuid(),
+  idempotencyKey: z.string().trim().default(() => crypto.randomUUID()),
   reason: z.string().trim().min(5),
   changes: z.record(z.string(), z.unknown()),
 });
@@ -291,17 +296,6 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json(
-      {
-        ok: false,
-        code: "DATABASE_NOT_CONFIGURED",
-        message: "POD verification requires a configured Supabase database.",
-      },
-      { status: 503 },
-    );
-  }
-
   const rawBody = await request.json().catch(() => null);
   const parsed = deliveryMutationSchema.safeParse(rawBody);
   if (!parsed.success) {
@@ -309,7 +303,7 @@ export async function PATCH(request: Request) {
       {
         ok: false,
         code: "VALIDATION_ERROR",
-        message: parsed.error.issues[0]?.message ?? "Invalid POD verification payload.",
+        message: parsed.error.issues[0]?.message ?? "Invalid delivery update payload.",
       },
       { status: 400 },
     );
@@ -324,8 +318,60 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const supabase = await createServerSupabaseClient();
   const mutation = parsed.data;
+
+  if (!isSupabaseConfigured()) {
+    const mockResult = mutation.action === "update_pod"
+      ? updateSmallMockPodState({
+          deliveryId: mutation.deliveryId,
+          dropoffId: mutation.dropoffId,
+          expectedVersion: mutation.expectedVersion,
+          podSubmitted: mutation.podSubmitted,
+          supportingDocsComplete: mutation.supportingDocsComplete,
+          documentRef: mutation.documentRef,
+        })
+      : mutation.action === "finalize_financials"
+        ? finalizeSmallMockDelivery({
+            deliveryId: mutation.deliveryId,
+            expectedVersion: mutation.expectedVersion,
+          })
+        : correctSmallMockDelivery({
+            deliveryId: mutation.deliveryId,
+            expectedVersion: mutation.expectedVersion,
+            changes: mutation.changes,
+            reason: mutation.reason,
+          });
+
+    if (!mockResult.ok) {
+      const isNotFound = mockResult.error.includes("NOT_FOUND");
+      const isConflict = mockResult.error.includes("VERSION_CONFLICT");
+      const isIncomplete = mockResult.error.includes("FINANCIALS_INCOMPLETE");
+      return NextResponse.json(
+        {
+          ok: false,
+          code: isNotFound
+            ? "NOT_FOUND"
+            : isConflict
+              ? "VERSION_CONFLICT"
+              : isIncomplete
+                ? "FINANCIALS_INCOMPLETE"
+                : "DELIVERY_UPDATE_FAILED",
+          message: mockResult.error,
+          preserveInput: true,
+        },
+        { status: isNotFound ? 404 : isConflict ? 409 : 400 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      deliveryId: mutation.deliveryId,
+      result: mockResult,
+      changedBy: { id: auth.actor.id, email: auth.actor.email, role: auth.actor.role },
+    });
+  }
+
+  const supabase = await createServerSupabaseClient();
   const response = mutation.action === "update_pod"
     ? await supabase.rpc("update_dropoff_document_state", {
         p_delivery_id: mutation.deliveryId,

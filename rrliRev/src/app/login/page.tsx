@@ -327,7 +327,7 @@ export default function LoginPage() {
             alt="RouteX"
           />
           <h2 id="sign-in-title">
-            {viewMode === "login" ? "Sign in" : "Forgot password"}
+            {viewMode === "login" ? "Log in" : "Forgot password"}
           </h2>
 
           {viewMode === "login" ? (
@@ -411,7 +411,7 @@ export default function LoginPage() {
                 type="submit"
                 disabled={status === "submitting"}
               >
-                {status === "submitting" ? "Signing in…" : "Sign in"}
+                {status === "submitting" ? "Logging in…" : "Log in"}
               </button>
             </form>
           ) : (
@@ -440,7 +440,7 @@ export default function LoginPage() {
                     setMessage("");
                   }}
                 >
-                  Back to sign in
+                  Back to log in
                 </button>
               </div>
 

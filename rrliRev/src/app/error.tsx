@@ -15,7 +15,7 @@ export default function GlobalErrorPage({
         <p className="eyebrow">APPLICATION BOUNDARY</p>
         <h1>Something interrupted this view</h1>
         <p>
-          Your delivery records and truck profitability data remain intact. Retry the action or
+          Your delivery records and truck data remain intact. Retry the action or
           return to the dashboard.
         </p>
         <div className="fallback-actions">

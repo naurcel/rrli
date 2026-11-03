@@ -1,6 +1,6 @@
 import { ViewTransition } from "react";
 
-export default function Template({
+export default function WorkspaceTemplate({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -15,4 +15,3 @@ export default function Template({
     </ViewTransition>
   );
 }
-
