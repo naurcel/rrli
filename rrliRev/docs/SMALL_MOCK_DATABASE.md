@@ -10,12 +10,12 @@ When Supabase is not configured, the delivery list and profitability-summary rou
 
 | Record type | Count | Notes |
 | --- | ---: | --- |
-| Clients | 3 | LANDERS, Manila Comisario Central Inc. (MCCI), VANGUARD |
-| Trucks | 3 | One 10-wheeler and two 6-wheelers |
+| Clients | 3 | Landers, Manila Comisario Central Inc. (MCCI), Vanguard |
+| Trucks | 6 | Two 10-wheelers, three 6-wheelers, and one 4-wheeler |
 | Drivers | 2 | Fictional personnel |
 | Helpers | 2 | Fictional personnel |
-| Completed deliveries | 6 | Exactly two per client |
-| Drop-offs | 9 | Three single-destination trips and three two-stop trips |
+| Completed deliveries | 9 | Exactly three per client |
+| Drop-offs | 12 | Six single-destination trips and three two-stop trips |
 
 All deliveries occur within the current seven-day window of October 27 through November 2, 2026. Waybills, routes, personnel, storage paths, and filenames are fictional. Sample filenames include `SAMPLE-NOT-SIGNED` so they cannot be mistaken for operational documents.
 
@@ -23,12 +23,15 @@ All deliveries occur within the current seven-day window of October 27 through N
 
 | Date | Client | Stops | Financial/POD scenario |
 | --- | --- | ---: | --- |
-| October 27 | LANDERS | 1 | Normal finalized trip; POD verified |
-| October 28 | LANDERS | 2 | Confirmed zero other expense; POD submitted |
+| October 27 | Landers | 1 | Normal finalized trip; POD verified |
+| October 28 | Landers | 2 | Confirmed zero other expense; POD submitted |
+| October 28 | Landers | 1 | Finalized compact-truck urban trip; POD verified |
 | October 29 | MCCI | 1 | Entry fee explicitly not applicable; POD missing |
 | October 30 | MCCI | 2 | Low but positive margin; POD rejected |
-| October 31 | VANGUARD | 1 | Confirmed zero toll; POD verified |
-| November 2 | VANGUARD | 2 | Unknown toll keeps finances incomplete; POD submitted |
+| October 31 | Vanguard | 1 | Confirmed zero toll; POD verified |
+| November 1 | MCCI | 1 | Finalized frozen delivery; POD submitted |
+| November 1 | Vanguard | 1 | Finalized multi-temperature trip; POD verified |
+| November 2 | Vanguard | 2 | Unknown toll keeps finances incomplete; POD submitted |
 
 Revenue remains trip-level. Store entry fees are derived from the delivery's child drop-offs. Total expenses, net income, and profit margin are calculated by the centralized delivery-domain functions and are checked again against database-generated values after seeding. The incomplete trip is excluded from confirmed profitability summaries.
 
