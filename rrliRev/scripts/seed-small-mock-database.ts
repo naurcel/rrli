@@ -111,7 +111,6 @@ async function run(): Promise<void> {
       id: truck.id,
       plate_number: truck.plateNumber,
       truck_type: truck.truckType,
-      truck_temperature: truck.truckTemperature,
       is_active: true,
     })),
     { onConflict: "id" },

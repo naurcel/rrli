@@ -6,6 +6,7 @@ import {
 } from "./delivery-domain.ts";
 import type { DeliveryListQuery } from "./delivery-query.ts";
 import { SMALL_MOCK_DATABASE, type SmallMockDelivery } from "./small-mock-database.ts";
+import { getFleetTrucks } from "./truck-registry.ts";
 import type {
   DeliveryLedgerItem,
   DeliveryListResult,
@@ -125,7 +126,7 @@ export function listSmallMockDeliveryRecords(input: DeliveryListQuery): Delivery
         id: client.id,
         label: client.name,
       })),
-      trucks: SMALL_MOCK_DATABASE.trucks.map((truck) => ({
+      trucks: getFleetTrucks().map((truck) => ({
         id: truck.id,
         label: truck.plateNumber,
       })),
@@ -150,7 +151,7 @@ export function getSmallMockProfitabilitySummary(input: {
   const expenses = eligible.reduce((total, delivery) => total + (delivery.totalExpenses ?? 0), 0);
   const netIncome = eligible.reduce((total, delivery) => total + (delivery.netIncome ?? 0), 0);
   const truckIds = new Map<string, string>(
-    SMALL_MOCK_DATABASE.trucks.map((truck) => [truck.plateNumber, truck.id]),
+    getFleetTrucks().map((truck) => [truck.plateNumber, truck.id]),
   );
 
   return {

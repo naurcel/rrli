@@ -10,6 +10,7 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery-repository";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import { saveBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
+import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
 import type { ExpenseResolutionStatus, TruckTemperature } from "@/features/deliveries/delivery-domain";
 import { formatPeso } from "@/lib/format";
 
@@ -95,9 +96,16 @@ export default function NewCompletedDeliveryPage() {
           throw new Error(payload.message ?? "Unable to load active clients and trucks.");
         }
         const nextReferences = payload.filters ?? { clients: [], trucks: [] };
-        setReferences(nextReferences);
-        setClientName(nextReferences.clients[0]?.label ?? "");
-        setPlateNumber(nextReferences.trucks[0]?.label ?? "");
+        const localTrucks = readBrowserPreviewTrucks().map((t) => ({ id: t.id, label: t.plateNumber }));
+        const existingPlates = new Set(nextReferences.trucks.map((t) => t.label.toUpperCase()));
+        const mergedTrucks = [
+          ...nextReferences.trucks,
+          ...localTrucks.filter((t) => !existingPlates.has(t.label.toUpperCase())),
+        ];
+        const mergedReferences = { ...nextReferences, trucks: mergedTrucks };
+        setReferences(mergedReferences);
+        setClientName(mergedReferences.clients[0]?.label ?? "");
+        setPlateNumber(mergedReferences.trucks[0]?.label ?? "");
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;

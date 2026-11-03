@@ -437,6 +437,10 @@ export default function DashboardPage() {
             label: "Truck & Type",
             value: `${selectedTrip.plateNumber} (${selectedTrip.truckType})`,
           },
+          {
+            label: "Ownership & Rate",
+            value: `${selectedTrip.truckOwnership} · ${selectedTrip.rateBasis}`,
+          },
           { label: "Temperature", value: selectedTrip.truckTemperature },
           { label: "Origin", value: selectedTrip.origin },
           {
@@ -586,9 +590,9 @@ export default function DashboardPage() {
             aria-label="Delivery profitability summary"
           >
             <Link
-              className="stat-card stat-card-link"
+              className="stat-card stat-card-link ui-tooltip"
               href="/deliveries"
-              title="View completed delivery earnings & records breakdown"
+              data-tooltip="View completed delivery earnings and records"
             >
               <span className="stat-label">TOTAL DELIVERY EARNINGS</span>
               <strong>{formatPeso(totals.earnings)}</strong>
@@ -602,9 +606,9 @@ export default function DashboardPage() {
             </Link>
 
             <Link
-              className="stat-card stat-card-link"
+              className="stat-card stat-card-link ui-tooltip"
               href="/reports?tab=truck-profitability"
-              title="View itemized operational & trip expense reports breakdown"
+              data-tooltip="View itemized trip expenses"
             >
               <span className="stat-label">TOTAL TRIP EXPENSES</span>
               <strong>{formatPeso(totals.expenses)}</strong>
@@ -614,9 +618,9 @@ export default function DashboardPage() {
             </Link>
 
             <Link
-              className="stat-card stat-card-link"
+              className="stat-card stat-card-link ui-tooltip"
               href="/truck-profitability"
-              title="View truck net profit performance"
+              data-tooltip="View truck net profit performance"
             >
               <span className="stat-label">NET PROFIT</span>
               <strong>{formatPeso(totals.netIncome)}</strong>
@@ -638,9 +642,9 @@ export default function DashboardPage() {
             </Link>
 
             <Link
-              className="stat-card stat-card-link"
+              className="stat-card stat-card-link ui-tooltip"
               href="/deliveries"
-              title="View completed deliveries"
+              data-tooltip="View completed deliveries"
             >
               <span className="stat-label">TOTAL DELIVERIES</span>
               <strong>{totals.totalTrips}</strong>

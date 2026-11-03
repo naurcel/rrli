@@ -117,6 +117,8 @@ export async function POST(request: Request) {
         plateNumber: truck.plateNumber,
         truckType: truck.truckType,
         truckTemperature: row.truckTemperature,
+        truckOwnership: truck.ownershipType,
+        rateBasis: truck.rateBasis,
         origin: row.origin,
         distanceKm: row.distanceKm,
         fuelRate: row.fuelRate,

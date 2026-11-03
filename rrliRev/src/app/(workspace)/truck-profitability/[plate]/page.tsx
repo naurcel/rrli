@@ -11,6 +11,8 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { TruckPhoto } from "@/components/truck-photo";
 import { summarizeTruckProfitability } from "@/features/deliveries/delivery-domain";
+import { getFleetTrucks } from "@/features/deliveries/truck-registry";
+import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import { formatPercent, formatPeso } from "@/lib/format";
 
@@ -46,6 +48,23 @@ export default function TruckProfilePage({
       ) ?? null,
     [deliveries, normalizedPlate],
   );
+
+  const registeredTruck = useMemo(() => {
+    const all = [...getFleetTrucks(), ...readBrowserPreviewTrucks()];
+    return all.find((candidate) => candidate.plateNumber.toUpperCase() === normalizedPlate) ?? null;
+  }, [normalizedPlate]);
+
+  const activeTruck = truck ?? (registeredTruck ? {
+    plateNumber: registeredTruck.plateNumber,
+    truckType: registeredTruck.truckType,
+    completedTrips: 0,
+    totalEarnings: 0,
+    totalExpenses: 0,
+    netProfit: 0,
+    marginPercent: null,
+    totalStoresServed: 0,
+    totalDistanceKm: 0,
+  } : null);
 
   const sortedTruckTrips = useMemo(() => {
     const multiplier = historySort.direction === "asc" ? 1 : -1;
@@ -87,26 +106,26 @@ export default function TruckProfilePage({
             <span className="notice-icon" aria-hidden="true">!</span>
             <div><strong>Truck profile unavailable:</strong><span>{error}</span></div>
           </section>
-        ) : !truck ? (
+        ) : !activeTruck ? (
           <section className="fallback-panel truck-profile-unavailable">
             <h1>Truck profile unavailable</h1>
-            <p>No finalized deliveries for {normalizedPlate} are available in the selected date range.</p>
+            <p>No fleet record or finalized deliveries for {normalizedPlate} were found.</p>
             <Link className="fallback-link" href="/truck-profitability">Back to trucks</Link>
           </section>
         ) : (
           <>
             <header className="page-intro truck-profile-page-intro">
               <div>
-                <h1>{truck.plateNumber}</h1>
+                <h1>{activeTruck.plateNumber}</h1>
                 <p className="subtitle">
-                  {truck.truckType} · {formatDateRange(range)}
+                  {activeTruck.truckType} · {formatDateRange(range)}
                 </p>
               </div>
             </header>
 
             <section className="truck-profile-hero" aria-label="Truck profile overview">
               <article className="records-card truck-profile-visual">
-                <TruckPhoto plateNumber={truck.plateNumber} editable />
+                <TruckPhoto plateNumber={activeTruck.plateNumber} editable />
               </article>
 
               <article className="records-card truck-profile-card truck-profile-availability">
@@ -117,11 +136,11 @@ export default function TruckProfilePage({
                   </div>
                 </div>
                 <div className="truck-performance-kpis" aria-label="Truck performance metrics">
-                  <div><span>Total deliveries</span><strong>{truck.completedTrips}</strong></div>
-                  <div><span>Revenue</span><strong>{formatPeso(truck.totalEarnings)}</strong></div>
-                  <div><span>Total expenses</span><strong>{formatPeso(truck.totalExpenses)}</strong></div>
-                  <div><span>Net profit</span><strong className={truck.netProfit < 0 ? "warning" : undefined}>{formatPeso(truck.netProfit)}</strong></div>
-                  <div><span>Profit margin</span><strong className={truck.netProfit < 0 ? "warning" : undefined}>{formatPercent(truck.marginPercent)}</strong></div>
+                  <div><span>Total deliveries</span><strong>{activeTruck.completedTrips}</strong></div>
+                  <div><span>Revenue</span><strong>{formatPeso(activeTruck.totalEarnings)}</strong></div>
+                  <div><span>Total expenses</span><strong>{formatPeso(activeTruck.totalExpenses)}</strong></div>
+                  <div><span>Net profit</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPeso(activeTruck.netProfit)}</strong></div>
+                  <div><span>Profit margin</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPercent(activeTruck.marginPercent)}</strong></div>
                 </div>
               </article>
 
@@ -133,10 +152,10 @@ export default function TruckProfilePage({
                   </div>
                 </div>
                 <dl className="truck-profile-list">
-                  <div><dt>Plate number</dt><dd>{truck.plateNumber}</dd></div>
-                  <div><dt>Vehicle type</dt><dd>{truck.truckType}</dd></div>
-                  <div><dt>Store drop-offs</dt><dd>{truck.totalStoresServed}</dd></div>
-                  <div><dt>Total distance</dt><dd>{truck.totalDistanceKm} km</dd></div>
+                  <div><dt>Plate number</dt><dd>{activeTruck.plateNumber}</dd></div>
+                  <div><dt>Vehicle type</dt><dd>{activeTruck.truckType}</dd></div>
+                  <div><dt>Store drop-offs</dt><dd>{activeTruck.totalStoresServed}</dd></div>
+                  <div><dt>Total distance</dt><dd>{activeTruck.totalDistanceKm} km</dd></div>
                 </dl>
               </article>
             </section>
@@ -148,41 +167,48 @@ export default function TruckProfilePage({
                   <p>{truckTrips.length} deliver{truckTrips.length === 1 ? "y" : "ies"} in this period.</p>
                 </div>
               </div>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                      <SortableTableHeader label="Client" sortKey="client" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
-                      <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                      <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                      <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                      <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                      <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                      <SortableTableHeader label="POD Status" sortKey="pod" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedTruckTrips.map((trip) => (
-                      <tr key={trip.id}>
-                        <td><strong>{trip.waybillNumber}</strong><br /><small>{trip.deliveryDate}</small></td>
-                        <td>{trip.clientName}</td>
-                        <td>{trip.dropoffs.length} stores</td>
-                        <td>{trip.distanceKm} km</td>
-                        <td className="money">{formatPeso(trip.deliveryRate)}</td>
-                        <td>{formatPeso(trip.totalExpenses)}</td>
-                        <td className="money">{formatPeso(trip.netIncome)}</td>
-                        <td>
-                          <span className={`pod-status ${trip.podStatus === "Verified" ? "attached" : "missing"}`}>
-                            <i aria-hidden="true" />
-                            {trip.podStatus}
-                          </span>
-                        </td>
+              {sortedTruckTrips.length === 0 ? (
+                <div className="empty-state" style={{ padding: "36px 20px" }}>
+                  <strong>No completed deliveries in this range</strong>
+                  <span>No finalized trips have been recorded for {activeTruck.plateNumber} within the selected date range.</span>
+                </div>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Client" sortKey="client" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="POD Status" sortKey="pod" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {sortedTruckTrips.map((trip) => (
+                        <tr key={trip.id}>
+                          <td><strong>{trip.waybillNumber}</strong><br /><small>{trip.deliveryDate}</small></td>
+                          <td>{trip.clientName}</td>
+                          <td>{trip.dropoffs.length} stores</td>
+                          <td>{trip.distanceKm} km</td>
+                          <td className="money">{formatPeso(trip.deliveryRate)}</td>
+                          <td>{formatPeso(trip.totalExpenses)}</td>
+                          <td className="money">{formatPeso(trip.netIncome)}</td>
+                          <td>
+                            <span className={`pod-status ${trip.podStatus === "Verified" ? "attached" : "missing"}`}>
+                              <i aria-hidden="true" />
+                              {trip.podStatus}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           </>
         )}

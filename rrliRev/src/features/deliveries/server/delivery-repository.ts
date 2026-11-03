@@ -131,6 +131,10 @@ function mapLedgerRow(
     truckTemperature: asString(
       row.truck_temperature_snapshot || row.truck_temperature,
     ) as TruckTemperature,
+    truckOwnership:
+      row.truck_ownership_snapshot === "Subcontracted" ? "Subcontracted" : "Owned",
+    rateBasis:
+      row.rate_basis === "Trucker Rate" ? "Trucker Rate" : "Redeemed Rate",
     origin: asString(row.origin),
     distanceKm: asNumber(row.distance_km),
     fuelRate: asNumber(row.fuel_rate),

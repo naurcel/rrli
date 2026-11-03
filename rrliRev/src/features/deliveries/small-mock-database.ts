@@ -2,9 +2,13 @@ import {
   buildDeliveryTripRecord,
   summarizeTruckProfitability,
   type DeliveryTripRecord,
-  type TruckTemperature,
-  type TruckType,
 } from "./delivery-domain.ts";
+import {
+  FLEET_TRUCKS,
+  OWNED_TRUCKS,
+  SUBCONTRACTED_TRUCKS,
+  type FleetTruck,
+} from "./truck-registry.ts";
 
 export const SMALL_MOCK_PERIOD = {
   start: "2026-10-27",
@@ -17,12 +21,7 @@ export type SmallMockClient = {
   name: "Landers" | "Manila Comisario Central Inc. (MCCI)" | "Vanguard";
 };
 
-export type SmallMockTruck = {
-  id: string;
-  plateNumber: string;
-  truckType: TruckType;
-  truckTemperature: TruckTemperature;
-};
+export type SmallMockTruck = FleetTruck;
 
 export type SmallMockEmployee = {
   id: string;
@@ -74,44 +73,7 @@ const CLIENTS = [
   },
 ] as const satisfies readonly SmallMockClient[];
 
-const TRUCKS = [
-  {
-    id: "20000000-0000-4000-8000-000000000001",
-    plateNumber: "NGS 4281",
-    truckType: "6-Wheeler",
-    truckTemperature: "-18°C / 2°C–4°C",
-  },
-  {
-    id: "20000000-0000-4000-8000-000000000002",
-    plateNumber: "DAA 7310",
-    truckType: "6-Wheeler",
-    truckTemperature: "2°C–4°C",
-  },
-  {
-    id: "20000000-0000-4000-8000-000000000003",
-    plateNumber: "CBZ 1187",
-    truckType: "10-Wheeler",
-    truckTemperature: "18°C–25°C",
-  },
-  {
-    id: "20000000-0000-4000-8000-000000000004",
-    plateNumber: "NBE 9042",
-    truckType: "4-Wheeler",
-    truckTemperature: "2°C–4°C",
-  },
-  {
-    id: "20000000-0000-4000-8000-000000000005",
-    plateNumber: "ABX 2201",
-    truckType: "4-Wheeler",
-    truckTemperature: "-18°C",
-  },
-  {
-    id: "20000000-0000-4000-8000-000000000006",
-    plateNumber: "XCY 6612",
-    truckType: "4-Wheeler",
-    truckTemperature: "-18°C / 2°C–4°C",
-  },
-] as const satisfies readonly SmallMockTruck[];
+const TRUCKS = OWNED_TRUCKS;
 
 const DRIVERS = [
   {
@@ -238,31 +200,33 @@ const DELIVERIES = [
   },
   {
     clientId: CLIENTS[1].id,
-    truckId: TRUCKS[1].id,
+    truckId: SUBCONTRACTED_TRUCKS[0].id,
     driverId: DRIVERS[0].id,
     helperId: HELPERS[1].id,
-    scenario: "MCCI chilled commissary dispatch delivering marinated meats and fresh restaurant supplies to Kuya J Festival Mall Alabang with mall entry fee not applicable.",
+    scenario: "Subcontracted MCCI chilled commissary dispatch to Kuya J Festival Mall Alabang using the Trucker Rate schedule; mall entry fee is not applicable.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000003",
       waybillNumber: "WB-261029",
       deliveryDate: "2026-10-29",
       clientName: CLIENTS[1].name,
-      plateNumber: TRUCKS[1].plateNumber,
-      truckType: TRUCKS[1].truckType,
+      plateNumber: SUBCONTRACTED_TRUCKS[0].plateNumber,
+      truckType: SUBCONTRACTED_TRUCKS[0].truckType,
       truckTemperature: "2°C–4°C",
+      truckOwnership: "Subcontracted",
+      rateBasis: "Trucker Rate",
       origin: "MCCI Central Commissary, San Pedro, Laguna",
       distanceKm: 54,
       fuelRate: 62.1,
-      deliveryRate: 18500,
+      deliveryRate: 6325,
       expenses: {
-        dieselExpenses: 3000,
-        tollGateExpenses: 600,
+        dieselExpenses: 1800,
+        tollGateExpenses: 450,
         tollGateBreakdown: "SLEX connector round trip",
         driverAllowance: 300,
         driverDailyRate: 900,
         helperAllowance: 200,
         helperDailyRate: 650,
-        otherExpenses: 250,
+        otherExpenses: 100,
       },
       dropoffs: [{
         id: "50000000-0000-4000-8000-000000000004",
@@ -584,7 +548,7 @@ const DOCUMENTS: readonly SmallMockDocument[] = DELIVERIES.flatMap((delivery, de
 
 export const SMALL_MOCK_DATABASE = {
   clients: CLIENTS,
-  trucks: TRUCKS,
+  trucks: FLEET_TRUCKS,
   drivers: DRIVERS,
   helpers: HELPERS,
   deliveries: DELIVERIES,
@@ -610,7 +574,8 @@ export function validateSmallMockDatabase(): string[] {
   const waybills = new Set(deliveries.map((delivery) => delivery.record.waybillNumber));
 
   if (clients.length !== 3) issues.push("Expected exactly 3 mock clients.");
-  if (trucks.length !== 6) issues.push("Expected exactly 6 mock trucks.");
+  if (trucks.filter((truck) => truck.ownershipType === "Owned").length !== 6) issues.push("Expected exactly 6 owned mock trucks.");
+  if (trucks.filter((truck) => truck.ownershipType === "Subcontracted").length !== 10) issues.push("Expected exactly 10 subcontracted mock trucks.");
   if (drivers.length !== 2) issues.push("Expected exactly 2 mock drivers.");
   if (helpers.length !== 2) issues.push("Expected exactly 2 mock helpers.");
   if (deliveries.length !== 9) issues.push("Expected exactly 9 mock deliveries.");
@@ -622,6 +587,15 @@ export function validateSmallMockDatabase(): string[] {
     if (count !== 3) issues.push(`${client.name} must have exactly 3 deliveries.`);
   }
   for (const delivery of deliveries) {
+    const truck = trucks.find((candidate) => candidate.id === delivery.truckId);
+    if (!truck) {
+      issues.push(`${delivery.record.waybillNumber} references an unknown truck.`);
+    } else if (
+      delivery.record.truckOwnership !== truck.ownershipType ||
+      delivery.record.rateBasis !== truck.rateBasis
+    ) {
+      issues.push(`${delivery.record.waybillNumber} has an inconsistent ownership or rate basis.`);
+    }
     if (
       delivery.record.deliveryDate < SMALL_MOCK_PERIOD.start ||
       delivery.record.deliveryDate > SMALL_MOCK_PERIOD.end
@@ -635,8 +609,8 @@ export function validateSmallMockDatabase(): string[] {
   if (finalized.length !== 8 || incomplete.length !== 1) {
     issues.push("Expected 8 financially finalized deliveries and 1 incomplete delivery.");
   }
-  if (summarizeTruckProfitability(deliveries.map((delivery) => delivery.record)).length !== 6) {
-    issues.push("All 6 mock trucks must appear in confirmed profitability summaries.");
+  if (summarizeTruckProfitability(deliveries.map((delivery) => delivery.record)).length !== 7) {
+    issues.push("All 6 owned trucks and the active subcontracted truck must appear in confirmed profitability summaries.");
   }
 
   const documentStatuses = new Set(documents.map((document) => document.status));

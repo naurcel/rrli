@@ -349,6 +349,8 @@ export default function DeliveriesPage() {
         rows: [
           { label: "Truck", value: selectedTrip.plateNumber },
           { label: "Truck Type", value: selectedTrip.truckType },
+          { label: "Ownership", value: selectedTrip.truckOwnership },
+          { label: "Rate Basis", value: selectedTrip.rateBasis },
           { label: "Temperature", value: selectedTrip.truckTemperature },
           { label: "Driver", value: selectedTrip.driverName || "Not recorded" },
           { label: "Helper", value: selectedTrip.helperName || "Not recorded" },
@@ -393,7 +395,6 @@ export default function DeliveriesPage() {
       {
         title: "Financial Breakdown",
         eyebrow: "Revenue, expenses, and profitability",
-        fullWidth: true,
         rows: [
           {
             label: "Delivery Rate (Revenue)",
@@ -453,7 +454,6 @@ export default function DeliveriesPage() {
       {
         title: "Financial state",
         eyebrow: "Integrity and audit",
-        fullWidth: true,
         rows: [
           { label: "Record Version", value: String(selectedTrip.version) },
           {
@@ -684,6 +684,9 @@ export default function DeliveriesPage() {
                       </td>
                       <td className="truck-code">
                         <strong>{trip.plateNumber}</strong> ({trip.truckType})
+                        <span className={`truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
+                          {trip.truckOwnership} · {trip.rateBasis}
+                        </span>
                       </td>
                       <td>{trip.truckTemperature}</td>
                       <td>

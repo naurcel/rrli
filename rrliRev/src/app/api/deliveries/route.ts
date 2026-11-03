@@ -11,6 +11,7 @@ import {
   updateSmallMockPodState,
 } from "@/features/deliveries/small-mock-repository";
 import { listDeliveryRecords } from "@/features/deliveries/server/delivery-repository";
+import { getFleetTrucks } from "@/features/deliveries/truck-registry";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -188,7 +189,9 @@ export async function POST(request: Request) {
 
   if (!isSupabaseConfigured()) {
     const client = SMALL_MOCK_DATABASE.clients.find((item) => item.name === parsed.data.clientName);
-    const truck = SMALL_MOCK_DATABASE.trucks.find((item) => item.plateNumber === parsed.data.plateNumber);
+    const truck =
+      getFleetTrucks().find((item) => item.plateNumber === parsed.data.plateNumber) ??
+      SMALL_MOCK_DATABASE.trucks.find((item) => item.plateNumber === parsed.data.plateNumber);
     if (!client || !truck) {
       return NextResponse.json(
         { ok: false, code: !client ? "INVALID_CLIENT" : "INVALID_TRUCK", message: !client ? "Select an available client." : "Select an available Fleet truck." },
@@ -210,6 +213,8 @@ export async function POST(request: Request) {
       plateNumber: truck.plateNumber,
       truckType: truck.truckType,
       truckTemperature: parsed.data.truckTemperature,
+      truckOwnership: truck.ownershipType,
+      rateBasis: truck.rateBasis,
       origin: parsed.data.origin,
       distanceKm: parsed.data.distanceKm,
       fuelRate: parsed.data.fuelRate,

@@ -23,6 +23,8 @@ export const EXPENSE_KEYS = [
 export type ExpenseKey = (typeof EXPENSE_KEYS)[number];
 export type ExpenseResolutionStatus = "confirmed" | "not_applicable" | "unknown";
 export type FinancialState = "incomplete" | "finalized";
+export type TruckOwnership = "Owned" | "Subcontracted";
+export type DeliveryRateBasis = "Redeemed Rate" | "Trucker Rate";
 
 export type DeliveryStoreDropoff = {
   id: string;
@@ -58,6 +60,8 @@ export type DeliveryTripRecord = {
   plateNumber: string;
   truckType: TruckType;
   truckTemperature: TruckTemperature;
+  truckOwnership: TruckOwnership;
+  rateBasis: DeliveryRateBasis;
   origin: string;
   distanceKm: number;
   fuelRate: number;
@@ -143,6 +147,8 @@ export function buildDeliveryTripRecord(input: {
   plateNumber: string;
   truckType: TruckType;
   truckTemperature: TruckTemperature;
+  truckOwnership?: TruckOwnership;
+  rateBasis?: DeliveryRateBasis;
   origin: string;
   distanceKm: number;
   fuelRate: number;
@@ -204,6 +210,8 @@ export function buildDeliveryTripRecord(input: {
     plateNumber: input.plateNumber,
     truckType: input.truckType,
     truckTemperature: input.truckTemperature,
+    truckOwnership: input.truckOwnership ?? "Owned",
+    rateBasis: input.rateBasis ?? "Redeemed Rate",
     origin: input.origin,
     distanceKm: input.distanceKm,
     fuelRate: input.fuelRate,

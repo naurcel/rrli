@@ -15,12 +15,23 @@ test("keeps the RouteX mock database intentionally small and internally related"
     SMALL_MOCK_DATABASE.clients.map((client) => client.name),
     ["Landers", "Manila Comisario Central Inc. (MCCI)", "Vanguard"],
   );
-  assert.equal(SMALL_MOCK_DATABASE.trucks.length, 6);
+  assert.equal(SMALL_MOCK_DATABASE.trucks.length, 16);
+  assert.equal(
+    SMALL_MOCK_DATABASE.trucks.filter((truck) => truck.ownershipType === "Owned").length,
+    6,
+  );
+  assert.equal(
+    SMALL_MOCK_DATABASE.trucks.filter((truck) => truck.ownershipType === "Subcontracted").length,
+    10,
+  );
+  const ownedTrucks = SMALL_MOCK_DATABASE.trucks.filter(
+    (truck) => truck.ownershipType === "Owned",
+  );
   assert.deepEqual(
     Object.fromEntries(
       ["4-Wheeler", "6-Wheeler", "10-Wheeler"].map((type) => [
         type,
-        SMALL_MOCK_DATABASE.trucks.filter((truck) => truck.truckType === type).length,
+        ownedTrucks.filter((truck) => truck.truckType === type).length,
       ]),
     ),
     { "4-Wheeler": 3, "6-Wheeler": 2, "10-Wheeler": 1 },
@@ -77,13 +88,18 @@ test("preserves confirmed zero, not applicable, unknown, low-margin, and incompl
   assert.equal(incomplete?.netIncome, null);
   assert.equal(incomplete?.marginPercent, null);
   assert.equal(incomplete?.financialState, "incomplete");
+
+  const subcontracted = records.find((record) => record.waybillNumber === "WB-261029");
+  assert.equal(subcontracted?.truckOwnership, "Subcontracted");
+  assert.equal(subcontracted?.rateBasis, "Trucker Rate");
+  assert.equal(subcontracted?.deliveryRate, 6325);
 });
 
 test("excludes the incomplete trip from confirmed truck profitability", () => {
   const records = SMALL_MOCK_DATABASE.deliveries.map((delivery) => delivery.record);
   const summaries = summarizeTruckProfitability(records);
 
-  assert.equal(summaries.length, 6);
+  assert.equal(summaries.length, 7);
   assert.equal(summaries.reduce((count, truck) => count + truck.completedTrips, 0), 8);
   for (const summary of summaries) {
     assert.equal(summary.netProfit, summary.totalEarnings - summary.totalExpenses);

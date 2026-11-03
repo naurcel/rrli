@@ -185,6 +185,10 @@ export function canManageUsers(role: UserRole): boolean {
   return hasPermission(role, "users:manage");
 }
 
+export function canManageTrucks(role: UserRole): boolean {
+  return hasPermission(role, "profitability:manage");
+}
+
 export type NavigationSection = "primary" | "management";
 
 export type NavigationItem = {
