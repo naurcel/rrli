@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -130,11 +132,11 @@ export async function GET(request: Request) {
 
 /**
  * POST /api/deliveries/documents
- * Handles POD document upload, verification, or rejection.
- * Enforces server-side `pod:verify` permission (restricted strictly to Admin and Operations).
+ * Handles POD document upload or replacement.
+ * Enforces server-side `deliveries:edit` permission (restricted strictly to Admin and Operations).
  */
 export async function POST(request: Request) {
-  const auth = await verifyServerPermission("pod:verify");
+  const auth = await verifyServerPermission("deliveries:edit");
   if (!auth.ok) {
     return NextResponse.json(
       { ok: false, code: auth.code, message: auth.message },
@@ -152,8 +154,6 @@ export async function POST(request: Request) {
 
   const deliveryId = String(formData.get("deliveryId") || "").trim();
   const dropoffId = String(formData.get("dropoffId") || "").trim();
-  const action = String(formData.get("action") || "upload").trim(); // "upload" | "verify" | "reject"
-  const notes = String(formData.get("notes") || "").trim();
   const file = formData.get("file") as File | null;
 
   if (!deliveryId || !dropoffId) {
@@ -183,9 +183,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const isVerified = action === "verify";
-  const isRejected = action === "reject";
-  const newStatus = isVerified ? "Verified" : isRejected ? "Rejected" : "Submitted";
+  const newStatus = "Attached";
   const originalFilename = file && file.name ? file.name : `POD-${deliveryId.slice(0, 8)}.pdf`;
 
   if (!isSupabaseConfigured()) {
@@ -206,8 +204,7 @@ export async function POST(request: Request) {
       );
     }
 
-    dropoff.podSubmitted = !isRejected;
-    dropoff.supportingDocsComplete = isVerified;
+    dropoff.podSubmitted = true;
     dropoff.documentRef = originalFilename;
 
     const key = `${deliveryId}:${dropoffId}`;
@@ -227,19 +224,20 @@ export async function POST(request: Request) {
         originalFilename,
         mimeType: "application/pdf",
         sizeBytes: file ? file.size : 102400,
-        verificationNotes: notes || null,
+        verificationNotes: null,
       };
       extraMockDocuments.set(key, newDoc);
       doc = newDoc;
     } else {
       doc.status = newStatus;
       doc.originalFilename = originalFilename;
-      doc.verificationNotes = notes || doc.verificationNotes;
       extraMockDocuments.set(key, doc);
     }
 
     delivery.record.podStatus = derivePodVerificationStatus(delivery.record.dropoffs);
     delivery.record.version += 1;
+
+    recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "document.uploaded", entityType: "delivery", entityId: deliveryId, summary: `Uploaded POD for stop ${dropoff.sequence}.`, changes: { dropoffId, filename: originalFilename } });
 
     return NextResponse.json({
       ok: true,
@@ -247,7 +245,7 @@ export async function POST(request: Request) {
         id: doc.id,
         filename: originalFilename,
         status: newStatus,
-        notes: doc.verificationNotes,
+        notes: null,
       },
       dropoff: {
         id: dropoff.id,
@@ -293,11 +291,9 @@ export async function POST(request: Request) {
       original_filename: originalFilename,
       mime_type: file?.type ?? "application/pdf",
       size_bytes: file?.size ?? null,
-      verification_notes: notes || null,
+      verification_notes: null,
       uploaded_by: auth.actor.id,
       uploaded_at: now,
-      verified_by: isVerified ? auth.actor.id : null,
-      verified_at: isVerified ? now : null,
       updated_at: now,
       ...(storagePath ? { storage_path: storagePath } : {}),
     };
@@ -319,11 +315,12 @@ export async function POST(request: Request) {
     await supabase
       .from("delivery_dropoffs")
       .update({
-        pod_submitted: !isRejected,
-        supporting_docs_complete: isVerified,
+        pod_submitted: true,
         document_ref: originalFilename,
       })
       .eq("id", dropoffId);
+
+    recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "document.uploaded", entityType: "delivery", entityId: deliveryId, summary: "Uploaded or replaced a POD document.", changes: { dropoffId, filename: originalFilename } });
 
     return NextResponse.json({
       ok: true,

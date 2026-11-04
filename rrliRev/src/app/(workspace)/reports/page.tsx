@@ -28,8 +28,8 @@ type FinancialReportRow = {
 type ActivityReportRow = {
   label: string;
   deliveries: number;
-  verifiedPods: number;
-  followUpPods: number;
+  totalDropoffs: number;
+  attachedPods: number;
 };
 
 const REPORT_TABS: readonly { id: ReportTab; label: string }[] = [
@@ -135,15 +135,13 @@ export default function ReportsPage() {
       const row = groups.get(delivery.clientName) ?? {
         label: delivery.clientName,
         deliveries: 0,
-        verifiedPods: 0,
-        followUpPods: 0,
+        totalDropoffs: 0,
+        attachedPods: 0,
       };
-      const verifiedPods = delivery.dropoffs.filter(
-        (dropoff) => dropoff.podSubmitted && dropoff.supportingDocsComplete,
-      ).length;
+      const attached = delivery.dropoffs.filter((dropoff) => dropoff.podSubmitted).length;
       row.deliveries += 1;
-      row.verifiedPods += verifiedPods;
-      row.followUpPods += delivery.dropoffs.length - verifiedPods;
+      row.totalDropoffs += delivery.dropoffs.length;
+      row.attachedPods += attached;
       groups.set(delivery.clientName, row);
     }
     return [...groups.values()].sort(
@@ -171,7 +169,19 @@ export default function ReportsPage() {
   const displayedClientRows = sortRows(clientFinancialRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.label : key === "deliveries" ? row.deliveries : row.revenue);
   const displayedExpenseRows = sortRows(expenseRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.plateNumber : key === "deliveries" ? row.completedTrips : row.totalExpenses);
   const displayedTruckRows = sortRows(truckRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.plateNumber : key === "deliveries" ? row.completedTrips : key === "revenue" ? row.totalEarnings : key === "expenses" ? row.totalExpenses : key === "margin" ? row.marginPercent ?? Number.NEGATIVE_INFINITY : row.netProfit);
-  const displayedActivityRows = sortRows(activityRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.label : key === "verified" ? row.verifiedPods : key === "followup" ? row.followUpPods : row.deliveries);
+  const displayedActivityRows = sortRows(
+    activityRows,
+    reportSort.key,
+    reportSort.direction,
+    (row, key) =>
+      key === "label"
+        ? row.label
+        : key === "dropoffs"
+          ? row.totalDropoffs
+          : key === "attached"
+            ? row.attachedPods
+            : row.deliveries,
+  );
   const changeReportSort = (key: string, direction: TableSortDirection) => setReportSort({ key, direction });
 
   const activeReport = {
@@ -192,7 +202,7 @@ export default function ReportsPage() {
     },
     activity: {
       title: "Activity Report",
-      heading: "Completed Deliveries & POD Follow-up by Client",
+      heading: "Completed Deliveries & Store Drop-offs by Client",
       rowCount: activityRows.length,
     },
   }[activeTab];
@@ -385,8 +395,8 @@ export default function ReportsPage() {
                       <tr>
                         <SortableTableHeader label="Client" sortKey="label" activeSortKey={reportSort.key} direction={reportSort.direction} onSort={changeReportSort} />
                         <SortableTableHeader label="Deliveries" sortKey="deliveries" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="POD Verified" sortKey="verified" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Follow-up" sortKey="followup" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Store Drop-offs" sortKey="dropoffs" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                        <SortableTableHeader label="Attached PODs" sortKey="attached" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
                       </tr>
                     </thead>
                     <tbody>
@@ -394,8 +404,8 @@ export default function ReportsPage() {
                         <tr key={row.label}>
                           <td>{row.label}</td>
                           <td>{row.deliveries}</td>
-                          <td>{row.verifiedPods}</td>
-                          <td>{row.followUpPods}</td>
+                          <td>{row.totalDropoffs}</td>
+                          <td>{row.attachedPods}</td>
                         </tr>
                       ))}
                     </tbody>

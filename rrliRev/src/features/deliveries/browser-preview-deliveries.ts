@@ -14,7 +14,9 @@ export const BROWSER_PREVIEW_DELIVERIES_CHANGED = "routex:browser-preview-delive
 export type BrowserDeliveryFilters = {
   search?: string;
   clientId?: string;
+  clientIds?: string[];
   truckId?: string;
+  truckIds?: string[];
   status?: string;
   podStatus?: string;
   dateFrom?: string;
@@ -44,18 +46,41 @@ export function selectBrowserPreviewDeliveries(
   filters: BrowserDeliveryFilters = {},
 ): DeliveryLedgerItem[] {
   const search = filters.search?.trim().toLocaleLowerCase() ?? "";
+  const searchClean = search.replace(/\s+/g, "");
   return readBrowserPreviewDeliveries().filter((item) => {
+    const plateClean = item.plateNumber.toLocaleLowerCase().replace(/\s+/g, "");
     const searchable = [
       item.waybillNumber,
       item.clientName,
       item.plateNumber,
+      plateClean,
       item.driverName ?? "",
       ...item.dropoffs.flatMap((dropoff) => [dropoff.storeName, dropoff.destinationArea]),
     ].join(" ").toLocaleLowerCase();
+    const matchesClient =
+      filters.clientIds && filters.clientIds.length > 0
+        ? filters.clientIds.includes(item.clientId)
+        : !filters.clientId || item.clientId === filters.clientId;
+
+    const matchesTruck =
+      filters.truckIds && filters.truckIds.length > 0
+        ? filters.truckIds.some(
+            (idOrPlate) =>
+              item.truckId === idOrPlate ||
+              item.plateNumber.toUpperCase() === idOrPlate.toUpperCase() ||
+              plateClean === idOrPlate.replace(/\s+/g, "").toLowerCase(),
+          )
+        : !filters.truckId ||
+          item.truckId === filters.truckId ||
+          item.plateNumber.toUpperCase() === filters.truckId.toUpperCase() ||
+          plateClean === filters.truckId.replace(/\s+/g, "").toLowerCase();
+
     return (
-      (!search || searchable.includes(search)) &&
-      (!filters.clientId || item.clientId === filters.clientId) &&
-      (!filters.truckId || item.truckId === filters.truckId) &&
+      (!search ||
+        searchable.includes(search) ||
+        (searchClean.length > 0 && plateClean.includes(searchClean))) &&
+      matchesClient &&
+      matchesTruck &&
       (!filters.status || item.deliveryStatus === filters.status) &&
       (!filters.podStatus || item.podStatus === filters.podStatus) &&
       (!filters.dateFrom || item.deliveryDate >= filters.dateFrom) &&

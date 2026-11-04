@@ -18,7 +18,7 @@ export const SMALL_MOCK_PERIOD = {
 export type SmallMockClient = {
   id: string;
   code: string;
-  name: "Landers" | "Manila Comisario Central Inc. (MCCI)" | "Vanguard";
+  name: string;
 };
 
 export type SmallMockTruck = FleetTruck;
@@ -119,10 +119,10 @@ const DELIVERIES = [
       clientName: CLIENTS[0].name,
       plateNumber: TRUCKS[0].plateNumber,
       truckType: TRUCKS[0].truckType,
-      truckTemperature: "-18°C / 2°C–4°C",
+      truckTemperature: "-18°C",
       origin: "Fictional Origin: Landers Greater Manila Consolidation Hub, Calamba, Laguna",
       distanceKm: 82,
-      fuelRate: 61.8,
+      fuelRate: 84.5,
       deliveryRate: 24000,
       expenses: {
         dieselExpenses: 4200,
@@ -159,10 +159,10 @@ const DELIVERIES = [
       clientName: CLIENTS[0].name,
       plateNumber: TRUCKS[2].plateNumber,
       truckType: TRUCKS[2].truckType,
-      truckTemperature: "18°C–25°C",
+      truckTemperature: "20°C",
       origin: "Fictional Origin: Landers South Luzon Distribution Center, Santa Rosa, Laguna",
       distanceKm: 118,
-      fuelRate: 61.9,
+      fuelRate: 86.2,
       deliveryRate: 28000,
       expenses: {
         dieselExpenses: 5200,
@@ -211,12 +211,12 @@ const DELIVERIES = [
       clientName: CLIENTS[1].name,
       plateNumber: SUBCONTRACTED_TRUCKS[0].plateNumber,
       truckType: SUBCONTRACTED_TRUCKS[0].truckType,
-      truckTemperature: "2°C–4°C",
+      truckTemperature: "4°C",
       truckOwnership: "Subcontracted",
       rateBasis: "Trucker Rate",
       origin: "MCCI Central Commissary, San Pedro, Laguna",
       distanceKm: 54,
-      fuelRate: 62.1,
+      fuelRate: 85.0,
       deliveryRate: 6325,
       expenses: {
         dieselExpenses: 1800,
@@ -254,10 +254,10 @@ const DELIVERIES = [
       clientName: CLIENTS[1].name,
       plateNumber: TRUCKS[1].plateNumber,
       truckType: TRUCKS[1].truckType,
-      truckTemperature: "2°C–4°C",
+      truckTemperature: "2°C",
       origin: "MCCI Central Commissary, San Pedro, Laguna",
       distanceKm: 96,
-      fuelRate: 62.2,
+      fuelRate: 87.5,
       deliveryRate: 13000,
       expenses: {
         dieselExpenses: 4800,
@@ -306,10 +306,10 @@ const DELIVERIES = [
       clientName: CLIENTS[2].name,
       plateNumber: TRUCKS[0].plateNumber,
       truckType: TRUCKS[0].truckType,
-      truckTemperature: "-18°C / 2°C–4°C",
+      truckTemperature: "-18°C",
       origin: "Fictional Origin: Vanguard Southern Luzon Logistics Facility, Carmona, Cavite",
       distanceKm: 68,
-      fuelRate: 62.0,
+      fuelRate: 83.8,
       deliveryRate: 17500,
       expenses: {
         dieselExpenses: 2900,
@@ -346,10 +346,10 @@ const DELIVERIES = [
       clientName: CLIENTS[2].name,
       plateNumber: TRUCKS[2].plateNumber,
       truckType: TRUCKS[2].truckType,
-      truckTemperature: "18°C–25°C",
+      truckTemperature: "20°C",
       origin: "Fictional Origin: Vanguard Industrial Cross-Dock Hub, Biñan, Laguna",
       distanceKm: 104,
-      fuelRate: 62.3,
+      fuelRate: 88.5,
       deliveryRate: 21000,
       financialState: "incomplete",
       expenses: {
@@ -395,15 +395,15 @@ const DELIVERIES = [
     scenario: "Landers chilled replenishment from the South Luzon hub to the Arcovia branch using a compact truck for an urban delivery window.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000007",
-      waybillNumber: "WB-261028-B",
+      waybillNumber: "WB-261032",
       deliveryDate: "2026-10-28",
       clientName: CLIENTS[0].name,
       plateNumber: TRUCKS[3].plateNumber,
       truckType: TRUCKS[3].truckType,
-      truckTemperature: "2°C–4°C",
+      truckTemperature: "4°C",
       origin: "Fictional Origin: Landers Greater Manila Consolidation Hub, Calamba, Laguna",
       distanceKm: 71,
-      fuelRate: 61.9,
+      fuelRate: 82.5,
       deliveryRate: 16000,
       expenses: {
         dieselExpenses: 2700,
@@ -435,7 +435,7 @@ const DELIVERIES = [
     scenario: "MCCI frozen commissary dispatch to a north Metro Manila restaurant branch with complete trip financials and a submitted POD awaiting review.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000008",
-      waybillNumber: "WB-261101-A",
+      waybillNumber: "WB-261101",
       deliveryDate: "2026-11-01",
       clientName: CLIENTS[1].name,
       plateNumber: TRUCKS[4].plateNumber,
@@ -443,7 +443,7 @@ const DELIVERIES = [
       truckTemperature: "-18°C",
       origin: "MCCI Central Commissary, San Pedro, Laguna",
       distanceKm: 88,
-      fuelRate: 62.2,
+      fuelRate: 89.0,
       deliveryRate: 22000,
       expenses: {
         dieselExpenses: 4100,
@@ -472,18 +472,18 @@ const DELIVERIES = [
     truckId: TRUCKS[5].id,
     driverId: DRIVERS[0].id,
     helperId: HELPERS[1].id,
-    scenario: "Vanguard multi-temperature wholesale run from Biñan to a Taguig retail destination with finalized costs and verified receiving documents.",
+    scenario: "Vanguard frozen wholesale run from Biñan to a Taguig retail destination with finalized costs and verified receiving documents.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000009",
-      waybillNumber: "WB-261101-B",
+      waybillNumber: "WB-261103",
       deliveryDate: "2026-11-01",
       clientName: CLIENTS[2].name,
       plateNumber: TRUCKS[5].plateNumber,
       truckType: TRUCKS[5].truckType,
-      truckTemperature: "-18°C / 2°C–4°C",
+      truckTemperature: "-20°C",
       origin: "Fictional Origin: Vanguard Industrial Cross-Dock Hub, Biñan, Laguna",
       distanceKm: 112,
-      fuelRate: 62.2,
+      fuelRate: 86.5,
       deliveryRate: 26000,
       expenses: {
         dieselExpenses: 4700,
@@ -554,6 +554,38 @@ export const SMALL_MOCK_DATABASE = {
   deliveries: DELIVERIES,
   documents: DOCUMENTS,
 } as const;
+
+export const dynamicMockClients: SmallMockClient[] = [];
+
+export function getMockClients(): readonly SmallMockClient[] {
+  return [...SMALL_MOCK_DATABASE.clients, ...dynamicMockClients];
+}
+
+export function registerMockClient(name: string): SmallMockClient {
+  const trimmed = name.trim();
+  const existing = getMockClients().find(
+    (client) => client.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+  if (existing) {
+    return existing;
+  }
+  const id = `mock-client-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const code =
+    trimmed
+      .split(/\s+/)
+      .map((word) => word[0])
+      .join("")
+      .replace(/[^A-Za-z0-9]/g, "")
+      .toUpperCase()
+      .slice(0, 6) || "CLI";
+  const newClient: SmallMockClient = {
+    id,
+    code,
+    name: trimmed,
+  };
+  dynamicMockClients.push(newClient);
+  return newClient;
+}
 
 export function filterSmallMockDeliveries(input: {
   clientId?: string;

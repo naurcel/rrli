@@ -77,7 +77,6 @@ export default function TruckProfilePage({
         revenue: [left.deliveryRate ?? Number.NEGATIVE_INFINITY, right.deliveryRate ?? Number.NEGATIVE_INFINITY],
         expenses: [left.totalExpenses ?? Number.NEGATIVE_INFINITY, right.totalExpenses ?? Number.NEGATIVE_INFINITY],
         netIncome: [left.netIncome ?? Number.NEGATIVE_INFINITY, right.netIncome ?? Number.NEGATIVE_INFINITY],
-        pod: [left.podStatus, right.podStatus],
       };
       const [leftValue, rightValue] = values[historySort.key] ?? values.date;
       const compared = typeof leftValue === "number" && typeof rightValue === "number"
@@ -136,27 +135,13 @@ export default function TruckProfilePage({
                   </div>
                 </div>
                 <div className="truck-performance-kpis" aria-label="Truck performance metrics">
-                  <div><span>Total deliveries</span><strong>{activeTruck.completedTrips}</strong></div>
-                  <div><span>Revenue</span><strong>{formatPeso(activeTruck.totalEarnings)}</strong></div>
-                  <div><span>Total expenses</span><strong>{formatPeso(activeTruck.totalExpenses)}</strong></div>
-                  <div><span>Net profit</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPeso(activeTruck.netProfit)}</strong></div>
-                  <div><span>Profit margin</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPercent(activeTruck.marginPercent)}</strong></div>
+                  <article className="stat-card"><span className="stat-label">Total deliveries</span><strong>{activeTruck.completedTrips}</strong></article>
+                  <article className="stat-card"><span className="stat-label">Store drop-offs</span><strong>{activeTruck.totalStoresServed}</strong></article>
+                  <article className="stat-card"><span className="stat-label">Revenue</span><strong>{formatPeso(activeTruck.totalEarnings)}</strong></article>
+                  <article className="stat-card"><span className="stat-label">Total expenses</span><strong>{formatPeso(activeTruck.totalExpenses)}</strong></article>
+                  <article className="stat-card"><span className="stat-label">Net profit</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPeso(activeTruck.netProfit)}</strong></article>
+                  <article className="stat-card"><span className="stat-label">Profit margin</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPercent(activeTruck.marginPercent)}</strong></article>
                 </div>
-              </article>
-
-              <article className="records-card truck-profile-card truck-profile-details">
-                <div className="records-heading">
-                  <div>
-                    <h2>Truck Details</h2>
-                    <p>Vehicle details from delivery records.</p>
-                  </div>
-                </div>
-                <dl className="truck-profile-list">
-                  <div><dt>Plate number</dt><dd>{activeTruck.plateNumber}</dd></div>
-                  <div><dt>Vehicle type</dt><dd>{activeTruck.truckType}</dd></div>
-                  <div><dt>Store drop-offs</dt><dd>{activeTruck.totalStoresServed}</dd></div>
-                  <div><dt>Total distance</dt><dd>{activeTruck.totalDistanceKm} km</dd></div>
-                </dl>
               </article>
             </section>
 
@@ -184,7 +169,6 @@ export default function TruckProfilePage({
                         <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="POD Status" sortKey="pod" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
                       </tr>
                     </thead>
                     <tbody>
@@ -197,12 +181,6 @@ export default function TruckProfilePage({
                           <td className="money">{formatPeso(trip.deliveryRate)}</td>
                           <td>{formatPeso(trip.totalExpenses)}</td>
                           <td className="money">{formatPeso(trip.netIncome)}</td>
-                          <td>
-                            <span className={`pod-status ${trip.podStatus === "Verified" ? "attached" : "missing"}`}>
-                              <i aria-hidden="true" />
-                              {trip.podStatus}
-                            </span>
-                          </td>
                         </tr>
                       ))}
                     </tbody>

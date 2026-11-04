@@ -5,7 +5,11 @@ import {
   summarizeTruckProfitability,
 } from "./delivery-domain.ts";
 import type { DeliveryListQuery } from "./delivery-query.ts";
-import { SMALL_MOCK_DATABASE, type SmallMockDelivery } from "./small-mock-database.ts";
+import {
+  getMockClients,
+  SMALL_MOCK_DATABASE,
+  type SmallMockDelivery,
+} from "./small-mock-database.ts";
 import { getFleetTrucks } from "./truck-registry.ts";
 import type {
   DeliveryLedgerItem,
@@ -57,7 +61,10 @@ function sortableValue(item: DeliveryLedgerItem, sort: DeliveryListQuery["sort"]
   if (sort === "client") return item.clientName.toLocaleLowerCase();
   if (sort === "waybill") return item.waybillNumber.toLocaleLowerCase();
   if (sort === "truck") return item.plateNumber.toLocaleLowerCase();
-  if (sort === "temperature") return item.truckTemperature;
+  if (sort === "temperature") {
+    const num = Number(item.truckTemperature.replace(/°?c/i, "").trim());
+    return Number.isFinite(num) ? num : item.truckTemperature;
+  }
   if (sort === "origin") return item.origin.toLocaleLowerCase();
   if (sort === "distance") return item.distanceKm;
   if (sort === "delivery_rate") return item.deliveryRate;
@@ -83,20 +90,43 @@ function compareValues(
 }
 
 export function listSmallMockDeliveryRecords(input: DeliveryListQuery): DeliveryListResult {
-  const search = input.search.toLocaleLowerCase();
+  const search = input.search.toLocaleLowerCase().trim();
+  const searchClean = search.replace(/\s+/g, "");
   const matching = ledgerItems().filter((item) => {
+    const plateClean = item.plateNumber.toLocaleLowerCase().replace(/\s+/g, "");
     const searchable = [
       item.waybillNumber,
       item.clientName,
       item.plateNumber,
+      plateClean,
       item.driverName ?? "",
       ...item.dropoffs.flatMap((dropoff) => [dropoff.storeName, dropoff.destinationArea]),
     ].join(" ").toLocaleLowerCase();
 
+    const matchesClient =
+      input.clientIds && input.clientIds.length > 0
+        ? input.clientIds.includes(item.clientId)
+        : !input.clientId || item.clientId === input.clientId;
+
+    const matchesTruck =
+      input.truckIds && input.truckIds.length > 0
+        ? input.truckIds.some(
+            (idOrPlate) =>
+              item.truckId === idOrPlate ||
+              item.plateNumber.toUpperCase() === idOrPlate.toUpperCase() ||
+              plateClean === idOrPlate.replace(/\s+/g, "").toLowerCase(),
+          )
+        : !input.truckId ||
+          item.truckId === input.truckId ||
+          item.plateNumber.toUpperCase() === input.truckId.toUpperCase() ||
+          plateClean === input.truckId.replace(/\s+/g, "").toLowerCase();
+
     return (
-      (!search || searchable.includes(search)) &&
-      (!input.clientId || item.clientId === input.clientId) &&
-      (!input.truckId || item.truckId === input.truckId) &&
+      (!search ||
+        searchable.includes(search) ||
+        (searchClean.length > 0 && plateClean.includes(searchClean))) &&
+      matchesClient &&
+      matchesTruck &&
       (!input.status || item.deliveryStatus === input.status) &&
       (!input.podStatus || item.podStatus === input.podStatus) &&
       (!input.dateFrom || item.deliveryDate >= input.dateFrom) &&
@@ -122,13 +152,14 @@ export function listSmallMockDeliveryRecords(input: DeliveryListQuery): Delivery
     pageSize: input.pageSize,
     pageCount: Math.max(1, Math.ceil(total / input.pageSize)),
     filters: {
-      clients: SMALL_MOCK_DATABASE.clients.map((client) => ({
+      clients: getMockClients().map((client) => ({
         id: client.id,
         label: client.name,
       })),
       trucks: getFleetTrucks().map((truck) => ({
         id: truck.id,
         label: truck.plateNumber,
+        ownershipType: truck.ownershipType,
       })),
       statuses: ["Completed"],
       podStatuses: ["Verified", "Incomplete", "Pending"],

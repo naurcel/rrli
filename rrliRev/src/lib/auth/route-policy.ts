@@ -24,6 +24,10 @@ export function getRequiredPermissionForPath(pathname: string): Permission | nul
     return "users:manage";
   }
 
+  if (pathname.startsWith("/api/audit")) {
+    return "users:manage";
+  }
+
   if (pathname === "/deliveries/import" || pathname.startsWith("/deliveries/import/") || pathname.startsWith("/api/deliveries/import")) {
     return "imports:upload";
   }

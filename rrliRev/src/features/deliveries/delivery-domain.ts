@@ -8,7 +8,7 @@
  */
 
 export type TruckType = "4-Wheeler" | "6-Wheeler" | "10-Wheeler";
-export type TruckTemperature = "-18°C" | "2°C–4°C" | "18°C–25°C" | "-18°C / 2°C–4°C";
+export type TruckTemperature = `${number}°C`;
 export type PodVerificationStatus = "Verified" | "Incomplete" | "Pending";
 export const EXPENSE_KEYS = [
   "dieselExpenses",
@@ -211,7 +211,11 @@ export function buildDeliveryTripRecord(input: {
     truckType: input.truckType,
     truckTemperature: input.truckTemperature,
     truckOwnership: input.truckOwnership ?? "Owned",
-    rateBasis: input.rateBasis ?? "Redeemed Rate",
+    rateBasis:
+      input.rateBasis ??
+      ((input.truckOwnership ?? "Owned") === "Subcontracted"
+        ? "Trucker Rate"
+        : "Redeemed Rate"),
     origin: input.origin,
     distanceKm: input.distanceKm,
     fuelRate: input.fuelRate,
@@ -241,7 +245,7 @@ export const INITIAL_DELIVERY_TRIP_RECORDS: readonly DeliveryTripRecord[] = [
     truckTemperature: "-18°C",
     origin: "Marilao Cold Chain Hub",
     distanceKm: 94,
-    fuelRate: 61.5,
+    fuelRate: 85.5,
     deliveryRate: 24500,
     expenses: {
       dieselExpenses: 4120,
@@ -293,10 +297,10 @@ export const INITIAL_DELIVERY_TRIP_RECORDS: readonly DeliveryTripRecord[] = [
     clientName: "Puregold Price Club Inc.",
     plateNumber: "DAA 7310",
     truckType: "6-Wheeler",
-    truckTemperature: "2°C–4°C",
+    truckTemperature: "4°C",
     origin: "Meycauayan Consolidation Depot",
     distanceKm: 78,
-    fuelRate: 61.5,
+    fuelRate: 84.5,
     deliveryRate: 18800,
     expenses: {
       dieselExpenses: 3180,
@@ -341,7 +345,7 @@ export const INITIAL_DELIVERY_TRIP_RECORDS: readonly DeliveryTripRecord[] = [
     truckTemperature: "-18°C",
     origin: "Santa Rosa Cold Storage",
     distanceKm: 112,
-    fuelRate: 62.0,
+    fuelRate: 88.0,
     deliveryRate: 26800,
     expenses: {
       dieselExpenses: 4860,
@@ -383,10 +387,10 @@ export const INITIAL_DELIVERY_TRIP_RECORDS: readonly DeliveryTripRecord[] = [
     clientName: "Robinsons Supermarket Corp.",
     plateNumber: "NBE 9042",
     truckType: "6-Wheeler",
-    truckTemperature: "-18°C / 2°C–4°C",
+    truckTemperature: "-18°C",
     origin: "Marilao Cold Chain Hub",
     distanceKm: 64,
-    fuelRate: 61.2,
+    fuelRate: 83.5,
     deliveryRate: 16400,
     expenses: {
       dieselExpenses: 2740,
@@ -428,10 +432,10 @@ export const INITIAL_DELIVERY_TRIP_RECORDS: readonly DeliveryTripRecord[] = [
     clientName: "Jollibee Foods Corp. (Commissary)",
     plateNumber: "ABX 2201",
     truckType: "4-Wheeler",
-    truckTemperature: "2°C–4°C",
+    truckTemperature: "4°C",
     origin: "Meycauayan Consolidation Depot",
     distanceKm: 52,
-    fuelRate: 61.0,
+    fuelRate: 82.5,
     deliveryRate: 13200,
     expenses: {
       dieselExpenses: 2150,

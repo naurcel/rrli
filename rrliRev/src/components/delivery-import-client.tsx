@@ -33,15 +33,17 @@ type ParsedImportRow = {
 };
 
 const SAMPLE_CSV_DATA = `Delivery Date,Waybill Number,Client Name,Truck Plate,Temperature,Origin,Distance Km,Fuel Rate,Delivery Rate,Diesel,Tolls,Driver Rate,Driver Allowance,Helper Rate,Helper Allowance,Store Name,Destination Area,Entry Fee
-2026-11-01,WB-2611-9001,Landers,NGS 4281,-18°C / 2°C–4°C,Marilao Depot,85,62.5,23000,3800,950,950,300,700,200,Landers Balintawak,Quezon City,150
-2026-11-01,WB-2611-9002,Manila Comisario Central Inc. (MCCI),NFO 8324,2°C–4°C,FTI Taguig Hub,110,61.0,26500,4200,1200,1000,350,750,250,MCCI Alabang Center,Muntinlupa,0
-2026-11-02,WB-2611-9003,Vanguard,CBC 5519,18°C–25°C,North Harbor Terminal,65,63.0,19500,2900,450,900,250,650,200,Vanguard Pasig Hub,Pasig City,100`;
+2026-11-01,WB-2611-9001,Landers,NGS 4281,-18°C,Marilao Depot,85,85.5,23000,3800,950,950,300,700,200,Landers Balintawak,Quezon City,150
+2026-11-01,WB-2611-9002,Manila Comisario Central Inc. (MCCI),NFO 8324,4°C,FTI Taguig Hub,110,84.0,26500,4200,1200,1000,350,750,250,MCCI Alabang Center,Muntinlupa,0
+2026-11-02,WB-2611-9003,Vanguard,CBC 5519,20°C,North Harbor Terminal,65,86.5,19500,2900,450,900,250,650,200,Vanguard Pasig Hub,Pasig City,100`;
 
 const DELIVERY_TEMPERATURES: readonly TruckTemperature[] = [
+  "-20°C",
   "-18°C",
-  "2°C–4°C",
-  "18°C–25°C",
-  "-18°C / 2°C–4°C",
+  "0°C",
+  "2°C",
+  "4°C",
+  "20°C",
 ];
 
 type ImportIconName = "arrow" | "check" | "download" | "sample" | "spreadsheet" | "warning";
@@ -142,10 +144,11 @@ export function DeliveryExcelImportClient({
       const deliveryDate = dateIdx >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(cols[dateIdx]) ? cols[dateIdx] : new Date().toISOString().slice(0, 10);
       const clientName = clientIdx >= 0 && cols[clientIdx] ? cols[clientIdx] : "Landers";
       const plateNumber = plateIdx >= 0 && cols[plateIdx] ? cols[plateIdx] : "NGS 4281";
-      const rawTemperature = temperatureIdx >= 0 ? cols[temperatureIdx] : "";
-      const truckTemperature = DELIVERY_TEMPERATURES.includes(rawTemperature as TruckTemperature)
-        ? rawTemperature as TruckTemperature
-        : "18°C–25°C";
+      const rawTemperature = temperatureIdx >= 0 ? cols[temperatureIdx].trim() : "";
+      const match = rawTemperature.match(/^(-?\d+(?:\.\d+)?)/);
+      const truckTemperature: TruckTemperature = match
+        ? (`${match[1]}°C` as TruckTemperature)
+        : "-18°C";
       const deliveryRate = rateIdx >= 0 ? Number(cols[rateIdx]) || 20000 : 20000;
       const dieselExpenses = dieselIdx >= 0 && cols[dieselIdx] ? Number(cols[dieselIdx]) || null : 3500;
       const tollGateExpenses = tollIdx >= 0 && cols[tollIdx] ? Number(cols[tollIdx]) || null : 800;
@@ -169,7 +172,7 @@ export function DeliveryExcelImportClient({
         truckTemperature,
         origin: "Main Hub",
         distanceKm: 75,
-        fuelRate: 62.0,
+        fuelRate: 85.0,
         deliveryRate,
         dieselExpenses,
         tollGateExpenses,

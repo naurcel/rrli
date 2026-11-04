@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { RoundedSelect } from "@/components/rounded-select";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { RecordDetailDrawer, type DetailSection } from "@/components/record-detail-drawer";
 import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery-repository";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
-import { saveBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
+import {
+  readBrowserPreviewDeliveries,
+  saveBrowserPreviewDelivery,
+} from "@/features/deliveries/browser-preview-deliveries";
 import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
-import type { ExpenseResolutionStatus, TruckTemperature } from "@/features/deliveries/delivery-domain";
+import type { ExpenseResolutionStatus } from "@/features/deliveries/delivery-domain";
 import { formatPeso } from "@/lib/format";
 
 type DropoffDraft = {
@@ -31,8 +35,8 @@ const initialDropoff: DropoffDraft = {
   id: "dropoff-1",
   storeName: "",
   destinationArea: "",
-  entryFee: "0",
-  entryFeeStatus: "unknown",
+  entryFee: "",
+  entryFeeStatus: "confirmed",
 };
 
 function numberValue(value: string): number | null {
@@ -53,25 +57,31 @@ export default function NewCompletedDeliveryPage() {
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const idempotencyKeyRef = useRef("");
   const [clientName, setClientName] = useState("");
+  const [isNewClientMode, setIsNewClientMode] = useState(false);
   const [plateNumber, setPlateNumber] = useState("");
-  const [truckTemperature, setTruckTemperature] = useState<TruckTemperature>("18°C–25°C");
+  const [isNewPlateMode, setIsNewPlateMode] = useState(false);
+  const [podFiles, setPodFiles] = useState<File[]>([]);
+  const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
+  const [truckTemperature, setTruckTemperature] = useState("");
   const [dropoffs, setDropoffs] = useState<DropoffDraft[]>([initialDropoff]);
   const [expenseStatuses, setExpenseStatuses] = useState({
-    dieselExpenses: "unknown",
-    tollGateExpenses: "unknown",
-    driverAllowance: "unknown",
-    driverDailyRate: "unknown",
-    helperAllowance: "unknown",
-    helperDailyRate: "unknown",
-    otherExpenses: "unknown",
+    dieselExpenses: "confirmed",
+    tollGateExpenses: "confirmed",
+    driverAllowance: "confirmed",
+    driverDailyRate: "confirmed",
+    helperAllowance: "confirmed",
+    helperDailyRate: "confirmed",
+    otherExpenses: "confirmed",
   } satisfies Record<string, ExpenseResolutionStatus>);
   const [values, setValues] = useState({
     waybillNumber: "",
     deliveryDate: todayKey(),
     origin: "",
     distanceKm: "0",
-    fuelRate: "0",
+    fuelRate: "85.00",
     deliveryRate: "0",
     dieselExpenses: "",
     tollGateExpenses: "",
@@ -85,7 +95,7 @@ export default function NewCompletedDeliveryPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/deliveries?page=1&pageSize=1", { signal: controller.signal })
+    fetch("/api/deliveries?page=1&pageSize=10", { signal: controller.signal })
       .then(async (response) => {
         const payload = (await response.json()) as {
           ok?: boolean;
@@ -96,13 +106,33 @@ export default function NewCompletedDeliveryPage() {
           throw new Error(payload.message ?? "Unable to load active clients and trucks.");
         }
         const nextReferences = payload.filters ?? { clients: [], trucks: [] };
-        const localTrucks = readBrowserPreviewTrucks().map((t) => ({ id: t.id, label: t.plateNumber }));
+
+        // Merge custom clients from locally recorded deliveries
+        const localDeliveries = readBrowserPreviewDeliveries();
+        const existingClientNames = new Set(nextReferences.clients.map((c) => c.label.toLowerCase()));
+        const extraClients: DeliveryFilterOption[] = [];
+        for (const delivery of localDeliveries) {
+          if (delivery.clientName && !existingClientNames.has(delivery.clientName.toLowerCase())) {
+            existingClientNames.add(delivery.clientName.toLowerCase());
+            extraClients.push({
+              id: delivery.clientId || `client-${delivery.clientName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+              label: delivery.clientName,
+            });
+          }
+        }
+        const mergedClients = [...nextReferences.clients, ...extraClients];
+
+        const localTrucks = readBrowserPreviewTrucks().map((t) => ({
+          id: t.id,
+          label: t.plateNumber,
+          ownershipType: t.ownershipType,
+        }));
         const existingPlates = new Set(nextReferences.trucks.map((t) => t.label.toUpperCase()));
         const mergedTrucks = [
           ...nextReferences.trucks,
           ...localTrucks.filter((t) => !existingPlates.has(t.label.toUpperCase())),
         ];
-        const mergedReferences = { ...nextReferences, trucks: mergedTrucks };
+        const mergedReferences = { clients: mergedClients, trucks: mergedTrucks };
         setReferences(mergedReferences);
         setClientName(mergedReferences.clients[0]?.label ?? "");
         setPlateNumber(mergedReferences.trucks[0]?.label ?? "");
@@ -149,21 +179,19 @@ export default function NewCompletedDeliveryPage() {
   function addDropoff() {
     setDropoffs((current) => [
       ...current,
-      { id: crypto.randomUUID(), storeName: "", destinationArea: "", entryFee: "", entryFeeStatus: "unknown" },
+      { id: crypto.randomUUID(), storeName: "", destinationArea: "", entryFee: "", entryFeeStatus: "confirmed" },
     ]);
   }
 
-  async function submitDelivery(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSubmitError(null);
-    setSubmitting(true);
-
-    const payload = {
+  function buildPayload() {
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID();
+    const firstPodName = podFiles[0]?.name;
+    return {
       ...values,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: idempotencyKeyRef.current,
       clientName,
       plateNumber,
-      truckTemperature,
+      truckTemperature: `${truckTemperature}°C`,
       distanceKm: numberValue(values.distanceKm),
       fuelRate: numberValue(values.fuelRate),
       deliveryRate: numberValue(values.deliveryRate),
@@ -175,16 +203,29 @@ export default function NewCompletedDeliveryPage() {
       helperDailyRate: numberValue(values.helperDailyRate),
       otherExpenses: numberValue(values.otherExpenses),
       ...Object.fromEntries(Object.entries(expenseStatuses).map(([key, status]) => [`${key}Status`, status])),
-      dropoffs: dropoffs.map((dropoff) => ({
+      dropoffs: dropoffs.map((dropoff, index) => ({
         storeName: dropoff.storeName,
         destinationArea: dropoff.destinationArea,
         entryFee: numberValue(dropoff.entryFee),
         entryFeeStatus: dropoff.entryFeeStatus,
-        podSubmitted: false,
+        podSubmitted: Boolean(firstPodName && index === 0),
         supportingDocsComplete: false,
-        documentRef: "Pending upload",
+        documentRef: index === 0 && firstPodName ? firstPodName : "Pending upload",
       })),
     };
+  }
+
+  function submitDelivery(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitError(null);
+    buildPayload();
+    setPreviewing(true);
+  }
+
+  async function recordDelivery() {
+    setSubmitError(null);
+    setSubmitting(true);
+    const payload = buildPayload();
 
     try {
       const response = await fetch("/api/deliveries", {
@@ -206,8 +247,60 @@ export default function NewCompletedDeliveryPage() {
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to record the completed delivery.");
       setSubmitting(false);
+      setPreviewing(false);
     }
   }
+
+  const previewSections = useMemo<DetailSection[]>(() => [
+    {
+      eyebrow: "TRIP DETAILS",
+      title: "Delivery overview",
+      rows: [
+        { label: "Waybill", value: values.waybillNumber || "Not entered" },
+        { label: "Delivery date", value: values.deliveryDate },
+        { label: "Client", value: clientName || "Not selected" },
+        { label: "Origin", value: values.origin || "Not entered" },
+      ],
+    },
+    {
+      eyebrow: "ASSIGNMENT",
+      title: "Truck and trip",
+      rows: [
+        { label: "Truck", value: plateNumber || "Not selected" },
+        { label: "Temperature", value: truckTemperature ? `${truckTemperature}°C` : "Not entered" },
+        { label: "Distance", value: `${values.distanceKm || "0"} km` },
+        { label: "Fuel rate", value: formatPeso(numberValue(values.fuelRate)) },
+      ],
+    },
+    {
+      eyebrow: "STOP SEQUENCE",
+      title: `Route and drop-offs (${dropoffs.length})`,
+      fullWidth: true,
+      customContent: (
+        <ol className="delivery-preview-stops">
+          {dropoffs.map((dropoff) => <li key={dropoff.id}><strong>{dropoff.storeName}</strong><span>{dropoff.destinationArea}</span></li>)}
+        </ol>
+      ),
+    },
+    {
+      eyebrow: "FINANCIAL REVIEW",
+      title: "Revenue and expenses",
+      rows: [
+        { label: "Revenue", value: formatPeso(financialReview.revenue) },
+        { label: "Store entry fees", value: formatPeso(financialReview.entryFees) },
+        { label: "Total expenses", value: formatPeso(financialReview.totalExpenses) },
+        { label: "Net profit", value: formatPeso(financialReview.netIncome), tone: financialReview.netIncome != null && financialReview.netIncome < 0 ? "warning" : "success" },
+      ],
+    },
+    {
+      eyebrow: "FILES",
+      title: "POD and supporting documents",
+      rows: [
+        { label: "Proof of delivery", value: podFiles.map((file) => file.name).join(", ") || "None attached" },
+        { label: "Supporting files", value: supportingFiles.map((file) => file.name).join(", ") || "None attached" },
+      ],
+    },
+  ], [clientName, dropoffs, financialReview, plateNumber, podFiles, supportingFiles, truckTemperature, values]);
 
   const noReferences =
     !referencesLoading && (references.clients.length === 0 || references.trucks.length === 0);
@@ -218,10 +311,10 @@ export default function NewCompletedDeliveryPage() {
       <div className="content-wrap delivery-entry-page">
       <header className="page-intro">
         <div>
-          <Link className="back-link" href="/deliveries">← Back to completed deliveries</Link>
+          <Link className="back-link" href="/deliveries">← Back to deliveries</Link>
           <h1>Record delivery</h1>
           <p className="subtitle">
-            Record one completed trip and all store drop-offs.
+            Record completed trip and store drop-offs.
           </p>
         </div>
       </header>
@@ -231,43 +324,239 @@ export default function NewCompletedDeliveryPage() {
         {submitError ? <div className="delivery-form-alert" role="alert">{submitError}</div> : null}
 
         <section className="delivery-form-section">
-          <FormHeading number="01" title="Trip information" description="Enter the trip date and waybill." />
-          <div className="delivery-field-grid">
-            <label>Waybill number<input required value={values.waybillNumber} onChange={(event) => updateValue("waybillNumber", event.target.value)} placeholder="WB-2026-0001" /></label>
-            <label>Actual delivery date<input required type="date" value={values.deliveryDate} onChange={(event) => updateValue("deliveryDate", event.target.value)} /></label>
-            <label>Client<RoundedSelect value={clientName} options={references.clients.map((option) => ({ value: option.label, label: option.label }))} onChange={setClientName} ariaLabel="Select active client" /></label>
-            <label>Truck / plate number<RoundedSelect value={plateNumber} options={references.trucks.map((option) => ({ value: option.label, label: option.label }))} onChange={setPlateNumber} ariaLabel="Select active truck" /></label>
-            <label>Delivery temperature<RoundedSelect value={truckTemperature} options={["-18°C", "2°C–4°C", "18°C–25°C", "-18°C / 2°C–4°C"].map((temperature) => ({ value: temperature, label: temperature }))} onChange={(value) => setTruckTemperature(value as TruckTemperature)} ariaLabel="Select delivery temperature in degrees Celsius" /></label>
-            <label className="wide">Origin<input required value={values.origin} onChange={(event) => updateValue("origin", event.target.value)} placeholder="Warehouse or dispatch origin" /></label>
-            <label>Distance travelled (km)<input required min="0" step="0.01" type="number" value={values.distanceKm} onChange={(event) => updateValue("distanceKm", event.target.value)} /></label>
-            <label>Fuel rate per litre<input required min="0" step="0.01" type="number" value={values.fuelRate} onChange={(event) => updateValue("fuelRate", event.target.value)} /></label>
+          <FormHeading number="01" title="Trip information" />
+          <div className="delivery-field-grid delivery-trip-grid">
+            <label>Waybill<input required value={values.waybillNumber} onChange={(event) => updateValue("waybillNumber", event.target.value)} placeholder="WB-2026-0001" /></label>
+            <label>Delivery date
+              <span className="delivery-date-input">
+                <input required type="date" value={values.deliveryDate} onChange={(event) => updateValue("deliveryDate", event.target.value)} />
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 3v3m10-3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+              </span>
+            </label>
+            <div className="client-field-group">
+              <div className="client-field-header">
+                <label htmlFor={isNewClientMode ? "new-client-name-input" : undefined}>
+                  Client
+                </label>
+                <button
+                  type="button"
+                  className="client-mode-toggle"
+                  onClick={() => {
+                    const nextMode = !isNewClientMode;
+                    setIsNewClientMode(nextMode);
+                    if (nextMode) {
+                      setClientName("");
+                    } else if (references.clients.length > 0) {
+                      setClientName(references.clients[0]?.label ?? "");
+                    }
+                  }}
+                >
+                  {isNewClientMode ? "← Select existing" : "+ New client"}
+                </button>
+              </div>
+
+              {isNewClientMode ? (
+                <div className="new-client-input-wrap">
+                  <input
+                    id="new-client-name-input"
+                    required
+                    type="text"
+                    value={clientName}
+                    onChange={(event) => setClientName(event.target.value)}
+                    placeholder="Client name"
+                    autoFocus
+                  />
+                  <span className="new-client-badge">New</span>
+                </div>
+              ) : (
+                <RoundedSelect
+                  value={clientName}
+                  options={references.clients.map((option) => ({ value: option.label, label: option.label }))}
+                  onChange={(val) => setClientName(val)}
+                  ariaLabel="Select active client"
+                  placeholder={referencesLoading ? "Loading clients…" : "Select client"}
+                  emptyMessage={referenceError ? "Clients could not be loaded" : "No active clients available"}
+                  searchable
+                />
+              )}
+            </div>
+            <div className="client-field-group">
+              <div className="client-field-header">
+                <label htmlFor={isNewPlateMode ? "new-plate-number-input" : undefined}>
+                  Truck plate
+                </label>
+                <button
+                  type="button"
+                  className="client-mode-toggle"
+                  onClick={() => {
+                    const nextMode = !isNewPlateMode;
+                    setIsNewPlateMode(nextMode);
+                    if (nextMode) {
+                      setPlateNumber("");
+                    } else if (references.trucks.length > 0) {
+                      setPlateNumber(references.trucks[0]?.label ?? "");
+                    }
+                  }}
+                >
+                  {isNewPlateMode ? "← Select existing" : "+ New plate"}
+                </button>
+              </div>
+
+              {isNewPlateMode ? (
+                <div className="new-client-input-wrap">
+                  <input
+                    id="new-plate-number-input"
+                    required
+                    type="text"
+                    value={plateNumber}
+                    onChange={(event) => setPlateNumber(event.target.value.toUpperCase())}
+                    placeholder="Plate number"
+                    autoFocus
+                  />
+                  <span className="new-client-badge">New</span>
+                </div>
+              ) : (
+                <RoundedSelect
+                  value={plateNumber}
+                  options={references.trucks.map((option) => ({
+                    value: option.label,
+                    label: option.label,
+                    group: option.ownershipType === "Subcontracted" ? "Subcontracted Trucks" : "Owned Trucks",
+                  }))}
+                  onChange={(val) => setPlateNumber(val)}
+                  ariaLabel="Select active truck"
+                  placeholder={referencesLoading ? "Loading trucks…" : "Select truck"}
+                  emptyMessage={referenceError ? "Trucks could not be loaded" : "No active trucks available"}
+                  searchable
+                />
+              )}
+            </div>
+            <label>Temperature
+              <span className="temperature-input-wrap">
+                <input
+                  required
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  value={truckTemperature}
+                  placeholder="e.g. 4"
+                  className="no-spin-stepper"
+                  style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                  aria-describedby="delivery-temperature-unit"
+                  onChange={(event) => setTruckTemperature(event.target.value)}
+                />
+                <span id="delivery-temperature-unit" aria-hidden="true">°C</span>
+              </span>
+            </label>
+            <label className="origin-field">Origin<input required value={values.origin} onChange={(event) => updateValue("origin", event.target.value)} placeholder="e.g. Marilao Depot" /></label>
+            <label>Distance (km)<input required min="0" step="0.01" type="number" inputMode="decimal" className="no-spin-stepper" style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }} value={values.distanceKm} onChange={(event) => updateValue("distanceKm", event.target.value)} /></label>
+            <label>Fuel rate (₱/L)
+              <span className="peso-input-wrap">
+                <span className="peso-prefix" aria-hidden="true">₱</span>
+                <input
+                  required
+                  min="0"
+                  step="0.01"
+                  type="number"
+                  inputMode="decimal"
+                  className="no-spin-stepper peso-input"
+                  style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                  value={values.fuelRate}
+                  onChange={(event) => updateValue("fuelRate", event.target.value)}
+                  placeholder="85.00"
+                />
+              </span>
+            </label>
           </div>
         </section>
 
         <section className="delivery-form-section">
-          <FormHeading number="02" title="Stores and drop-offs" description="Add every store served." />
+          <FormHeading number="02" title="Stores & drop-offs" />
           <div className="dropoff-editor">
             {dropoffs.map((dropoff, index) => (
-              <fieldset key={dropoff.id} className="dropoff-row">
-                <legend>Stop {index + 1}</legend>
-                <label>Store name<input required value={dropoff.storeName} onChange={(event) => updateDropoff(dropoff.id, "storeName", event.target.value)} /></label>
-                <label>Destination<input required value={dropoff.destinationArea} onChange={(event) => updateDropoff(dropoff.id, "destinationArea", event.target.value)} /></label>
-                <ExpenseField label="Entry fee" value={dropoff.entryFee} status={dropoff.entryFeeStatus} onValueChange={(value) => updateDropoff(dropoff.id, "entryFee", value)} onStatusChange={(status) => { updateDropoff(dropoff.id, "entryFeeStatus", status); if (status !== "confirmed") updateDropoff(dropoff.id, "entryFee", ""); }} />
-                {dropoffs.length > 1 ? <button type="button" className="dropoff-remove" onClick={() => setDropoffs((current) => current.filter((item) => item.id !== dropoff.id))}>Remove</button> : null}
-              </fieldset>
+              <div key={dropoff.id} className="dropoff-row">
+                <div className="dropoff-row-header">
+                  <span className="dropoff-row-title">Stop {index + 1}</span>
+                  {dropoffs.length > 1 ? (
+                    <button
+                      type="button"
+                      className="dropoff-remove"
+                      onClick={() => setDropoffs((current) => current.filter((item) => item.id !== dropoff.id))}
+                      aria-label={`Remove Stop ${index + 1}`}
+                    >
+                      ✕ Remove
+                    </button>
+                  ) : null}
+                </div>
+                <div className="dropoff-fields">
+                  <label className="dropoff-field">
+                    <span className="field-label-text">Store name</span>
+                    <input
+                      required
+                      value={dropoff.storeName}
+                      onChange={(event) => updateDropoff(dropoff.id, "storeName", event.target.value)}
+                      placeholder="e.g. Landers Balintawak"
+                    />
+                  </label>
+                  <label className="dropoff-field">
+                    <span className="field-label-text">Destination</span>
+                    <input
+                      required
+                      value={dropoff.destinationArea}
+                      onChange={(event) => updateDropoff(dropoff.id, "destinationArea", event.target.value)}
+                      placeholder="e.g. Quezon City, Metro Manila"
+                    />
+                  </label>
+                  <div className="dropoff-field dropoff-entry-fee-wrap">
+                    <ExpenseField
+                      label="Entry fee (₱)"
+                      value={dropoff.entryFee}
+                      status={dropoff.entryFeeStatus}
+                      onValueChange={(value) => updateDropoff(dropoff.id, "entryFee", value)}
+                      onStatusChange={(status) => {
+                        updateDropoff(dropoff.id, "entryFeeStatus", status);
+                        if (status !== "confirmed") updateDropoff(dropoff.id, "entryFee", "");
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
             ))}
-            <button type="button" className="secondary-button add-dropoff" onClick={addDropoff}>+ Add another store</button>
+            <div className="dropoff-actions-bar">
+              <button type="button" className="secondary-button add-dropoff" onClick={addDropoff}>
+                + Add store
+              </button>
+              <span className="dropoff-counter">
+                {dropoffs.length} {dropoffs.length === 1 ? "stop recorded" : "stops recorded"}
+              </span>
+            </div>
           </div>
         </section>
 
         <section className="delivery-form-section">
-          <FormHeading number="03" title="Revenue and expenses" description="Confirm the trip's financial details." />
-          <div className="delivery-field-grid">
-            <MoneyField label="Delivery rate / revenue" value={values.deliveryRate} required onChange={(value) => updateValue("deliveryRate", value)} />
-            {(Object.keys(expenseStatuses) as (keyof typeof expenseStatuses)[]).map((key) => (
+          <FormHeading number="03" title="Revenue & expenses" />
+          <div className="delivery-field-grid delivery-finance-grid">
+            <h3 className="delivery-finance-group-title wide">Revenue</h3>
+            <MoneyField label="Delivery Rate (₱)" value={values.deliveryRate} required onChange={(value) => updateValue("deliveryRate", value)} />
+            <h3 className="delivery-finance-group-title wide">Expenses</h3>
+            {(["dieselExpenses", "tollGateExpenses", "otherExpenses"] as (keyof typeof expenseStatuses)[]).map((key) => (
               <ExpenseField key={key} label={expenseLabel(key)} value={values[key]} status={expenseStatuses[key]} onValueChange={(value) => updateValue(key, value)} onStatusChange={(status) => { setExpenseStatuses((current) => ({ ...current, [key]: status })); if (status !== "confirmed") updateValue(key, ""); }} />
             ))}
-            <label className="wide">Toll breakdown<textarea value={values.tollGateBreakdown} onChange={(event) => updateValue("tollGateBreakdown", event.target.value)} placeholder="Optional toll gate names and amounts" /></label>
+            <div className="crew-expense-groups wide">
+              {([
+                { title: "Driver", keys: [["driverDailyRate", "Daily rate (₱)"], ["driverAllowance", "Allowance (₱)"]] as const },
+                { title: "Helper", keys: [["helperDailyRate", "Daily rate (₱)"], ["helperAllowance", "Allowance (₱)"]] as const },
+              ] as const).map((group) => (
+                <section className="crew-expense-group" key={group.title}>
+                  <h4>{group.title}</h4>
+                  <div className="crew-expense-fields-row">
+                    {group.keys.map(([key, label]) => (
+                      <ExpenseField key={key} label={label} value={values[key]} status={expenseStatuses[key]} onValueChange={(value) => updateValue(key, value)} onStatusChange={(status) => { setExpenseStatuses((current) => ({ ...current, [key]: status })); if (status !== "confirmed") updateValue(key, ""); }} />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           </div>
           <div className="delivery-financial-review" aria-label="Financial review">
             <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
@@ -278,28 +567,123 @@ export default function NewCompletedDeliveryPage() {
         </section>
 
         <section className="delivery-form-section delivery-document-note">
-          <FormHeading number="04" title="POD and supporting documents" description="Upload documents after saving the trip." />
+          <FormHeading number="04" title="POD & supporting documents" />
+          <div className="delivery-upload-grid">
+            <FileUploadField
+              id="delivery-pod-files"
+              label="Proof of delivery"
+              helper="PDF, PNG, or JPG"
+              files={podFiles}
+              onChange={setPodFiles}
+            />
+            <FileUploadField
+              id="delivery-supporting-files"
+              label="Supporting documents"
+              helper="Receiving slips and attachments"
+              files={supportingFiles}
+              onChange={setSupportingFiles}
+            />
+          </div>
         </section>
 
         <div className="delivery-form-actions">
           <Link className="secondary-button" href="/deliveries">Cancel</Link>
           <button className="primary-action-button" type="submit" disabled={submitting || referencesLoading || noReferences}>
-            {submitting ? "Recording delivery…" : "Record completed delivery"}
+            Preview delivery
           </button>
         </div>
         {noReferences ? <p className="delivery-reference-warning">At least one active client and one active Fleet truck are required before a delivery can be recorded.</p> : null}
       </form>
       </div>
+      <RecordDetailDrawer
+        open={previewing}
+        eyebrow={`WAYBILL ${values.waybillNumber || "PREVIEW"}`}
+        title={clientName || "Delivery review"}
+        statusLabel="Ready to record"
+        sections={previewSections}
+        onClose={() => !submitting && setPreviewing(false)}
+        footer={(
+          <>
+            <button type="button" className="secondary-button" disabled={submitting} onClick={() => setPreviewing(false)}>Back to edit</button>
+            <button type="button" className="primary-action-button" disabled={submitting} onClick={recordDelivery}>
+              {submitting ? "Recording delivery…" : "Confirm and record"}
+            </button>
+          </>
+        )}
+      />
     </>
   );
 }
 
-function FormHeading({ number, title, description }: { number: string; title: string; description: string }) {
-  return <div className="delivery-form-heading"><div><span>{number}</span><h2>{title}</h2></div><p>{description}</p></div>;
+function FormHeading({ number, title, description }: { number: string; title: string; description?: string }) {
+  return (
+    <div className="delivery-form-heading">
+      <div><span>{number}</span><h2>{title}</h2></div>
+      {description ? <p>{description}</p> : null}
+    </div>
+  );
 }
 
 function MoneyField({ label, value, required = false, onChange }: { label: string; value: string; required?: boolean; onChange: (value: string) => void }) {
-  return <label>{label}<input required={required} min={required ? "0.01" : "0"} step="0.01" type="number" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  const displayLabel = label.includes("₱") ? label : `${label} (₱)`;
+  return (
+    <label>
+      <span className="field-label-text">{displayLabel}</span>
+      <span className="peso-input-wrap">
+        <span className="peso-prefix" aria-hidden="true">₱</span>
+        <input
+          required={required}
+          min={required ? "0.01" : "0"}
+          step="0.01"
+          type="number"
+          inputMode="decimal"
+          placeholder="0.00"
+          className="no-spin-stepper peso-input"
+          style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </span>
+    </label>
+  );
+}
+
+function FileUploadField({ id, label, helper, files, onChange }: {
+  id: string;
+  label: string;
+  helper: string;
+  files: File[];
+  onChange: (files: File[]) => void;
+}) {
+  return (
+    <div className="delivery-upload-field">
+      <span className="delivery-upload-label">{label}</span>
+      <label className="delivery-upload-control">
+        <span className="delivery-upload-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </span>
+        <span className="delivery-upload-copy">
+          <strong>{files.length ? `${files.length} file${files.length === 1 ? "" : "s"} selected` : "Choose files"}</strong>
+          <small>{files.length ? files.map((file) => file.name).join(", ") : "Select files from your device"}</small>
+        </span>
+        <span className="delivery-upload-browse">Browse</span>
+        <input
+          key={files.map((file) => `${file.name}:${file.size}`).join("|") || "empty"}
+          id={id}
+          className="delivery-upload-input"
+          type="file"
+          accept="application/pdf,image/png,image/jpeg"
+          multiple
+          aria-label={`Choose ${label.toLocaleLowerCase()}`}
+          onChange={(event) => onChange(Array.from(event.target.files ?? []))}
+        />
+      </label>
+      <div className="delivery-upload-meta">
+        <small>{helper}</small>
+        {files.length ? <button type="button" onClick={() => onChange([])}>Clear</button> : null}
+      </div>
+    </div>
+  );
 }
 
 function ExpenseField({
@@ -315,42 +699,59 @@ function ExpenseField({
   onValueChange: (value: string) => void;
   onStatusChange: (status: ExpenseResolutionStatus) => void;
 }) {
+  const displayLabel = label.includes("₱") ? label : `${label} (₱)`;
   return (
-    <label className="expense-resolution-field">
-      {label}
+    <div className="expense-resolution-field">
+      <span className="field-label-text">{displayLabel}</span>
       <div className="expense-resolution-controls">
-        <select
-          aria-label={`${label} resolution`}
-          value={status}
-          onChange={(event) => onStatusChange(event.target.value as ExpenseResolutionStatus)}
-        >
-          <option value="unknown">Unknown</option>
-          <option value="confirmed">Confirmed amount</option>
-          <option value="not_applicable">Not applicable</option>
-        </select>
-        <input
-          aria-label={`${label} amount`}
-          disabled={status !== "confirmed"}
-          min="0"
-          step="0.01"
-          type="number"
-          value={status === "confirmed" ? value : ""}
-          placeholder={status === "confirmed" ? "0.00" : status === "unknown" ? "Amount unknown" : "N/A"}
-          onChange={(event) => onValueChange(event.target.value)}
-        />
+        <span className={`peso-input-wrap ${status !== "confirmed" ? "is-disabled" : ""}`}>
+          {status === "confirmed" ? (
+            <span className="peso-prefix" aria-hidden="true">₱</span>
+          ) : null}
+          <input
+            aria-label={`${displayLabel} amount`}
+            disabled={status !== "confirmed"}
+            min="0"
+            step="0.01"
+            type="number"
+            inputMode="decimal"
+            className={`no-spin-stepper ${status === "confirmed" ? "peso-input" : ""}`}
+            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+            value={status === "confirmed" ? value : ""}
+            placeholder={status === "confirmed" ? "0.00" : status === "unknown" ? "Amount unknown" : "N/A"}
+            onChange={(event) => onValueChange(event.target.value)}
+          />
+        </span>
+        <div className="expense-resolution-options" role="group" aria-label={`${displayLabel} resolution`}>
+          {([
+            ["confirmed", "Amount"],
+            ["not_applicable", "N/A"],
+            ["unknown", "Unknown"],
+          ] as const).map(([val, text]) => (
+            <button
+              type="button"
+              key={val}
+              className={status === val ? "active" : ""}
+              aria-pressed={status === val}
+              onClick={() => onStatusChange(val)}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
       </div>
-    </label>
+    </div>
   );
 }
 
 function expenseLabel(key: string): string {
   return ({
-    dieselExpenses: "Diesel expenses",
-    tollGateExpenses: "Toll gate expenses",
-    driverAllowance: "Driver allowance",
-    driverDailyRate: "Driver daily rate",
-    helperAllowance: "Helper allowance",
-    helperDailyRate: "Helper daily rate",
-    otherExpenses: "Other expenses",
+    dieselExpenses: "Diesel (₱)",
+    tollGateExpenses: "Toll gate (₱)",
+    driverAllowance: "Allowance (₱)",
+    driverDailyRate: "Daily rate (₱)",
+    helperAllowance: "Allowance (₱)",
+    helperDailyRate: "Daily rate (₱)",
+    otherExpenses: "Other expenses (₱)",
   } as Record<string, string>)[key] ?? key;
 }

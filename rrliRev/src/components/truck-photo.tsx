@@ -9,7 +9,7 @@ function storageKey(plateNumber: string): string {
   return `routex.truck-photo.${plateNumber.trim().toUpperCase()}`;
 }
 
-async function resizePhoto(file: File): Promise<string> {
+export async function resizeTruckPhoto(file: File): Promise<string> {
   const source = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
@@ -30,6 +30,12 @@ async function resizePhoto(file: File): Promise<string> {
   if (!context) throw new Error("Photo processing is unavailable in this browser.");
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+export async function saveTruckPhotoFile(plateNumber: string, file: File): Promise<void> {
+  const photo = await resizeTruckPhoto(file);
+  window.localStorage.setItem(storageKey(plateNumber), photo);
+  window.dispatchEvent(new Event(PHOTO_EVENT));
 }
 
 export function TruckPhoto({ plateNumber, editable = false }: { plateNumber: string; editable?: boolean }) {
@@ -77,7 +83,7 @@ export function TruckPhoto({ plateNumber, editable = false }: { plateNumber: str
     setProcessing(true);
     setMessage(null);
     try {
-      const nextPhoto = await resizePhoto(file);
+      const nextPhoto = await resizeTruckPhoto(file);
       window.localStorage.setItem(storageKey(plateNumber), nextPhoto);
       setPhoto(nextPhoto);
       window.dispatchEvent(new Event(PHOTO_EVENT));

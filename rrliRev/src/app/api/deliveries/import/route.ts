@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import * as z from "zod";
 
+import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { SMALL_MOCK_DATABASE } from "@/features/deliveries/small-mock-database";
-import { buildDeliveryTripRecord } from "@/features/deliveries/delivery-domain";
+import {
+  getMockClients,
+  registerMockClient,
+  SMALL_MOCK_DATABASE,
+} from "@/features/deliveries/small-mock-database";
+import { buildDeliveryTripRecord, type TruckTemperature } from "@/features/deliveries/delivery-domain";
 import { dynamicMockDeliveries, getAllMockDeliveries } from "@/features/deliveries/small-mock-repository";
 
 const importRowSchema = z.object({
@@ -13,10 +18,13 @@ const importRowSchema = z.object({
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Valid YYYY-MM-DD date required."),
   clientName: z.string().trim().min(2, "Client name is required."),
   plateNumber: z.string().trim().min(3, "Truck plate number is required."),
-  truckTemperature: z.enum(["-18°C", "2°C–4°C", "18°C–25°C", "-18°C / 2°C–4°C"]),
+  truckTemperature: z
+    .string()
+    .trim()
+    .regex(/^-?\d+(?:\.\d+)?°C$/, "Enter a fixed numeric temperature in °C."),
   origin: z.string().trim().default("Central Depot"),
   distanceKm: z.number().min(0).default(50),
-  fuelRate: z.number().min(0).default(60),
+  fuelRate: z.number().min(0).default(85),
   deliveryRate: z.number().positive("Delivery rate must be positive."),
   dieselExpenses: z.number().nullable().default(null),
   dieselExpensesStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("confirmed"),
@@ -98,10 +106,11 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const client = SMALL_MOCK_DATABASE.clients.find((c) =>
-        c.name.toLowerCase().includes(row.clientName.toLowerCase()) ||
-        row.clientName.toLowerCase().includes(c.name.toLowerCase())
-      ) ?? SMALL_MOCK_DATABASE.clients[0];
+      const client =
+        getMockClients().find((c) =>
+          c.name.toLowerCase().includes(row.clientName.toLowerCase()) ||
+          row.clientName.toLowerCase().includes(c.name.toLowerCase())
+        ) ?? registerMockClient(row.clientName);
 
       const truck = SMALL_MOCK_DATABASE.trucks.find((t) =>
         t.plateNumber.toLowerCase().replace(/\s+/g, "") ===
@@ -116,7 +125,7 @@ export async function POST(request: Request) {
         clientName: client.name,
         plateNumber: truck.plateNumber,
         truckType: truck.truckType,
-        truckTemperature: row.truckTemperature,
+        truckTemperature: row.truckTemperature as TruckTemperature,
         truckOwnership: truck.ownershipType,
         rateBasis: truck.rateBasis,
         origin: row.origin,
@@ -162,6 +171,16 @@ export async function POST(request: Request) {
 
       committed.push(row.waybillNumber);
     }
+
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "delivery.batch_imported",
+      entityType: "import_batch",
+      entityId: idempotencyKey,
+      summary: `Imported batch "${batchName}" with ${committed.length} deliveries.`,
+      changes: { committedWaybills: committed, duplicateCount: duplicates.length, errorCount: errors.length },
+    });
 
     return NextResponse.json({
       ok: true,

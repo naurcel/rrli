@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export type DetailSection = {
   title: string;
@@ -86,11 +87,11 @@ export function RecordDetailDrawer({
     };
   }, [open]);
 
-  if (!open) {
+  if (!open || typeof document === "undefined") {
     return null;
   }
 
-  return (
+  return createPortal(
     <div className="record-detail-layer">
       <button
         type="button"
@@ -151,14 +152,14 @@ export function RecordDetailDrawer({
             </section>
           ))}
         </div>
-        <footer className="record-detail-footer">
-          <button type="button" className="secondary-button" onClick={onClose}>
-            Close
-          </button>
-          {footer ? <div className="record-detail-footer-actions">{footer}</div> : null}
-        </footer>
+        {footer ? (
+          <footer className="record-detail-footer">
+            <div className="record-detail-footer-actions">{footer}</div>
+          </footer>
+        ) : null}
       </article>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -32,7 +32,6 @@ export const PERMISSIONS = [
   "imports:upload",
   "imports:review_confirm",
   "pod:view",
-  "pod:verify",
   "profitability:view",
   "profitability:manage",
   "reports:view",
@@ -71,7 +70,6 @@ const OPERATIONS_PERMISSIONS: readonly Permission[] = [
   "dropoffs:manage",
   "imports:upload",
   "imports:review_confirm",
-  "pod:verify",
   "profitability:manage",
   "reports:export",
 ] as const;
@@ -109,7 +107,7 @@ export const ROLE_METADATA: Readonly<Record<UserRole, RoleMetadata>> = {
     accessLevelLabel: "Operations Write Access",
     badgeTone: "success",
     summary:
-      "Create and manage deliveries, manage multi-store drop-offs, import and review Excel trip reports before saving, verify PODs, and view truck performance.",
+      "Create and manage deliveries, manage multi-store drop-offs, import and review Excel trip reports before saving, manage PODs and supporting documents, and view truck performance.",
   },
   finance: {
     role: "finance",
@@ -177,8 +175,15 @@ export function canImportAndReviewExcel(role: UserRole): boolean {
   return hasPermission(role, "imports:upload") && hasPermission(role, "imports:review_confirm");
 }
 
+export function canManageDocuments(role: UserRole): boolean {
+  return canMutateDeliveryRecords(role);
+}
+
+/**
+ * @deprecated Verification workflow removed. Retained as permission check alias for document write access.
+ */
 export function canVerifyPodDocuments(role: UserRole): boolean {
-  return hasPermission(role, "pod:verify");
+  return canManageDocuments(role);
 }
 
 export function canManageUsers(role: UserRole): boolean {

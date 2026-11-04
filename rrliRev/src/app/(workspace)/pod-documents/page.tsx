@@ -9,11 +9,8 @@ import {
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RoundedSelect } from "@/components/rounded-select";
-import {
-  derivePodVerificationStatus,
-} from "@/features/deliveries/delivery-domain";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
-import { canVerifyPodDocuments } from "@/lib/auth/rbac";
+import { canManageDocuments } from "@/lib/auth/rbac";
 
 function toDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -25,19 +22,18 @@ function toDateKey(date: Date): string {
 export default function PodDocumentsPage() {
   const actor = useAuthenticatedActor();
   const { range } = useGlobalDateRange();
-  const canVerify = canVerifyPodDocuments(actor.role);
+  const canManage = canManageDocuments(actor.role);
 
   const [deliveries, setDeliveries] = useState<readonly DeliveryLedgerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState("All Drop-off Statuses");
+  const [filterStatus, setFilterStatus] = useState("All Drop-offs");
   const [feedback, setFeedback] = useState<{
     tone: "success" | "error";
     text: string;
   } | null>(null);
-  const [updatingStopId, setUpdatingStopId] = useState<string | null>(null);
 
-  // Modal review state
+  // Modal inspection state
   const [inspectingStop, setInspectingStop] = useState<{
     tripId: string;
     waybillNumber: string;
@@ -46,21 +42,19 @@ export default function PodDocumentsPage() {
     plateNumber: string;
     version: number;
     stop: DeliveryLedgerItem["dropoffs"][number];
-    isComplete: boolean;
+    hasPod: boolean;
   } | null>(null);
 
   const [docDetail, setDocDetail] = useState<{
     id?: string;
     filename?: string;
     status?: string;
-    notes?: string | null;
     downloadUrl?: string | null;
     isMock?: boolean;
   } | null>(null);
   const [docLoading, setDocLoading] = useState(false);
   const [docActionError, setDocActionError] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [reviewNotes, setReviewNotes] = useState("");
   const [docSubmitting, setDocSubmitting] = useState(false);
 
   useEffect(() => {
@@ -107,25 +101,25 @@ export default function PodDocumentsPage() {
         plateNumber: trip.plateNumber,
         version: trip.version,
         stop,
-        isComplete: stop.podSubmitted && stop.supportingDocsComplete,
+        hasPod: Boolean(stop.podSubmitted && stop.documentRef && stop.documentRef !== "Pending upload"),
       })),
     );
   }, [dateFilteredDeliveries]);
 
   const filteredStops = useMemo(() => {
-    if (filterStatus === "Verified Only") {
-      return flattenedStops.filter((item) => item.isComplete);
+    if (filterStatus === "POD Attached") {
+      return flattenedStops.filter((item) => item.hasPod);
     }
-    if (filterStatus === "Needs Follow-up") {
-      return flattenedStops.filter((item) => !item.isComplete);
+    if (filterStatus === "Missing POD") {
+      return flattenedStops.filter((item) => !item.hasPod);
     }
     return flattenedStops;
   }, [flattenedStops, filterStatus]);
 
   const counts = useMemo(() => {
-    const verified = flattenedStops.filter((item) => item.isComplete).length;
-    const pending = flattenedStops.length - verified;
-    return { total: flattenedStops.length, verified, pending };
+    const attached = flattenedStops.filter((item) => item.hasPod).length;
+    const missing = flattenedStops.length - attached;
+    return { total: flattenedStops.length, attached, missing };
   }, [flattenedStops]);
 
   async function openDocModal(item: (typeof flattenedStops)[number]) {
@@ -133,7 +127,6 @@ export default function PodDocumentsPage() {
     setDocDetail(null);
     setDocActionError(null);
     setUploadFile(null);
-    setReviewNotes("");
     setDocLoading(true);
 
     try {
@@ -141,7 +134,6 @@ export default function PodDocumentsPage() {
       const data = await res.json();
       if (res.ok && data.ok) {
         setDocDetail(data.document);
-        setReviewNotes(data.document.notes || "");
       }
     } catch {
       // Ignored if document record doesn't exist yet
@@ -150,13 +142,8 @@ export default function PodDocumentsPage() {
     }
   }
 
-  async function handleDocAction(action: "upload" | "verify" | "reject") {
-    if (!inspectingStop || docSubmitting) return;
-
-    if (action === "reject" && reviewNotes.trim().length < 5) {
-      setDocActionError("A rejection note with at least 5 characters is required.");
-      return;
-    }
+  async function handleUploadDocument() {
+    if (!inspectingStop || !uploadFile || docSubmitting) return;
 
     setDocSubmitting(true);
     setDocActionError(null);
@@ -164,11 +151,8 @@ export default function PodDocumentsPage() {
     const formData = new FormData();
     formData.append("deliveryId", inspectingStop.tripId);
     formData.append("dropoffId", inspectingStop.stop.id);
-    formData.append("action", action);
-    formData.append("notes", reviewNotes.trim());
-    if (uploadFile) {
-      formData.append("file", uploadFile);
-    }
+    formData.append("action", "upload");
+    formData.append("file", uploadFile);
 
     try {
       const res = await fetch("/api/deliveries/documents", {
@@ -177,16 +161,10 @@ export default function PodDocumentsPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        throw new Error(data.message ?? "Failed to perform document action.");
+        throw new Error(data.message ?? "Failed to upload document.");
       }
 
-      const isVerified = action === "verify";
-      const isRejected = action === "reject";
-      const nextSubmitted = !isRejected;
-      const nextComplete = isVerified;
-      const docRef = uploadFile
-        ? uploadFile.name
-        : (data.document?.filename ?? inspectingStop.stop.documentRef);
+      const docRef = uploadFile.name;
 
       setDeliveries((current) =>
         current.map((trip) =>
@@ -196,8 +174,8 @@ export default function PodDocumentsPage() {
                   stop.id === inspectingStop.stop.id
                     ? {
                         ...stop,
-                        podSubmitted: nextSubmitted,
-                        supportingDocsComplete: nextComplete,
+                        podSubmitted: true,
+                        supportingDocsComplete: true,
                         documentRef: docRef,
                       }
                     : stop,
@@ -206,7 +184,6 @@ export default function PodDocumentsPage() {
                   ...trip,
                   version: trip.version + 1,
                   dropoffs: nextDropoffs,
-                  podStatus: derivePodVerificationStatus(nextDropoffs),
                 };
               })()
             : trip,
@@ -215,117 +192,31 @@ export default function PodDocumentsPage() {
 
       setFeedback({
         tone: "success",
-        text: `Successfully performed "${action}" for ${inspectingStop.stop.storeName} (${inspectingStop.waybillNumber}).`,
+        text: `Uploaded POD document for ${inspectingStop.stop.storeName} (${inspectingStop.waybillNumber}).`,
       });
       setInspectingStop(null);
     } catch (err) {
-      setDocActionError(err instanceof Error ? err.message : "Error performing document action.");
+      setDocActionError(err instanceof Error ? err.message : "Error uploading document.");
     } finally {
       setDocSubmitting(false);
     }
   }
 
-  async function toggleStopVerification(
-    item: (typeof flattenedStops)[number],
-  ): Promise<boolean> {
-    if (!canVerify || updatingStopId) {
-      return false;
-    }
-
-    setUpdatingStopId(item.stop.id);
-    setFeedback(null);
-    const nextState = !item.isComplete;
-
-    try {
-      const response = await fetch("/api/deliveries", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "update_pod",
-          deliveryId: item.tripId,
-          dropoffId: item.stop.id,
-          expectedVersion: item.version,
-          podSubmitted: nextState,
-          supportingDocsComplete: nextState,
-          documentRef: nextState
-            ? `POD-${item.waybillNumber}-S${item.stop.sequence}.pdf`
-            : "Awaiting verification",
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as {
-        ok?: boolean;
-        deliveryId?: string;
-        podStatus?: string;
-        result?: { version?: number };
-        message?: string;
-      } | null;
-
-      if (!response.ok || !payload?.ok) {
-        setFeedback({
-          tone: "error",
-          text: payload?.message ?? "Could not update POD verification status.",
-        });
-        return false;
-      }
-
-      setDeliveries((current) =>
-        current.map((trip) =>
-          trip.id === item.tripId
-            ? (() => {
-                const nextDropoffs = trip.dropoffs.map((stop) =>
-                  stop.id === item.stop.id
-                    ? {
-                        ...stop,
-                        podSubmitted: nextState,
-                        supportingDocsComplete: nextState,
-                        documentRef: nextState
-                          ? `POD-${item.waybillNumber}-S${item.stop.sequence}.pdf`
-                          : "Awaiting verification",
-                      }
-                    : stop,
-                );
-                return {
-                  ...trip,
-                  version: payload?.result?.version ?? trip.version + 1,
-                  dropoffs: nextDropoffs,
-                  podStatus: derivePodVerificationStatus(nextDropoffs),
-                };
-              })()
-            : trip,
-        ),
-      );
-      setFeedback({
-        tone: "success",
-        text: `Updated POD & supporting document status for ${item.stop.storeName} (${item.waybillNumber}).`,
-      });
-      return true;
-    } catch {
-      setFeedback({
-        tone: "error",
-        text: "Network error while updating POD verification status.",
-      });
-      return false;
-    } finally {
-      setUpdatingStopId(null);
-    }
-  }
-
   return (
     <>
-      <OperationalTopbar contextLabel="POD & Supporting Document Verification" />
+      <OperationalTopbar contextLabel="POD & Supporting Documents" />
 
       <div className="content-wrap">
         <header className="page-intro">
           <div>
             <h1>POD & Supporting Documents</h1>
             <p className="subtitle">
-              Review PODs and supporting documents by store.
+              View and manage proof of delivery documents by store drop-off.
             </p>
           </div>
-          {canVerify ? (
+          {canManage ? (
             <span className="access-pill operations">
-              Verification Enabled ({actor.roleLabel})
+              Document Management ({actor.roleLabel})
             </span>
           ) : (
             <span className="settings-readonly-pill">
@@ -341,7 +232,7 @@ export default function PodDocumentsPage() {
             </span>
             <div>
               <strong>
-                {feedback.tone === "error" ? "Action Blocked:" : "Verification Updated:"}
+                {feedback.tone === "error" ? "Error:" : "Document Saved:"}
               </strong>
               <span>{feedback.text}</span>
             </div>
@@ -355,37 +246,37 @@ export default function PodDocumentsPage() {
           </section>
         ) : null}
 
-        <section className="stat-grid" aria-label="POD verification totals">
+        <section className="stat-grid" aria-label="POD document totals">
           <article className="stat-card">
             <span className="stat-label">TOTAL STORE DROP-OFFS</span>
             <strong>{counts.total}</strong>
             <span className="stat-meta">Across {deliveries.length} completed deliveries</span>
           </article>
           <article className="stat-card">
-            <span className="stat-label">VERIFIED POD & DOCS</span>
-            <strong>{counts.verified}</strong>
-            <span className="stat-meta positive">Complete receiving slip & waybill</span>
+            <span className="stat-label">POD ATTACHED</span>
+            <strong>{counts.attached}</strong>
+            <span className="stat-meta positive">Document stored &amp; accessible</span>
           </article>
           <article className="stat-card">
-            <span className="stat-label">NEEDS FOLLOW-UP</span>
-            <strong>{counts.pending}</strong>
-            <span className={`stat-meta ${counts.pending > 0 ? "warning" : "positive"}`}>
-              {counts.pending > 0
-                ? "Missing POD or incomplete supporting document"
-                : "All store documents verified"}
+            <span className="stat-label">MISSING POD</span>
+            <strong>{counts.missing}</strong>
+            <span className={`stat-meta ${counts.missing > 0 ? "warning" : "positive"}`}>
+              {counts.missing > 0
+                ? "Awaiting document upload"
+                : "All drop-offs have documents attached"}
             </span>
           </article>
         </section>
 
-        <section className={`records-card${loading ? " is-loading" : ""}`} aria-label="Store POD verification checklist">
+        <section className={`records-card${loading ? " is-loading" : ""}`} aria-label="Store POD document repository">
           <div className="records-heading">
             <div>
-              <h2>Store-Level Document Verification Queue</h2>
-              <p>Review documents for each store drop-off.</p>
+              <h2>Store-Level Document Repository</h2>
+              <p>Select any store drop-off to view, download, or upload documents.</p>
             </div>
             <RoundedSelect
               value={filterStatus}
-              options={["All Drop-off Statuses", "Needs Follow-up", "Verified Only"]}
+              options={["All Drop-offs", "POD Attached", "Missing POD"]}
               onChange={setFilterStatus}
               ariaLabel="Filter drop-offs by document status"
             />
@@ -398,82 +289,73 @@ export default function PodDocumentsPage() {
             </div>
           ) : loading ? (
             <div className="empty-state" role="status">
-              <strong>Loading document queue…</strong>
-              <span>Retrieving completed deliveries and store-level document states.</span>
+              <strong>Loading documents…</strong>
+              <span>Retrieving completed deliveries and store-level document attachments.</span>
             </div>
           ) : filteredStops.length === 0 ? (
             <div className="empty-state">
               <strong>No drop-offs match this view</strong>
               <span>Change the document filter or selected date range.</span>
             </div>
-          ) : <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Waybill & Date</th>
-                  <th>Client</th>
-                  <th>Truck</th>
-                  <th>Stop # & Store Name</th>
-                  <th>POD Submitted</th>
-                  <th>Supporting Docs</th>
-                  <th>Document Reference</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStops.map((item) => (
-                  <tr
-                    key={item.stop.id}
-                    className="record-row"
-                    tabIndex={0}
-                    aria-label={`Review POD for ${item.stop.storeName}, ${item.waybillNumber}`}
-                    onClick={() => void openDocModal(item)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        void openDocModal(item);
-                      }
-                    }}
-                  >
-                    <td>
-                      <strong>{item.waybillNumber}</strong>
-                      <br />
-                      <small>{item.deliveryDate}</small>
-                    </td>
-                    <td>{item.clientName}</td>
-                    <td className="truck-code">{item.plateNumber}</td>
-                    <td>
-                      <strong>
-                        Stop #{item.stop.sequence}: {item.stop.storeName}
-                      </strong>
-                      <br />
-                      <small>{item.stop.destinationArea}</small>
-                    </td>
-                    <td>
-                      <span
-                        className={`pod-status ${
-                          item.stop.podSubmitted ? "attached" : "missing"
-                        }`}
-                      >
-                        <i aria-hidden="true" />
-                        {item.stop.podSubmitted ? "Submitted" : "Missing"}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`pod-status ${
-                          item.stop.supportingDocsComplete ? "attached" : "missing"
-                        }`}
-                      >
-                        <i aria-hidden="true" />
-                        {item.stop.supportingDocsComplete ? "Complete" : "Incomplete"}
-                      </span>
-                    </td>
-                    <td>{item.stop.documentRef}</td>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Waybill & Date</th>
+                    <th>Client</th>
+                    <th>Truck</th>
+                    <th>Stop # & Store Name</th>
+                    <th>POD Status</th>
+                    <th>Document Reference</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>}
+                </thead>
+                <tbody>
+                  {filteredStops.map((item) => (
+                    <tr
+                      key={item.stop.id}
+                      className="record-row"
+                      tabIndex={0}
+                      aria-label={`View POD for ${item.stop.storeName}, ${item.waybillNumber}`}
+                      onClick={() => void openDocModal(item)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          void openDocModal(item);
+                        }
+                      }}
+                    >
+                      <td>
+                        <strong>{item.waybillNumber}</strong>
+                        <br />
+                        <small>{item.deliveryDate}</small>
+                      </td>
+                      <td>{item.clientName}</td>
+                      <td className="truck-code">{item.plateNumber}</td>
+                      <td>
+                        <strong>
+                          Stop #{item.stop.sequence}: {item.stop.storeName}
+                        </strong>
+                        <br />
+                        <small>{item.stop.destinationArea}</small>
+                      </td>
+                      <td>
+                        <span
+                          className={`pod-status ${
+                            item.hasPod ? "attached" : "missing"
+                          }`}
+                        >
+                          <i aria-hidden="true" />
+                          {item.hasPod ? "Attached" : "Missing"}
+                        </span>
+                      </td>
+                      <td>{item.stop.documentRef || "Pending upload"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </div>
 
@@ -483,7 +365,7 @@ export default function PodDocumentsPage() {
           <div className="routex-dialog">
             <header className="routex-dialog-header">
               <div>
-                <h2 id="doc-dialog-title">Proof of Delivery Review</h2>
+                <h2 id="doc-dialog-title">Proof of Delivery Document</h2>
                 <p>
                   Stop #{inspectingStop.stop.sequence} · {inspectingStop.stop.storeName} ({inspectingStop.waybillNumber})
                 </p>
@@ -510,16 +392,11 @@ export default function PodDocumentsPage() {
                 <div><strong>Truck:</strong> {inspectingStop.plateNumber}</div>
                 <div><strong>Delivery Date:</strong> {inspectingStop.deliveryDate}</div>
                 <div><strong>Destination Area:</strong> {inspectingStop.stop.destinationArea}</div>
-                <div>
+                <div style={{ gridColumn: "1 / -1" }}>
                   <strong>POD Status:</strong>{" "}
-                  <span className={`pod-status ${inspectingStop.stop.podSubmitted ? "attached" : "missing"}`}>
-                    {inspectingStop.stop.podSubmitted ? "Submitted" : "Missing"}
-                  </span>
-                </div>
-                <div>
-                  <strong>Supporting Docs:</strong>{" "}
-                  <span className={`pod-status ${inspectingStop.stop.supportingDocsComplete ? "attached" : "missing"}`}>
-                    {inspectingStop.stop.supportingDocsComplete ? "Complete" : "Incomplete"}
+                  <span className={`pod-status ${inspectingStop.hasPod ? "attached" : "missing"}`}>
+                    <i aria-hidden="true" />
+                    {inspectingStop.hasPod ? "Attached" : "Missing"}
                   </span>
                 </div>
               </div>
@@ -534,11 +411,6 @@ export default function PodDocumentsPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid var(--line)", borderRadius: "10px" }}>
                     <div>
                       <strong>{docDetail?.filename || inspectingStop.stop.documentRef || "No file attached"}</strong>
-                      {docDetail?.notes ? (
-                        <p style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--color-text-muted)" }}>
-                          Note: {docDetail.notes}
-                        </p>
-                      ) : null}
                     </div>
                     {docDetail?.downloadUrl ? (
                       <a
@@ -550,7 +422,7 @@ export default function PodDocumentsPage() {
                       >
                         Download Document
                       </a>
-                    ) : inspectingStop.stop.podSubmitted ? (
+                    ) : inspectingStop.hasPod ? (
                       <span className="detail-status success">Stored Private</span>
                     ) : (
                       <span className="detail-status warning">Awaiting Upload</span>
@@ -559,35 +431,22 @@ export default function PodDocumentsPage() {
                 </div>
               )}
 
-              {canVerify ? (
-                <>
-                  <div className="routex-dialog-field">
-                    <label htmlFor="pod-upload-input">Upload / Replace POD Document (PDF, PNG, JPG up to 10MB)</label>
-                    <input
-                      id="pod-upload-input"
-                      type="file"
-                      accept=".pdf,.png,.jpg,.jpeg"
-                      onChange={(e) => {
-                        const files = e.target.files;
-                        if (files && files[0]) setUploadFile(files[0]);
-                      }}
-                    />
-                  </div>
-
-                  <div className="routex-dialog-field">
-                    <label htmlFor="pod-review-notes">Review Notes / Rejection Reason</label>
-                    <textarea
-                      id="pod-review-notes"
-                      rows={2}
-                      placeholder="Add verification notes or rejection explanation (required if rejecting)"
-                      value={reviewNotes}
-                      onChange={(e) => setReviewNotes(e.target.value)}
-                    />
-                  </div>
-                </>
+              {canManage ? (
+                <div className="routex-dialog-field">
+                  <label htmlFor="pod-upload-input">Upload / Replace POD Document (PDF, PNG, JPG up to 10MB)</label>
+                  <input
+                    id="pod-upload-input"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (files && files[0]) setUploadFile(files[0]);
+                    }}
+                  />
+                </div>
               ) : (
                 <p style={{ fontSize: "12px", color: "var(--color-text-muted)", margin: 0 }}>
-                  You are viewing this record in view-only mode ({actor.roleLabel}). Document modifications require Operations or Admin privileges.
+                  You are viewing this record in view-only mode ({actor.roleLabel}). Document uploads require Operations or Admin privileges.
                 </p>
               )}
             </div>
@@ -602,57 +461,16 @@ export default function PodDocumentsPage() {
                 Close
               </button>
 
-              {canVerify ? (
-                <>
-                  {!inspectingStop.isComplete ? (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ color: "var(--color-status-warning)" }}
-                    disabled={docSubmitting || reviewNotes.trim().length < 5}
-                    onClick={() => handleDocAction("reject")}
-                    title={reviewNotes.trim().length < 5 ? "Rejection requires at least 5 characters of notes" : "Reject document"}
-                  >
-                    Reject
-                  </button>
-                  ) : null}
-                  {uploadFile ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={docSubmitting}
-                      onClick={() => handleDocAction("upload")}
-                      title="Upload or replace the proof of delivery document"
-                    >
-                      {docSubmitting ? "Uploading…" : "Upload"}
-                    </button>
-                  ) : null}
-                  {inspectingStop.isComplete ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      style={{ color: "#b91c1c" }}
-                      disabled={docSubmitting || updatingStopId === inspectingStop.stop.id}
-                      onClick={async () => {
-                        const updated = await toggleStopVerification(inspectingStop);
-                        if (updated) setInspectingStop(null);
-                      }}
-                      title="Mark this POD and its supporting documents as unverified"
-                    >
-                      {updatingStopId === inspectingStop.stop.id ? "Updating…" : "Unverify POD"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="primary-action-button"
-                      disabled={docSubmitting}
-                      onClick={() => handleDocAction("verify")}
-                      title="Verify the POD and approve its supporting documents as complete"
-                    >
-                      {docSubmitting ? "Verifying…" : "Approve POD"}
-                    </button>
-                  )}
-                </>
+              {canManage && uploadFile ? (
+                <button
+                  type="button"
+                  className="primary-action-button"
+                  disabled={docSubmitting}
+                  onClick={handleUploadDocument}
+                  title="Upload or replace the proof of delivery document"
+                >
+                  {docSubmitting ? "Uploading…" : "Upload Document"}
+                </button>
               ) : null}
             </footer>
           </div>
@@ -661,4 +479,3 @@ export default function PodDocumentsPage() {
     </>
   );
 }
-

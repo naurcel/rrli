@@ -24,8 +24,8 @@ import {
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import {
   canImportAndReviewExcel,
+  canManageDocuments,
   canMutateDeliveryRecords,
-  canVerifyPodDocuments,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
@@ -70,6 +70,54 @@ function formatDashboardDate(dateValue: string): string {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
   return dateValue;
+}
+
+function getDeliveryMissingDetails(delivery: DeliveryTripRecord): string[] {
+  const issues: string[] = [];
+
+  const unknownExpenseLabels: Record<string, string> = {
+    dieselExpenses: "Diesel",
+    tollGateExpenses: "Toll gate",
+    entryFees: "Entry fees",
+    driverAllowance: "Driver allowance",
+    driverDailyRate: "Driver rate",
+    helperAllowance: "Helper allowance",
+    helperDailyRate: "Helper rate",
+    otherExpenses: "Other expenses",
+  };
+  const unknownExpenses = Object.entries(delivery.expenseStates)
+    .filter(([_, status]) => status === "unknown")
+    .map(([key]) => unknownExpenseLabels[key] ?? key);
+
+  if (unknownExpenses.length > 0) {
+    issues.push(`Unknown expense: ${unknownExpenses.join(", ")}`);
+  }
+
+  if (delivery.deliveryRate == null || delivery.deliveryRate <= 0) {
+    issues.push("Missing delivery rate");
+  }
+
+  const missingPods = delivery.dropoffs.filter((d) => !d.podSubmitted);
+  if (missingPods.length > 0) {
+    if (missingPods.length === 1) {
+      issues.push(`Missing POD: ${missingPods[0].storeName}`);
+    } else {
+      issues.push(`Missing POD (${missingPods.length} stores)`);
+    }
+  }
+
+  const unknownEntryFees = delivery.dropoffs.filter((d) => d.entryFeeStatus === "unknown");
+  if (unknownEntryFees.length > 0) {
+    issues.push(`Unresolved entry fees (${unknownEntryFees.length} store${unknownEntryFees.length > 1 ? "s" : ""})`);
+  }
+
+  if (delivery.financialIntegrityIssues?.length > 0 && unknownExpenses.length === 0) {
+    issues.push(...delivery.financialIntegrityIssues);
+  } else if (delivery.financialState === "incomplete" && issues.length === 0) {
+    issues.push("Incomplete financials");
+  }
+
+  return issues;
 }
 
 function buildRevenueSeries(
@@ -353,6 +401,14 @@ export default function DashboardPage() {
   const [deliverySort, setDeliverySort] = useState<{ key: string; direction: TableSortDirection }>({ key: "date", direction: "desc" });
 
   const filteredDeliveries = deliveries;
+  const deliveriesWithMissingDetails = useMemo(() => {
+    return filteredDeliveries
+      .map((delivery) => ({
+        delivery,
+        issues: getDeliveryMissingDetails(delivery),
+      }))
+      .filter((item) => item.issues.length > 0);
+  }, [filteredDeliveries]);
   const sortedDeliveries = useMemo(() => {
     const multiplier = deliverySort.direction === "asc" ? 1 : -1;
     return [...filteredDeliveries].sort((left, right) => {
@@ -361,7 +417,6 @@ export default function DashboardPage() {
         client: [left.clientName, right.clientName],
         truck: [left.plateNumber, right.plateNumber],
         netIncome: [left.netIncome ?? Number.NEGATIVE_INFINITY, right.netIncome ?? Number.NEGATIVE_INFINITY],
-        pod: [left.podStatus, right.podStatus],
       };
       const [leftValue, rightValue] = values[deliverySort.key] ?? values.date;
       const compared = typeof leftValue === "number" && typeof rightValue === "number"
@@ -382,7 +437,8 @@ export default function DashboardPage() {
     const netIncome = persistedSummary?.netIncome ?? earnings - expenses;
     const margin = persistedSummary?.profitMargin ?? (earnings > 0 ? ((netIncome / earnings) * 100) : null);
     const totalStops = filteredDeliveries.reduce((sum, item) => sum + item.dropoffs.length, 0);
-    const unverifiedTrips = filteredDeliveries.filter((item) => item.podStatus !== "Verified").length;
+    const incompleteDeliveries = filteredDeliveries.filter((item) => item.financialState === "incomplete");
+    const incompleteFinancials = incompleteDeliveries.length;
     const finalizedCount = persistedSummary?.deliveries ?? finalized.length;
 
     return {
@@ -391,7 +447,7 @@ export default function DashboardPage() {
       netIncome,
       margin,
       totalStops,
-      unverifiedTrips,
+      incompleteFinancials,
       finalizedCount,
       totalTrips: filteredDeliveries.length,
     };
@@ -438,8 +494,8 @@ export default function DashboardPage() {
             value: `${selectedTrip.plateNumber} (${selectedTrip.truckType})`,
           },
           {
-            label: "Ownership & Rate",
-            value: `${selectedTrip.truckOwnership} · ${selectedTrip.rateBasis}`,
+            label: "Ownership",
+            value: selectedTrip.truckOwnership,
           },
           { label: "Temperature", value: selectedTrip.truckTemperature },
           { label: "Origin", value: selectedTrip.origin },
@@ -453,21 +509,18 @@ export default function DashboardPage() {
         title: `Store Drop-offs (${selectedTrip.dropoffs.length} stops)`,
         rows: selectedTrip.dropoffs.map((stop) => ({
           label: `Stop #${stop.sequence}: ${stop.storeName} (${stop.destinationArea})`,
-          value: `${stop.podSubmitted && stop.supportingDocsComplete ? "POD Verified" : "Follow-up"} · Entry ${formatPeso(stop.entryFee)}`,
-          tone:
-            stop.podSubmitted && stop.supportingDocsComplete
-              ? ("success" as const)
-              : ("warning" as const),
+          value: `${stop.podSubmitted ? "POD Attached" : "Missing POD"} · Entry ${formatPeso(stop.entryFee)}`,
+          tone: stop.podSubmitted ? ("success" as const) : ("warning" as const),
         })),
       },
       {
         title: "POD & Supporting Documents",
         fullWidth: true,
-        description: "Select a drop-off to inspect its stored document and review status.",
+        description: "Select a drop-off to inspect or upload documents.",
         customContent: (
           <DeliveryPodDocuments
             trip={selectedTrip}
-            canVerify={canVerifyPodDocuments(actor.role)}
+            canVerify={canManageDocuments(actor.role)}
             roleLabel={actor.roleLabel}
             onTripChange={setSelectedTrip}
           />
@@ -561,7 +614,7 @@ export default function DashboardPage() {
             <div>
               <strong>View-Only Access ({actor.roleLabel}):</strong>
               <span>
-                You can inspect all delivery records, store drop-offs, POD verification statuses,
+                You can inspect all delivery records, store drop-offs, POD documents,
                 truck performance metrics, and reports. Creating, editing, or importing records
                 is restricted to Operations and Admin personnel.
               </span>
@@ -675,7 +728,6 @@ export default function DashboardPage() {
                     <SortableTableHeader label="Client" sortKey="client" activeSortKey={deliverySort.key} direction={deliverySort.direction} onSort={(key, direction) => setDeliverySort({ key, direction })} />
                     <SortableTableHeader label="Truck" sortKey="truck" activeSortKey={deliverySort.key} direction={deliverySort.direction} onSort={(key, direction) => setDeliverySort({ key, direction })} />
                     <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={deliverySort.key} direction={deliverySort.direction} defaultDirection="desc" onSort={(key, direction) => setDeliverySort({ key, direction })} />
-                    <SortableTableHeader label="POD Status" sortKey="pod" activeSortKey={deliverySort.key} direction={deliverySort.direction} onSort={(key, direction) => setDeliverySort({ key, direction })} />
                   </tr>
                 </thead>
                 <tbody>
@@ -704,16 +756,6 @@ export default function DashboardPage() {
                         <small>{trip.truckType}</small>
                       </td>
                       <td className="money">{formatPeso(trip.netIncome)}</td>
-                      <td>
-                        <span
-                          className={`pod-status ${
-                            trip.podStatus === "Verified" ? "attached" : "missing"
-                          }`}
-                        >
-                          <i aria-hidden="true" />
-                          {trip.podStatus}
-                        </span>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -778,32 +820,50 @@ export default function DashboardPage() {
               <div className="records-heading">
                 <div>
                   <h2>Attention Needed</h2>
-                  <p>Follow-up items for this period.</p>
+                  <p>
+                    {deliveriesWithMissingDetails.length > 0
+                      ? `${deliveriesWithMissingDetails.length} ${deliveriesWithMissingDetails.length === 1 ? "delivery has" : "deliveries have"} missing details.`
+                      : "Follow-up items for this period."}
+                  </p>
                 </div>
               </div>
-              {totals.unverifiedTrips > 0 ? (
-                <button
-                  type="button"
-                  className="dashboard-attention-item"
-                  onClick={() => setSelectedTrip(
-                    filteredDeliveries.find((delivery) => delivery.podStatus !== "Verified") ?? null,
-                  )}
-                >
-                  <span className="dashboard-attention-indicator" aria-hidden="true" />
-                  <span>
-                    <strong>
-                      {totals.unverifiedTrips} {totals.unverifiedTrips === 1 ? "delivery needs" : "deliveries need"} POD review
-                    </strong>
-                    <small>Review receiving slips and supporting documents.</small>
-                  </span>
-                  <b aria-hidden="true">›</b>
-                </button>
+              {deliveriesWithMissingDetails.length > 0 ? (
+                <div className="dashboard-attention-list">
+                  {deliveriesWithMissingDetails.map(({ delivery, issues }) => (
+                    <button
+                      key={delivery.id}
+                      type="button"
+                      className="dashboard-attention-item"
+                      onClick={() => setSelectedTrip(delivery)}
+                    >
+                      <span className="dashboard-attention-indicator" aria-hidden="true" />
+                      <span>
+                        <div className="dashboard-attention-header">
+                          <span className="dashboard-attention-waybill">
+                            {delivery.waybillNumber} · {delivery.clientName}
+                          </span>
+                          <span className="dashboard-attention-meta">
+                            {delivery.plateNumber}
+                          </span>
+                        </div>
+                        <div className="dashboard-attention-tags">
+                          {issues.map((issue, idx) => (
+                            <span key={idx} className="dashboard-attention-tag">
+                              {issue}
+                            </span>
+                          ))}
+                        </div>
+                      </span>
+                      <b aria-hidden="true">›</b>
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <div className="dashboard-attention-empty">
                   <span aria-hidden="true">✓</span>
                   <div>
                     <strong>All caught up</strong>
-                    <small>No delivery records need POD review in this range.</small>
+                    <small>No delivery records have missing details in this range.</small>
                   </div>
                 </div>
               )}
@@ -814,7 +874,7 @@ export default function DashboardPage() {
         <p className="scope-note">
           <span aria-hidden="true">●</span>
           RouteX is focused exclusively on Delivery Operations, Multi-Store Drop-offs, POD
-          Verification, and Trucks.
+          Documents, and Trucks.
         </p>
       </div>
 
@@ -822,8 +882,8 @@ export default function DashboardPage() {
         open={Boolean(selectedTrip)}
         eyebrow={selectedTrip ? `WAYBILL ${selectedTrip.waybillNumber}` : ""}
         title={selectedTrip ? selectedTrip.clientName : ""}
-        statusLabel={selectedTrip?.podStatus}
-        statusTone={selectedTrip?.podStatus === "Verified" ? "success" : "warning"}
+        statusLabel={selectedTrip?.financialState === "finalized" ? "Finalized" : "Incomplete"}
+        statusTone={selectedTrip?.financialState === "finalized" ? "success" : "warning"}
         sections={drawerSections}
         onClose={() => setSelectedTrip(null)}
       />

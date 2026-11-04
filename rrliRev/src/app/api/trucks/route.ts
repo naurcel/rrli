@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import * as z from "zod";
 
+import { recordAuditEntry } from "@/lib/audit/server-audit-store";
+
 import {
   getFleetTrucks,
   registerFleetTruck,
@@ -135,6 +137,8 @@ export async function POST(request: Request) {
       );
     }
 
+    recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "truck.created", entityType: "truck", entityId: registerResult.truck.id, summary: `Registered truck ${registerResult.truck.plateNumber}.`, changes: { truckType: registerResult.truck.truckType, ownershipType: registerResult.truck.ownershipType } });
+
     return NextResponse.json(
       {
         ok: true,
@@ -190,6 +194,8 @@ export async function POST(request: Request) {
       }
       throw insertError;
     }
+
+    recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "truck.created", entityType: "truck", entityId: newTruck.id, summary: `Registered truck ${newTruck.plateNumber}.`, changes: { truckType: newTruck.truckType, ownershipType: newTruck.ownershipType } });
 
     return NextResponse.json(
       {

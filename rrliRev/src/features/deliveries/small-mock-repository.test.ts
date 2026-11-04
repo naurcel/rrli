@@ -57,3 +57,39 @@ test("mock profitability honors dates and excludes financially incomplete trips"
   assert.equal(finalDay.deliveries, 0);
   assert.equal(finalDay.profitMargin, null);
 });
+
+test("mock repository filters by multiple clients and multiple trucks", () => {
+  const all = listSmallMockDeliveryRecords(query("pageSize=10"));
+  const client1 = all.filters.clients[0].id;
+  const client2 = all.filters.clients[1].id;
+
+  // Filter by two clients simultaneously
+  const multiClient = listSmallMockDeliveryRecords(
+    query(`clientIds=${client1},${client2}&pageSize=10`),
+  );
+  assert.equal(multiClient.total, 6);
+  assert.ok(
+    multiClient.items.every(
+      (item) => item.clientId === client1 || item.clientId === client2,
+    ),
+  );
+});
+
+test("mock repository allows searching and filtering by typed plate numbers", () => {
+  // Search with space
+  const searchWithSpace = listSmallMockDeliveryRecords(query("q=NGS%204281&pageSize=10"));
+  assert.equal(searchWithSpace.total, 2);
+  assert.ok(searchWithSpace.items.every((item) => item.plateNumber === "NGS 4281"));
+
+  // Search without space (e.g. user typed "ngs4281")
+  const searchClean = listSmallMockDeliveryRecords(query("q=ngs4281&pageSize=10"));
+  assert.equal(searchClean.total, 2);
+  assert.ok(searchClean.items.every((item) => item.plateNumber === "NGS 4281"));
+
+  // Filter using typed plate number directly in truckIds
+  const filterByPlate = listSmallMockDeliveryRecords(query("truckIds=NGS%204281&pageSize=10"));
+  assert.equal(filterByPlate.total, 2);
+  assert.ok(filterByPlate.items.every((item) => item.plateNumber === "NGS 4281"));
+});
+
+

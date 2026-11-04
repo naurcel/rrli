@@ -75,14 +75,14 @@ test("financial finalization protects incomplete trips and prevents duplicate fi
   }
 });
 
-test("POD verification workflow updates dropoffs and trip verification status", () => {
+test("POD document attachment updates dropoffs and document reference", () => {
   const delivery = SMALL_MOCK_DATABASE.deliveries[0];
   assert.ok(delivery);
   const dropoff = delivery.record.dropoffs[0];
   assert.ok(dropoff);
   const currentVersion = delivery.record.version;
 
-  // Update dropoff POD to verified
+  // Update dropoff POD document attachment
   const updateResult = updateSmallMockPodState({
     deliveryId: delivery.record.id,
     dropoffId: dropoff.id,
@@ -114,10 +114,10 @@ test("dynamic batch deliveries are queryable without corrupting the 9 base seed 
     clientName: "Landers",
     plateNumber: "CBL-4412",
     truckType: "4-Wheeler",
-    truckTemperature: "18°C–25°C",
+    truckTemperature: "20°C",
     origin: "Laguna Hub",
     distanceKm: 85,
-    fuelRate: 58.5,
+    fuelRate: 86.5,
     deliveryRate: 14500,
     expenses: {
       dieselExpenses: 2800,

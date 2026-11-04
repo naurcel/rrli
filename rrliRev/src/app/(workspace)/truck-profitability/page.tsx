@@ -11,7 +11,7 @@ import {
   SortableTableHeader,
   type TableSortDirection,
 } from "@/components/sortable-table-header";
-import { TruckPhoto } from "@/components/truck-photo";
+import { saveTruckPhotoFile, TruckPhoto } from "@/components/truck-photo";
 import {
   BROWSER_PREVIEW_TRUCKS_CHANGED,
   readBrowserPreviewTrucks,
@@ -60,6 +60,7 @@ export default function TruckProfitabilityPage() {
     key: SubcontractedTruckSortKey;
     direction: TableSortDirection;
   }>({ key: "plateNumber", direction: "asc" });
+  const [plateSearch, setPlateSearch] = useState("");
 
   const [extraTrucks, setExtraTrucks] = useState<FleetTruck[]>([]);
   const [isAddTruckOpen, setIsAddTruckOpen] = useState(false);
@@ -76,6 +77,8 @@ export default function TruckProfitabilityPage() {
   const [ownershipType, setOwnershipType] = useState<FleetTruck["ownershipType"]>("Owned");
   const [provider, setProvider] = useState("");
   const [contactPerson, setContactPerson] = useState("");
+  const [truckPhotoFile, setTruckPhotoFile] = useState<File | null>(null);
+  const [truckPhotoPreview, setTruckPhotoPreview] = useState<string | null>(null);
 
   useEffect(() => {
     const syncLocal = () => setExtraTrucks(readBrowserPreviewTrucks());
@@ -190,6 +193,29 @@ export default function TruckProfitabilityPage() {
     );
   }, [allSubcontractedTrucks, subcontractedSort]);
 
+  const filteredOwnedTrucks = useMemo(() => {
+    if (!plateSearch.trim()) return sortedTruckSummaries;
+    const clean = plateSearch.trim().toLowerCase().replace(/\s+/g, "");
+    return sortedTruckSummaries.filter(
+      (t) =>
+        t.plateNumber.toLowerCase().includes(plateSearch.trim().toLowerCase()) ||
+        t.plateNumber.replace(/\s+/g, "").toLowerCase().includes(clean),
+    );
+  }, [plateSearch, sortedTruckSummaries]);
+
+  const filteredSubcontractedTrucks = useMemo(() => {
+    if (!plateSearch.trim()) return sortedSubcontractedTrucks;
+    const clean = plateSearch.trim().toLowerCase().replace(/\s+/g, "");
+    return sortedSubcontractedTrucks.filter(
+      (t) =>
+        t.plateNumber.toLowerCase().includes(plateSearch.trim().toLowerCase()) ||
+        t.plateNumber.replace(/\s+/g, "").toLowerCase().includes(clean) ||
+        (t.provider && t.provider.toLowerCase().includes(plateSearch.trim().toLowerCase())) ||
+        (t.contactPerson &&
+          t.contactPerson.toLowerCase().includes(plateSearch.trim().toLowerCase())),
+    );
+  }, [plateSearch, sortedSubcontractedTrucks]);
+
   function sortSubcontractedTrucks(key: string, direction: TableSortDirection) {
     setSubcontractedSort({
       key: key as SubcontractedTruckSortKey,
@@ -234,6 +260,9 @@ export default function TruckProfitabilityPage() {
       }
 
       saveBrowserPreviewTruck(payload.truck);
+      if (truckPhotoFile) {
+        await saveTruckPhotoFile(payload.truck.plateNumber, truckPhotoFile);
+      }
       setExtraTrucks((prev) => [...prev, payload.truck!]);
 
       setPlateNumber("");
@@ -241,6 +270,8 @@ export default function TruckProfitabilityPage() {
       setOwnershipType("Owned");
       setProvider("");
       setContactPerson("");
+      setTruckPhotoFile(null);
+      setTruckPhotoPreview(null);
       setIsAddTruckOpen(false);
 
       setFeedback({
@@ -322,23 +353,55 @@ export default function TruckProfitabilityPage() {
               <h2>Owned Trucks</h2>
               <p>Select a truck to view details.</p>
             </div>
-            <RoundedSelect
-              value={ownedTruckSort}
-              options={OWNED_TRUCK_SORT_OPTIONS}
-              onChange={(value) => setOwnedTruckSort(value as OwnedTruckSort)}
-              ariaLabel="Sort owned trucks"
-              className="owned-truck-sort"
-            />
+            <div className="truck-heading-controls" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <div className="truck-plate-search-wrap" style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <span style={{ position: "absolute", left: "10px", color: "var(--color-text-muted)", pointerEvents: "none", fontSize: "13px" }} aria-hidden="true">⌕</span>
+                <input
+                  type="search"
+                  placeholder="Type plate number…"
+                  aria-label="Filter trucks by plate number"
+                  value={plateSearch}
+                  onChange={(e) => setPlateSearch(e.target.value)}
+                  style={{
+                    height: "40px",
+                    padding: "0 28px 0 30px",
+                    border: "1px solid var(--glass-border)",
+                    borderRadius: "12px",
+                    background: "var(--glass-surface-strong)",
+                    fontSize: "12px",
+                    outline: "none",
+                    color: "var(--color-text-primary)",
+                  }}
+                />
+                {plateSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setPlateSearch("")}
+                    aria-label="Clear plate search"
+                    style={{ position: "absolute", right: "8px", background: "none", border: "none", cursor: "pointer", color: "var(--color-text-muted)", fontSize: "14px" }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <RoundedSelect
+                value={ownedTruckSort}
+                options={OWNED_TRUCK_SORT_OPTIONS}
+                onChange={(value) => setOwnedTruckSort(value as OwnedTruckSort)}
+                ariaLabel="Sort owned trucks"
+                className="owned-truck-sort"
+              />
+            </div>
           </div>
 
-          {loading || error ? null : sortedTruckSummaries.length === 0 ? (
+          {loading || error ? null : filteredOwnedTrucks.length === 0 ? (
             <div className="empty-state">
-              <strong>No owned trucks in fleet</strong>
-              <span>Add a truck using the button above to begin tracking fleet profitability.</span>
+              <strong>{plateSearch ? `No owned trucks match “${plateSearch}”` : "No owned trucks in fleet"}</strong>
+              <span>{plateSearch ? "Try clearing the plate number search." : "Add a truck using the button above to begin tracking fleet profitability."}</span>
             </div>
           ) : (
             <div className="fleet-card-grid truck-profitability-card-grid">
-              {sortedTruckSummaries.map((truck) => (
+              {filteredOwnedTrucks.map((truck) => (
                 <Link
                   className="fleet-card fleet-card-link truck-profitability-card"
                   href={`/truck-profitability/${truck.plateNumber}`}
@@ -375,7 +438,10 @@ export default function TruckProfitabilityPage() {
               <h2>Subcontracted Trucks</h2>
               <p>Reference list of external trucks.</p>
             </div>
-            <span className="truck-history-count">{allSubcontractedTrucks.length} trucks</span>
+            <span className="truck-history-count">
+              {filteredSubcontractedTrucks.length} truck
+              {filteredSubcontractedTrucks.length === 1 ? "" : "s"}
+            </span>
           </div>
 
           <div className="table-wrap">
@@ -389,7 +455,7 @@ export default function TruckProfitabilityPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedSubcontractedTrucks.map((truck) => (
+                {filteredSubcontractedTrucks.map((truck) => (
                   <tr key={truck.plateNumber}>
                     <td><strong className="truck-code">{truck.plateNumber}</strong></td>
                     <td>{truck.truckType}</td>
@@ -401,7 +467,9 @@ export default function TruckProfitabilityPage() {
             </table>
           </div>
           <div className="table-footer">
-            <span>Showing {allSubcontractedTrucks.length} subcontracted trucks</span>
+            <span>
+              Showing {filteredSubcontractedTrucks.length} of {allSubcontractedTrucks.length} subcontracted trucks
+            </span>
           </div>
         </section>
       </div>
@@ -446,6 +514,35 @@ export default function TruckProfitabilityPage() {
                   </div>
                 )}
 
+                <div className="truck-create-photo-field">
+                  <div className="truck-create-photo-preview">
+                    {truckPhotoPreview ? <img src={truckPhotoPreview} alt="Selected truck preview" /> : <span>No photo selected</span>}
+                  </div>
+                  <div className="routex-dialog-field">
+                    <label htmlFor="new-truck-photo">Truck Picture</label>
+                    <input
+                      id="new-truck-photo"
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        if (!file) return;
+                        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+                          setFormError("Choose an image file smaller than 10 MB.");
+                          event.target.value = "";
+                          return;
+                        }
+                        setFormError(null);
+                        setTruckPhotoFile(file);
+                        const reader = new FileReader();
+                        reader.onload = () => setTruckPhotoPreview(String(reader.result));
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                    <small>You can replace the picture before saving.</small>
+                  </div>
+                </div>
+
                 <div className="routex-dialog-field">
                   <label htmlFor="new-truck-plate" style={{ fontWeight: 600, fontSize: "12px" }}>
                     Plate Number *
@@ -478,45 +575,27 @@ export default function TruckProfitabilityPage() {
                     <label htmlFor="new-truck-type" style={{ fontWeight: 600, fontSize: "12px" }}>
                       Vehicle Type *
                     </label>
-                    <select
-                      id="new-truck-type"
+                    <RoundedSelect
                       value={truckType}
-                      onChange={(e) => setTruckType(e.target.value as FleetTruck["truckType"])}
-                      style={{
-                        minHeight: "42px",
-                        padding: "0 12px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--color-border)",
-                        background: "var(--glass-surface-strong)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <option value="4-Wheeler">4-Wheeler</option>
-                      <option value="6-Wheeler">6-Wheeler</option>
-                      <option value="10-Wheeler">10-Wheeler</option>
-                    </select>
+                      options={["4-Wheeler", "6-Wheeler", "10-Wheeler"]}
+                      onChange={(value) => setTruckType(value as FleetTruck["truckType"])}
+                      ariaLabel="Select vehicle type"
+                    />
                   </div>
 
                   <div className="routex-dialog-field">
                     <label htmlFor="new-truck-ownership" style={{ fontWeight: 600, fontSize: "12px" }}>
                       Fleet Ownership *
                     </label>
-                    <select
-                      id="new-truck-ownership"
+                    <RoundedSelect
                       value={ownershipType}
-                      onChange={(e) => setOwnershipType(e.target.value as FleetTruck["ownershipType"])}
-                      style={{
-                        minHeight: "42px",
-                        padding: "0 12px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--color-border)",
-                        background: "var(--glass-surface-strong)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <option value="Owned">Owned (Company Fleet Asset · Redeemed Rate)</option>
-                      <option value="Subcontracted">Subcontracted (Third-Party Hauler · Trucker Rate)</option>
-                    </select>
+                      options={[
+                        { value: "Owned", label: "Owned" },
+                        { value: "Subcontracted", label: "Subcontracted" },
+                      ]}
+                      onChange={(value) => setOwnershipType(value as FleetTruck["ownershipType"])}
+                      ariaLabel="Select fleet ownership"
+                    />
                   </div>
                 </div>
 

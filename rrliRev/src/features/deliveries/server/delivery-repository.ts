@@ -23,7 +23,11 @@ export type DeliveryLedgerItem = DeliveryTripRecord & {
   helperName: string | null;
 };
 
-export type DeliveryFilterOption = { id: string; label: string };
+export type DeliveryFilterOption = {
+  id: string;
+  label: string;
+  ownershipType?: "Owned" | "Subcontracted";
+};
 
 export type DeliveryListResult = {
   items: DeliveryLedgerItem[];
@@ -167,9 +171,33 @@ export async function listDeliveryRecords(
     .from("delivery_ledger")
     .select("*", { count: "exact" });
 
-  if (input.search) query = query.ilike("waybill_number", `%${input.search}%`);
-  if (input.clientId) query = query.eq("client_id", input.clientId);
-  if (input.truckId) query = query.eq("truck_id", input.truckId);
+  if (input.search) {
+    query = query.or(
+      `waybill_number.ilike.%${input.search}%,plate_number.ilike.%${input.search}%,client_name.ilike.%${input.search}%`,
+    );
+  }
+  if (input.clientIds && input.clientIds.length > 0) {
+    query = query.in("client_id", input.clientIds);
+  } else if (input.clientId) {
+    query = query.eq("client_id", input.clientId);
+  }
+  if (input.truckIds && input.truckIds.length > 0) {
+    const isUuid = (val: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    const uuids = input.truckIds.filter(isUuid);
+    const plates = input.truckIds.filter((t) => !isUuid(t));
+    if (uuids.length > 0 && plates.length > 0) {
+      query = query.or(
+        `truck_id.in.(${uuids.join(",")}),plate_number.in.(${plates.join(",")})`,
+      );
+    } else if (uuids.length > 0) {
+      query = query.in("truck_id", uuids);
+    } else if (plates.length > 0) {
+      query = query.in("plate_number", plates);
+    }
+  } else if (input.truckId) {
+    query = query.eq("truck_id", input.truckId);
+  }
   if (input.status) query = query.eq("delivery_status", input.status);
   if (input.podStatus) query = query.eq("pod_status", input.podStatus);
   if (input.dateFrom) query = query.gte("delivery_date", input.dateFrom);
@@ -260,6 +288,7 @@ export async function listDeliveryRecords(
       trucks: (trucksResponse.data ?? []).map((row) => ({
         id: row.id,
         label: row.plate_number,
+        ownershipType: "Owned" as const,
       })),
       statuses: ["Completed"],
       podStatuses: ["Verified", "Incomplete", "Pending"],

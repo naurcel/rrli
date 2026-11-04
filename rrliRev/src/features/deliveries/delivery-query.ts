@@ -23,7 +23,9 @@ export type DeliverySortDirection = "asc" | "desc";
 export type DeliveryListQuery = {
   search: string;
   clientId: string | null;
+  clientIds?: string[];
   truckId: string | null;
+  truckIds?: string[];
   status: string | null;
   podStatus: string | null;
   dateFrom: string | null;
@@ -45,8 +47,10 @@ const pageSizeSchema = z
 
 const querySchema = z.object({
   search: z.string().trim().max(120).default(""),
-  clientId: z.string().uuid().nullable().default(null),
-  truckId: z.string().uuid().nullable().default(null),
+  clientId: z.string().trim().min(1).nullable().default(null),
+  clientIds: z.array(z.string().trim().min(1)).default([]),
+  truckId: z.string().trim().min(1).nullable().default(null),
+  truckIds: z.array(z.string().trim().min(1)).default([]),
   status: z.string().trim().min(1).max(40).nullable().default(null),
   podStatus: z.string().trim().min(1).max(40).nullable().default(null),
   dateFrom: dateSchema.nullable().default(null),
@@ -62,13 +66,33 @@ function nullableParameter(params: URLSearchParams, key: string): string | null 
   return value ? value : null;
 }
 
+function parseIdList(params: URLSearchParams, ...keys: string[]): string[] {
+  const result: string[] = [];
+  for (const key of keys) {
+    for (const val of params.getAll(key)) {
+      for (const item of val.split(",")) {
+        const trimmed = item.trim();
+        if (trimmed && !result.includes(trimmed)) {
+          result.push(trimmed);
+        }
+      }
+    }
+  }
+  return result;
+}
+
 export function parseDeliveryListQuery(params: URLSearchParams):
   | { ok: true; value: DeliveryListQuery }
   | { ok: false; message: string } {
+  const clientIds = parseIdList(params, "clientId", "clientIds");
+  const truckIds = parseIdList(params, "truckId", "truckIds");
+
   const parsed = querySchema.safeParse({
     search: params.get("q") ?? "",
-    clientId: nullableParameter(params, "clientId"),
-    truckId: nullableParameter(params, "truckId"),
+    clientId: clientIds[0] ?? null,
+    clientIds,
+    truckId: truckIds[0] ?? null,
+    truckIds,
     status: nullableParameter(params, "status"),
     podStatus: nullableParameter(params, "podStatus"),
     dateFrom: nullableParameter(params, "dateFrom"),

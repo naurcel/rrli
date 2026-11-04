@@ -4,6 +4,8 @@ import test from "node:test";
 import { summarizeTruckProfitability } from "./delivery-domain.ts";
 import {
   filterSmallMockDeliveries,
+  getMockClients,
+  registerMockClient,
   SMALL_MOCK_DATABASE,
   SMALL_MOCK_PERIOD,
   validateSmallMockDatabase,
@@ -121,4 +123,22 @@ test("represents every requested POD document state with explicitly fictional me
     ),
   );
 });
+
+test("dynamically registers custom clients without corrupting base mock database fixtures", () => {
+  const initialCount = getMockClients().length;
+  const newClient = registerMockClient("San Miguel Foods");
+
+  assert.equal(newClient.name, "San Miguel Foods");
+  assert.equal(newClient.code, "SMF");
+  assert.equal(getMockClients().length, initialCount + 1);
+
+  // Re-registering existing client returns existing record
+  const duplicate = registerMockClient("san miguel foods");
+  assert.equal(duplicate.id, newClient.id);
+  assert.equal(getMockClients().length, initialCount + 1);
+
+  // Base fixtures remain completely intact
+  assert.deepEqual(validateSmallMockDatabase(), []);
+});
+
 
