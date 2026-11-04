@@ -66,6 +66,7 @@ function sortableValue(item: DeliveryLedgerItem, sort: DeliveryListQuery["sort"]
     return Number.isFinite(num) ? num : item.truckTemperature;
   }
   if (sort === "origin") return item.origin.toLocaleLowerCase();
+  if (sort === "dropoffs") return item.dropoffs.length;
   if (sort === "distance") return item.distanceKm;
   if (sort === "delivery_rate") return item.deliveryRate;
   if (sort === "total_expenses") return item.totalExpenses;

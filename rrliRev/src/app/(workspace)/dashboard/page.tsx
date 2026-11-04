@@ -5,6 +5,8 @@ import { useMemo, useRef, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
+import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
+import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
 import {
   formatDateRange,
   useGlobalDateRange,
@@ -484,26 +486,34 @@ export default function DashboardPage() {
 
     return [
       {
-        title: "Delivery & Truck Context",
+        title: "Delivery Overview",
+        eyebrow: "Trip details",
         rows: [
           { label: "Waybill Number", value: selectedTrip.waybillNumber },
           { label: "Delivery Date", value: selectedTrip.deliveryDate },
-          { label: "Client", value: selectedTrip.clientName },
+          { label: "Client Account", value: selectedTrip.clientName },
+          { label: "Origin Hub", value: selectedTrip.origin },
+          { label: "Distance", value: `${selectedTrip.distanceKm} km` },
+          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L` },
           {
-            label: "Truck & Type",
-            value: `${selectedTrip.plateNumber} (${selectedTrip.truckType})`,
-          },
-          {
-            label: "Ownership",
-            value: selectedTrip.truckOwnership,
-          },
-          { label: "Temperature", value: selectedTrip.truckTemperature },
-          { label: "Origin", value: selectedTrip.origin },
-          {
-            label: "Distance & Fuel Rate",
-            value: `${selectedTrip.distanceKm} km @ ₱${selectedTrip.fuelRate.toFixed(2)}/L`,
+            label: "Financial Status",
+            value: selectedTrip.financialState === "finalized" ? "Finalized" : "Incomplete",
+            tone: selectedTrip.financialState === "finalized" ? "success" : "warning",
           },
         ],
+      },
+      {
+        title: "Assigned Vehicle",
+        eyebrow: "Fleet Asset",
+        customContent: (
+          <DeliveryTruckInfoSection
+            plateNumber={selectedTrip.plateNumber}
+            truckType={selectedTrip.truckType}
+            truckTemperature={selectedTrip.truckTemperature}
+            truckOwnership={selectedTrip.truckOwnership}
+            rateBasis={selectedTrip.rateBasis}
+          />
+        ),
       },
       {
         title: `Store Drop-offs (${selectedTrip.dropoffs.length} stops)`,
@@ -527,31 +537,10 @@ export default function DashboardPage() {
         ),
       },
       {
-        title: "Daily Trip Report Financials",
-        rows: [
-          { label: "Delivery Rate (Earnings)", value: formatPeso(selectedTrip.deliveryRate), tone: "success" },
-          { label: "Diesel Expenses", value: formatPeso(selectedTrip.expenses.dieselExpenses) },
-          {
-            label: "Toll Gate Expenses",
-            value: `${formatPeso(selectedTrip.expenses.tollGateExpenses)} (${selectedTrip.expenses.tollGateBreakdown || "Standard"})`,
-          },
-          { label: "Store Entry Fees", value: formatPeso(selectedTrip.expenses.entryFees) },
-          {
-            label: "Driver Daily Rate + Allowance",
-            value: `${formatPeso(selectedTrip.expenses.driverDailyRate)} + ${formatPeso(selectedTrip.expenses.driverAllowance)}`,
-          },
-          {
-            label: "Helper Daily Rate + Allowance",
-            value: `${formatPeso(selectedTrip.expenses.helperDailyRate)} + ${formatPeso(selectedTrip.expenses.helperAllowance)}`,
-          },
-          { label: "Other Expenses", value: formatPeso(selectedTrip.expenses.otherExpenses) },
-          { label: "Total Trip Expenses", value: formatPeso(selectedTrip.totalExpenses) },
-          {
-            label: "Net Profit",
-            value: `${formatPeso(selectedTrip.netIncome)} (${formatPercent(selectedTrip.marginPercent)})`,
-            tone: selectedTrip.netIncome !== null && selectedTrip.netIncome >= 0 ? "success" : "warning",
-          },
-        ],
+        title: "Financial Breakdown",
+        eyebrow: "Revenue, expenses, and profitability",
+        fullWidth: true,
+        customContent: <DeliveryFinancialBreakdown trip={selectedTrip} />,
       },
     ];
   }, [actor.role, actor.roleLabel, selectedTrip]);

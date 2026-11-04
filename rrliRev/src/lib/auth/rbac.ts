@@ -36,6 +36,7 @@ export const PERMISSIONS = [
   "profitability:manage",
   "reports:view",
   "reports:export",
+  "reports:manage_templates",
   "users:view",
   "users:manage",
   "settings:view",
@@ -76,6 +77,7 @@ const OPERATIONS_PERMISSIONS: readonly Permission[] = [
 
 const ADMIN_PERMISSIONS: readonly Permission[] = [
   ...OPERATIONS_PERMISSIONS,
+  "reports:manage_templates",
   "users:view",
   "users:manage",
   "settings:manage",
@@ -192,6 +194,10 @@ export function canManageUsers(role: UserRole): boolean {
 
 export function canManageTrucks(role: UserRole): boolean {
   return hasPermission(role, "profitability:manage");
+}
+
+export function canManageReportTemplates(role: UserRole): boolean {
+  return hasPermission(role, "reports:manage_templates");
 }
 
 export type NavigationSection = "primary" | "management";

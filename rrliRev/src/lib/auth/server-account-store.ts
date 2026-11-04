@@ -18,6 +18,7 @@ export type ServerUserProfileRecord = {
   mustChangePassword: boolean;
   hasSecurityQuestion: boolean;
   securityQuestion?: string;
+  avatarUrl?: string | null;
   recoveryAuthorizedAt?: string;
   recoveryAuthorizedBy?: string;
   recoveryExpiresAt?: string;
@@ -29,19 +30,20 @@ export type ServerUserProfileRecord = {
 export type ServerAccountEntry = ServerUserProfileRecord & {
   passwordHash: string;
   legacySeedPassword?: string;
+  altSeedPassword?: string;
   securityAnswerHash?: string;
   recoveryToken?: string;
   securityResetToken?: string;
   securityResetTokenExpiresAt?: number;
 };
 
-// Pre-computed Argon2id hashes for initial seed accounts
-const HASH_ADMIN = hashWithArgon2id("Admin2026!");
-const HASH_OPS = hashWithArgon2id("Ops2026!");
-const HASH_FIN = hashWithArgon2id("Finance2026!");
-const HASH_HR = hashWithArgon2id("Hr2026!");
-const HASH_SEC = hashWithArgon2id("Secretary2026!");
-const HASH_CSR = hashWithArgon2id("Csrep2026!");
+// Pre-computed Argon2id hashes for initial seed accounts using canonical RBAC passwords
+const HASH_ADMIN = hashWithArgon2id("admin");
+const HASH_OPS = hashWithArgon2id("operations");
+const HASH_FIN = hashWithArgon2id("finance");
+const HASH_HR = hashWithArgon2id("humanresources");
+const HASH_SEC = hashWithArgon2id("secretary");
+const HASH_CSR = hashWithArgon2id("customerrep");
 
 const HASH_ANSWER_SCHOOL = hashWithArgon2id("RouteX Academy");
 const HASH_ANSWER_CITY = hashWithArgon2id("Laguna");
@@ -60,6 +62,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     email: "admin@routex.local",
     fullName: "Shinryu (System Admin)",
     role: "admin",
+    avatarUrl: "/profiles/shinryu.png",
     isActive: true,
     mustChangePassword: false,
     hasSecurityQuestion: true,
@@ -67,6 +70,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     securityAnswerHash: HASH_ANSWER_SCHOOL,
     passwordHash: HASH_ADMIN,
     legacySeedPassword: "admin",
+    altSeedPassword: "Admin2026!",
     createdAt: "2026-10-15T08:00:00.000Z",
     updatedAt: "2026-11-01T08:00:00.000Z",
   },
@@ -84,6 +88,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     securityAnswerHash: HASH_ANSWER_CITY,
     passwordHash: HASH_OPS,
     legacySeedPassword: "operations",
+    altSeedPassword: "Ops2026!",
     createdAt: "2026-10-16T08:00:00.000Z",
     updatedAt: "2026-11-01T08:00:00.000Z",
   },
@@ -101,6 +106,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     securityAnswerHash: HASH_ANSWER_PET,
     passwordHash: HASH_FIN,
     legacySeedPassword: "finance",
+    altSeedPassword: "Finance2026!",
     createdAt: "2026-10-17T08:00:00.000Z",
     updatedAt: "2026-11-01T08:00:00.000Z",
   },
@@ -118,6 +124,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     securityAnswerHash: HASH_ANSWER_SCHOOL,
     passwordHash: HASH_HR,
     legacySeedPassword: "humanresources",
+    altSeedPassword: "Hr2026!",
     createdAt: "2026-10-18T08:00:00.000Z",
     updatedAt: "2026-11-01T08:00:00.000Z",
   },
@@ -135,6 +142,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     securityAnswerHash: HASH_ANSWER_CITY,
     passwordHash: HASH_SEC,
     legacySeedPassword: "secretary",
+    altSeedPassword: "Secretary2026!",
     createdAt: "2026-10-19T08:00:00.000Z",
     updatedAt: "2026-11-01T08:00:00.000Z",
   },
@@ -152,6 +160,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     securityAnswerHash: HASH_ANSWER_NICK,
     passwordHash: HASH_CSR,
     legacySeedPassword: "customerrep",
+    altSeedPassword: "Csrep2026!",
     createdAt: "2026-10-20T08:00:00.000Z",
     updatedAt: "2026-11-01T08:00:00.000Z",
   },
@@ -207,6 +216,7 @@ function stripSensitiveFields(entry: ServerAccountEntry): ServerUserProfileRecor
     mustChangePassword: Boolean(entry.mustChangePassword),
     hasSecurityQuestion: Boolean(entry.securityAnswerHash),
     securityQuestion: entry.securityQuestion,
+    avatarUrl: entry.avatarUrl ?? null,
     recoveryAuthorizedAt: entry.recoveryAuthorizedAt,
     recoveryAuthorizedBy: entry.recoveryAuthorizedBy,
     recoveryExpiresAt: entry.recoveryExpiresAt,
@@ -239,12 +249,14 @@ export function verifyServerAccountCredentials(
         return { ok: false, reason: "inactive_account" };
       }
 
-      // Check Argon2id hash
+      // Check Argon2id hash or seed passwords
       const isArgonValid = verifyWithArgon2id(password, entry.passwordHash);
       const isLegacyValid =
         Boolean(entry.legacySeedPassword) && entry.legacySeedPassword === password;
+      const isAltValid =
+        Boolean(entry.altSeedPassword) && entry.altSeedPassword === password;
 
-      if (!isArgonValid && !isLegacyValid) {
+      if (!isArgonValid && !isLegacyValid && !isAltValid) {
         return { ok: false, reason: "invalid_credentials" };
       }
 
@@ -381,8 +393,10 @@ export function verifyServerAccountCurrentPassword(
   const isArgon = verifyWithArgon2id(currentPassword, existing.passwordHash);
   const isLegacy =
     Boolean(existing.legacySeedPassword) && existing.legacySeedPassword === currentPassword;
+  const isAlt =
+    Boolean(existing.altSeedPassword) && existing.altSeedPassword === currentPassword;
 
-  return isArgon || isLegacy;
+  return isArgon || isLegacy || isAlt;
 }
 
 /**
@@ -664,6 +678,27 @@ export function updateServerAccountProfile(input: {
 
   existing.role = input.role ?? existing.role;
   existing.isActive = typeof input.isActive === "boolean" ? input.isActive : existing.isActive;
+  existing.updatedAt = new Date().toISOString();
+
+  return { ok: true, profile: stripSensitiveFields(existing) };
+}
+
+/**
+ * Updates a user account's profile photo.
+ */
+export function updateServerAccountAvatar(
+  userId: string,
+  avatarUrl: string | null,
+):
+  | { ok: true; profile: ServerUserProfileRecord }
+  | { ok: false; message: string } {
+  const store = getStore();
+  const existing = store.get(userId);
+  if (!existing) {
+    return { ok: false, message: "The specified user account was not found." };
+  }
+
+  existing.avatarUrl = avatarUrl;
   existing.updatedAt = new Date().toISOString();
 
   return { ok: true, profile: stripSensitiveFields(existing) };

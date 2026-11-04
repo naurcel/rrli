@@ -48,10 +48,18 @@ const createDeliverySchema = z.object({
   driverAllowanceStatus: expenseStatusSchema,
   driverDailyRate: optionalMoneySchema,
   driverDailyRateStatus: expenseStatusSchema,
+  driverName: z.string().trim().optional().nullable(),
   helperAllowance: optionalMoneySchema,
   helperAllowanceStatus: expenseStatusSchema,
   helperDailyRate: optionalMoneySchema,
   helperDailyRateStatus: expenseStatusSchema,
+  helperName: z.string().trim().optional().nullable(),
+  hasSecondHelper: z.boolean().default(false),
+  helper2Allowance: optionalMoneySchema.optional().nullable(),
+  helper2AllowanceStatus: expenseStatusSchema.optional().default("not_applicable"),
+  helper2DailyRate: optionalMoneySchema.optional().nullable(),
+  helper2DailyRateStatus: expenseStatusSchema.optional().default("not_applicable"),
+  helper2Name: z.string().trim().optional().nullable(),
   otherExpenses: optionalMoneySchema,
   otherExpensesStatus: expenseStatusSchema,
   dropoffs: z
@@ -83,6 +91,20 @@ const createDeliverySchema = z.object({
     }
     if (status === "not_applicable" && amount != null) {
       context.addIssue({ code: "custom", path: [field], message: "Not applicable expenses must not contain an amount." });
+    }
+  }
+  if (data.hasSecondHelper) {
+    const helper2Pairs = [
+      ["helper2Allowance", data.helper2Allowance, data.helper2AllowanceStatus],
+      ["helper2DailyRate", data.helper2DailyRate, data.helper2DailyRateStatus],
+    ] as const;
+    for (const [field, amount, status] of helper2Pairs) {
+      if (status === "confirmed" && amount == null) {
+        context.addIssue({ code: "custom", path: [field], message: "Enter a confirmed amount for Helper 2, including zero when confirmed." });
+      }
+      if (status === "not_applicable" && amount != null) {
+        context.addIssue({ code: "custom", path: [field], message: "Not applicable expenses must not contain an amount." });
+      }
     }
   }
   data.dropoffs.forEach((dropoff, index) => {
@@ -182,6 +204,43 @@ export async function POST(request: Request) {
     );
   }
 
+  let combinedHelperAllowance = parsed.data.helperAllowance;
+  let combinedHelperAllowanceStatus = parsed.data.helperAllowanceStatus;
+  let combinedHelperDailyRate = parsed.data.helperDailyRate;
+  let combinedHelperDailyRateStatus = parsed.data.helperDailyRateStatus;
+
+  if (parsed.data.hasSecondHelper) {
+    if (parsed.data.helperAllowanceStatus === "unknown" || parsed.data.helper2AllowanceStatus === "unknown") {
+      combinedHelperAllowance = null;
+      combinedHelperAllowanceStatus = "unknown";
+    } else if (parsed.data.helperAllowanceStatus === "confirmed" || parsed.data.helper2AllowanceStatus === "confirmed") {
+      const h1 = parsed.data.helperAllowanceStatus === "confirmed" ? (parsed.data.helperAllowance ?? 0) : 0;
+      const h2 = parsed.data.helper2AllowanceStatus === "confirmed" ? (parsed.data.helper2Allowance ?? 0) : 0;
+      combinedHelperAllowance = h1 + h2;
+      combinedHelperAllowanceStatus = "confirmed";
+    } else {
+      combinedHelperAllowance = null;
+      combinedHelperAllowanceStatus = "not_applicable";
+    }
+
+    if (parsed.data.helperDailyRateStatus === "unknown" || parsed.data.helper2DailyRateStatus === "unknown") {
+      combinedHelperDailyRate = null;
+      combinedHelperDailyRateStatus = "unknown";
+    } else if (parsed.data.helperDailyRateStatus === "confirmed" || parsed.data.helper2DailyRateStatus === "confirmed") {
+      const r1 = parsed.data.helperDailyRateStatus === "confirmed" ? (parsed.data.helperDailyRate ?? 0) : 0;
+      const r2 = parsed.data.helper2DailyRateStatus === "confirmed" ? (parsed.data.helper2DailyRate ?? 0) : 0;
+      combinedHelperDailyRate = r1 + r2;
+      combinedHelperDailyRateStatus = "confirmed";
+    } else {
+      combinedHelperDailyRate = null;
+      combinedHelperDailyRateStatus = "not_applicable";
+    }
+  }
+
+  const helperNames = [parsed.data.helperName, parsed.data.helper2Name]
+    .filter((n): n is string => Boolean(n && n.trim()))
+    .join(", ") || null;
+
   if (!isSupabaseConfigured()) {
     const rawClientName = parsed.data.clientName.trim();
     const client =
@@ -252,8 +311,8 @@ export async function POST(request: Request) {
         tollGateBreakdown: parsed.data.tollGateBreakdown,
         driverAllowance: parsed.data.driverAllowance,
         driverDailyRate: parsed.data.driverDailyRate,
-        helperAllowance: parsed.data.helperAllowance,
-        helperDailyRate: parsed.data.helperDailyRate,
+        helperAllowance: combinedHelperAllowance,
+        helperDailyRate: combinedHelperDailyRate,
         otherExpenses: parsed.data.otherExpenses,
       },
       expenseStates: {
@@ -261,8 +320,8 @@ export async function POST(request: Request) {
         tollGateExpenses: parsed.data.tollGateExpensesStatus,
         driverAllowance: parsed.data.driverAllowanceStatus,
         driverDailyRate: parsed.data.driverDailyRateStatus,
-        helperAllowance: parsed.data.helperAllowanceStatus,
-        helperDailyRate: parsed.data.helperDailyRateStatus,
+        helperAllowance: combinedHelperAllowanceStatus,
+        helperDailyRate: combinedHelperDailyRateStatus,
         otherExpenses: parsed.data.otherExpensesStatus,
       },
       dropoffs: parsed.data.dropoffs.map((dropoff, index) => ({
@@ -282,8 +341,8 @@ export async function POST(request: Request) {
         clientId: client.id,
         truckId: truck.id,
         deliveryStatus: "Completed",
-        driverName: null,
-        helperName: null,
+        driverName: parsed.data.driverName || null,
+        helperName: helperNames,
       },
       recordedBy: { id: auth.actor.id, email: auth.actor.email, role: auth.actor.role },
     }, { status: 201 });
@@ -337,7 +396,13 @@ export async function POST(request: Request) {
   }
 
   const { data: deliveryId, error } = await supabase.rpc("create_delivery_record", {
-    p_record: parsed.data,
+    p_record: {
+      ...parsed.data,
+      helperAllowance: combinedHelperAllowance,
+      helperAllowanceStatus: combinedHelperAllowanceStatus,
+      helperDailyRate: combinedHelperDailyRate,
+      helperDailyRateStatus: combinedHelperDailyRateStatus,
+    },
     p_dropoffs: parsed.data.dropoffs,
   });
 

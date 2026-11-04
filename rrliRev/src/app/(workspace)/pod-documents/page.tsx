@@ -10,6 +10,7 @@ import {
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RoundedSelect } from "@/components/rounded-select";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
+import { isImageDocument, openDocumentInNewTab, triggerDocumentDownload } from "@/features/deliveries/pod-utils";
 import { canManageDocuments } from "@/lib/auth/rbac";
 
 function toDateKey(date: Date): string {
@@ -165,6 +166,7 @@ export default function PodDocumentsPage() {
       }
 
       const docRef = uploadFile.name;
+      const downloadUrl = data.document?.downloadUrl ?? null;
 
       setDeliveries((current) =>
         current.map((trip) =>
@@ -189,6 +191,29 @@ export default function PodDocumentsPage() {
             : trip,
         ),
       );
+
+      if (downloadUrl) {
+        setDocDetail({
+          filename: docRef,
+          downloadUrl,
+          status: "Attached",
+        });
+      }
+      setInspectingStop((prev) =>
+        prev
+          ? {
+              ...prev,
+              hasPod: true,
+              stop: {
+                ...prev.stop,
+                podSubmitted: true,
+                supportingDocsComplete: true,
+                documentRef: docRef,
+              },
+            }
+          : null,
+      );
+      setUploadFile(null);
 
       setFeedback({
         tone: "success",
@@ -402,34 +427,82 @@ export default function PodDocumentsPage() {
               </div>
 
               {docLoading ? (
-                <div style={{ textAlign: "center", padding: "16px", color: "var(--color-text-muted)" }}>
-                  Loading document information…
+                <div className="pod-preview-loading" role="status">
+                  <span className="detail-status warning">Loading document preview…</span>
                 </div>
-              ) : (
-                <div className="routex-dialog-field">
-                  <label>Document Reference & Storage</label>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid var(--line)", borderRadius: "10px" }}>
-                    <div>
-                      <strong>{docDetail?.filename || inspectingStop.stop.documentRef || "No file attached"}</strong>
-                    </div>
-                    {docDetail?.downloadUrl ? (
-                      <a
-                        href={docDetail.downloadUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="secondary-button"
-                        style={{ padding: "6px 12px", fontSize: "12px" }}
-                      >
-                        Download Document
-                      </a>
-                    ) : inspectingStop.hasPod ? (
-                      <span className="detail-status success">Stored Private</span>
+              ) : null}
+
+              {!docLoading && !inspectingStop.hasPod ? (
+                <div className="pod-empty-display" role="status">
+                  <div className="pod-empty-icon" aria-hidden="true">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="9" y1="15" x2="15" y2="15" />
+                    </svg>
+                  </div>
+                  <div className="pod-empty-content">
+                    <h4>No Proof of Delivery Attached</h4>
+                    <p>No document has been uploaded for stop #{inspectingStop.stop.sequence} ({inspectingStop.stop.storeName}).</p>
+                    {canManage ? (
+                      <span className="pod-empty-hint">Upload a scanned receipt or signed document below.</span>
                     ) : (
-                      <span className="detail-status warning">Awaiting Upload</span>
+                      <span className="pod-empty-hint">Awaiting document upload by Operations or Admin staff.</span>
                     )}
                   </div>
                 </div>
-              )}
+              ) : null}
+
+              {!docLoading && inspectingStop.hasPod && docDetail?.downloadUrl ? (
+                <div className="delivery-document-viewer" aria-label="Proof of delivery document view">
+                  <div className="delivery-document-viewer-header">
+                    <div>
+                      <strong>{docDetail.filename || inspectingStop.stop.documentRef || "Attached POD"}</strong>
+                      <span>Proof of delivery document</span>
+                    </div>
+                    <span className="detail-status success">Attached</span>
+                  </div>
+
+                  <div className="pod-preview-viewport">
+                    {isImageDocument(docDetail.downloadUrl, docDetail.filename || inspectingStop.stop.documentRef) ? (
+                      <img
+                        src={docDetail.downloadUrl}
+                        alt={`POD for ${inspectingStop.stop.storeName}`}
+                        className="pod-preview-image"
+                      />
+                    ) : (
+                      <iframe
+                        title={`POD for ${inspectingStop.stop.storeName}`}
+                        src={docDetail.downloadUrl}
+                        className="pod-preview-iframe"
+                      />
+                    )}
+                    <div className="pod-action-toolbar">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{ padding: "6px 12px", fontSize: "12px" }}
+                        onClick={() => void openDocumentInNewTab(docDetail.downloadUrl!, docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf")}
+                      >
+                        <span aria-hidden="true">↗</span> Open in New Tab
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => void triggerDocumentDownload(docDetail.downloadUrl!, docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf")}
+                      >
+                        <span aria-hidden="true">⤓</span> Download File
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {!docLoading && inspectingStop.hasPod && !docDetail?.downloadUrl ? (
+                <div className="pod-preview-fallback">
+                  <p>Document reference is on file (<strong>{inspectingStop.stop.documentRef}</strong>), but storage preview is currently unreachable.</p>
+                </div>
+              ) : null}
 
               {canManage ? (
                 <div className="routex-dialog-field">

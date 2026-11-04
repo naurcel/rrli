@@ -5,6 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
+import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
+import { TruckPhoto } from "@/components/truck-photo";
+import { DeliveryCrewSection, parsePersonnelNames } from "@/components/delivery-crew-section";
 import {
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
@@ -14,6 +17,10 @@ import {
   type DetailSection,
 } from "@/components/record-detail-drawer";
 import { DeliveryFilterDropdown } from "@/components/delivery-filter-dropdown";
+import {
+  AggregateExpenseBreakdown,
+  DeliveryFinancialBreakdown,
+} from "@/components/delivery-financial-breakdown";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import type {
   ExpenseResolutionStatus,
@@ -474,6 +481,17 @@ export default function DeliveriesPage() {
       const expTotal = summary.expenseTotal;
       return [
         {
+          eyebrow: "EXPENSE DISTRIBUTION VISUALIZATION",
+          title: "Operating Expenses Distribution",
+          fullWidth: true,
+          customContent: (
+            <AggregateExpenseBreakdown
+              summary={summary}
+              kpiBreakdown={kpiBreakdown}
+            />
+          ),
+        },
+        {
           eyebrow: "CALCULATION FORMULA",
           title: "Total Operational Expenses",
           description:
@@ -604,6 +622,7 @@ export default function DeliveriesPage() {
   const canImport = canImportAndReviewExcel(actor.role);
   const [activeSortKey, activeSortDirection] = sort.split(":") as [string, TableSortDirection];
   const updateTableSort = (key: string, direction: TableSortDirection) => setSort(`${key}:${direction}`);
+  const resetTableSort = () => setSort("delivery_date:desc");
 
   async function finalizeFinancials() {
     if (!selectedTrip || financialActionPending) return;
@@ -646,6 +665,9 @@ export default function DeliveriesPage() {
       return [];
     }
 
+    const driverCount = parsePersonnelNames(selectedTrip.driverName).length;
+    const helperCount = parsePersonnelNames(selectedTrip.helperName).length;
+
     return [
       {
         title: "Delivery Overview",
@@ -653,103 +675,63 @@ export default function DeliveriesPage() {
         rows: [
           { label: "Waybill Number", value: selectedTrip.waybillNumber },
           { label: "Delivery Date", value: selectedTrip.deliveryDate },
-          { label: "Client", value: selectedTrip.clientName },
+          { label: "Client Account", value: selectedTrip.clientName },
+          { label: "Origin Hub", value: selectedTrip.origin },
+          { label: "Distance", value: `${selectedTrip.distanceKm} km` },
+          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L` },
           { label: "Delivery Status", value: selectedTrip.deliveryStatus || "Completed" },
-          { label: "Financial Status", value: selectedTrip.financialState === "finalized" ? "Finalized" : "Incomplete", tone: selectedTrip.financialState === "finalized" ? "success" : "warning" },
-          { label: "Truck / Plate Number", value: selectedTrip.plateNumber },
+          {
+            label: "Financial Status",
+            value: selectedTrip.financialState === "finalized" ? "Finalized" : "Incomplete",
+            tone: selectedTrip.financialState === "finalized" ? "success" : "warning",
+          },
         ],
       },
       {
-        title: "Truck & Personnel",
-        eyebrow: "Assignment",
-        rows: [
-          { label: "Truck", value: selectedTrip.plateNumber },
-          { label: "Truck Type", value: selectedTrip.truckType },
-          { label: "Ownership", value: selectedTrip.truckOwnership },
-          { label: "Temperature", value: selectedTrip.truckTemperature },
-          { label: "Driver", value: selectedTrip.driverName || "Not recorded" },
-          { label: "Helper", value: selectedTrip.helperName || "Not recorded" },
-        ],
+        title: "Assigned Vehicle",
+        eyebrow: "Fleet Asset",
+        customContent: (
+          <DeliveryTruckInfoSection
+            plateNumber={selectedTrip.plateNumber}
+            truckType={selectedTrip.truckType}
+            truckTemperature={selectedTrip.truckTemperature}
+            truckOwnership={selectedTrip.truckOwnership}
+            rateBasis={selectedTrip.rateBasis}
+          />
+        ),
+      },
+      {
+        title: `Crew Assignment (${driverCount} Driver${driverCount === 1 ? "" : "s"} · ${helperCount} Helper${helperCount === 1 ? "" : "s"})`,
+        eyebrow: "Dispatch Personnel",
+        fullWidth: true,
+        customContent: (
+          <DeliveryCrewSection
+            driverName={selectedTrip.driverName}
+            helperName={selectedTrip.helperName}
+            driverRateText={`${formatExpenseResolution(selectedTrip.expenses.driverDailyRate, selectedTrip.expenseStates.driverDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.driverAllowance, selectedTrip.expenseStates.driverAllowance)}`}
+            helperRateText={`${formatExpenseResolution(selectedTrip.expenses.helperDailyRate, selectedTrip.expenseStates.helperDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.helperAllowance, selectedTrip.expenseStates.helperAllowance)}`}
+          />
+        ),
       },
       {
         title: `Route & Drop-offs (${selectedTrip.dropoffs.length} stops)`,
         eyebrow: "Stop sequence and documents",
         fullWidth: true,
         rows: [
-          { label: "Origin", value: selectedTrip.origin },
-          { label: "Distance", value: `${selectedTrip.distanceKm} km` },
-          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L` },
           ...selectedTrip.dropoffs.map((stop) => ({
-          label: `#${stop.sequence} ${stop.storeName} (${stop.destinationArea})`,
-          value: `Entry fee: ${formatExpenseResolution(stop.entryFee, stop.entryFeeStatus)} · ${
-            stop.podSubmitted ? `Attached (${stop.documentRef})` : stop.documentRef
-          }`,
-          tone:
-            stop.podSubmitted
-              ? ("success" as const)
-              : ("warning" as const),
+            label: `#${stop.sequence} ${stop.storeName} (${stop.destinationArea})`,
+            value: `Entry fee: ${formatExpenseResolution(stop.entryFee, stop.entryFeeStatus)} · ${
+              stop.podSubmitted ? `Attached (${stop.documentRef})` : stop.documentRef
+            }`,
+            tone: stop.podSubmitted ? ("success" as const) : ("warning" as const),
           })),
         ],
       },
       {
         title: "Financial Breakdown",
         eyebrow: "Revenue, expenses, and profitability",
-        rows: [
-          {
-            label: "Delivery Rate (Revenue)",
-            value: formatPeso(selectedTrip.deliveryRate),
-            tone: "success",
-          },
-          {
-            label: "Diesel Expenses",
-            value: formatExpenseResolution(
-              selectedTrip.expenses.dieselExpenses,
-              selectedTrip.expenseStates.dieselExpenses,
-            ),
-            tone: selectedTrip.expenseStates.dieselExpenses === "unknown" ? "warning" : undefined,
-          },
-          {
-            label: "Toll Gate Expenses",
-            value: formatExpenseResolution(
-              selectedTrip.expenses.tollGateExpenses,
-              selectedTrip.expenseStates.tollGateExpenses,
-            ),
-            tone: selectedTrip.expenseStates.tollGateExpenses === "unknown" ? "warning" : undefined,
-          },
-          {
-            label: "Store Entry Fees",
-            value: formatExpenseResolution(
-              selectedTrip.expenses.entryFees,
-              selectedTrip.expenseStates.entryFees,
-            ),
-            tone: selectedTrip.expenseStates.entryFees === "unknown" ? "warning" : undefined,
-          },
-          {
-            label: "Driver Daily Rate + Allowance",
-            value: `${formatExpenseResolution(selectedTrip.expenses.driverDailyRate, selectedTrip.expenseStates.driverDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.driverAllowance, selectedTrip.expenseStates.driverAllowance)}`,
-            tone: selectedTrip.expenseStates.driverDailyRate === "unknown" || selectedTrip.expenseStates.driverAllowance === "unknown" ? "warning" : undefined,
-          },
-          {
-            label: "Helper Daily Rate + Allowance",
-            value: `${formatExpenseResolution(selectedTrip.expenses.helperDailyRate, selectedTrip.expenseStates.helperDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.helperAllowance, selectedTrip.expenseStates.helperAllowance)}`,
-            tone: selectedTrip.expenseStates.helperDailyRate === "unknown" || selectedTrip.expenseStates.helperAllowance === "unknown" ? "warning" : undefined,
-          },
-          {
-            label: "Other Expenses",
-            value: formatExpenseResolution(
-              selectedTrip.expenses.otherExpenses,
-              selectedTrip.expenseStates.otherExpenses,
-            ),
-            tone: selectedTrip.expenseStates.otherExpenses === "unknown" ? "warning" : undefined,
-          },
-          { label: "Total Expenses", value: formatPeso(selectedTrip.totalExpenses) },
-          {
-            label: "Net Income",
-            value: formatPeso(selectedTrip.netIncome),
-            tone: selectedTrip.netIncome !== null && selectedTrip.netIncome >= 0 ? "success" : "warning",
-          },
-          { label: "Profit Margin", value: formatPercent(selectedTrip.marginPercent), tone: selectedTrip.netIncome !== null && selectedTrip.netIncome >= 0 ? "success" : "warning" },
-        ],
+        fullWidth: true,
+        customContent: <DeliveryFinancialBreakdown trip={selectedTrip} />,
       },
       {
         title: "POD & Supporting Documents",
@@ -877,9 +859,14 @@ export default function DeliveriesPage() {
 
         <section className={`records-card${loading ? " is-loading" : ""}`} aria-label="Completed deliveries table">
           <div className="records-heading">
-            <div>
+            <div className="records-heading-copy">
               <h2>Completed Delivery Ledger</h2>
-              <p>Filter and open completed delivery records.</p>
+              <p>Filter, sort, and inspect completed multi-store trips.</p>
+            </div>
+            <div className="records-heading-meta">
+              <span className="ledger-total-badge">
+                {total} total trips · {summary.stopCount} store stops
+              </span>
             </div>
           </div>
 
@@ -1005,16 +992,17 @@ export default function DeliveriesPage() {
               <table>
                 <thead>
                   <tr>
-                    <SortableTableHeader label="Waybill" sortKey="waybill" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
-                    <SortableTableHeader label="Date" sortKey="delivery_date" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
-                    <SortableTableHeader label="Client" sortKey="client" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
-                    <SortableTableHeader label="Truck" sortKey="truck" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
-                    <SortableTableHeader label="Temperature" sortKey="temperature" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
-                    <SortableTableHeader label="Origin & Store Drop-offs" sortKey="origin" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} />
-                    <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
-                    <SortableTableHeader label="Delivery Rate" sortKey="delivery_rate" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
-                    <SortableTableHeader label="Total Expenses" sortKey="total_expenses" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
-                    <SortableTableHeader label="Net Profit" sortKey="net_income" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} />
+                    <SortableTableHeader label="Waybill" sortKey="waybill" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Date" sortKey="delivery_date" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Client" sortKey="client" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Truck" sortKey="truck" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Temp" sortKey="temperature" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Origin" sortKey="origin" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Stores" sortKey="dropoffs" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Delivery Rate" sortKey="delivery_rate" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Expenses" sortKey="total_expenses" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Net Profit" sortKey="net_income" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                   </tr>
                 </thead>
                 <tbody>
@@ -1035,30 +1023,74 @@ export default function DeliveriesPage() {
                         }
                       }}
                     >
-                      <td>
-                        <strong>{trip.waybillNumber}</strong>
+                      <td className="cell-waybill">
+                        <div className="waybill-badge-stack">
+                          <strong className="waybill-code">#{trip.waybillNumber}</strong>
+                          {trip.financialState === "incomplete" ? (
+                            <span className="incomplete-ledger-pill" title="Incomplete: Contains unverified or unknown expenses">
+                              Pending
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
-                      <td>{trip.deliveryDate}</td>
-                      <td>
-                        <strong>{trip.clientName}</strong>
+                      <td className="cell-date">
+                        <span className="date-main">{trip.deliveryDate}</span>
                       </td>
-                      <td className="truck-code">
-                        <strong>{trip.plateNumber}</strong> ({trip.truckType})
-                        <span className={`truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
-                          {trip.truckOwnership}
+                      <td className="cell-client">
+                        <span className="client-name-label">{trip.clientName}</span>
+                      </td>
+                      <td className="truck-code cell-truck">
+                        <div className="truck-info-stack">
+                          <span className="truck-plate-label">{trip.plateNumber}</span>
+                          <span className="truck-type-meta">{trip.truckType}</span>
+                          <span className={`truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
+                            {trip.truckOwnership}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="cell-temp">
+                        <span className={`temp-badge ${trip.truckTemperature.includes("-") ? "frozen" : "chilled"}`}>
+                          {trip.truckTemperature}
                         </span>
                       </td>
-                      <td>{trip.truckTemperature}</td>
-                      <td>
-                        <span>{trip.origin} → </span>
-                        <span className="dropoff-count-badge">
-                          {trip.dropoffs.length} stores
-                        </span>
+                      <td className="cell-origin">
+                        <span className="origin-name">{trip.origin}</span>
                       </td>
-                      <td>{trip.distanceKm} km</td>
-                      <td className="money">{formatPeso(trip.deliveryRate)}</td>
-                      <td>{formatPeso(trip.totalExpenses)}</td>
-                      <td className="money">{formatPeso(trip.netIncome)}</td>
+                      <td className="cell-stores">
+                        <div
+                          className="stores-cell-wrap"
+                          title={trip.dropoffs.map((d) => `#${d.sequence} ${d.storeName} (${d.destinationArea})`).join("\n")}
+                        >
+                          <span className="dropoff-count-badge">
+                            <span className="store-pin-dot" aria-hidden="true" />
+                            {trip.dropoffs.length} {trip.dropoffs.length === 1 ? "store" : "stores"}
+                          </span>
+                          {trip.dropoffs.length > 0 ? (
+                            <span className="stores-destination-summary">
+                              {trip.dropoffs
+                                .map((d) => d.destinationArea || d.storeName)
+                                .filter(Boolean)
+                                .slice(0, 2)
+                                .join(", ") + (trip.dropoffs.length > 2 ? ` +${trip.dropoffs.length - 2}` : "")}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="cell-distance">{trip.distanceKm} km</td>
+                      <td className="money cell-delivery-rate">{formatPeso(trip.deliveryRate)}</td>
+                      <td className="cell-expenses">{formatPeso(trip.totalExpenses)}</td>
+                      <td className="money cell-net-income">
+                        <div className="profit-stack">
+                          <span className={`profit-amount ${trip.netIncome != null && trip.netIncome >= 0 ? "positive" : "warning"}`}>
+                            {formatPeso(trip.netIncome)}
+                          </span>
+                          {trip.marginPercent !== null ? (
+                            <span className={`margin-pill ${trip.marginPercent >= 20 ? "good" : trip.marginPercent >= 0 ? "mod" : "low"}`}>
+                              {formatPercent(trip.marginPercent)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1101,15 +1133,6 @@ export default function DeliveriesPage() {
         statusTone={activeKpiMeta?.statusTone}
         sections={kpiDrawerSections}
         onClose={() => setActiveKpi(null)}
-        footer={(
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => setActiveKpi(null)}
-          >
-            Close breakdown
-          </button>
-        )}
       />
 
       <RecordDetailDrawer

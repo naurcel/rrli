@@ -15,32 +15,32 @@ const ROLE_VERIFICATION_ACCOUNTS = [
   {
     label: "Admin (Full Access)",
     username: "admin",
-    password: "Admin2026!",
+    password: "admin",
   },
   {
     label: "Operations (Write)",
     username: "operations",
-    password: "Ops2026!",
+    password: "operations",
   },
   {
     label: "Finance (View-Only)",
     username: "finance",
-    password: "Finance2026!",
+    password: "finance",
   },
   {
     label: "HR (View-Only)",
     username: "hr",
-    password: "Hr2026!",
+    password: "humanresources",
   },
   {
     label: "Secretary (View-Only)",
     username: "secretary",
-    password: "Secretary2026!",
+    password: "secretary",
   },
   {
     label: "Customer Rep (View-Only)",
     username: "customerrep",
-    password: "Csrep2026!",
+    password: "customerrep",
   },
 ] as const;
 

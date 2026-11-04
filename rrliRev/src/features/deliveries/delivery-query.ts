@@ -9,6 +9,7 @@ export const DELIVERY_SORT_FIELDS = [
   "truck",
   "temperature",
   "origin",
+  "dropoffs",
   "distance",
   "delivery_rate",
   "total_expenses",

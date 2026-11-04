@@ -5,8 +5,9 @@ import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { SMALL_MOCK_DATABASE } from "@/features/deliveries/small-mock-database";
-import { derivePodVerificationStatus } from "@/features/deliveries/delivery-domain";
+import { derivePodVerificationStatus, type DeliveryStoreDropoff, type DeliveryTripRecord } from "@/features/deliveries/delivery-domain";
 import { getAllMockDeliveries } from "@/features/deliveries/small-mock-repository";
+import { generateMockPodSvgReceipt } from "@/features/deliveries/pod-utils";
 
 type MutableMockDoc = {
   id: string;
@@ -17,9 +18,10 @@ type MutableMockDoc = {
   status: string;
   storagePath: string | null;
   originalFilename: string | null;
-  mimeType: "application/pdf" | null;
+  mimeType: string | null;
   sizeBytes: number | null;
   verificationNotes: string | null;
+  dataUrl?: string | null;
 };
 
 const extraMockDocuments = new Map<string, MutableMockDoc>();
@@ -36,6 +38,7 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 /**
  * GET /api/deliveries/documents?deliveryId=...&dropoffId=...
  * Generates a short-lived private signed URL for authenticated staff to view/download a POD.
+ * Generates a private signed download/preview URL for authenticated staff to view a POD.
  * Enforces server-side `pod:view` permission (accessible by all 6 authenticated roles).
  */
 export async function GET(request: Request) {
@@ -61,24 +64,49 @@ export async function GET(request: Request) {
   if (!isSupabaseConfigured()) {
     const key = `${deliveryId}:${dropoffId}`;
     const extraDoc = extraMockDocuments.get(key);
+
+    // Look up delivery and drop-off in mock database
+    const delivery = getAllMockDeliveries().find((d) => d.record.id === deliveryId);
+    const dropoff = delivery?.record.dropoffs.find((s) => s.id === dropoffId);
+
     const doc = extraDoc ?? SMALL_MOCK_DATABASE.documents.find(
       (d) => d.deliveryId === deliveryId && d.dropoffId === dropoffId,
     );
-    if (!doc) {
+    if (!doc && !dropoff) {
       return NextResponse.json(
         { ok: false, code: "NOT_FOUND", message: "Document record not found." },
         { status: 404 },
       );
     }
 
+    const filename =
+      extraDoc?.originalFilename ??
+      doc?.originalFilename ??
+      dropoff?.documentRef ??
+      "proof-of-delivery.pdf";
+
+    const isAttached = Boolean(
+      dropoff ? dropoff.podSubmitted : doc?.status === "Attached",
+    );
+
+    // Generate real preview URL when attached
+    let downloadUrl: string | null = null;
+    if (isAttached) {
+      if (extraDoc?.dataUrl) {
+        downloadUrl = extraDoc.dataUrl;
+      } else {
+        downloadUrl = generateMockPodSvgReceipt(delivery?.record, dropoff, filename);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       document: {
-        id: doc.id,
-        filename: doc.originalFilename ?? `${doc.label}.pdf`,
-        status: doc.status,
-        notes: doc.verificationNotes,
-        downloadUrl: null, // Simulated in bundled mock
+        id: doc?.id ?? extraDoc?.id ?? `doc-${deliveryId}-${dropoffId}`,
+        filename,
+        status: isAttached ? "Attached" : "Missing",
+        notes: doc?.verificationNotes ?? null,
+        downloadUrl,
         isMock: true,
       },
     });
@@ -104,7 +132,7 @@ export async function GET(request: Request) {
     if (doc.storage_path) {
       const { data: signed } = await supabase.storage
         .from("delivery-documents")
-        .createSignedUrl(doc.storage_path, 120); // 2-minute signed URL
+        .createSignedUrl(doc.storage_path, 300); // 5-minute signed URL
       downloadUrl = signed?.signedUrl ?? null;
     }
 
@@ -187,6 +215,14 @@ export async function POST(request: Request) {
   const originalFilename = file && file.name ? file.name : `POD-${deliveryId.slice(0, 8)}.pdf`;
 
   if (!isSupabaseConfigured()) {
+    // Convert uploaded file to base64 data URL for preview rendering
+    let dataUrl: string | null = null;
+    if (file && file.size > 0) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const mime = file.type || "application/pdf";
+      dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
+    }
+
     // Update mock delivery in memory
     const delivery = getAllMockDeliveries().find((d) => d.record.id === deliveryId);
     if (!delivery) {
@@ -222,22 +258,32 @@ export async function POST(request: Request) {
         status: newStatus,
         storagePath: `pod/${deliveryId}/${dropoffId}/${originalFilename}`,
         originalFilename,
-        mimeType: "application/pdf",
+        mimeType: file?.type || "application/pdf",
         sizeBytes: file ? file.size : 102400,
         verificationNotes: null,
+        dataUrl,
       };
       extraMockDocuments.set(key, newDoc);
       doc = newDoc;
     } else {
       doc.status = newStatus;
       doc.originalFilename = originalFilename;
+      doc.dataUrl = dataUrl;
       extraMockDocuments.set(key, doc);
     }
 
     delivery.record.podStatus = derivePodVerificationStatus(delivery.record.dropoffs);
     delivery.record.version += 1;
 
-    recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "document.uploaded", entityType: "delivery", entityId: deliveryId, summary: `Uploaded POD for stop ${dropoff.sequence}.`, changes: { dropoffId, filename: originalFilename } });
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "document.uploaded",
+      entityType: "delivery",
+      entityId: deliveryId,
+      summary: `Uploaded POD for stop #${dropoff.sequence} (${dropoff.storeName}).`,
+      changes: { dropoffId, filename: originalFilename },
+    });
 
     return NextResponse.json({
       ok: true,
@@ -246,6 +292,7 @@ export async function POST(request: Request) {
         filename: originalFilename,
         status: newStatus,
         notes: null,
+        downloadUrl: dataUrl,
       },
       dropoff: {
         id: dropoff.id,
@@ -306,12 +353,12 @@ export async function POST(request: Request) {
 
     if (docError) {
       return NextResponse.json(
-        { ok: false, code: "DOC_RECORD_FAILED", message: docError.message },
+        { ok: false, code: "DATABASE_ERROR", message: docError.message },
         { status: 500 },
       );
     }
 
-    // Update dropoff stop in public.delivery_dropoffs
+    // Update stop pod_submitted flag
     await supabase
       .from("delivery_dropoffs")
       .update({
@@ -320,18 +367,40 @@ export async function POST(request: Request) {
       })
       .eq("id", dropoffId);
 
-    recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "document.uploaded", entityType: "delivery", entityId: deliveryId, summary: "Uploaded or replaced a POD document.", changes: { dropoffId, filename: originalFilename } });
+    // Generate signed download URL
+    let downloadUrl: string | null = null;
+    if (storagePath) {
+      const { data: signed } = await supabase.storage
+        .from("delivery-documents")
+        .createSignedUrl(storagePath, 300);
+      downloadUrl = signed?.signedUrl ?? null;
+    }
+
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "document.uploaded",
+      entityType: "delivery",
+      entityId: deliveryId,
+      summary: `Uploaded POD for delivery ${deliveryId}.`,
+      changes: { dropoffId, filename: originalFilename },
+    });
 
     return NextResponse.json({
       ok: true,
-      document: docData,
+      document: {
+        id: docData?.id ?? `doc-${deliveryId}-${dropoffId}`,
+        filename: originalFilename,
+        status: newStatus,
+        downloadUrl,
+      },
     });
   } catch (err) {
     return NextResponse.json(
       {
         ok: false,
-        code: "SERVER_ERROR",
-        message: err instanceof Error ? err.message : "Document operation failed.",
+        code: "INTERNAL_ERROR",
+        message: err instanceof Error ? err.message : "Document upload failed.",
       },
       { status: 500 },
     );

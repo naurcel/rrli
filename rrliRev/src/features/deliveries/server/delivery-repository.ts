@@ -209,6 +209,7 @@ export async function listDeliveryRecords(
     truck: "plate_number",
     temperature: "truck_temperature_snapshot",
     origin: "origin",
+    dropoffs: "delivery_date",
     distance: "distance_km",
     delivery_date: "delivery_date",
     delivery_rate: "delivery_rate",

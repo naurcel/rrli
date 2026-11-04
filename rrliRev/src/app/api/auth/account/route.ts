@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { recordAuditEntry } from "@/lib/audit/server-audit-store";
+import { isSupabaseConfigured } from "@/lib/config/env";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   changePasswordSchema,
   changeSecurityQuestionSchema,
@@ -10,6 +12,7 @@ import {
 import {
   completeInitialServerAccountSetup,
   findServerAccountById,
+  updateServerAccountAvatar,
   updateServerAccountPassword,
   updateServerAccountSecurityQuestion,
   updateServerAccountUsername,
@@ -232,6 +235,82 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: "Initial account setup completed successfully.",
+      profile: result.profile,
+    });
+  }
+
+  // 5. Update Profile Photo
+  if (action === "update-profile-photo") {
+    const rawAvatar = body?.avatarUrl;
+    let avatarUrl: string | null = null;
+
+    if (rawAvatar !== null && rawAvatar !== undefined) {
+      if (typeof rawAvatar !== "string") {
+        return NextResponse.json(
+          { ok: false, message: "Invalid profile photo format." },
+          { status: 400 },
+        );
+      }
+      const trimmed = rawAvatar.trim();
+      if (
+        !trimmed.startsWith("data:image/") &&
+        !trimmed.startsWith("/profiles/") &&
+        !trimmed.startsWith("https://") &&
+        !trimmed.startsWith("http://")
+      ) {
+        return NextResponse.json(
+          { ok: false, message: "Invalid image format. Supported formats are JPG, PNG, and WebP." },
+          { status: 400 },
+        );
+      }
+      // Safety size constraint (3MB)
+      if (trimmed.length > 3 * 1024 * 1024) {
+        return NextResponse.json(
+          { ok: false, message: "Profile photo is too large. Maximum size is 3MB." },
+          { status: 400 },
+        );
+      }
+      avatarUrl = trimmed;
+    }
+
+    const result = updateServerAccountAvatar(actor.id, avatarUrl);
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = await createServerSupabaseClient();
+        await supabase
+          .from("user_profiles")
+          .update({ avatar_url: avatarUrl })
+          .eq("id", actor.id);
+      } catch {
+        // Fallback gracefully if Supabase table is not configured
+      }
+    }
+
+    recordAuditEntry({
+      actorId: actor.id,
+      actorEmail: actor.email,
+      action: "user.profile_photo_updated",
+      entityType: "user",
+      entityId: actor.id,
+      summary: avatarUrl
+        ? `User '${actor.username}' updated their profile picture.`
+        : `User '${actor.username}' removed their profile picture.`,
+      changes: {
+        username: actor.username,
+        userId: actor.id,
+        hasAvatar: Boolean(avatarUrl),
+        updatedAt: new Date().toISOString(),
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: avatarUrl ? "Profile picture updated successfully." : "Profile picture removed.",
+      avatarUrl,
       profile: result.profile,
     });
   }

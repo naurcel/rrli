@@ -7,6 +7,8 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
 import { RoundedSelect } from "@/components/rounded-select";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
+import { AuditStateChanges } from "@/components/audit-state-changes";
+import { getActionVisuals } from "@/features/audit/audit-formatters";
 import {
   evaluatePasswordCriteria,
   validateUsernameFormat,
@@ -102,8 +104,8 @@ export default function UserManagementPage() {
       });
   }, []);
 
-  async function loadAuditEntries() {
-    setAuditLoading(true);
+  async function loadAuditEntries(silent = false) {
+    if (!silent) setAuditLoading(true);
     setAuditError(null);
     try {
       const response = await fetch("/api/audit");
@@ -120,15 +122,41 @@ export default function UserManagementPage() {
       setAuditEntries(payload.entries ?? []);
     } catch (err) {
       setAuditError(err instanceof Error ? err.message : "Error loading audit records.");
+      if (!silent) {
+        setAuditError(err instanceof Error ? err.message : "Error loading audit records.");
+      }
     } finally {
       setAuditLoading(false);
+      if (!silent) setAuditLoading(false);
     }
   }
 
   useEffect(() => {
-    if (activeTab === "audit") {
-      void loadAuditEntries();
+    if (activeTab !== "audit") return;
+
+    // Initial fetch when switching to audit tab
+    void loadAuditEntries();
+
+    // Auto-revalidate periodically (every 20 seconds) while on audit tab
+    const intervalId = setInterval(() => {
+      void loadAuditEntries(true);
+    }, 20000);
+
+    // Auto-revalidate on window focus or visibility change
+    function handleVisibilityOrFocus() {
+      if (document.visibilityState === "visible") {
+        void loadAuditEntries(true);
+      }
     }
+
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+    };
   }, [activeTab]);
 
   const filteredAuditEntries = useMemo(() => {
@@ -173,6 +201,7 @@ export default function UserManagementPage() {
     if (action.includes("corrected") || action.includes("changed") || action.includes("status")) return "missing";
     if (action.includes("uploaded")) return "attached";
     return "attached";
+    return getActionVisuals(action).className;
   }
 
   const sortedUsers = useMemo(() => {
@@ -267,6 +296,7 @@ export default function UserManagementPage() {
         tone: "success",
         text: `Provisioned @${payload.user.username} (${payload.user.fullName}) with role ${payload.user.roleLabel}. The user will be required to change their temporary password upon first login.`,
       });
+      void loadAuditEntries(true);
     } catch {
       setFeedback({
         tone: "error",
@@ -308,6 +338,7 @@ export default function UserManagementPage() {
         tone: "success",
         text: `Updated ${payload.user.fullName}'s role to ${payload.user.roleLabel} (${payload.user.accessLevelLabel}).`,
       });
+      void loadAuditEntries(true);
     } catch {
       setFeedback({
         tone: "error",
@@ -347,6 +378,7 @@ export default function UserManagementPage() {
         tone: "success",
         text: `${payload.user.fullName} (@${payload.user.username}) is now ${payload.user.isActive ? "Active" : "Deactivated"}.`,
       });
+      void loadAuditEntries(true);
     } catch {
       setFeedback({
         tone: "error",
@@ -398,6 +430,7 @@ export default function UserManagementPage() {
         text: payload.message ?? `Authorized single-use password recovery for @${authorizingUser.username}.`,
       });
       setAuthorizingUser(null);
+      void loadAuditEntries(true);
     } catch {
       setAuthorizeError("Network or server error while authorizing password recovery.");
     } finally {
@@ -454,6 +487,7 @@ export default function UserManagementPage() {
         text: `Successfully updated username for ${editingUser.fullName} to @${payload.user?.username ?? cleanUsername}.`,
       });
       setEditingUser(null);
+      void loadAuditEntries(true);
     } catch {
       setEditUsernameError("Network or server error while updating username.");
     } finally {
@@ -1058,10 +1092,10 @@ export default function UserManagementPage() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Date &amp; Time</th>
-                        <th>User</th>
-                        <th>Action</th>
-                        <th>Entity</th>
+                        <th style={{ width: "150px" }}>Date &amp; Time</th>
+                        <th style={{ width: "180px" }}>User</th>
+                        <th style={{ width: "170px" }}>Action</th>
+                        <th style={{ width: "140px" }}>Entity</th>
                         <th>Details &amp; State Changes</th>
                       </tr>
                     </thead>
@@ -1072,29 +1106,55 @@ export default function UserManagementPage() {
                             colSpan={5}
                             style={{
                               textAlign: "center",
-                              padding: "32px",
+                              padding: "36px",
                               color: "var(--color-text-muted)",
                             }}
                           >
-                            No audit events match your search criteria.
+                            <div style={{ display: "grid", gap: "6px", placeItems: "center" }}>
+                              <strong>No audit events match your search criteria.</strong>
+                              <span>Try modifying your search query or reset action and entity filters.</span>
+                              {(auditSearch || actionFilter !== "All Actions" || entityFilter !== "All Entities") ? (
+                                <button
+                                  type="button"
+                                  className="secondary-button"
+                                  style={{ marginTop: "8px", fontSize: "11px", padding: "4px 10px" }}
+                                  onClick={() => {
+                                    setAuditSearch("");
+                                    setActionFilter("All Actions");
+                                    setEntityFilter("All Entities");
+                                  }}
+                                >
+                                  Reset Filters
+                                </button>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       ) : (
                         filteredAuditEntries.map((entry) => (
                           <tr key={entry.id}>
                             <td>
-                              <strong>{new Date(entry.occurredAt).toLocaleDateString()}</strong>
-                              <br />
-                              <small style={{ color: "var(--color-text-muted)" }}>
-                                {new Date(entry.occurredAt).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                })}
-                              </small>
+                              <div className="audit-timestamp">
+                                <strong>
+                                  {new Date(entry.occurredAt).toLocaleDateString(undefined, {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
+                                </strong>
+                                <small>
+                                  {new Date(entry.occurredAt).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    second: "2-digit",
+                                  })}
+                                </small>
+                              </div>
                             </td>
                             <td>
-                              <strong>{entry.actorEmail}</strong>
+                              <div className="audit-user-cell">
+                                <strong>{entry.actorEmail}</strong>
+                              </div>
                             </td>
                             <td>
                               <span className={`pod-status ${actionBadgeClass(entry.action)}`}>
@@ -1103,34 +1163,15 @@ export default function UserManagementPage() {
                               </span>
                             </td>
                             <td>
-                              <span style={{ textTransform: "capitalize", fontWeight: 600 }}>
-                                {entry.entityType}
-                              </span>
-                              <br />
-                              <small className="truck-code">{entry.entityId}</small>
+                              <div className="audit-entity-cell">
+                                <span className="audit-entity-type">{entry.entityType}</span>
+                                <span className="audit-entity-id" title={entry.entityId}>
+                                  {entry.entityId}
+                                </span>
+                              </div>
                             </td>
                             <td>
-                              <details style={{ cursor: "pointer" }}>
-                                <summary style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>
-                                  {entry.summary}
-                                </summary>
-                                {entry.changes ? (
-                                  <pre
-                                    style={{
-                                      margin: "8px 0 0",
-                                      padding: "10px",
-                                      background: "var(--glass-surface-strong)",
-                                      border: "1px solid var(--color-border)",
-                                      borderRadius: "8px",
-                                      fontSize: "11px",
-                                      maxHeight: "160px",
-                                      overflow: "auto",
-                                    }}
-                                  >
-                                    {JSON.stringify(entry.changes, null, 2)}
-                                  </pre>
-                                ) : null}
-                              </details>
+                              <AuditStateChanges summary={entry.summary} changes={entry.changes} />
                             </td>
                           </tr>
                         ))

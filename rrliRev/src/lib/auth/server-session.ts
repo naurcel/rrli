@@ -39,6 +39,7 @@ export type AuthenticatedActor = {
   providerMode: AuthProviderMode;
   mustChangePassword?: boolean;
   hasSecurityQuestion?: boolean;
+  avatarUrl?: string | null;
 };
 
 export function getAuthProviderMode(): AuthProviderMode {
@@ -54,6 +55,7 @@ function buildAuthenticatedActor(params: {
   providerMode: AuthProviderMode;
   mustChangePassword?: boolean;
   hasSecurityQuestion?: boolean;
+  avatarUrl?: string | null;
 }): AuthenticatedActor {
   const meta = getRoleMetadata(params.role);
 
@@ -70,6 +72,7 @@ function buildAuthenticatedActor(params: {
     providerMode: params.providerMode,
     mustChangePassword: Boolean(params.mustChangePassword),
     hasSecurityQuestion: Boolean(params.hasSecurityQuestion),
+    avatarUrl: params.avatarUrl ?? null,
   };
 }
 
@@ -113,6 +116,7 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
           providerMode: "supabase",
           mustChangePassword: Boolean(profileRow.must_change_password),
           hasSecurityQuestion: Boolean(profileRow.security_answer_hash),
+          avatarUrl: (profileRow as { avatar_url?: string | null }).avatar_url || null,
         });
       }
 
@@ -167,6 +171,7 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
     providerMode: "server-local",
     mustChangePassword: account.mustChangePassword,
     hasSecurityQuestion: account.hasSecurityQuestion,
+    avatarUrl: account.avatarUrl ?? null,
   });
 }
 

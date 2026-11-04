@@ -8,204 +8,245 @@ import {
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { ReportCustomizerModal } from "@/components/report-customizer-modal";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
-import {
-  summarizeTruckProfitability,
-} from "@/features/deliveries/delivery-domain";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
+import {
+  downloadReportCsvFile,
+  formatCellValue,
+  processReport,
+} from "@/features/reports/report-engine";
+import {
+  deleteClientReportTemplate,
+  loadClientReportTemplates,
+  saveClientReportTemplate,
+} from "@/features/reports/report-template-store";
+import {
+  BUILTIN_REPORT_TEMPLATES,
+  DEFAULT_REVENUE_TEMPLATE,
+  type ReportTemplate,
+} from "@/features/reports/report-template-types";
+import { canManageReportTemplates } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
-
-type ReportTab = "revenue" | "expenses" | "profitability" | "activity";
-
-type FinancialReportRow = {
-  label: string;
-  deliveries: number;
-  revenue: number;
-  expenses: number;
-  netIncome: number;
-};
-
-type ActivityReportRow = {
-  label: string;
-  deliveries: number;
-  totalDropoffs: number;
-  attachedPods: number;
-};
-
-const REPORT_TABS: readonly { id: ReportTab; label: string }[] = [
-  { id: "revenue", label: "Revenue" },
-  { id: "expenses", label: "Expenses" },
-  { id: "profitability", label: "Profitability" },
-  { id: "activity", label: "Activity" },
-];
-
-function financialShare(value: number, total: number): string {
-  return formatPercent(total === 0 ? null : (value / total) * 100);
-}
-
-function sortRows<T>(rows: readonly T[], key: string, direction: TableSortDirection, valueFor: (row: T, key: string) => string | number): T[] {
-  const multiplier = direction === "asc" ? 1 : -1;
-  return [...rows].sort((left, right) => {
-    const leftValue = valueFor(left, key);
-    const rightValue = valueFor(right, key);
-    const compared = typeof leftValue === "number" && typeof rightValue === "number"
-      ? leftValue - rightValue
-      : String(leftValue).localeCompare(String(rightValue));
-    return compared * multiplier;
-  });
-}
 
 export default function ReportsPage() {
   const actor = useAuthenticatedActor();
+  const isAdmin = canManageReportTemplates(actor.role);
   const { range } = useGlobalDateRange();
   const { deliveries: filteredDeliveries, loading, error } = usePersistedDeliveries(range);
-  const [activeTab, setActiveTab] = useState<ReportTab>("revenue");
-  const [reportSort, setReportSort] = useState<{ key: string; direction: TableSortDirection }>({ key: "revenue", direction: "desc" });
 
+  // Template collection state
+  const [templates, setTemplates] = useState<ReportTemplate[]>(() => [
+    ...BUILTIN_REPORT_TEMPLATES,
+  ]);
+  const [activeTemplateId, setActiveTemplateId] = useState<string>("default-revenue");
+
+  // Customizer modal state
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+  const [customizerTargetTemplate, setCustomizerTargetTemplate] = useState<ReportTemplate>(
+    DEFAULT_REVENUE_TEMPLATE,
+  );
+  const [feedbackNotice, setFeedbackNotice] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  // Table sorting
+  const [reportSort, setReportSort] = useState<{ key: string; direction: TableSortDirection }>({
+    key: "revenue",
+    direction: "desc",
+  });
+
+  // Load saved templates from localStorage & server API
+  useEffect(() => {
+    const localTemplates = loadClientReportTemplates();
+    if (localTemplates.length > 0) {
+      setTemplates(localTemplates);
+    }
+
+    fetch("/api/reports/templates")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.ok && Array.isArray(data.templates)) {
+          setTemplates(data.templates);
+        }
+      })
+      .catch(() => {
+        // Fallback to local storage
+      });
+  }, []);
+
+  // Handle URL query parameters for tab / template routing
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
+      const templateParam = params.get("template") || params.get("templateId");
       const tabParam = params.get("tab");
-      if (REPORT_TABS.some((tab) => tab.id === tabParam)) {
-        setActiveTab(tabParam as ReportTab);
-      } else if (tabParam === "truck-profitability") {
-        setActiveTab("profitability");
-      } else if (tabParam === "client-deliveries") {
-        setActiveTab("revenue");
-      } else if (tabParam === "pod-completeness") {
-        setActiveTab("activity");
+
+      if (templateParam) {
+        setActiveTemplateId(templateParam);
+      } else if (tabParam) {
+        const tabToId: Record<string, string> = {
+          revenue: "default-revenue",
+          expenses: "default-expenses",
+          profitability: "default-profitability",
+          activity: "default-activity",
+          "trip-ledger": "default-trip-ledger",
+          "truck-profitability": "default-profitability",
+          "client-deliveries": "default-revenue",
+          "pod-completeness": "default-activity",
+        };
+        if (tabToId[tabParam]) {
+          setActiveTemplateId(tabToId[tabParam]);
+        }
       }
     } catch {
-      // Ignore
+      // Ignore URL parsing errors
     }
   }, []);
 
+  // Find active template
+  const activeTemplate = useMemo(() => {
+    return (
+      templates.find((t) => t.id === activeTemplateId) ||
+      BUILTIN_REPORT_TEMPLATES.find((t) => t.id === activeTemplateId) ||
+      DEFAULT_REVENUE_TEMPLATE
+    );
+  }, [templates, activeTemplateId]);
+
+  // Adjust default sort key when active template changes
   useEffect(() => {
-    const defaultKeys: Record<ReportTab, string> = { revenue: "revenue", expenses: "expenses", profitability: "netIncome", activity: "deliveries" };
-    setReportSort({ key: defaultKeys[activeTab], direction: "desc" });
-  }, [activeTab]);
-
-  const truckRows = useMemo(
-    () => summarizeTruckProfitability(filteredDeliveries),
-    [filteredDeliveries],
-  );
-
-  const financialDeliveries = useMemo(
-    () => filteredDeliveries.filter(
-      (item) =>
-        item.financialState === "finalized" &&
-        item.deliveryRate != null &&
-        item.totalExpenses != null &&
-        item.netIncome != null,
-    ),
-    [filteredDeliveries],
-  );
-
-  const clientFinancialRows = useMemo(() => {
-    const groups = new Map<string, FinancialReportRow>();
-    for (const delivery of financialDeliveries) {
-      const row = groups.get(delivery.clientName) ?? {
-        label: delivery.clientName,
-        deliveries: 0,
-        revenue: 0,
-        expenses: 0,
-        netIncome: 0,
-      };
-      row.deliveries += 1;
-      row.revenue += delivery.deliveryRate ?? 0;
-      row.expenses += delivery.totalExpenses ?? 0;
-      row.netIncome += delivery.netIncome ?? 0;
-      groups.set(delivery.clientName, row);
+    const visibleCols = activeTemplate.columns.filter((c) => c.visible);
+    if (visibleCols.length > 0) {
+      // Prefer financial, count, or first column
+      const preferred =
+        visibleCols.find((c) => ["revenue", "expenses", "netProfit", "deliveries", "netIncome"].includes(c.id)) ||
+        visibleCols[0];
+      setReportSort({
+        key: preferred.id,
+        direction: preferred.id === "clientName" || preferred.id === "plateNumber" ? "asc" : "desc",
+      });
     }
-    return [...groups.values()].sort(
-      (left, right) => right.revenue - left.revenue || left.label.localeCompare(right.label),
-    );
-  }, [financialDeliveries]);
+  }, [activeTemplate.id, activeTemplate.columns]);
 
-  const expenseRows = useMemo(
-    () => [...truckRows].sort(
-      (left, right) => right.totalExpenses - left.totalExpenses || left.plateNumber.localeCompare(right.plateNumber),
-    ),
-    [truckRows],
-  );
+  // Process report rows and metrics using the reporting engine
+  const processedReport = useMemo(() => {
+    return processReport(filteredDeliveries, activeTemplate);
+  }, [filteredDeliveries, activeTemplate]);
 
-  const activityRows = useMemo(() => {
-    const groups = new Map<string, ActivityReportRow>();
-    for (const delivery of filteredDeliveries) {
-      const row = groups.get(delivery.clientName) ?? {
-        label: delivery.clientName,
-        deliveries: 0,
-        totalDropoffs: 0,
-        attachedPods: 0,
+  // Sort rows for presentation
+  const sortedRows = useMemo(() => {
+    if (!reportSort.key) return processedReport.rows;
+    const mult = reportSort.direction === "asc" ? 1 : -1;
+    return [...processedReport.rows].sort((a, b) => {
+      const valA = a[reportSort.key];
+      const valB = b[reportSort.key];
+      if (typeof valA === "number" && typeof valB === "number") {
+        return (valA - valB) * mult;
+      }
+      return String(valA ?? "").localeCompare(String(valB ?? "")) * mult;
+    });
+  }, [processedReport.rows, reportSort.key, reportSort.direction]);
+
+  function changeReportSort(key: string, direction: TableSortDirection) {
+    setReportSort({ key, direction });
+  }
+
+  // Open customizer modal
+  function handleOpenCustomizer(targetTemplate: ReportTemplate, asNew: boolean) {
+    if (asNew) {
+      const cloned: ReportTemplate = {
+        ...targetTemplate,
+        id: "",
+        name: `${targetTemplate.name} (Custom Layout)`,
+        isDefault: false,
+        layout: {
+          ...targetTemplate.layout,
+          title: `${targetTemplate.layout.title} (Custom)`,
+        },
       };
-      const attached = delivery.dropoffs.filter((dropoff) => dropoff.podSubmitted).length;
-      row.deliveries += 1;
-      row.totalDropoffs += delivery.dropoffs.length;
-      row.attachedPods += attached;
-      groups.set(delivery.clientName, row);
+      setCustomizerTargetTemplate(cloned);
+    } else {
+      setCustomizerTargetTemplate(targetTemplate);
     }
-    return [...groups.values()].sort(
-      (left, right) => right.deliveries - left.deliveries || left.label.localeCompare(right.label),
-    );
-  }, [filteredDeliveries]);
+    setIsCustomizerOpen(true);
+  }
 
-  const totals = useMemo(() => {
-    const earnings = financialDeliveries.reduce(
-      (sum, item) => sum + (item.deliveryRate ?? 0),
-      0,
-    );
-    const expenses = financialDeliveries.reduce(
-      (sum, item) => sum + (item.totalExpenses ?? 0),
-      0,
-    );
-    const netIncome = earnings - expenses;
-    const totalStops = filteredDeliveries.reduce(
-      (sum, item) => sum + item.dropoffs.length,
-      0,
-    );
-    return { earnings, expenses, netIncome, totalStops };
-  }, [filteredDeliveries, financialDeliveries]);
+  // Save template from customizer modal
+  async function handleSaveTemplate(templateToSave: ReportTemplate, isNew: boolean) {
+    try {
+      const response = await fetch("/api/reports/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...templateToSave,
+          id: isNew ? undefined : templateToSave.id,
+        }),
+      });
 
-  const displayedClientRows = sortRows(clientFinancialRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.label : key === "deliveries" ? row.deliveries : row.revenue);
-  const displayedExpenseRows = sortRows(expenseRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.plateNumber : key === "deliveries" ? row.completedTrips : row.totalExpenses);
-  const displayedTruckRows = sortRows(truckRows, reportSort.key, reportSort.direction, (row, key) => key === "label" ? row.plateNumber : key === "deliveries" ? row.completedTrips : key === "revenue" ? row.totalEarnings : key === "expenses" ? row.totalExpenses : key === "margin" ? row.marginPercent ?? Number.NEGATIVE_INFINITY : row.netProfit);
-  const displayedActivityRows = sortRows(
-    activityRows,
-    reportSort.key,
-    reportSort.direction,
-    (row, key) =>
-      key === "label"
-        ? row.label
-        : key === "dropoffs"
-          ? row.totalDropoffs
-          : key === "attached"
-            ? row.attachedPods
-            : row.deliveries,
-  );
-  const changeReportSort = (key: string, direction: TableSortDirection) => setReportSort({ key, direction });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "Failed to save template layout.");
+      }
 
-  const activeReport = {
-    revenue: {
-      title: "Revenue Report",
-      heading: "Completed-Delivery Revenue by Client",
-      rowCount: clientFinancialRows.length,
-    },
-    expenses: {
-      title: "Expense Report",
-      heading: "Confirmed Trip Expenses by Truck",
-      rowCount: expenseRows.length,
-    },
-    profitability: {
-      title: "Profitability Report",
-      heading: "Revenue, Expenses & Net Profit by Truck",
-      rowCount: truckRows.length,
-    },
-    activity: {
-      title: "Activity Report",
-      heading: "Completed Deliveries & Store Drop-offs by Client",
-      rowCount: activityRows.length,
-    },
-  }[activeTab];
+      const savedTemplate = data.template as ReportTemplate;
+      saveClientReportTemplate(savedTemplate);
+
+      setTemplates((prev) => {
+        const filtered = prev.filter((t) => t.id !== savedTemplate.id);
+        return [...filtered, savedTemplate];
+      });
+
+      setActiveTemplateId(savedTemplate.id);
+      setFeedbackNotice({
+        type: "success",
+        message: `Report layout "${savedTemplate.name}" has been saved.`,
+      });
+      setTimeout(() => setFeedbackNotice(null), 5000);
+    } catch (err) {
+      setFeedbackNotice({
+        type: "error",
+        message: err instanceof Error ? err.message : "Error saving report layout.",
+      });
+      throw err;
+    }
+  }
+
+  // Delete custom template
+  async function handleDeleteTemplate(id: string) {
+    try {
+      const response = await fetch(`/api/reports/templates?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "Failed to delete template.");
+      }
+
+      deleteClientReportTemplate(id);
+
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      setActiveTemplateId("default-revenue");
+      setIsCustomizerOpen(false);
+      setFeedbackNotice({
+        type: "success",
+        message: "Custom report layout was deleted.",
+      });
+      setTimeout(() => setFeedbackNotice(null), 5000);
+    } catch (err) {
+      setFeedbackNotice({
+        type: "error",
+        message: err instanceof Error ? err.message : "Error deleting report layout.",
+      });
+      throw err;
+    }
+  }
+
+  // Filter custom templates for selector
+  const customTemplates = useMemo(() => {
+    return templates.filter((t) => !t.isDefault);
+  }, [templates]);
 
   return (
     <>
@@ -216,15 +257,43 @@ export default function ReportsPage() {
           <div>
             <h1>Reports</h1>
             <p className="subtitle">
-              Create printable delivery and financial reports.
+              Create printable and exportable delivery and financial reports.
             </p>
           </div>
           <div className="report-actions">
+            {isAdmin && (
+              <>
+                <button
+                  type="button"
+                  className="page-intro-action report-customize-action"
+                  aria-label="Customize current report layout"
+                  onClick={() => handleOpenCustomizer(activeTemplate, false)}
+                >
+                  <span aria-hidden="true">⚙</span>
+                  {activeTemplate.isDefault ? "Customize Layout" : "Edit Layout"}
+                </button>
+                <button
+                  type="button"
+                  className="page-intro-action report-new-action"
+                  aria-label="Create new report format"
+                  onClick={() => handleOpenCustomizer(activeTemplate, true)}
+                >
+                  <span aria-hidden="true">+</span> New Format
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className="page-intro-action report-export-action"
+              aria-label="Export report to Excel CSV"
+              onClick={() => downloadReportCsvFile(processedReport, formatDateRange(range))}
+            >
+              <span aria-hidden="true">↓</span> Export Excel (.csv)
+            </button>
             <button
               type="button"
               className="report-print-button page-intro-action"
               aria-label="Print the report or save it as a PDF"
-              data-tooltip="Print the report or save it as a PDF"
               onClick={() => window.print()}
             >
               Print
@@ -232,42 +301,149 @@ export default function ReportsPage() {
           </div>
         </header>
 
+        {feedbackNotice && (
+          <section
+            className={`notice ${feedbackNotice.type === "success" ? "notice-success" : "notice-alert"}`}
+            role="status"
+            style={{ marginBottom: "16px" }}
+          >
+            <span className="notice-icon" aria-hidden="true">
+              {feedbackNotice.type === "success" ? "✓" : "!"}
+            </span>
+            <div>
+              <strong>
+                {feedbackNotice.type === "success" ? "Report Format Updated:" : "Action Failed:"}
+              </strong>
+              <span>{feedbackNotice.message}</span>
+            </div>
+          </section>
+        )}
+
         {error ? (
           <section className="notice" role="alert">
             <span className="notice-icon" aria-hidden="true">!</span>
-            <div><strong>Report data unavailable:</strong><span>{error}</span></div>
+            <div>
+              <strong>Report data unavailable:</strong>
+              <span>{error}</span>
+            </div>
           </section>
         ) : loading ? (
           <section className="notice" role="status">
             <span className="notice-icon" aria-hidden="true">i</span>
-            <div><strong>Preparing report:</strong><span>Loading completed deliveries for the selected period.</span></div>
+            <div>
+              <strong>Preparing report:</strong>
+              <span>Loading completed deliveries for the selected period.</span>
+            </div>
           </section>
         ) : null}
 
         <div className={`report-workspace${loading ? " is-loading" : ""}`}>
-          <div className="report-tabs" role="tablist" aria-label="Report categories">
-            {REPORT_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                className={activeTab === tab.id ? "active" : undefined}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
+          {/* Report Format Selection Tabs */}
+          <div className="report-tabs-bar" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "16px" }}>
+            <div className="report-tabs" role="tablist" aria-label="Standard report formats">
+              {BUILTIN_REPORT_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTemplateId === tpl.id}
+                  className={activeTemplateId === tpl.id ? "active" : undefined}
+                  onClick={() => setActiveTemplateId(tpl.id)}
+                >
+                  {tpl.layout.title.replace(" Report", "")}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Saved Formats Selector */}
+            {customTemplates.length > 0 && (
+              <div className="report-custom-selector" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <label htmlFor="custom-format-dropdown" style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)" }}>
+                  Custom Formats:
+                </label>
+                <select
+                  id="custom-format-dropdown"
+                  value={activeTemplate.isDefault ? "" : activeTemplate.id}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setActiveTemplateId(e.target.value);
+                    }
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--color-border-subtle)",
+                    backgroundColor: "var(--color-surface)",
+                    color: "var(--color-text-primary)",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="">— Select Saved Layout ({customTemplates.length}) —</option>
+                  {customTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
+
+          {/* Active Template Metadata Pill */}
+          {!activeTemplate.isDefault && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 16px",
+                marginBottom: "16px",
+                borderRadius: "10px",
+                background: "color-mix(in srgb, var(--color-accent-soft) 40%, transparent)",
+                border: "1px solid var(--color-border-subtle)",
+                fontSize: "11px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontWeight: 700, color: "var(--color-accent)" }}>Custom Layout Active:</span>
+                <span style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>{activeTemplate.name}</span>
+                <span style={{ color: "var(--color-text-muted)" }}>— {activeTemplate.description}</span>
+              </div>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenCustomizer(activeTemplate, false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--color-accent)",
+                    fontWeight: 700,
+                    fontSize: "11px",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  Edit Format Settings
+                </button>
+              )}
+            </div>
+          )}
 
           <article className="report-document" aria-label="Formatted operational report">
             <header className="report-document-header">
               <div>
-                <p>REDEEMED ROUTE LOGISTICS INC. · ROUTEX</p>
-                <h2>{activeReport.title}</h2>
+                <p>{activeTemplate.layout.documentTitle || "REDEEMED ROUTE LOGISTICS INC. · ROUTEX"}</p>
+                <h2>{activeTemplate.layout.title}</h2>
                 <span>
                   Prepared for {actor.fullName} ({actor.roleLabel} — {actor.accessLevelLabel})
                 </span>
+                {activeTemplate.layout.subtitle && (
+                  <p style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-muted)" }}>
+                    {activeTemplate.layout.subtitle}
+                  </p>
+                )}
               </div>
               <dl>
                 <div>
@@ -276,146 +452,183 @@ export default function ReportsPage() {
                 </div>
                 <div>
                   <dt>Trips Included</dt>
-                  <dd>{filteredDeliveries.length} trips</dd>
+                  <dd>{processedReport.totals.totalTrips} trips</dd>
                 </div>
                 <div>
                   <dt>Store Drop-offs</dt>
-                  <dd>{totals.totalStops} stores</dd>
+                  <dd>{processedReport.totals.totalStoreDropoffs} stores</dd>
+                </div>
+                <div>
+                  <dt>Layout Format</dt>
+                  <dd>{activeTemplate.isDefault ? "Standard Default" : "Custom Layout"}</dd>
                 </div>
               </dl>
             </header>
 
+            {/* Dynamic Summary Cards Based on Configured Financial Breakdowns */}
             <section className="report-summary">
-              <div>
-                <span>Gross Delivery Earnings</span>
-                <strong>{formatPeso(totals.earnings)}</strong>
-                <em>Billed delivery rates</em>
-              </div>
-              <div>
-                <span>Total Trip Expenses</span>
-                <strong>{formatPeso(totals.expenses)}</strong>
-                <em>Diesel, tolls, crew & entry</em>
-              </div>
-              <div>
-                <span>Net Profit</span>
-                <strong>{formatPeso(totals.netIncome)}</strong>
-                <em>
-                  {formatPercent(
-                    totals.earnings > 0 ? (totals.netIncome / totals.earnings) * 100 : null,
-                  )}{" "}
-                  net margin
-                </em>
-              </div>
-              <div>
-                <span>Active Trucks</span>
-                <strong>{truckRows.length} units</strong>
-                <em>4W, 6W & 10W fleet</em>
-              </div>
+              {activeTemplate.breakdown.showGrossEarnings && (
+                <div>
+                  <span>Gross Delivery Earnings</span>
+                  <strong>{formatPeso(processedReport.totals.grossEarnings)}</strong>
+                  <em>Billed delivery rates</em>
+                </div>
+              )}
+              {activeTemplate.breakdown.showTotalExpenses && (
+                <div>
+                  <span>Total Trip Expenses</span>
+                  <strong>{formatPeso(processedReport.totals.totalExpenses)}</strong>
+                  <em>Diesel, tolls, crew & entry</em>
+                </div>
+              )}
+              {activeTemplate.breakdown.showNetProfit && (
+                <div>
+                  <span>Net Profit</span>
+                  <strong>{formatPeso(processedReport.totals.netProfit)}</strong>
+                  <em>
+                    {formatPercent(processedReport.totals.marginPercent)}{" "}
+                    net margin
+                  </em>
+                </div>
+              )}
+              {activeTemplate.breakdown.showProfitMargin && (
+                <div>
+                  <span>Profit Margin</span>
+                  <strong>{formatPercent(processedReport.totals.marginPercent)}</strong>
+                  <em>Net return on revenue</em>
+                </div>
+              )}
+              {activeTemplate.breakdown.showActiveTrucks && (
+                <div>
+                  <span>Active Trucks</span>
+                  <strong>{processedReport.totals.activeTruckCount} units</strong>
+                  <em>Fleet units deployed</em>
+                </div>
+              )}
+              {activeTemplate.breakdown.showStoreDropoffs && (
+                <div>
+                  <span>Store Drop-offs</span>
+                  <strong>{processedReport.totals.totalStoreDropoffs} stores</strong>
+                  <em>Destination delivery points</em>
+                </div>
+              )}
+              {activeTemplate.breakdown.showDieselExpenses && (
+                <div>
+                  <span>Diesel Fuel Costs</span>
+                  <strong>{formatPeso(processedReport.totals.totalDieselExpenses)}</strong>
+                  <em>Fleet fuel consumption</em>
+                </div>
+              )}
+              {activeTemplate.breakdown.showTollExpenses && (
+                <div>
+                  <span>Tollway Fees</span>
+                  <strong>{formatPeso(processedReport.totals.totalTollExpenses)}</strong>
+                  <em>Expressway toll costs</em>
+                </div>
+              )}
+              {activeTemplate.breakdown.showCrewCosts && (
+                <div>
+                  <span>Crew Wages & Allowance</span>
+                  <strong>{formatPeso(processedReport.totals.totalCrewCosts)}</strong>
+                  <em>Driver & helper rates</em>
+                </div>
+              )}
             </section>
 
             <section className="report-table-section">
               <div className="report-table-heading">
-                <h3>
-                  {activeReport.heading}
-                </h3>
-                <p>{activeReport.rowCount} group{activeReport.rowCount === 1 ? "" : "s"} in the selected range</p>
+                <div>
+                  <h3>{activeTemplate.layout.sectionHeading}</h3>
+                  <p>
+                    {processedReport.rows.length}{" "}
+                    {activeTemplate.baseType === "trip_ledger" ? "trip" : "group"}
+                    {processedReport.rows.length === 1 ? "" : "s"} in the selected range
+                  </p>
+                </div>
+                {activeTemplate.filters.financialState === "finalized_only" && (
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      backgroundColor: "var(--color-surface-soft)",
+                      color: "var(--color-text-muted)",
+                    }}
+                  >
+                    Showing Finalized Deliveries Only
+                  </span>
+                )}
               </div>
 
               <div className="report-table-scroll">
-                {activeTab === "revenue" ? (
-                  <table>
-                    <thead>
-                      <tr>
-                        <SortableTableHeader label="Client" sortKey="label" activeSortKey={reportSort.key} direction={reportSort.direction} onSort={changeReportSort} />
-                        <SortableTableHeader label="Deliveries" sortKey="deliveries" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Share" sortKey="share" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayedClientRows.map((row) => (
-                        <tr key={row.label}>
-                          <td>{row.label}</td>
-                          <td>{row.deliveries}</td>
-                          <td>{formatPeso(row.revenue)}</td>
-                          <td>{financialShare(row.revenue, totals.earnings)}</td>
-                        </tr>
+                <table>
+                  <thead>
+                    <tr>
+                      {processedReport.columns.map((col) => (
+                        <SortableTableHeader
+                          key={col.id}
+                          label={col.label}
+                          sortKey={col.id}
+                          activeSortKey={reportSort.key}
+                          direction={reportSort.direction}
+                          defaultDirection={col.dataType === "string" ? "asc" : "desc"}
+                          onSort={changeReportSort}
+                        />
                       ))}
-                    </tbody>
-                  </table>
-                ) : activeTab === "expenses" ? (
-                  <table>
-                    <thead>
-                      <tr>
-                        <SortableTableHeader label="Truck" sortKey="label" activeSortKey={reportSort.key} direction={reportSort.direction} onSort={changeReportSort} />
-                        <SortableTableHeader label="Deliveries" sortKey="deliveries" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Share" sortKey="share" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedRows.map((row, rowIdx) => (
+                      <tr
+                        key={
+                          (row.waybillNumber as string) ||
+                          (row.clientName as string) ||
+                          (row.plateNumber as string) ||
+                          rowIdx
+                        }
+                      >
+                        {processedReport.columns.map((col) => {
+                          const rawVal = row[col.id];
+                          if (col.dataType === "badge") {
+                            const isPositive =
+                              rawVal === "Finalized" || rawVal === "Complete";
+                            return (
+                              <td key={col.id} style={{ textAlign: col.align }}>
+                                <span
+                                  style={{
+                                    display: "inline-block",
+                                    padding: "2px 8px",
+                                    borderRadius: "12px",
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    backgroundColor: isPositive
+                                      ? "rgba(16, 185, 129, 0.15)"
+                                      : "rgba(107, 114, 128, 0.15)",
+                                    color: isPositive ? "#059669" : "var(--color-text-muted)",
+                                  }}
+                                >
+                                  {String(rawVal ?? "—")}
+                                </span>
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td key={col.id} style={{ textAlign: col.align }}>
+                              {formatCellValue(rawVal, col.dataType)}
+                            </td>
+                          );
+                        })}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {displayedExpenseRows.map((row) => (
-                        <tr key={row.plateNumber}>
-                          <td>{row.plateNumber}</td>
-                          <td>{row.completedTrips}</td>
-                          <td>{formatPeso(row.totalExpenses)}</td>
-                          <td>{financialShare(row.totalExpenses, totals.expenses)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : activeTab === "profitability" ? (
-                  <table>
-                    <thead>
-                      <tr>
-                        <SortableTableHeader label="Truck" sortKey="label" activeSortKey={reportSort.key} direction={reportSort.direction} onSort={changeReportSort} />
-                        <SortableTableHeader label="Deliveries" sortKey="deliveries" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Profit Margin" sortKey="margin" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayedTruckRows.map((row) => (
-                        <tr key={row.plateNumber}>
-                          <td>{row.plateNumber}</td>
-                          <td>{row.completedTrips}</td>
-                          <td>{formatPeso(row.totalEarnings)}</td>
-                          <td>{formatPeso(row.totalExpenses)}</td>
-                          <td>{formatPeso(row.netProfit)}</td>
-                          <td>{formatPercent(row.marginPercent)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <SortableTableHeader label="Client" sortKey="label" activeSortKey={reportSort.key} direction={reportSort.direction} onSort={changeReportSort} />
-                        <SortableTableHeader label="Deliveries" sortKey="deliveries" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Store Drop-offs" sortKey="dropoffs" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                        <SortableTableHeader label="Attached PODs" sortKey="attached" activeSortKey={reportSort.key} direction={reportSort.direction} defaultDirection="desc" onSort={changeReportSort} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayedActivityRows.map((row) => (
-                        <tr key={row.label}>
-                          <td>{row.label}</td>
-                          <td>{row.deliveries}</td>
-                          <td>{row.totalDropoffs}</td>
-                          <td>{row.attachedPods}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              {activeReport.rowCount === 0 ? (
+
+              {processedReport.rows.length === 0 ? (
                 <div className="empty-state report-empty-state">
                   <strong>No records in this range</strong>
-                  <span>Choose a wider date range to populate this report.</span>
+                  <span>Choose a wider date range or adjust template filters to populate this report.</span>
                 </div>
               ) : null}
             </section>
@@ -427,7 +640,20 @@ export default function ReportsPage() {
           </article>
         </div>
       </div>
+
+      {/* Report Layout Customizer Modal */}
+      {isCustomizerOpen && (
+        <ReportCustomizerModal
+          isOpen={isCustomizerOpen}
+          onClose={() => setIsCustomizerOpen(false)}
+          currentTemplate={customizerTargetTemplate}
+          onSaveTemplate={handleSaveTemplate}
+          onDeleteTemplate={
+            customizerTargetTemplate.isDefault ? undefined : handleDeleteTemplate
+          }
+          sampleDeliveries={filteredDeliveries}
+        />
+      )}
     </>
   );
 }
-

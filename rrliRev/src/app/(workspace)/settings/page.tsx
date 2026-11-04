@@ -1,10 +1,17 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
+import {
+  getDefaultAvatarUrl,
+  getProfileStorageKey,
+  getUserInitials,
+  PROFILE_PHOTO_EVENT,
+  resizeProfilePhotoFile,
+} from "@/components/profile-photo";
 import {
   evaluatePasswordCriteria,
   PREDEFINED_SECURITY_QUESTIONS,
@@ -15,6 +22,14 @@ import { ROLE_METADATA, USER_ROLES } from "@/lib/auth/rbac";
 export default function SettingsPage() {
   const actor = useAuthenticatedActor();
   const [currentUsername, setCurrentUsername] = useState(actor.username);
+
+  // Profile Photo state
+  const [currentAvatar, setCurrentAvatar] = useState<string | null>(() => {
+    return actor.avatarUrl ?? getDefaultAvatarUrl(actor.username);
+  });
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoFeedback, setPhotoFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   // Change Username form
   const [newUsername, setNewUsername] = useState("");
@@ -40,18 +55,137 @@ export default function SettingsPage() {
   const [securityFeedback, setSecurityFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [securitySubmitting, setSecuritySubmitting] = useState(false);
 
+  // Load fresh user data on mount & sync local storage photo
   useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(getProfileStorageKey(actor.id));
+      if (stored) {
+        setCurrentAvatar(stored);
+      }
+    } catch {
+      // Ignore storage restrictions
+    }
+
     fetch("/api/auth/me")
       .then((res) => res.json())
       .then((data) => {
         if (data?.ok && data.actor) {
           if (data.actor.username) setCurrentUsername(data.actor.username);
           if (data.actor.securityQuestion) setCurrentQuestion(data.actor.securityQuestion);
+          if (data.actor.avatarUrl) {
+            setCurrentAvatar(data.actor.avatarUrl);
+            try {
+              window.localStorage.setItem(getProfileStorageKey(actor.id), data.actor.avatarUrl);
+            } catch {
+              // Ignore
+            }
+          }
         }
       })
       .catch(() => {});
-  }, []);
+  }, [actor.id]);
 
+  // Handle Profile Photo Upload / Replace
+  async function handlePhotoSelect(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPhotoFeedback(null);
+    setPhotoUploading(true);
+
+    try {
+      const dataUrl = await resizeProfilePhotoFile(file, 320);
+      setPreviewUrl(dataUrl);
+
+      const res = await fetch("/api/auth/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-profile-photo",
+          avatarUrl: dataUrl,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.message ?? "Unable to save profile photo.");
+      }
+
+      setCurrentAvatar(dataUrl);
+      setPreviewUrl(null);
+      try {
+        window.localStorage.setItem(getProfileStorageKey(actor.id), dataUrl);
+      } catch {
+        // Ignore
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(PROFILE_PHOTO_EVENT, {
+          detail: { avatarUrl: dataUrl, userId: actor.id },
+        }),
+      );
+
+      setPhotoFeedback({ tone: "success", text: "Profile picture updated successfully." });
+    } catch (err) {
+      setPreviewUrl(null);
+      setPhotoFeedback({
+        tone: "error",
+        text: err instanceof Error ? err.message : "Error processing photo.",
+      });
+    } finally {
+      setPhotoUploading(false);
+      // Reset input
+      e.target.value = "";
+    }
+  }
+
+  // Handle Profile Photo Removal
+  async function handleRemovePhoto() {
+    setPhotoFeedback(null);
+    setPhotoUploading(true);
+
+    try {
+      const res = await fetch("/api/auth/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-profile-photo",
+          avatarUrl: null,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.message ?? "Unable to remove profile photo.");
+      }
+
+      const defaultAvatar = getDefaultAvatarUrl(actor.username);
+      setCurrentAvatar(defaultAvatar);
+      setPreviewUrl(null);
+      try {
+        window.localStorage.removeItem(getProfileStorageKey(actor.id));
+      } catch {
+        // Ignore
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(PROFILE_PHOTO_EVENT, {
+          detail: { avatarUrl: null, userId: actor.id },
+        }),
+      );
+
+      setPhotoFeedback({ tone: "success", text: "Profile picture removed." });
+    } catch (err) {
+      setPhotoFeedback({
+        tone: "error",
+        text: err instanceof Error ? err.message : "Error removing photo.",
+      });
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  // Handle Change Username
   async function handleUsernameSubmit(e: FormEvent) {
     e.preventDefault();
     setUsernameFeedback(null);
@@ -95,6 +229,7 @@ export default function SettingsPage() {
     }
   }
 
+  // Handle Change Password
   async function handlePasswordSubmit(e: FormEvent) {
     e.preventDefault();
     setPasswordFeedback(null);
@@ -144,6 +279,7 @@ export default function SettingsPage() {
     }
   }
 
+  // Handle Change Security Question
   async function handleSecurityQuestionSubmit(e: FormEvent) {
     e.preventDefault();
     setSecurityFeedback(null);
@@ -200,16 +336,19 @@ export default function SettingsPage() {
     }
   }
 
+  const activeAvatar = previewUrl || currentAvatar;
+  const initials = getUserInitials(actor.fullName, actor.username);
+
   return (
     <>
       <OperationalTopbar contextLabel="Settings" />
 
-      <div className="content-wrap">
+      <div className="content-wrap settings-page-wrap">
         <header className="page-intro">
           <div>
             <h1>Account Settings</h1>
             <p className="subtitle">
-              Manage your RouteX credentials, username, and security settings.
+              Manage your profile photo, login credentials, and account security.
             </p>
           </div>
           <span className={`access-pill ${actor.accessLevel}`}>
@@ -217,323 +356,370 @@ export default function SettingsPage() {
           </span>
         </header>
 
-        {/* 1. Account Information */}
-        <section className="records-card" style={{ marginTop: "24px" }} aria-label="Account Information">
-          <div className="records-heading">
-            <div>
-              <h2>Account Information</h2>
-              <p>Your current profile and role assignments.</p>
-            </div>
-          </div>
-          <div style={{ padding: "0 23px 22px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
-            <div>
-              <span style={{ display: "block", color: "var(--color-text-muted)", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>
-                Username
-              </span>
-              <strong style={{ fontSize: "16px", color: "var(--color-accent-deep)" }}>
-                @{currentUsername}
-              </strong>
-            </div>
-            <div>
-              <span style={{ display: "block", color: "var(--color-text-muted)", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>
-                Full Name
-              </span>
-              <strong style={{ fontSize: "16px" }}>{actor.fullName}</strong>
-            </div>
-            <div>
-              <span style={{ display: "block", color: "var(--color-text-muted)", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>
-                Assigned Role (Non-Editable)
-              </span>
-              <div style={{ marginTop: "4px" }}>
-                <span className={`access-pill ${actor.accessLevel}`}>
-                  {actor.roleLabel} ({actor.accessLevelLabel})
-                </span>
+        {/* 2-Column Responsive Workspace Grid */}
+        <div className="settings-workspace-layout">
+          {/* Left Column: Profile Photo & Account Identity Card */}
+          <aside className="records-card settings-profile-card" aria-label="Profile Card">
+            <div className="settings-avatar-section">
+              <div className="settings-avatar-wrap">
+                {activeAvatar ? (
+                  <img
+                    src={activeAvatar}
+                    alt={actor.fullName}
+                    className="settings-avatar-img"
+                  />
+                ) : (
+                  <div className="settings-avatar-fallback">
+                    <span>{initials}</span>
+                  </div>
+                )}
+                {photoUploading ? (
+                  <div className="settings-avatar-loading-overlay">
+                    <span>Saving…</span>
+                  </div>
+                ) : null}
               </div>
-            </div>
-          </div>
-        </section>
 
-        {/* 2. Change Username */}
-        <section className="records-card" style={{ marginTop: "24px" }} aria-label="Change Username">
-          <div className="records-heading">
-            <div>
-              <h2>Change Username</h2>
-              <p>Update your primary login identifier. Preserves your user ID, role, and history.</p>
-            </div>
-          </div>
+              <div className="settings-photo-actions">
+                <label className="primary-action-button settings-photo-upload-label" title="Upload a JPG, PNG, or WebP photo">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    onChange={handlePhotoSelect}
+                    disabled={photoUploading}
+                  />
+                  {activeAvatar ? "Change Photo" : "Upload Photo"}
+                </label>
 
-          <form onSubmit={handleUsernameSubmit} style={{ padding: "0 23px 22px", display: "grid", gap: "14px", maxWidth: "560px" }}>
-            {usernameFeedback ? (
-              <div
-                style={{
-                  padding: "9px 13px",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                  background: usernameFeedback.tone === "success" ? "rgba(15, 138, 79, 0.08)" : "rgba(220, 38, 38, 0.08)",
-                  border: `1px solid ${usernameFeedback.tone === "success" ? "rgba(15, 138, 79, 0.25)" : "rgba(220, 38, 38, 0.25)"}`,
-                  color: usernameFeedback.tone === "success" ? "var(--color-status-success)" : "#991b1b",
-                }}
-              >
-                {usernameFeedback.text}
+                {activeAvatar ? (
+                  <button
+                    type="button"
+                    className="secondary-button settings-photo-remove-btn"
+                    onClick={handleRemovePhoto}
+                    disabled={photoUploading}
+                    title="Remove profile picture"
+                  >
+                    Remove
+                  </button>
+                ) : null}
               </div>
-            ) : null}
 
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>Current Username</label>
-              <input
-                type="text"
-                disabled
-                value={`@${currentUsername}`}
-                style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-page)", color: "var(--color-text-muted)" }}
-              />
+              {photoFeedback ? (
+                <div className={`settings-photo-feedback ${photoFeedback.tone}`}>
+                  {photoFeedback.text}
+                </div>
+              ) : (
+                <p className="settings-photo-hint">
+                  JPG, PNG, or WebP (max 5MB). Resized to square avatar.
+                </p>
+              )}
             </div>
 
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>New Username</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. shinryu"
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.target.value)}
-                style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
-              />
-              <small style={{ color: "var(--color-text-muted)", fontSize: "10.5px" }}>
-                3-30 characters, letters, numbers, underscores, dots, and hyphens. Case-insensitive unique.
-              </small>
-            </div>
-
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>Confirm Current Password</label>
-              <input
-                type="password"
-                required
-                placeholder="Enter current password"
-                value={usernamePassword}
-                onChange={(e) => setUsernamePassword(e.target.value)}
-                style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="primary-action-button"
-              disabled={usernameSubmitting}
-              style={{ minHeight: "42px", justifySelf: "start", padding: "0 18px" }}
-            >
-              {usernameSubmitting ? "Updating…" : "Save Username"}
-            </button>
-          </form>
-        </section>
-
-        {/* 3. Change Password */}
-        <section className="records-card" style={{ marginTop: "24px" }} aria-label="Change Password">
-          <div className="records-heading">
-            <div>
-              <h2>Change Password</h2>
-              <p>Update your permanent login password. Secured using Argon2id.</p>
-            </div>
-          </div>
-
-          <form onSubmit={handlePasswordSubmit} style={{ padding: "0 23px 22px", display: "grid", gap: "14px", maxWidth: "560px" }}>
-            {passwordFeedback ? (
-              <div
-                style={{
-                  padding: "9px 13px",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                  background: passwordFeedback.tone === "success" ? "rgba(15, 138, 79, 0.08)" : "rgba(220, 38, 38, 0.08)",
-                  border: `1px solid ${passwordFeedback.tone === "success" ? "rgba(15, 138, 79, 0.25)" : "rgba(220, 38, 38, 0.25)"}`,
-                  color: passwordFeedback.tone === "success" ? "var(--color-status-success)" : "#991b1b",
-                }}
-              >
-                {passwordFeedback.text}
+            <div className="settings-profile-metadata">
+              <div className="settings-meta-item">
+                <span className="settings-meta-label">Full Name</span>
+                <strong className="settings-meta-value">{actor.fullName}</strong>
               </div>
-            ) : null}
 
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>Current Password</label>
-              <input
-                type="password"
-                required
-                placeholder="Enter current password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>New Password</label>
-              <input
-                type="password"
-                required
-                placeholder="Enter new password (min. 8 characters)"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
-              />
-              <PasswordCriteriaList password={newPassword} />
-            </div>
-
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>Confirm New Password</label>
-              <input
-                type="password"
-                required
-                placeholder="Re-enter new password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="primary-action-button"
-              disabled={passwordSubmitting}
-              style={{ minHeight: "42px", justifySelf: "start", padding: "0 18px" }}
-            >
-              {passwordSubmitting ? "Updating…" : "Update Password"}
-            </button>
-          </form>
-        </section>
-
-        {/* 4. Security Question */}
-        <section className="records-card" style={{ marginTop: "24px" }} aria-label="Security Question">
-          <div className="records-heading">
-            <div>
-              <h2>Security Question & Password Recovery</h2>
-              <p>Configure the security question used for self-service password recovery.</p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSecurityQuestionSubmit} style={{ padding: "0 23px 22px", display: "grid", gap: "14px", maxWidth: "560px" }}>
-            {securityFeedback ? (
-              <div
-                style={{
-                  padding: "9px 13px",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                  background: securityFeedback.tone === "success" ? "rgba(15, 138, 79, 0.08)" : "rgba(220, 38, 38, 0.08)",
-                  border: `1px solid ${securityFeedback.tone === "success" ? "rgba(15, 138, 79, 0.25)" : "rgba(220, 38, 38, 0.25)"}`,
-                  color: securityFeedback.tone === "success" ? "var(--color-status-success)" : "#991b1b",
-                }}
-              >
-                {securityFeedback.text}
+              <div className="settings-meta-item">
+                <span className="settings-meta-label">Username</span>
+                <span className="settings-meta-value username-tag">@{currentUsername}</span>
               </div>
-            ) : null}
 
-            <div style={{ display: "grid", gap: "6px" }}>
-              <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-text-muted)", textTransform: "uppercase" }}>
-                Active Question
-              </span>
-              <div style={{ fontSize: "13px", fontWeight: 600, padding: "8px 12px", borderRadius: "8px", background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}>
-                {currentQuestion}
+              <div className="settings-meta-item">
+                <span className="settings-meta-label">Email Address</span>
+                <span className="settings-meta-value">{actor.email}</span>
+              </div>
+
+              <div className="settings-meta-item">
+                <span className="settings-meta-label">Assigned Role</span>
+                <div className="settings-role-badge-row">
+                  <span className={`access-pill ${actor.accessLevel}`}>
+                    {actor.roleLabel}
+                  </span>
+                  <span className="settings-role-hint">Assigned by Admin</span>
+                </div>
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>Choose New Question</label>
-              <select
-                value={isCustomQuestion ? "custom" : selectedQuestion}
-                onChange={(e) => {
-                  if (e.target.value === "custom") {
-                    setIsCustomQuestion(true);
-                  } else {
-                    setIsCustomQuestion(false);
-                    setSelectedQuestion(e.target.value);
-                  }
-                }}
-                style={{
-                  minHeight: "42px",
-                  padding: "0 12px",
-                  borderRadius: "10px",
-                  border: "1px solid var(--color-border)",
-                  background: "var(--color-surface)",
-                  fontSize: "12px",
-                }}
-              >
-                {PREDEFINED_SECURITY_QUESTIONS.map((q) => (
-                  <option key={q} value={q}>
-                    {q}
-                  </option>
-                ))}
-                <option value="custom">Enter custom question…</option>
-              </select>
-
-              {isCustomQuestion ? (
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter your custom security question"
-                  value={customQuestionText}
-                  onChange={(e) => setCustomQuestionText(e.target.value)}
-                  style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-surface)", marginTop: "4px" }}
-                />
-              ) : null}
+            <div className="settings-security-card">
+              <h4>Account Security Status</h4>
+              <ul className="settings-security-checklist">
+                <li>
+                  <span className="settings-check-pill ok">✓</span>
+                  <span>Argon2id password encryption</span>
+                </li>
+                <li>
+                  <span className={`settings-check-pill ${currentQuestion !== "Not yet configured" ? "ok" : "pending"}`}>
+                    {currentQuestion !== "Not yet configured" ? "✓" : "!"}
+                  </span>
+                  <span>
+                    {currentQuestion !== "Not yet configured"
+                      ? "Security question configured"
+                      : "Security question pending"}
+                  </span>
+                </li>
+              </ul>
             </div>
+          </aside>
 
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>Security Answer (Case-sensitive)</label>
-              <input
-                type="text"
-                required
-                placeholder="Enter your security answer"
-                value={securityAnswer}
-                onChange={(e) => setSecurityAnswer(e.target.value)}
-                style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
-              />
-            </div>
+          {/* Right Column: Main Configuration Forms */}
+          <div className="settings-forms-grid">
+            {/* Panel 1: Change Username */}
+            <section className="records-card settings-panel-card" aria-label="Change Username">
+              <div className="records-heading">
+                <div>
+                  <h2>Change Username</h2>
+                  <p>Update your unique RouteX login username. Preserves your user ID, role, and history.</p>
+                </div>
+              </div>
 
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>Confirm Security Answer</label>
-              <input
-                type="text"
-                required
-                placeholder="Confirm your security answer"
-                value={confirmSecurityAnswer}
-                onChange={(e) => setConfirmSecurityAnswer(e.target.value)}
-                style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
-              />
-              <small style={{ color: "var(--color-text-muted)", fontSize: "10.5px" }}>
-                Answers are case-sensitive and hashed using Argon2id. Stored answers are never revealed.
-              </small>
-            </div>
+              <form onSubmit={handleUsernameSubmit} className="settings-form-body">
+                {usernameFeedback ? (
+                  <div className={`settings-form-alert ${usernameFeedback.tone}`}>
+                    {usernameFeedback.text}
+                  </div>
+                ) : null}
 
-            <div style={{ display: "grid", gap: "6px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>Confirm Current Password</label>
-              <input
-                type="password"
-                required
-                placeholder="Enter current password"
-                value={securityPassword}
-                onChange={(e) => setSecurityPassword(e.target.value)}
-                style={{ minHeight: "42px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--color-border)", background: "var(--color-surface)" }}
-              />
-            </div>
+                <div className="settings-field-row-2col">
+                  <div className="settings-form-field">
+                    <label>Current Username</label>
+                    <input
+                      type="text"
+                      disabled
+                      value={`@${currentUsername}`}
+                      className="settings-input"
+                    />
+                  </div>
 
-            <button
-              type="submit"
-              className="primary-action-button"
-              disabled={securitySubmitting}
-              style={{ minHeight: "42px", justifySelf: "start", padding: "0 18px" }}
-            >
-              {securitySubmitting ? "Saving…" : "Save Security Question"}
-            </button>
-          </form>
-        </section>
+                  <div className="settings-form-field">
+                    <label>New Username</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. shinryu"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      className="settings-input"
+                    />
+                  </div>
+                </div>
 
-        {/* 5. Role & Permission Matrix Reference */}
+                <div className="settings-form-field">
+                  <label>Confirm Current Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter current password to verify identity"
+                    value={usernamePassword}
+                    onChange={(e) => setUsernamePassword(e.target.value)}
+                    className="settings-input"
+                  />
+                  <small className="settings-field-hint">
+                    3-30 characters (letters, numbers, underscores, dots, hyphens). Case-insensitive unique.
+                  </small>
+                </div>
+
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={usernameSubmitting}
+                  style={{ minHeight: "42px", justifySelf: "start", padding: "0 20px" }}
+                >
+                  {usernameSubmitting ? "Updating…" : "Save Username"}
+                </button>
+              </form>
+            </section>
+
+            {/* Panel 2: Change Password */}
+            <section className="records-card settings-panel-card" aria-label="Change Password">
+              <div className="records-heading">
+                <div>
+                  <h2>Change Password</h2>
+                  <p>Update your account password. Secured using Argon2id with strict criteria.</p>
+                </div>
+              </div>
+
+              <form onSubmit={handlePasswordSubmit} className="settings-form-body">
+                {passwordFeedback ? (
+                  <div className={`settings-form-alert ${passwordFeedback.tone}`}>
+                    {passwordFeedback.text}
+                  </div>
+                ) : null}
+
+                <div className="settings-form-field">
+                  <label>Current Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter current password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="settings-input"
+                  />
+                </div>
+
+                <div className="settings-field-row-2col">
+                  <div className="settings-form-field">
+                    <label>New Password</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Enter new password (min. 8 characters)"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="settings-input"
+                    />
+                  </div>
+
+                  <div className="settings-form-field">
+                    <label>Confirm New Password</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="settings-input"
+                    />
+                  </div>
+                </div>
+
+                <PasswordCriteriaList password={newPassword} />
+
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={passwordSubmitting}
+                  style={{ minHeight: "42px", justifySelf: "start", padding: "0 20px" }}
+                >
+                  {passwordSubmitting ? "Updating…" : "Update Password"}
+                </button>
+              </form>
+            </section>
+
+            {/* Panel 3: Security Question & Password Recovery */}
+            <section className="records-card settings-panel-card" aria-label="Security Question">
+              <div className="records-heading">
+                <div>
+                  <h2>Security Question & Recovery</h2>
+                  <p>Configure the security question and secret answer used for self-service password recovery.</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSecurityQuestionSubmit} className="settings-form-body">
+                {securityFeedback ? (
+                  <div className={`settings-form-alert ${securityFeedback.tone}`}>
+                    {securityFeedback.text}
+                  </div>
+                ) : null}
+
+                <div className="settings-form-field">
+                  <label>Active Security Question</label>
+                  <div style={{ fontSize: "13px", fontWeight: 600, padding: "10px 14px", borderRadius: "10px", background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}>
+                    {currentQuestion}
+                  </div>
+                </div>
+
+                <div className="settings-form-field">
+                  <label>Choose New Question</label>
+                  <select
+                    value={isCustomQuestion ? "custom" : selectedQuestion}
+                    onChange={(e) => {
+                      if (e.target.value === "custom") {
+                        setIsCustomQuestion(true);
+                      } else {
+                        setIsCustomQuestion(false);
+                        setSelectedQuestion(e.target.value);
+                      }
+                    }}
+                    className="settings-input"
+                  >
+                    {PREDEFINED_SECURITY_QUESTIONS.map((q) => (
+                      <option key={q} value={q}>
+                        {q}
+                      </option>
+                    ))}
+                    <option value="custom">Enter custom question…</option>
+                  </select>
+
+                  {isCustomQuestion ? (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter your custom security question"
+                      value={customQuestionText}
+                      onChange={(e) => setCustomQuestionText(e.target.value)}
+                      className="settings-input"
+                      style={{ marginTop: "8px" }}
+                    />
+                  ) : null}
+                </div>
+
+                <div className="settings-field-row-2col">
+                  <div className="settings-form-field">
+                    <label>Security Answer (Case-sensitive)</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter secret answer"
+                      value={securityAnswer}
+                      onChange={(e) => setSecurityAnswer(e.target.value)}
+                      className="settings-input"
+                    />
+                  </div>
+
+                  <div className="settings-form-field">
+                    <label>Confirm Security Answer</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Confirm secret answer"
+                      value={confirmSecurityAnswer}
+                      onChange={(e) => setConfirmSecurityAnswer(e.target.value)}
+                      className="settings-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="settings-form-field">
+                  <label>Confirm Current Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter current password to save security question"
+                    value={securityPassword}
+                    onChange={(e) => setSecurityPassword(e.target.value)}
+                    className="settings-input"
+                  />
+                  <small className="settings-field-hint">
+                    Answers are case-sensitive and hashed using Argon2id. Stored answers are never revealed.
+                  </small>
+                </div>
+
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={securitySubmitting}
+                  style={{ minHeight: "42px", justifySelf: "start", padding: "0 20px" }}
+                >
+                  {securitySubmitting ? "Saving…" : "Save Security Question"}
+                </button>
+              </form>
+            </section>
+          </div>
+        </div>
+
+        {/* Full-Width Role & Access Level Reference Table */}
         <section
-          className="records-card"
-          style={{ marginTop: "34px" }}
+          className="records-card settings-matrix-section"
           aria-label="Role and permission matrix"
         >
           <div className="records-heading">
             <div>
               <h2>Role & Access Level Reference</h2>
-              <p>Access for six company roles.</p>
+              <p>Reference matrix for all six company operational roles.</p>
             </div>
           </div>
 

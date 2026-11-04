@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
 import { RoundedSelect } from "@/components/rounded-select";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RecordDetailDrawer, type DetailSection } from "@/components/record-detail-drawer";
@@ -30,6 +31,17 @@ type ReferenceData = {
   clients: DeliveryFilterOption[];
   trucks: DeliveryFilterOption[];
 };
+
+type ExpenseFormKey =
+  | "dieselExpenses"
+  | "tollGateExpenses"
+  | "driverAllowance"
+  | "driverDailyRate"
+  | "helperAllowance"
+  | "helperDailyRate"
+  | "helper2Allowance"
+  | "helper2DailyRate"
+  | "otherExpenses";
 
 const initialDropoff: DropoffDraft = {
   id: "dropoff-1",
@@ -62,20 +74,29 @@ export default function NewCompletedDeliveryPage() {
   const [clientName, setClientName] = useState("");
   const [isNewClientMode, setIsNewClientMode] = useState(false);
   const [plateNumber, setPlateNumber] = useState("");
-  const [isNewPlateMode, setIsNewPlateMode] = useState(false);
   const [podFiles, setPodFiles] = useState<File[]>([]);
   const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
   const [truckTemperature, setTruckTemperature] = useState("");
   const [dropoffs, setDropoffs] = useState<DropoffDraft[]>([initialDropoff]);
-  const [expenseStatuses, setExpenseStatuses] = useState({
+
+  // Delivery crew state with support for up to 2 helpers
+  const [hasSecondHelper, setHasSecondHelper] = useState(false);
+  const [driverName, setDriverName] = useState("");
+  const [helper1Name, setHelper1Name] = useState("");
+  const [helper2Name, setHelper2Name] = useState("");
+
+  const [expenseStatuses, setExpenseStatuses] = useState<Record<ExpenseFormKey, ExpenseResolutionStatus>>({
     dieselExpenses: "confirmed",
     tollGateExpenses: "confirmed",
     driverAllowance: "confirmed",
     driverDailyRate: "confirmed",
     helperAllowance: "confirmed",
     helperDailyRate: "confirmed",
+    helper2Allowance: "confirmed",
+    helper2DailyRate: "confirmed",
     otherExpenses: "confirmed",
-  } satisfies Record<string, ExpenseResolutionStatus>);
+  });
+
   const [values, setValues] = useState({
     waybillNumber: "",
     deliveryDate: todayKey(),
@@ -90,6 +111,8 @@ export default function NewCompletedDeliveryPage() {
     driverDailyRate: "",
     helperAllowance: "",
     helperDailyRate: "",
+    helper2Allowance: "",
+    helper2DailyRate: "",
     otherExpenses: "",
   });
 
@@ -150,13 +173,34 @@ export default function NewCompletedDeliveryPage() {
     const entryFees = entryFeesComplete
       ? dropoffs.reduce((sum, stop) => sum + (stop.entryFeeStatus === "confirmed" ? numberValue(stop.entryFee) ?? 0 : 0), 0)
       : null;
-    const expenseEntries = Object.entries(expenseStatuses) as [keyof typeof expenseStatuses, ExpenseResolutionStatus][];
-    const expensesComplete = expenseEntries.every(([key, status]) =>
-      status === "not_applicable" || (status === "confirmed" && numberValue(values[key]) != null),
-    );
+
+    // Active keys accounting for Helper 1 and conditionally Helper 2 without duplication
+    const activeExpenseKeys: ExpenseFormKey[] = [
+      "dieselExpenses",
+      "tollGateExpenses",
+      "driverAllowance",
+      "driverDailyRate",
+      "helperAllowance",
+      "helperDailyRate",
+      "otherExpenses",
+    ];
+
+    if (hasSecondHelper) {
+      activeExpenseKeys.push("helper2Allowance", "helper2DailyRate");
+    }
+
+    const expensesComplete = activeExpenseKeys.every((key) => {
+      const status = expenseStatuses[key];
+      return status === "not_applicable" || (status === "confirmed" && numberValue(values[key]) != null);
+    });
+
     const totalExpenses = entryFees == null || !expensesComplete
       ? null
-      : expenseEntries.reduce((sum, [key, status]) => sum + (status === "confirmed" ? numberValue(values[key]) ?? 0 : 0), entryFees);
+      : activeExpenseKeys.reduce((sum, key) => {
+          const status = expenseStatuses[key];
+          return sum + (status === "confirmed" ? numberValue(values[key]) ?? 0 : 0);
+        }, entryFees);
+
     const revenue = numberValue(values.deliveryRate);
     return {
       entryFees,
@@ -164,7 +208,7 @@ export default function NewCompletedDeliveryPage() {
       netIncome: revenue == null || totalExpenses == null ? null : revenue - totalExpenses,
       revenue,
     };
-  }, [dropoffs, expenseStatuses, values]);
+  }, [dropoffs, expenseStatuses, hasSecondHelper, values]);
 
   function updateValue(name: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -199,10 +243,24 @@ export default function NewCompletedDeliveryPage() {
       tollGateExpenses: numberValue(values.tollGateExpenses),
       driverAllowance: numberValue(values.driverAllowance),
       driverDailyRate: numberValue(values.driverDailyRate),
+      driverName: driverName.trim() || null,
       helperAllowance: numberValue(values.helperAllowance),
       helperDailyRate: numberValue(values.helperDailyRate),
+      helperName: helper1Name.trim() || null,
+      hasSecondHelper,
+      helper2Allowance: hasSecondHelper ? numberValue(values.helper2Allowance) : null,
+      helper2DailyRate: hasSecondHelper ? numberValue(values.helper2DailyRate) : null,
+      helper2Name: hasSecondHelper ? (helper2Name.trim() || null) : null,
       otherExpenses: numberValue(values.otherExpenses),
-      ...Object.fromEntries(Object.entries(expenseStatuses).map(([key, status]) => [`${key}Status`, status])),
+      dieselExpensesStatus: expenseStatuses.dieselExpenses,
+      tollGateExpensesStatus: expenseStatuses.tollGateExpenses,
+      driverAllowanceStatus: expenseStatuses.driverAllowance,
+      driverDailyRateStatus: expenseStatuses.driverDailyRate,
+      helperAllowanceStatus: expenseStatuses.helperAllowance,
+      helperDailyRateStatus: expenseStatuses.helperDailyRate,
+      helper2AllowanceStatus: hasSecondHelper ? expenseStatuses.helper2Allowance : "not_applicable",
+      helper2DailyRateStatus: hasSecondHelper ? expenseStatuses.helper2DailyRate : "not_applicable",
+      otherExpensesStatus: expenseStatuses.otherExpenses,
       dropoffs: dropoffs.map((dropoff, index) => ({
         storeName: dropoff.storeName,
         destinationArea: dropoff.destinationArea,
@@ -263,13 +321,48 @@ export default function NewCompletedDeliveryPage() {
       ],
     },
     {
-      eyebrow: "ASSIGNMENT",
-      title: "Truck and trip",
+      eyebrow: "ASSIGNED VEHICLE",
+      title: "Truck details",
+      customContent: plateNumber ? (
+        <DeliveryTruckInfoSection
+          plateNumber={plateNumber}
+          truckType="6-Wheeler"
+          truckTemperature={truckTemperature ? `${truckTemperature}°C` : "Ambient"}
+          truckOwnership="Owned"
+        />
+      ) : undefined,
+      rows: plateNumber
+        ? [
+            { label: "Distance", value: `${values.distanceKm || "0"} km` },
+            { label: "Fuel rate", value: `${formatPeso(numberValue(values.fuelRate))} / liter` },
+          ]
+        : [
+            { label: "Truck", value: "Not selected" },
+            { label: "Temperature", value: truckTemperature ? `${truckTemperature}°C` : "Not entered" },
+            { label: "Distance", value: `${values.distanceKm || "0"} km` },
+            { label: "Fuel rate", value: `${formatPeso(numberValue(values.fuelRate))} / liter` },
+          ],
+    },
+    {
+      eyebrow: "CREW ASSIGNMENT",
+      title: `Trip Crew (1 Driver · ${hasSecondHelper ? "2 Helpers" : "1 Helper"})`,
       rows: [
-        { label: "Truck", value: plateNumber || "Not selected" },
-        { label: "Temperature", value: truckTemperature ? `${truckTemperature}°C` : "Not entered" },
-        { label: "Distance", value: `${values.distanceKm || "0"} km` },
-        { label: "Fuel rate", value: formatPeso(numberValue(values.fuelRate)) },
+        {
+          label: "Driver",
+          value: `${driverName ? `${driverName} — ` : ""}Rate: ${formatPeso(numberValue(values.driverDailyRate))} | Allowance: ${formatPeso(numberValue(values.driverAllowance))}`,
+        },
+        {
+          label: hasSecondHelper ? "Helper 1" : "Helper",
+          value: `${helper1Name ? `${helper1Name} — ` : ""}Rate: ${formatPeso(numberValue(values.helperDailyRate))} | Allowance: ${formatPeso(numberValue(values.helperAllowance))}`,
+        },
+        ...(hasSecondHelper
+          ? [
+              {
+                label: "Helper 2",
+                value: `${helper2Name ? `${helper2Name} — ` : ""}Rate: ${formatPeso(numberValue(values.helper2DailyRate))} | Allowance: ${formatPeso(numberValue(values.helper2Allowance))}`,
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -278,7 +371,12 @@ export default function NewCompletedDeliveryPage() {
       fullWidth: true,
       customContent: (
         <ol className="delivery-preview-stops">
-          {dropoffs.map((dropoff) => <li key={dropoff.id}><strong>{dropoff.storeName}</strong><span>{dropoff.destinationArea}</span></li>)}
+          {dropoffs.map((dropoff) => (
+            <li key={dropoff.id}>
+              <strong>{dropoff.storeName}</strong>
+              <span>{dropoff.destinationArea}</span>
+            </li>
+          ))}
         </ol>
       ),
     },
@@ -286,10 +384,14 @@ export default function NewCompletedDeliveryPage() {
       eyebrow: "FINANCIAL REVIEW",
       title: "Revenue and expenses",
       rows: [
-        { label: "Revenue", value: formatPeso(financialReview.revenue) },
+        { label: "Delivery Rate (Gross Revenue)", value: formatPeso(financialReview.revenue) },
         { label: "Store entry fees", value: formatPeso(financialReview.entryFees) },
         { label: "Total expenses", value: formatPeso(financialReview.totalExpenses) },
-        { label: "Net profit", value: formatPeso(financialReview.netIncome), tone: financialReview.netIncome != null && financialReview.netIncome < 0 ? "warning" : "success" },
+        {
+          label: "Net profit",
+          value: formatPeso(financialReview.netIncome),
+          tone: financialReview.netIncome != null && financialReview.netIncome < 0 ? "warning" : "success",
+        },
       ],
     },
     {
@@ -300,7 +402,20 @@ export default function NewCompletedDeliveryPage() {
         { label: "Supporting files", value: supportingFiles.map((file) => file.name).join(", ") || "None attached" },
       ],
     },
-  ], [clientName, dropoffs, financialReview, plateNumber, podFiles, supportingFiles, truckTemperature, values]);
+  ], [
+    clientName,
+    driverName,
+    dropoffs,
+    financialReview,
+    hasSecondHelper,
+    helper1Name,
+    helper2Name,
+    plateNumber,
+    podFiles,
+    supportingFiles,
+    truckTemperature,
+    values,
+  ]);
 
   const noReferences =
     !referencesLoading && (references.clients.length === 0 || references.trucks.length === 0);
@@ -380,57 +495,28 @@ export default function NewCompletedDeliveryPage() {
                 />
               )}
             </div>
+
+            {/* Truck Selection strictly from registered fleet trucks */}
             <div className="client-field-group">
               <div className="client-field-header">
-                <label htmlFor={isNewPlateMode ? "new-plate-number-input" : undefined}>
-                  Truck plate
-                </label>
-                <button
-                  type="button"
-                  className="client-mode-toggle"
-                  onClick={() => {
-                    const nextMode = !isNewPlateMode;
-                    setIsNewPlateMode(nextMode);
-                    if (nextMode) {
-                      setPlateNumber("");
-                    } else if (references.trucks.length > 0) {
-                      setPlateNumber(references.trucks[0]?.label ?? "");
-                    }
-                  }}
-                >
-                  {isNewPlateMode ? "← Select existing" : "+ New plate"}
-                </button>
+                <label>Truck plate</label>
+                <span className="field-hint">Fleet registry</span>
               </div>
-
-              {isNewPlateMode ? (
-                <div className="new-client-input-wrap">
-                  <input
-                    id="new-plate-number-input"
-                    required
-                    type="text"
-                    value={plateNumber}
-                    onChange={(event) => setPlateNumber(event.target.value.toUpperCase())}
-                    placeholder="Plate number"
-                    autoFocus
-                  />
-                  <span className="new-client-badge">New</span>
-                </div>
-              ) : (
-                <RoundedSelect
-                  value={plateNumber}
-                  options={references.trucks.map((option) => ({
-                    value: option.label,
-                    label: option.label,
-                    group: option.ownershipType === "Subcontracted" ? "Subcontracted Trucks" : "Owned Trucks",
-                  }))}
-                  onChange={(val) => setPlateNumber(val)}
-                  ariaLabel="Select active truck"
-                  placeholder={referencesLoading ? "Loading trucks…" : "Select truck"}
-                  emptyMessage={referenceError ? "Trucks could not be loaded" : "No active trucks available"}
-                  searchable
-                />
-              )}
+              <RoundedSelect
+                value={plateNumber}
+                options={references.trucks.map((option) => ({
+                  value: option.label,
+                  label: option.label,
+                  group: option.ownershipType === "Subcontracted" ? "Subcontracted Trucks" : "Owned Trucks",
+                }))}
+                onChange={(val) => setPlateNumber(val)}
+                ariaLabel="Select registered truck"
+                placeholder={referencesLoading ? "Loading trucks…" : "Select registered truck"}
+                emptyMessage={referenceError ? "Trucks could not be loaded" : "No active trucks registered in Fleet"}
+                searchable
+              />
             </div>
+
             <label>Temperature
               <span className="temperature-input-wrap">
                 <input
@@ -450,23 +536,31 @@ export default function NewCompletedDeliveryPage() {
             </label>
             <label className="origin-field">Origin<input required value={values.origin} onChange={(event) => updateValue("origin", event.target.value)} placeholder="e.g. Marilao Depot" /></label>
             <label>Distance (km)<input required min="0" step="0.01" type="number" inputMode="decimal" className="no-spin-stepper" style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }} value={values.distanceKm} onChange={(event) => updateValue("distanceKm", event.target.value)} /></label>
-            <label>Fuel rate (₱/L)
-              <span className="peso-input-wrap">
-                <span className="peso-prefix" aria-hidden="true">₱</span>
-                <input
-                  required
-                  min="0"
-                  step="0.01"
-                  type="number"
-                  inputMode="decimal"
-                  className="no-spin-stepper peso-input"
-                  style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                  value={values.fuelRate}
-                  onChange={(event) => updateValue("fuelRate", event.target.value)}
-                  placeholder="85.00"
-                />
+
+            {/* Fuel Rate with explicit distinction from Delivery Rate */}
+            <div className="fuel-rate-field-wrap">
+              <label>
+                <span className="field-label-text">Fuel rate (₱ / Liter)</span>
+                <span className="peso-input-wrap">
+                  <span className="peso-prefix" aria-hidden="true">₱</span>
+                  <input
+                    required
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    inputMode="decimal"
+                    className="no-spin-stepper peso-input"
+                    style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                    value={values.fuelRate}
+                    onChange={(event) => updateValue("fuelRate", event.target.value)}
+                    placeholder="85.00"
+                  />
+                </span>
+              </label>
+              <span className="field-explanatory-note">
+                Pump price per liter of fuel (e.g. ₱85.00/L). Reference for diesel costs, distinct from the gross Delivery Rate.
               </span>
-            </label>
+            </div>
           </div>
         </section>
 
@@ -536,28 +630,201 @@ export default function NewCompletedDeliveryPage() {
         <section className="delivery-form-section">
           <FormHeading number="03" title="Revenue & expenses" />
           <div className="delivery-field-grid delivery-finance-grid">
-            <h3 className="delivery-finance-group-title wide">Revenue</h3>
-            <MoneyField label="Delivery Rate (₱)" value={values.deliveryRate} required onChange={(value) => updateValue("deliveryRate", value)} />
-            <h3 className="delivery-finance-group-title wide">Expenses</h3>
-            {(["dieselExpenses", "tollGateExpenses", "otherExpenses"] as (keyof typeof expenseStatuses)[]).map((key) => (
-              <ExpenseField key={key} label={expenseLabel(key)} value={values[key]} status={expenseStatuses[key]} onValueChange={(value) => updateValue(key, value)} onStatusChange={(status) => { setExpenseStatuses((current) => ({ ...current, [key]: status })); if (status !== "confirmed") updateValue(key, ""); }} />
+
+            {/* Delivery Rate with prominent clarification */}
+            <div className="delivery-rate-banner wide">
+              <div className="delivery-rate-banner-header">
+                <h3 className="delivery-finance-group-title">Revenue: Delivery Rate</h3>
+                <span className="delivery-rate-pill">Gross Freight Amount</span>
+              </div>
+              <p className="delivery-rate-clarification">
+                <strong>Delivery Rate</strong> is the total gross billable revenue for this trip (the larger monetary amount). This is independent from the per-liter <strong>Fuel Rate</strong> above. Business formula calculation is pending formal verification.
+              </p>
+              <div className="delivery-rate-input-row">
+                <MoneyField
+                  label="Delivery Rate (Gross Trip Revenue ₱)"
+                  value={values.deliveryRate}
+                  required
+                  onChange={(value) => updateValue("deliveryRate", value)}
+                />
+              </div>
+            </div>
+
+            <h3 className="delivery-finance-group-title wide">Operational Expenses</h3>
+            {(["dieselExpenses", "tollGateExpenses", "otherExpenses"] as const).map((key) => (
+              <ExpenseField
+                key={key}
+                label={expenseLabel(key)}
+                value={values[key]}
+                status={expenseStatuses[key]}
+                onValueChange={(value) => updateValue(key, value)}
+                onStatusChange={(status) => {
+                  setExpenseStatuses((current) => ({ ...current, [key]: status }));
+                  if (status !== "confirmed") updateValue(key, "");
+                }}
+              />
             ))}
+
+            {/* Crew Expenses with Support for 2 Helpers */}
             <div className="crew-expense-groups wide">
-              {([
-                { title: "Driver", keys: [["driverDailyRate", "Daily rate (₱)"], ["driverAllowance", "Allowance (₱)"]] as const },
-                { title: "Helper", keys: [["helperDailyRate", "Daily rate (₱)"], ["helperAllowance", "Allowance (₱)"]] as const },
-              ] as const).map((group) => (
-                <section className="crew-expense-group" key={group.title}>
-                  <h4>{group.title}</h4>
+              <div className="crew-expense-header-bar">
+                <div>
+                  <h4 className="crew-section-subtitle">Delivery Crew Rates & Allowances</h4>
+                  <p className="crew-section-caption">
+                    Daily compensation and travel allowances per personnel (maximum 2 helpers).
+                  </p>
+                </div>
+                {!hasSecondHelper ? (
+                  <button
+                    type="button"
+                    className="secondary-button add-second-helper-btn"
+                    onClick={() => {
+                      setHasSecondHelper(true);
+                      setExpenseStatuses((cur) => ({
+                        ...cur,
+                        helper2DailyRate: "confirmed",
+                        helper2Allowance: "confirmed",
+                      }));
+                    }}
+                  >
+                    + Add Second Helper
+                  </button>
+                ) : (
+                  <span className="crew-max-badge" title="Maximum limit of 2 helpers reached">
+                    ✓ 2 Helpers Assigned (Max Limit)
+                  </span>
+                )}
+              </div>
+
+              <div className="crew-cards-grid">
+                {/* Driver Card */}
+                <section className="crew-expense-group">
+                  <div className="crew-card-title-row">
+                    <span className="crew-role-pill driver">Driver</span>
+                    <input
+                      type="text"
+                      className="crew-name-input"
+                      placeholder="Driver Name (Optional)"
+                      value={driverName}
+                      onChange={(e) => setDriverName(e.target.value)}
+                    />
+                  </div>
                   <div className="crew-expense-fields-row">
-                    {group.keys.map(([key, label]) => (
-                      <ExpenseField key={key} label={label} value={values[key]} status={expenseStatuses[key]} onValueChange={(value) => updateValue(key, value)} onStatusChange={(status) => { setExpenseStatuses((current) => ({ ...current, [key]: status })); if (status !== "confirmed") updateValue(key, ""); }} />
-                    ))}
+                    <ExpenseField
+                      label="Daily rate"
+                      value={values.driverDailyRate}
+                      status={expenseStatuses.driverDailyRate}
+                      onValueChange={(value) => updateValue("driverDailyRate", value)}
+                      onStatusChange={(status) => {
+                        setExpenseStatuses((current) => ({ ...current, driverDailyRate: status }));
+                        if (status !== "confirmed") updateValue("driverDailyRate", "");
+                      }}
+                    />
+                    <ExpenseField
+                      label="Allowance"
+                      value={values.driverAllowance}
+                      status={expenseStatuses.driverAllowance}
+                      onValueChange={(value) => updateValue("driverAllowance", value)}
+                      onStatusChange={(status) => {
+                        setExpenseStatuses((current) => ({ ...current, driverAllowance: status }));
+                        if (status !== "confirmed") updateValue("driverAllowance", "");
+                      }}
+                    />
                   </div>
                 </section>
-              ))}
+
+                {/* Helper 1 Card */}
+                <section className="crew-expense-group">
+                  <div className="crew-card-title-row">
+                    <span className="crew-role-pill helper">
+                      {hasSecondHelper ? "Helper 1 (Lead)" : "Helper"}
+                    </span>
+                    <input
+                      type="text"
+                      className="crew-name-input"
+                      placeholder={hasSecondHelper ? "Helper 1 Name (Optional)" : "Helper Name (Optional)"}
+                      value={helper1Name}
+                      onChange={(e) => setHelper1Name(e.target.value)}
+                    />
+                  </div>
+                  <div className="crew-expense-fields-row">
+                    <ExpenseField
+                      label="Daily rate"
+                      value={values.helperDailyRate}
+                      status={expenseStatuses.helperDailyRate}
+                      onValueChange={(value) => updateValue("helperDailyRate", value)}
+                      onStatusChange={(status) => {
+                        setExpenseStatuses((current) => ({ ...current, helperDailyRate: status }));
+                        if (status !== "confirmed") updateValue("helperDailyRate", "");
+                      }}
+                    />
+                    <ExpenseField
+                      label="Allowance"
+                      value={values.helperAllowance}
+                      status={expenseStatuses.helperAllowance}
+                      onValueChange={(value) => updateValue("helperAllowance", value)}
+                      onStatusChange={(status) => {
+                        setExpenseStatuses((current) => ({ ...current, helperAllowance: status }));
+                        if (status !== "confirmed") updateValue("helperAllowance", "");
+                      }}
+                    />
+                  </div>
+                </section>
+
+                {/* Helper 2 Card (When added) */}
+                {hasSecondHelper ? (
+                  <section className="crew-expense-group helper-2-card">
+                    <div className="crew-card-title-row">
+                      <span className="crew-role-pill helper-2">Helper 2</span>
+                      <input
+                        type="text"
+                        className="crew-name-input"
+                        placeholder="Helper 2 Name (Optional)"
+                        value={helper2Name}
+                        onChange={(e) => setHelper2Name(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="remove-helper-btn"
+                        onClick={() => {
+                          setHasSecondHelper(false);
+                          updateValue("helper2DailyRate", "");
+                          updateValue("helper2Allowance", "");
+                          setHelper2Name("");
+                        }}
+                        title="Remove second helper"
+                      >
+                        ✕ Remove
+                      </button>
+                    </div>
+                    <div className="crew-expense-fields-row">
+                      <ExpenseField
+                        label="Daily rate"
+                        value={values.helper2DailyRate}
+                        status={expenseStatuses.helper2DailyRate}
+                        onValueChange={(value) => updateValue("helper2DailyRate", value)}
+                        onStatusChange={(status) => {
+                          setExpenseStatuses((current) => ({ ...current, helper2DailyRate: status }));
+                          if (status !== "confirmed") updateValue("helper2DailyRate", "");
+                        }}
+                      />
+                      <ExpenseField
+                        label="Allowance"
+                        value={values.helper2Allowance}
+                        status={expenseStatuses.helper2Allowance}
+                        onValueChange={(value) => updateValue("helper2Allowance", value)}
+                        onStatusChange={(status) => {
+                          setExpenseStatuses((current) => ({ ...current, helper2Allowance: status }));
+                          if (status !== "confirmed") updateValue("helper2Allowance", "");
+                        }}
+                      />
+                    </div>
+                  </section>
+                ) : null}
+              </div>
             </div>
           </div>
+
           <div className="delivery-financial-review" aria-label="Financial review">
             <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
             <div><span>Store entry fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
@@ -752,6 +1019,8 @@ function expenseLabel(key: string): string {
     driverDailyRate: "Daily rate (₱)",
     helperAllowance: "Allowance (₱)",
     helperDailyRate: "Daily rate (₱)",
+    helper2Allowance: "Allowance (₱)",
+    helper2DailyRate: "Daily rate (₱)",
     otherExpenses: "Other expenses (₱)",
   } as Record<string, string>)[key] ?? key;
 }

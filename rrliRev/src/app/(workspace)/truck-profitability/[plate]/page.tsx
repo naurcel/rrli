@@ -11,7 +11,10 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { TruckPhoto } from "@/components/truck-photo";
 import { summarizeTruckProfitability } from "@/features/deliveries/delivery-domain";
-import { getFleetTrucks } from "@/features/deliveries/truck-registry";
+import {
+  getFleetTrucks,
+  getTruckStorageCapability,
+} from "@/features/deliveries/truck-registry";
 import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import { formatPercent, formatPeso } from "@/lib/format";
@@ -116,9 +119,24 @@ export default function TruckProfilePage({
             <header className="page-intro truck-profile-page-intro">
               <div>
                 <h1>{activeTruck.plateNumber}</h1>
-                <p className="subtitle">
-                  {activeTruck.truckType} · {formatDateRange(range)}
-                </p>
+                <div className="truck-profile-subtitle-wrap">
+                  <span className="truck-profile-type-badge">{activeTruck.truckType}</span>
+                  <span
+                    className={`truck-capability-pill ${
+                      getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability) === "Refrigerated"
+                        ? "refrigerated"
+                        : "ambient"
+                    }`}
+                    style={{ position: "static", boxShadow: "none" }}
+                  >
+                    {getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability) === "Refrigerated"
+                      ? "❄ Cold Storage (Reefer)"
+                      : "📦 Dry Cargo (Ambient)"}
+                  </span>
+                  <span className="truck-profile-date-range" style={{ color: "var(--color-text-muted)", fontSize: "13px" }}>
+                    · {formatDateRange(range)}
+                  </span>
+                </div>
               </div>
             </header>
 

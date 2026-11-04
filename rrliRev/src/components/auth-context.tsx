@@ -20,6 +20,10 @@ export function AuthActorProvider({
   );
 }
 
+export function useOptionalAuthenticatedActor(): AuthenticatedActor | null {
+  return useContext(AuthActorContext);
+}
+
 export function useAuthenticatedActor(): AuthenticatedActor {
   const actor = useContext(AuthActorContext);
   if (!actor) {
