@@ -128,7 +128,6 @@ test("rejects direct mutation requests from all View-Only roles with 403 Forbidd
     "dropoffs:manage",
     "imports:upload",
     "imports:review_confirm",
-    "pod:verify",
     "users:manage",
   ];
 
@@ -167,7 +166,7 @@ test("rejects direct mutation requests from all View-Only roles with 403 Forbidd
     });
     assert.equal(evaluateDirectServerRequest(opsToken, "deliveries:create").ok, true);
     assert.equal(evaluateDirectServerRequest(opsToken, "imports:upload").ok, true);
-    assert.equal(evaluateDirectServerRequest(opsToken, "pod:verify").ok, true);
+    assert.equal(evaluateDirectServerRequest(opsToken, "deliveries:edit").ok, true);
     assert.deepEqual(evaluateDirectServerRequest(opsToken, "users:manage"), {
       ok: false,
       status: 403,

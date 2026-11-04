@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { signInSchema } from "@/lib/auth/auth-schemas";
+import { checkRateLimit, resetRateLimit } from "@/lib/auth/rate-limiter";
 import { getRoleMetadata } from "@/lib/auth/rbac";
 import { sanitizeReturnPath } from "@/lib/auth/route-policy";
 import { verifyServerAccountCredentials } from "@/lib/auth/server-account-store";
@@ -15,14 +16,14 @@ import { createRouteHandlerSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   const rawBody = (await request.json().catch(() => null)) as {
-    email?: unknown;
+    username?: unknown;
     password?: unknown;
     rememberMe?: unknown;
     next?: unknown;
   } | null;
 
   const parsed = signInSchema.safeParse({
-    email: rawBody?.email ?? "",
+    username: rawBody?.username ?? "",
     password: rawBody?.password ?? "",
     rememberMe: Boolean(rawBody?.rememberMe),
   });
@@ -33,20 +34,36 @@ export async function POST(request: Request) {
       {
         ok: false,
         code: "VALIDATION_ERROR",
-        message: firstIssue?.message ?? "Enter a valid email address and password.",
+        message: firstIssue?.message ?? "Enter a valid username and password.",
       },
       { status: 400 },
     );
   }
 
-  const { email, password, rememberMe } = parsed.data;
+  const { username, password, rememberMe } = parsed.data;
   const requestedNext = typeof rawBody?.next === "string" ? rawBody.next : null;
+  const normalizedKey = `login:${username.trim().toLowerCase()}`;
+
+  // Rate Limiting: 5 attempts per 5 minutes
+  const rateLimit = checkRateLimit(normalizedKey, 5, 5 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "RATE_LIMITED",
+        message: `Too many failed login attempts. Please try again in ${rateLimit.retryAfterSec ?? 300} seconds.`,
+      },
+      { status: 429 },
+    );
+  }
 
   if (isSupabaseConfigured()) {
     try {
       const supabase = await createRouteHandlerSupabaseClient({ rememberMe });
+      // In Supabase, if migrated to username, or using email format:
+      const loginIdentifier = username.includes("@") ? username : `${username.toLowerCase()}@routex.local`;
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: loginIdentifier,
         password,
       });
 
@@ -55,7 +72,7 @@ export async function POST(request: Request) {
           {
             ok: false,
             code: "INVALID_CREDENTIALS",
-            message: "The email address or password you entered is incorrect.",
+            message: "The username or password you entered is incorrect.",
           },
           { status: 401 },
         );
@@ -75,18 +92,21 @@ export async function POST(request: Request) {
         );
       }
 
+      resetRateLimit(normalizedKey);
       const redirectTo = sanitizeReturnPath(requestedNext, actor.role);
 
       return NextResponse.json({
         ok: true,
         actor: {
           id: actor.id,
-          email: actor.email,
+          username: actor.username,
           fullName: actor.fullName,
           role: actor.role,
           roleLabel: actor.roleLabel,
           accessLevel: actor.accessLevel,
           accessLevelLabel: actor.accessLevelLabel,
+          mustChangePassword: actor.mustChangePassword,
+          hasSecurityQuestion: actor.hasSecurityQuestion,
         },
         redirectTo,
       });
@@ -114,8 +134,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // Server-verified authentication against server-side account registry (development/testing only)
-  const verification = verifyServerAccountCredentials(email, password);
+  // Server-verified authentication using Argon2id against server account store
+  const verification = verifyServerAccountCredentials(username, password);
 
   if (!verification.ok) {
     if (verification.reason === "inactive_account") {
@@ -134,11 +154,13 @@ export async function POST(request: Request) {
       {
         ok: false,
         code: "INVALID_CREDENTIALS",
-        message: "The email address or password you entered is incorrect.",
+        message: "The username or password you entered is incorrect.",
       },
       { status: 401 },
     );
   }
+
+  resetRateLimit(normalizedKey);
 
   const { profile } = verification;
   const roleMeta = getRoleMetadata(profile.role);
@@ -152,12 +174,14 @@ export async function POST(request: Request) {
     ok: true,
     actor: {
       id: profile.id,
-      email: profile.email,
+      username: profile.username,
       fullName: profile.fullName,
       role: profile.role,
       roleLabel: roleMeta.label,
       accessLevel: roleMeta.accessLevel,
       accessLevelLabel: roleMeta.accessLevelLabel,
+      mustChangePassword: profile.mustChangePassword,
+      hasSecurityQuestion: profile.hasSecurityQuestion,
     },
     redirectTo,
   });
@@ -170,4 +194,3 @@ export async function POST(request: Request) {
 
   return response;
 }
-

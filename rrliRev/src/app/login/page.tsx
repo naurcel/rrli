@@ -3,41 +3,44 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { PasswordCriteriaList } from "@/components/password-criteria-list";
+import { evaluatePasswordCriteria } from "@/lib/auth/password-policy";
 import { isSupabaseConfigured } from "@/lib/config/env";
 
 type AuthViewMode = "login" | "forgot-password";
+type ForgotStep = "username" | "security_question" | "reset_password";
 type LoginLayoutMode = "split" | "centered";
 
 const ROLE_VERIFICATION_ACCOUNTS = [
   {
     label: "Admin (Full Access)",
-    email: "admin@routex.local",
-    password: "admin",
+    username: "admin",
+    password: "Admin2026!",
   },
   {
     label: "Operations (Write)",
-    email: "operations@routex.local",
-    password: "operations",
+    username: "operations",
+    password: "Ops2026!",
   },
   {
     label: "Finance (View-Only)",
-    email: "finance@routex.local",
-    password: "finance",
+    username: "finance",
+    password: "Finance2026!",
   },
   {
     label: "HR (View-Only)",
-    email: "hr@routex.local",
-    password: "humanresources",
+    username: "hr",
+    password: "Hr2026!",
   },
   {
     label: "Secretary (View-Only)",
-    email: "secretary@routex.local",
-    password: "secretary",
+    username: "secretary",
+    password: "Secretary2026!",
   },
   {
     label: "Customer Rep (View-Only)",
-    email: "csrep@routex.local",
-    password: "customerrep",
+    username: "customerrep",
+    password: "Csrep2026!",
   },
 ] as const;
 
@@ -47,13 +50,24 @@ export default function LoginPage() {
 
   const [viewMode, setViewMode] = useState<AuthViewMode>("login");
   const [layoutMode, setLayoutMode] = useState<LoginLayoutMode>("split");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+
+  // Forgot password state
+  const [forgotStep, setForgotStep] = useState<ForgotStep>("username");
+  const [recoveryUsername, setRecoveryUsername] = useState("");
+  const [securityQuestion, setSecurityQuestion] = useState("");
+  const [securityAnswer, setSecurityAnswer] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [recoveryMode, setRecoveryMode] = useState<"admin" | "security_question">("security_question");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   useEffect(() => {
     try {
@@ -62,9 +76,9 @@ export default function LoginPage() {
         window.localStorage.getItem("routex-theme");
       setIsDark(currentTheme === "dark");
 
-      const rememberedEmail = window.localStorage.getItem("routex-remembered-email");
-      if (rememberedEmail) {
-        setEmail(rememberedEmail);
+      const rememberedUser = window.localStorage.getItem("routex-remembered-username");
+      if (rememberedUser) {
+        setUsername(rememberedUser);
       }
 
       const savedLayout = window.localStorage.getItem("routex-login-layout");
@@ -104,10 +118,10 @@ export default function LoginPage() {
     setStatus("submitting");
     setMessage("");
 
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
       setStatus("error");
-      setMessage("Enter a valid email address.");
+      setMessage("Enter your username.");
       return;
     }
 
@@ -127,7 +141,7 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: trimmedEmail,
+          username: trimmedUsername,
           password,
           rememberMe,
           next: nextParam,
@@ -138,22 +152,22 @@ export default function LoginPage() {
         ok?: boolean;
         message?: string;
         redirectTo?: string;
-        actor?: { fullName?: string; roleLabel?: string; accessLevelLabel?: string };
+        actor?: { fullName?: string; username?: string; roleLabel?: string; accessLevelLabel?: string };
       } | null;
 
       if (!response.ok || !payload?.ok) {
         setStatus("error");
         setMessage(
-          payload?.message ?? "The email address or password you entered is incorrect.",
+          payload?.message ?? "The username or password you entered is incorrect.",
         );
         return;
       }
 
       try {
         if (rememberMe) {
-          window.localStorage.setItem("routex-remembered-email", trimmedEmail);
+          window.localStorage.setItem("routex-remembered-username", trimmedUsername);
         } else {
-          window.localStorage.removeItem("routex-remembered-email");
+          window.localStorage.removeItem("routex-remembered-username");
         }
       } catch {
         // Ignore storage errors
@@ -161,7 +175,7 @@ export default function LoginPage() {
 
       setStatus("success");
       setMessage(
-        `Authenticated as ${payload.actor?.fullName ?? trimmedEmail} (${payload.actor?.roleLabel ?? "Authorized"} — ${payload.actor?.accessLevelLabel ?? "Active"}). Redirecting…`,
+        `Authenticated as @${payload.actor?.username ?? trimmedUsername} (${payload.actor?.roleLabel ?? "Authorized"}). Redirecting…`,
       );
 
       const destination = payload.redirectTo ?? "/dashboard";
@@ -173,15 +187,16 @@ export default function LoginPage() {
     }
   }
 
-  async function handleForgotPasswordSubmit(event: FormEvent<HTMLFormElement>) {
+  // Step 1: Check username for recovery options
+  async function handleRecoveryCheckUsername(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("submitting");
     setMessage("");
 
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+    const trimmed = recoveryUsername.trim();
+    if (!trimmed) {
       setStatus("error");
-      setMessage("Enter the email address associated with your RouteX account.");
+      setMessage("Enter your RouteX username.");
       return;
     }
 
@@ -189,7 +204,122 @@ export default function LoginPage() {
       const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmedEmail }),
+        body: JSON.stringify({
+          action: "check-user",
+          username: trimmed,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        mode?: "admin_authorized" | "security_question";
+        question?: string;
+        recoveryToken?: string;
+        message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setStatus("error");
+        setMessage(payload?.message ?? "No recovery options available. Contact an Administrator.");
+        return;
+      }
+
+      setStatus("idle");
+      setMessage("");
+
+      if (payload.mode === "admin_authorized") {
+        setRecoveryMode("admin");
+        setResetToken(payload.recoveryToken || "");
+        setForgotStep("reset_password");
+        setMessage("Administrator-authorized password reset ready. Please set your new password below.");
+      } else if (payload.mode === "security_question") {
+        setRecoveryMode("security_question");
+        setSecurityQuestion(payload.question || "");
+        setForgotStep("security_question");
+      }
+    } catch {
+      setStatus("error");
+      setMessage("Unable to verify username. Please try again.");
+    }
+  }
+
+  // Step 2: Verify security answer
+  async function handleVerifySecurityAnswer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("submitting");
+    setMessage("");
+
+    const trimmedAnswer = securityAnswer.trim();
+    if (!trimmedAnswer) {
+      setStatus("error");
+      setMessage("Enter your security answer.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify-answer",
+          username: recoveryUsername.trim(),
+          answer: trimmedAnswer,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        resetToken?: string;
+        message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setStatus("error");
+        setMessage(payload?.message ?? "The security answer you entered is incorrect.");
+        return;
+      }
+
+      setStatus("idle");
+      setMessage("");
+      setResetToken(payload.resetToken || "");
+      setForgotStep("reset_password");
+    } catch {
+      setStatus("error");
+      setMessage("Unable to verify security answer. Please try again.");
+    }
+  }
+
+  // Step 3: Set new permanent password
+  async function handleResetPasswordSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("submitting");
+    setMessage("");
+
+    const validation = evaluatePasswordCriteria(newPassword);
+    if (!validation.isValid) {
+      setStatus("error");
+      setMessage(validation.errors[0] || "Password does not meet required criteria.");
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setStatus("error");
+      setMessage("New passwords do not match.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reset",
+          username: recoveryUsername.trim(),
+          token: resetToken,
+          mode: recoveryMode,
+          newPassword,
+          confirmPassword: confirmNewPassword,
+        }),
       });
 
       const payload = (await response.json().catch(() => null)) as {
@@ -199,24 +329,28 @@ export default function LoginPage() {
 
       if (!response.ok || !payload?.ok) {
         setStatus("error");
-        setMessage(payload?.message ?? "Unable to process password recovery request.");
+        setMessage(payload?.message ?? "Unable to reset password.");
         return;
       }
 
       setStatus("success");
-      setMessage(
-        payload.message ??
-          "If an active RouteX account matches that email, recovery instructions have been sent.",
-      );
+      setMessage(payload.message ?? "Password reset successfully. You can now log in.");
+      setUsername(recoveryUsername.trim());
+      setPassword("");
+      setViewMode("login");
+      setForgotStep("username");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setSecurityAnswer("");
     } catch {
       setStatus("error");
-      setMessage("Password recovery request failed. Please try again.");
+      setMessage("Password reset failed. Please try again.");
     }
   }
 
-  function applyRolePreset(presetEmail: string, presetPassword: string) {
+  function applyRolePreset(presetUsername: string, presetPassword: string) {
     setViewMode("login");
-    setEmail(presetEmail);
+    setUsername(presetUsername);
     setPassword(presetPassword);
     setStatus("idle");
     setMessage("");
@@ -270,11 +404,11 @@ export default function LoginPage() {
               <div className="login-role-presets">
                 {ROLE_VERIFICATION_ACCOUNTS.map((item) => (
                   <button
-                    key={item.email}
+                    key={item.username}
                     type="button"
                     className="login-role-preset-btn"
                     onClick={(event) => {
-                      applyRolePreset(item.email, item.password);
+                      applyRolePreset(item.username, item.password);
                       event.currentTarget.closest("details")?.removeAttribute("open");
                     }}
                   >
@@ -327,20 +461,20 @@ export default function LoginPage() {
             alt="RouteX"
           />
           <h2 id="sign-in-title">
-            {viewMode === "login" ? "Log in" : "Forgot password"}
+            {viewMode === "login" ? "Log in" : "Password Recovery"}
           </h2>
 
           {viewMode === "login" ? (
             <form onSubmit={handleLoginSubmit} noValidate>
               <label>
-                Email address
+                Username
                 <input
-                  name="email"
-                  type="email"
-                  placeholder="name@routex.local"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  name="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
                   required
                 />
               </label>
@@ -363,8 +497,18 @@ export default function LoginPage() {
                     onClick={() => setShowPassword((value) => !value)}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6Z" />
-                      <circle cx="12" cy="12" r="2.7" />
+                      {showPassword ? (
+                        <>
+                          <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6Z" />
+                          <circle cx="12" cy="12" r="2.7" />
+                          <line x1="3" y1="3" x2="21" y2="21" />
+                        </>
+                      ) : (
+                        <>
+                          <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6Z" />
+                          <circle cx="12" cy="12" r="2.7" />
+                        </>
+                      )}
                     </svg>
                   </button>
                 </span>
@@ -379,17 +523,6 @@ export default function LoginPage() {
                   />{" "}
                   Remember me
                 </label>
-                <button
-                  type="button"
-                  className="text-link"
-                  onClick={() => {
-                    setViewMode("forgot-password");
-                    setStatus("idle");
-                    setMessage("");
-                  }}
-                >
-                  Forgot password?
-                </button>
               </div>
 
               {status === "error" && message ? (
@@ -413,61 +546,231 @@ export default function LoginPage() {
               >
                 {status === "submitting" ? "Logging in…" : "Log in"}
               </button>
-            </form>
-          ) : (
-            <form onSubmit={handleForgotPasswordSubmit} noValidate>
-              <label>
-                Email address
-                <input
-                  name="email"
-                  type="email"
-                  placeholder="Enter your RouteX email address"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                />
-              </label>
 
-              <div className="login-options">
-                <span>Accounts are managed by RouteX Admins.</span>
+              <div className="login-forgot-wrap">
                 <button
                   type="button"
-                  className="text-link"
+                  className="forgot-password-link"
                   onClick={() => {
-                    setViewMode("login");
+                    setViewMode("forgot-password");
+                    setForgotStep("username");
+                    setRecoveryUsername(username);
                     setStatus("idle");
                     setMessage("");
                   }}
                 >
-                  Back to log in
+                  Forgot password?
                 </button>
               </div>
-
-              {status === "error" && message ? (
-                <p className="login-note error" role="alert">
-                  <span>!</span>
-                  {message}
-                </p>
-              ) : null}
-
-              {status === "success" && message ? (
-                <p className="login-note success" role="status">
-                  <span>i</span>
-                  {message}
-                </p>
-              ) : null}
-
-              <button
-                className="sign-in-button"
-                type="submit"
-                disabled={status === "submitting"}
-              >
-                {status === "submitting"
-                  ? "Sending instructions…"
-                  : "Send reset instructions"}
-              </button>
             </form>
+          ) : (
+            <div className="forgot-password-flow">
+              {forgotStep === "username" && (
+                <form onSubmit={handleRecoveryCheckUsername} noValidate>
+                  <label>
+                    RouteX Username
+                    <input
+                      name="recoveryUsername"
+                      type="text"
+                      placeholder="Enter your username"
+                      autoComplete="username"
+                      value={recoveryUsername}
+                      onChange={(event) => setRecoveryUsername(event.target.value)}
+                      required
+                    />
+                  </label>
+
+                  <div className="login-options">
+                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                      Step 1 of 3: Identify Account
+                    </span>
+                  </div>
+
+                  {status === "error" && message ? (
+                    <p className="login-note error" role="alert">
+                      <span>!</span>
+                      {message}
+                    </p>
+                  ) : null}
+
+                  <button
+                    className="sign-in-button"
+                    type="submit"
+                    disabled={status === "submitting"}
+                  >
+                    {status === "submitting" ? "Verifying…" : "Continue →"}
+                  </button>
+
+                  <div className="login-forgot-wrap">
+                    <button
+                      type="button"
+                      className="forgot-password-link"
+                      onClick={() => {
+                        setViewMode("login");
+                        setStatus("idle");
+                        setMessage("");
+                      }}
+                    >
+                      ← Back to log in
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {forgotStep === "security_question" && (
+                <form onSubmit={handleVerifySecurityAnswer} noValidate>
+                  <div style={{ marginBottom: "12px" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-accent-deep)" }}>
+                      Security Question for @{recoveryUsername}:
+                    </span>
+                    <p style={{ margin: "4px 0 0", fontSize: "13px", fontWeight: 600 }}>
+                      {securityQuestion}
+                    </p>
+                  </div>
+
+                  <label>
+                    Your Answer (Case-sensitive)
+                    <input
+                      name="securityAnswer"
+                      type="text"
+                      placeholder="Enter your security answer"
+                      value={securityAnswer}
+                      onChange={(event) => setSecurityAnswer(event.target.value)}
+                      required
+                    />
+                  </label>
+
+                  <div className="login-options">
+                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                      Step 2 of 3: Security Verification
+                    </span>
+                  </div>
+
+                  {status === "error" && message ? (
+                    <p className="login-note error" role="alert">
+                      <span>!</span>
+                      {message}
+                    </p>
+                  ) : null}
+
+                  <button
+                    className="sign-in-button"
+                    type="submit"
+                    disabled={status === "submitting"}
+                  >
+                    {status === "submitting" ? "Verifying Answer…" : "Verify & Continue →"}
+                  </button>
+
+                  <div className="login-forgot-wrap">
+                    <button
+                      type="button"
+                      className="forgot-password-link"
+                      onClick={() => {
+                        setForgotStep("username");
+                        setStatus("idle");
+                        setMessage("");
+                      }}
+                    >
+                      ← Change username
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {forgotStep === "reset_password" && (
+                <form onSubmit={handleResetPasswordSubmit} noValidate>
+                  <label>
+                    New Password
+                    <span className="password-control">
+                      <input
+                        name="newPassword"
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="Enter your new password"
+                        value={newPassword}
+                        onChange={(event) => setNewPassword(event.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        aria-label={showNewPassword ? "Hide password" : "Show password"}
+                        onClick={() => setShowNewPassword((value) => !value)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          {showNewPassword ? (
+                            <>
+                              <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6Z" />
+                              <circle cx="12" cy="12" r="2.7" />
+                              <line x1="3" y1="3" x2="21" y2="21" />
+                            </>
+                          ) : (
+                            <>
+                              <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6Z" />
+                              <circle cx="12" cy="12" r="2.7" />
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    </span>
+                  </label>
+
+                  <PasswordCriteriaList password={newPassword} />
+
+                  <label style={{ marginTop: "12px" }}>
+                    Confirm New Password
+                    <input
+                      name="confirmNewPassword"
+                      type="password"
+                      placeholder="Re-enter your new password"
+                      value={confirmNewPassword}
+                      onChange={(event) => setConfirmNewPassword(event.target.value)}
+                      required
+                    />
+                  </label>
+
+                  <div className="login-options">
+                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                      Step 3 of 3: Set Permanent Password
+                    </span>
+                  </div>
+
+                  {status === "error" && message ? (
+                    <p className="login-note error" role="alert">
+                      <span>!</span>
+                      {message}
+                    </p>
+                  ) : null}
+
+                  {status === "success" && message ? (
+                    <p className="login-note success" role="status">
+                      <span>i</span>
+                      {message}
+                    </p>
+                  ) : null}
+
+                  <button
+                    className="sign-in-button"
+                    type="submit"
+                    disabled={status === "submitting"}
+                  >
+                    {status === "submitting" ? "Updating Password…" : "Reset Password & Log In"}
+                  </button>
+
+                  <div className="login-forgot-wrap">
+                    <button
+                      type="button"
+                      className="forgot-password-link"
+                      onClick={() => {
+                        setViewMode("login");
+                        setStatus("idle");
+                        setMessage("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           )}
         </div>
       </section>

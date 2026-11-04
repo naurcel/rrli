@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 
+import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 import {
+  adminUpdateUsernameSchema,
+  authorizeResetSchema,
   createUserAccountSchema,
   updateUserRoleSchema,
 } from "@/lib/auth/auth-schemas";
 import { getRoleMetadata, isValidUserRole, type UserRole } from "@/lib/auth/rbac";
 import {
+  authorizeServerAccountReset,
   createServerAccountProfile,
+  findServerAccountById,
   listServerAccountProfiles,
   updateServerAccountProfile,
+  updateServerAccountUsername,
 } from "@/lib/auth/server-account-store";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
@@ -28,7 +34,7 @@ export async function GET() {
       const supabase = await createServerSupabaseClient();
       const { data, error } = await supabase
         .from("user_profiles")
-        .select("id, email, full_name, role, is_active, created_at, updated_at")
+        .select("id, email, username, full_name, role, is_active, must_change_password, security_question, recovery_authorized_at, recovery_expires_at, created_at, updated_at")
         .order("created_at", { ascending: true });
 
       if (error) {
@@ -39,8 +45,10 @@ export async function GET() {
         .filter((row) => isValidUserRole(row.role))
         .map((row) => {
           const meta = getRoleMetadata(row.role);
+          const username = row.username || row.email.split("@")[0];
           return {
             id: row.id,
+            username,
             email: row.email,
             fullName: row.full_name,
             role: row.role,
@@ -48,6 +56,10 @@ export async function GET() {
             accessLevel: meta.accessLevel,
             accessLevelLabel: meta.accessLevelLabel,
             isActive: row.is_active,
+            mustChangePassword: Boolean(row.must_change_password),
+            hasSecurityQuestion: Boolean(row.security_question),
+            recoveryAuthorizedAt: row.recovery_authorized_at,
+            recoveryExpiresAt: row.recovery_expires_at,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
           };
@@ -111,14 +123,17 @@ export async function POST(request: Request) {
         .from("user_profiles")
         .insert({
           id: newId,
-          email: parsed.data.email.trim().toLowerCase(),
+          username: parsed.data.username.trim(),
+          normalized_username: parsed.data.username.trim().toLowerCase(),
+          email: (parsed.data.email || `${parsed.data.username.trim().toLowerCase()}@routex.local`).toLowerCase(),
           full_name: parsed.data.fullName.trim(),
           role: parsed.data.role,
           is_active: true,
+          must_change_password: true,
           created_at: now,
           updated_at: now,
         })
-        .select("id, email, full_name, role, is_active, created_at")
+        .select("id, email, username, full_name, role, is_active, must_change_password, created_at")
         .single();
 
       if (error) {
@@ -128,7 +143,7 @@ export async function POST(request: Request) {
             ok: false,
             code: isConflict ? "CONFLICT" : "USER_CREATION_FAILED",
             message: isConflict
-              ? "An account with this email address already exists."
+              ? "An account with this username already exists."
               : error.message,
           },
           { status: isConflict ? 409 : 400 },
@@ -136,11 +151,22 @@ export async function POST(request: Request) {
       }
 
       const meta = getRoleMetadata(data.role as UserRole);
+      recordAuditEntry({
+        actorId: auth.actor.id,
+        actorEmail: auth.actor.email,
+        action: "user.created",
+        entityType: "user",
+        entityId: data.id,
+        summary: `Created account for ${data.full_name} (@${data.username}).`,
+        changes: { role: data.role, username: data.username, isActive: data.is_active, mustChangePassword: true },
+      });
+
       return NextResponse.json(
         {
           ok: true,
           user: {
             id: data.id,
+            username: data.username,
             email: data.email,
             fullName: data.full_name,
             role: data.role,
@@ -148,6 +174,8 @@ export async function POST(request: Request) {
             accessLevel: meta.accessLevel,
             accessLevelLabel: meta.accessLevelLabel,
             isActive: data.is_active,
+            mustChangePassword: true,
+            hasSecurityQuestion: false,
             createdAt: data.created_at,
           },
         },
@@ -165,7 +193,14 @@ export async function POST(request: Request) {
     }
   }
 
-  const created = createServerAccountProfile(parsed.data);
+  const created = createServerAccountProfile({
+    username: parsed.data.username,
+    fullName: parsed.data.fullName,
+    role: parsed.data.role,
+    temporaryPassword: parsed.data.temporaryPassword,
+    email: parsed.data.email,
+  });
+
   if (!created.ok) {
     return NextResponse.json(
       {
@@ -178,6 +213,21 @@ export async function POST(request: Request) {
   }
 
   const meta = getRoleMetadata(created.profile.role);
+  recordAuditEntry({
+    actorId: auth.actor.id,
+    actorEmail: auth.actor.email,
+    action: "user.created",
+    entityType: "user",
+    entityId: created.profile.id,
+    summary: `Created account for ${created.profile.fullName} (@${created.profile.username}).`,
+    changes: {
+      role: created.profile.role,
+      username: created.profile.username,
+      isActive: created.profile.isActive,
+      mustChangePassword: true,
+    },
+  });
+
   return NextResponse.json(
     {
       ok: true,
@@ -202,8 +252,89 @@ export async function PATCH(request: Request) {
   }
 
   const rawBody = await request.json().catch(() => null);
-  const parsed = updateUserRoleSchema.safeParse(rawBody);
+  const action = typeof rawBody?.action === "string" ? rawBody.action : "";
 
+  // 1. Authorize Admin-assisted password reset
+  if (action === "authorize-reset") {
+    const parsed = authorizeResetSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, message: "Invalid user ID." }, { status: 400 });
+    }
+
+    const targetUser = findServerAccountById(parsed.data.userId);
+    if (!targetUser) {
+      return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
+    }
+
+    const resetAuth = authorizeServerAccountReset(targetUser.id, auth.actor.username);
+    if (!resetAuth.ok) {
+      return NextResponse.json({ ok: false, message: resetAuth.message }, { status: 400 });
+    }
+
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "user.recovery_authorized",
+      entityType: "user",
+      entityId: targetUser.id,
+      summary: `Admin @${auth.actor.username} authorized 24-hour password recovery for @${targetUser.username}.`,
+      changes: {
+        authorizedBy: auth.actor.username,
+        targetUsername: targetUser.username,
+        expiresAt: resetAuth.expiresAt,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: `Password reset authorized for @${targetUser.username}. The user can now use Forgot Password to reset their password within 24 hours.`,
+      expiresAt: resetAuth.expiresAt,
+    });
+  }
+
+  // 2. Admin update username
+  if (action === "update-username") {
+    const parsed = adminUpdateUsernameSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid username." },
+        { status: 400 },
+      );
+    }
+
+    const targetUser = findServerAccountById(parsed.data.userId);
+    if (!targetUser) {
+      return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
+    }
+
+    const oldUsername = targetUser.username;
+    const updateRes = updateServerAccountUsername(targetUser.id, parsed.data.newUsername);
+    if (!updateRes.ok) {
+      return NextResponse.json({ ok: false, message: updateRes.message }, { status: 400 });
+    }
+
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "user.username_changed_by_admin",
+      entityType: "user",
+      entityId: targetUser.id,
+      summary: `Admin @${auth.actor.username} changed username of ${targetUser.fullName} from '@${oldUsername}' to '@${updateRes.profile.username}'.`,
+      changes: {
+        oldUsername,
+        newUsername: updateRes.profile.username,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: `Username updated to @${updateRes.profile.username}.`,
+      profile: updateRes.profile,
+    });
+  }
+
+  // 3. Update role or active status
+  const parsed = updateUserRoleSchema.safeParse(rawBody);
   if (!parsed.success) {
     return NextResponse.json(
       {
@@ -228,69 +359,20 @@ export async function PATCH(request: Request) {
     }
   }
 
-  if (isSupabaseConfigured()) {
-    try {
-      const supabase = await createServerSupabaseClient();
-      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (parsed.data.role) updates.role = parsed.data.role;
-      if (typeof parsed.data.isActive === "boolean") updates.is_active = parsed.data.isActive;
-
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .update(updates)
-        .eq("id", parsed.data.userId)
-        .select("id, email, full_name, role, is_active, created_at, updated_at")
-        .maybeSingle();
-
-      if (error) {
-        return NextResponse.json(
-          { ok: false, code: "USER_UPDATE_FAILED", message: error.message },
-          { status: 400 },
-        );
-      }
-
-      if (!data) {
-        return NextResponse.json(
-          { ok: false, code: "NOT_FOUND", message: "The specified user account was not found." },
-          { status: 404 },
-        );
-      }
-
-      const meta = getRoleMetadata(data.role as UserRole);
-      return NextResponse.json({
-        ok: true,
-        user: {
-          id: data.id,
-          email: data.email,
-          fullName: data.full_name,
-          role: data.role,
-          roleLabel: meta.label,
-          accessLevel: meta.accessLevel,
-          accessLevelLabel: meta.accessLevelLabel,
-          isActive: data.is_active,
-          createdAt: data.created_at,
-          updatedAt: data.updated_at,
-        },
-      });
-    } catch (err) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "USER_UPDATE_FAILED",
-          message: err instanceof Error ? err.message : "Unable to update user profile.",
-        },
-        { status: 500 },
-      );
-    }
-  }
-
   const updated = updateServerAccountProfile(parsed.data);
   if (!updated.ok) {
-    return NextResponse.json(
-      { ok: false, code: "NOT_FOUND", message: updated.message },
-      { status: 404 },
-    );
+    return NextResponse.json({ ok: false, message: updated.message }, { status: 400 });
   }
+
+  recordAuditEntry({
+    actorId: auth.actor.id,
+    actorEmail: auth.actor.email,
+    action: "user.profile_updated",
+    entityType: "user",
+    entityId: updated.profile.id,
+    summary: `Updated account status for @${updated.profile.username}.`,
+    changes: { role: updated.profile.role, isActive: updated.profile.isActive },
+  });
 
   const meta = getRoleMetadata(updated.profile.role);
   return NextResponse.json({
@@ -303,4 +385,3 @@ export async function PATCH(request: Request) {
     },
   });
 }
-

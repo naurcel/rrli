@@ -28,6 +28,7 @@ export type AuthProviderMode = "supabase" | "server-local";
 
 export type AuthenticatedActor = {
   id: string;
+  username: string;
   email: string;
   fullName: string;
   role: UserRole;
@@ -36,6 +37,8 @@ export type AuthenticatedActor = {
   accessLevelLabel: string;
   permissions: readonly Permission[];
   providerMode: AuthProviderMode;
+  mustChangePassword?: boolean;
+  hasSecurityQuestion?: boolean;
 };
 
 export function getAuthProviderMode(): AuthProviderMode {
@@ -44,15 +47,19 @@ export function getAuthProviderMode(): AuthProviderMode {
 
 function buildAuthenticatedActor(params: {
   id: string;
+  username: string;
   email: string;
   fullName: string;
   role: UserRole;
   providerMode: AuthProviderMode;
+  mustChangePassword?: boolean;
+  hasSecurityQuestion?: boolean;
 }): AuthenticatedActor {
   const meta = getRoleMetadata(params.role);
 
   return {
     id: params.id,
+    username: params.username,
     email: params.email,
     fullName: params.fullName,
     role: params.role,
@@ -61,6 +68,8 @@ function buildAuthenticatedActor(params: {
     accessLevelLabel: meta.accessLevelLabel,
     permissions: getPermissionsForRole(params.role),
     providerMode: params.providerMode,
+    mustChangePassword: Boolean(params.mustChangePassword),
+    hasSecurityQuestion: Boolean(params.hasSecurityQuestion),
   };
 }
 
@@ -84,7 +93,7 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
       // 1. Primary source of truth: public.user_profiles table in Supabase PostgreSQL
       const { data: profileRow, error: profileError } = await supabase
         .from("user_profiles")
-        .select("id, email, full_name, role, is_active")
+        .select("id, email, username, full_name, role, is_active, must_change_password, security_question, security_answer_hash")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -93,12 +102,17 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
           return null;
         }
 
+        const username = profileRow.username || user.email.split("@")[0];
+
         return buildAuthenticatedActor({
           id: profileRow.id,
+          username,
           email: profileRow.email || user.email,
-          fullName: profileRow.full_name || user.email.split("@")[0],
+          fullName: profileRow.full_name || username,
           role: profileRow.role,
           providerMode: "supabase",
+          mustChangePassword: Boolean(profileRow.must_change_password),
+          hasSecurityQuestion: Boolean(profileRow.security_answer_hash),
         });
       }
 
@@ -106,21 +120,24 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
       const adminAssignedRole = user.app_metadata?.role;
       const adminAssignedActive = user.app_metadata?.is_active ?? true;
       if (adminAssignedActive !== false && isValidUserRole(adminAssignedRole)) {
+        const username = user.app_metadata?.username || user.email.split("@")[0];
         const displayName =
           typeof user.app_metadata?.full_name === "string"
             ? user.app_metadata.full_name
-            : user.email.split("@")[0];
+            : username;
 
         return buildAuthenticatedActor({
           id: user.id,
+          username,
           email: user.email,
           fullName: displayName,
           role: adminAssignedRole,
           providerMode: "supabase",
+          mustChangePassword: Boolean(user.app_metadata?.must_change_password),
+          hasSecurityQuestion: Boolean(user.app_metadata?.has_security_question),
         });
       }
 
-      // No valid role profile or app_metadata found — deny access by default
       return null;
     } catch {
       return null;
@@ -143,10 +160,13 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
 
   return buildAuthenticatedActor({
     id: account.id,
+    username: account.username,
     email: account.email,
     fullName: account.fullName,
     role: account.role,
     providerMode: "server-local",
+    mustChangePassword: account.mustChangePassword,
+    hasSecurityQuestion: account.hasSecurityQuestion,
   });
 }
 
@@ -196,4 +216,3 @@ export async function verifyServerPermission(
 
   return { ok: true, actor };
 }
-

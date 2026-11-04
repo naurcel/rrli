@@ -1,12 +1,11 @@
 import * as z from "zod";
-import { USER_ROLES } from "./rbac.ts";
+import { USER_ROLES } from "./rbac";
 
 export const signInSchema = z.object({
-  email: z
+  username: z
     .string()
     .trim()
-    .min(1, "Enter your email address.")
-    .email("Enter a valid email address."),
+    .min(1, "Enter your username."),
   password: z
     .string()
     .min(1, "Enter your password."),
@@ -15,22 +14,68 @@ export const signInSchema = z.object({
 
 export type SignInInput = z.infer<typeof signInSchema>;
 
-export const forgotPasswordSchema = z.object({
-  email: z
+export const checkRecoveryUserSchema = z.object({
+  username: z
     .string()
     .trim()
-    .min(1, "Enter the email address associated with your RouteX account.")
-    .email("Enter a valid email address."),
+    .min(1, "Enter your username."),
 });
 
-export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
-
-export const createUserAccountSchema = z.object({
-  email: z
+export const verifySecurityAnswerSchema = z.object({
+  username: z
     .string()
     .trim()
-    .min(1, "Enter an email address.")
-    .email("Enter a valid email address."),
+    .min(1, "Enter your username."),
+  answer: z
+    .string()
+    .trim()
+    .min(1, "Enter your security answer."),
+});
+
+export const resetPasswordWithTokenSchema = z.object({
+  username: z.string().trim().min(1, "Username is required."),
+  token: z.string().trim().min(1, "Recovery token is required."),
+  mode: z.enum(["admin", "security_question"]),
+  newPassword: z.string().min(8, "Password must be at least 8 characters."),
+  confirmPassword: z.string().min(1, "Confirm your new password."),
+});
+
+export const changeUsernameSchema = z.object({
+  newUsername: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters.")
+    .max(30, "Username cannot exceed 30 characters."),
+  currentPassword: z.string().min(1, "Enter your current password."),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password."),
+  newPassword: z.string().min(8, "New password must be at least 8 characters."),
+  confirmPassword: z.string().min(1, "Confirm your new password."),
+});
+
+export const changeSecurityQuestionSchema = z.object({
+  question: z.string().trim().min(1, "Select or enter a security question."),
+  answer: z.string().trim().min(2, "Security answer must be at least 2 characters."),
+  confirmAnswer: z.string().trim().min(1, "Confirm your security answer."),
+  currentPassword: z.string().min(1, "Enter your current password."),
+});
+
+export const initialSetupSchema = z.object({
+  newPassword: z.string().min(8, "New password must be at least 8 characters."),
+  confirmPassword: z.string().min(1, "Confirm your new password."),
+  question: z.string().trim().min(1, "Select or enter a security question."),
+  answer: z.string().trim().min(2, "Security answer must be at least 2 characters."),
+  confirmAnswer: z.string().trim().min(1, "Confirm your security answer."),
+});
+
+export const createUserAccountSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters.")
+    .max(30, "Username cannot exceed 30 characters."),
   fullName: z
     .string()
     .trim()
@@ -39,9 +84,11 @@ export const createUserAccountSchema = z.object({
   role: z.enum(USER_ROLES, {
     error: "Select a valid RouteX access role.",
   }),
-  password: z
+  temporaryPassword: z
     .string()
-    .min(8, "Initial password must be at least 8 characters."),
+    .min(8, "Temporary password must be at least 8 characters."),
+  confirmTemporaryPassword: z.string().optional(),
+  email: z.string().trim().email().optional(),
 });
 
 export const updateUserRoleSchema = z.object({
@@ -50,3 +97,15 @@ export const updateUserRoleSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+export const adminUpdateUsernameSchema = z.object({
+  userId: z.string().trim().min(1, "User ID is required."),
+  newUsername: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters.")
+    .max(30, "Username cannot exceed 30 characters."),
+});
+
+export const authorizeResetSchema = z.object({
+  userId: z.string().trim().min(1, "User ID is required."),
+});

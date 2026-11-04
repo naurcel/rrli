@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AuthActorProvider } from "@/components/auth-context";
 import { GlobalDateRangeProvider } from "@/components/global-date-range-picker";
+import { InitialSetupModal } from "@/components/initial-setup-modal";
 import { OperationalSidebar } from "@/components/operational-sidebar";
 import { SidebarStateProvider } from "@/components/sidebar-state";
 import { requireAuthenticatedActor } from "@/lib/auth/server-session";
@@ -19,11 +20,15 @@ export async function WorkspaceShellLayout({
         <SidebarStateProvider>
           <div className="app-shell">
             <OperationalSidebar />
-            <div className="main-content">{children}</div>
+            <div className="main-content">
+              {children}
+              {actor.mustChangePassword || !actor.hasSecurityQuestion ? (
+                <InitialSetupModal username={actor.username} />
+              ) : null}
+            </div>
           </div>
         </SidebarStateProvider>
       </GlobalDateRangeProvider>
     </AuthActorProvider>
   );
 }
-
