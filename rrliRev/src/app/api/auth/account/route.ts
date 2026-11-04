@@ -11,7 +11,6 @@ import {
 } from "@/lib/auth/auth-schemas";
 import {
   completeInitialServerAccountSetup,
-  findServerAccountById,
   updateServerAccountAvatar,
   updateServerAccountPassword,
   updateServerAccountSecurityQuestion,

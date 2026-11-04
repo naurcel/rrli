@@ -6,11 +6,8 @@ import {
   getTruckClassificationLabel,
   TRUCK_CLASSIFICATION_FILTER_OPTIONS,
   TRUCK_PERFORMANCE_FILTER_OPTIONS,
-  OWNED_TRUCKS,
-  SUBCONTRACTED_TRUCKS,
   getOwnedTrucks,
   getSubcontractedTrucks,
-  type TruckPerformanceFilterKey,
   type TruckClassificationFilterKey,
 } from "./truck-registry.ts";
 

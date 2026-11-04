@@ -19,7 +19,6 @@ import {
 } from "@/features/deliveries/browser-preview-trucks";
 import { summarizeTruckProfitability } from "@/features/deliveries/delivery-domain";
 import {
-  getTruckClassificationLabel,
   getTruckStorageCapability,
   OWNED_TRUCKS,
   SUBCONTRACTED_TRUCKS,

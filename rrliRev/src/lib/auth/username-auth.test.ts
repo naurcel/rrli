@@ -4,7 +4,6 @@ import test from "node:test";
 import { hashWithArgon2id, verifyWithArgon2id } from "./argon2id.ts";
 import {
   evaluatePasswordCriteria,
-  normalizeSecurityAnswer,
   PREDEFINED_SECURITY_QUESTIONS,
   validateUsernameFormat,
 } from "./password-policy.ts";
@@ -17,7 +16,6 @@ import {
   getServerAccountRecoveryState,
   resetServerAccountPasswordWithToken,
   updateServerAccountPassword,
-  updateServerAccountSecurityQuestion,
   updateServerAccountUsername,
   verifyServerAccountCredentials,
   verifyServerAccountCurrentPassword,

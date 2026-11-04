@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   canManageTrucks,
-  USER_ROLES,
   type UserRole,
 } from "../../lib/auth/rbac.ts";
 import {

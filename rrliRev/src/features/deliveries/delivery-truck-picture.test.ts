@@ -8,7 +8,6 @@ import {
   getFleetTrucks,
   getTruckClassificationLabel,
   getTruckStorageCapability,
-  OWNED_TRUCKS,
   SUBCONTRACTED_TRUCKS,
 } from "./truck-registry.ts";
 

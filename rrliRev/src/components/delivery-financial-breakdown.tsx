@@ -3,7 +3,6 @@
 import { useId, useMemo, useState } from "react";
 import type {
   DeliveryTripRecord,
-  ExpenseResolutionStatus,
 } from "@/features/deliveries/delivery-domain";
 import { formatPercent, formatPeso } from "@/lib/format";
 import {
