@@ -141,14 +141,12 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
           hasSecurityQuestion: Boolean(user.app_metadata?.has_security_question),
         });
       }
-
-      return null;
     } catch {
-      return null;
+      // Supabase lookup error; fallback to session token below
     }
   }
 
-  // Server-verified signed HttpOnly session token (when Supabase env vars are not yet configured)
+  // Server-verified signed HttpOnly session token (fallback for seed/demo sessions or unconfigured Supabase)
   const cookieStore = await cookies();
   const rawToken = cookieStore.get(VERIFIED_SESSION_COOKIE)?.value;
   const verifiedPayload = verifySignedSessionToken(rawToken);

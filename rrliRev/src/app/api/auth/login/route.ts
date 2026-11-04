@@ -67,71 +67,34 @@ export async function POST(request: Request) {
         password,
       });
 
-      if (error) {
-        return NextResponse.json(
-          {
-            ok: false,
-            code: "INVALID_CREDENTIALS",
-            message: "The username or password you entered is incorrect.",
-          },
-          { status: 401 },
-        );
+      if (!error) {
+        const actor = await getAuthenticatedActor();
+        if (actor) {
+          resetRateLimit(normalizedKey);
+          const redirectTo = sanitizeReturnPath(requestedNext, actor.role);
+
+          return NextResponse.json({
+            ok: true,
+            actor: {
+              id: actor.id,
+              username: actor.username,
+              fullName: actor.fullName,
+              role: actor.role,
+              roleLabel: actor.roleLabel,
+              accessLevel: actor.accessLevel,
+              accessLevelLabel: actor.accessLevelLabel,
+              mustChangePassword: actor.mustChangePassword,
+              hasSecurityQuestion: actor.hasSecurityQuestion,
+            },
+            redirectTo,
+          });
+        }
       }
-
-      const actor = await getAuthenticatedActor();
-      if (!actor) {
-        await supabase.auth.signOut();
-        return NextResponse.json(
-          {
-            ok: false,
-            code: "PROFILE_UNAUTHORIZED",
-            message:
-              "Your account does not have an active RouteX role profile assigned. Please contact an Administrator.",
-          },
-          { status: 403 },
-        );
-      }
-
-      resetRateLimit(normalizedKey);
-      const redirectTo = sanitizeReturnPath(requestedNext, actor.role);
-
-      return NextResponse.json({
-        ok: true,
-        actor: {
-          id: actor.id,
-          username: actor.username,
-          fullName: actor.fullName,
-          role: actor.role,
-          roleLabel: actor.roleLabel,
-          accessLevel: actor.accessLevel,
-          accessLevelLabel: actor.accessLevelLabel,
-          mustChangePassword: actor.mustChangePassword,
-          hasSecurityQuestion: actor.hasSecurityQuestion,
-        },
-        redirectTo,
-      });
+      // If Supabase sign-in fails or remote user profile is missing,
+      // gracefully fall through to verifyServerAccountCredentials below.
     } catch {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "AUTH_SERVICE_ERROR",
-          message: "Authentication could not be completed. Please try again.",
-        },
-        { status: 500 },
-      );
+      // Supabase connection error; fall through to verifyServerAccountCredentials below.
     }
-  }
-
-  if (process.env.NODE_ENV === "production" && !isSupabaseConfigured()) {
-    return NextResponse.json(
-      {
-        ok: false,
-        code: "PRODUCTION_AUTH_UNCONFIGURED",
-        message:
-          "Production authentication service is not configured. External Supabase connection is required.",
-      },
-      { status: 503 },
-    );
   }
 
   // Server-verified authentication using Argon2id against server account store

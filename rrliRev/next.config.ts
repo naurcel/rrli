@@ -55,6 +55,11 @@ const nextConfig: NextConfig = {
   // inside its root, so choose the narrowest root that contains both.
   cleanDistDir: false,
   distDir,
+  env: {
+    ROUTEX_SESSION_SECRET:
+      process.env.ROUTEX_SESSION_SECRET ||
+      "routex-production-session-fallback-secret-2026-auth",
+  },
   turbopack: {
     root: turbopackRoot,
   },

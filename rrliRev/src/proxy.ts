@@ -25,63 +25,47 @@ export async function proxy(request: NextRequest) {
       applySessionUpdates = (response) => updater(previous(response));
     });
 
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-    const isAuthenticated = !error && Boolean(user?.id);
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
-    if (!isAuthenticated && !isPublicRoute(pathname)) {
-      if (pathname.startsWith("/api/")) {
-        return applySessionUpdates(
-          NextResponse.json(
-            {
-              ok: false,
-              code: "UNAUTHENTICATED",
-              message: "You must log in to access this resource.",
-            },
-            { status: 401 },
-          ),
-        );
-      }
-
-      return applySessionUpdates(
-        NextResponse.redirect(getLoginRedirectUrl(request.url)),
-      );
-    }
-
-    if (isAuthenticated) {
-      if (pathname === "/login") {
-        return applySessionUpdates(
-          NextResponse.redirect(new URL("/dashboard", request.url)),
-        );
-      }
-
-      const role = isValidUserRole(user?.app_metadata?.role)
-        ? user.app_metadata.role
-        : null;
-
-      if (role && !canRoleAccessPath(role, pathname)) {
-        if (pathname.startsWith("/api/")) {
+      if (!error && Boolean(user?.id)) {
+        if (pathname === "/login") {
           return applySessionUpdates(
-            NextResponse.json(
-              {
-                ok: false,
-                code: "FORBIDDEN",
-                message: `Access denied for role '${role}'.`,
-              },
-              { status: 403 },
-            ),
+            NextResponse.redirect(new URL("/dashboard", request.url)),
           );
         }
 
-        const deniedUrl = new URL("/dashboard", request.url);
-        deniedUrl.searchParams.set("access", "restricted");
-        return applySessionUpdates(NextResponse.redirect(deniedUrl));
-      }
-    }
+        const role = isValidUserRole(user?.app_metadata?.role)
+          ? user.app_metadata.role
+          : null;
 
-    return applySessionUpdates(NextResponse.next({ request }));
+        if (role && !canRoleAccessPath(role, pathname)) {
+          if (pathname.startsWith("/api/")) {
+            return applySessionUpdates(
+              NextResponse.json(
+                {
+                  ok: false,
+                  code: "FORBIDDEN",
+                  message: `Access denied for role '${role}'.`,
+                },
+                { status: 403 },
+              ),
+            );
+          }
+
+          const deniedUrl = new URL("/dashboard", request.url);
+          deniedUrl.searchParams.set("access", "restricted");
+          return applySessionUpdates(NextResponse.redirect(deniedUrl));
+        }
+
+        return applySessionUpdates(NextResponse.next({ request }));
+      }
+    } catch {
+      // Supabase unavailable; fall through to server-verified session cookie
+    }
   }
 
   // Server-verified signed HttpOnly cookie verification

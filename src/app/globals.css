@@ -1163,7 +1163,7 @@ html[data-theme="dark"] .sidebar.collapsed:has(.sidebar-header:hover) {
   pointer-events: auto;
   transform: translateX(0) scale(1);
   transition: opacity .28s ease 40ms, transform .32s cubic-bezier(.22, 1, .36, 1) 40ms, background-color .15s ease, color .15s ease !important;
-k}
+}
 
 .sidebar.collapsed .sidebar-collapse-toggle:hover {
   background: var(--color-accent-soft);
