@@ -22,9 +22,6 @@ export function SortableTableHeader({
   className?: string;
 }) {
   const active = sortKey === activeSortKey;
-  const nextDirection = active
-    ? direction === "asc" ? "desc" : "asc"
-    : defaultDirection;
 
   function handleClick() {
     if (!active) {

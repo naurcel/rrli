@@ -2,7 +2,7 @@ import type {
   DeliveryTripRecord,
   ExpenseResolutionStatus,
 } from "./delivery-domain.ts";
-import { formatPercent, formatPeso } from "../../lib/format.ts";
+import { formatPeso } from "../../lib/format.ts";
 
 export type ExpenseCategorySlice = {
   id: string;

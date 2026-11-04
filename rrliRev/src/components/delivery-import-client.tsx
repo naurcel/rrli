@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { TruckTemperature } from "@/features/deliveries/delivery-domain";
-import { formatPeso } from "@/lib/format";
 
 type ParsedImportRow = {
   id: string;
@@ -89,8 +88,8 @@ function ImportIcon({ name, className = "" }: { name: ImportIconName; className?
 }
 
 export function DeliveryExcelImportClient({
-  actorRoleLabel,
-  actorFullName,
+  actorRoleLabel: _actorRoleLabel,
+  actorFullName: _actorFullName,
 }: {
   actorRoleLabel: string;
   actorFullName: string;

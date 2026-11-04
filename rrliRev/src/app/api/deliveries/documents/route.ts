@@ -5,7 +5,7 @@ import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { SMALL_MOCK_DATABASE } from "@/features/deliveries/small-mock-database";
-import { derivePodVerificationStatus, type DeliveryStoreDropoff, type DeliveryTripRecord } from "@/features/deliveries/delivery-domain";
+import { derivePodVerificationStatus } from "@/features/deliveries/delivery-domain";
 import { getAllMockDeliveries } from "@/features/deliveries/small-mock-repository";
 import { generateMockPodSvgReceipt } from "@/features/deliveries/pod-utils";
 

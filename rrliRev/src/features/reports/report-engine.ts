@@ -61,8 +61,6 @@ export function resolveTemplateColumns(
   const catalog = getColumnCatalog(baseType);
   const catalogMap = new Map(catalog.map((col) => [col.id, col]));
 
-  const configsMap = new Map(columnConfigs.map((cfg) => [cfg.id, cfg]));
-
   // Combine catalog with template config
   const resolved: ResolvedReportColumn[] = [];
 

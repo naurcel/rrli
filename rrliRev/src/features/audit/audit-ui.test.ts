@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   extractStateChanges,
-  formatAuditFieldLabel,
   formatAuditValue,
   getActionVisuals,
 } from "./audit-formatters.ts";

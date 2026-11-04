@@ -46,7 +46,6 @@ describe("Deliveries Page Improvements", () => {
 
     it("cycles default sort column (delivery_date) between desc and asc and returns to default desc", () => {
       type SortDir = "asc" | "desc";
-      type SortState = { key: string; direction: SortDir };
 
       function simulateDateClick(currentDirection: SortDir): SortDir {
         // delivery_date defaults to desc

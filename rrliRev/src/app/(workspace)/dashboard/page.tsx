@@ -25,7 +25,6 @@ import {
 } from "@/features/deliveries/use-delivery-profitability-summary";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import {
-  canImportAndReviewExcel,
   canManageDocuments,
   canMutateDeliveryRecords,
 } from "@/lib/auth/rbac";
@@ -477,7 +476,6 @@ export default function DashboardPage() {
   );
 
   const canWrite = canMutateDeliveryRecords(actor.role);
-  const canImport = canImportAndReviewExcel(actor.role);
 
   const drawerSections: DetailSection[] = useMemo(() => {
     if (!selectedTrip) {

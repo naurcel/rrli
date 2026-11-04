@@ -10,7 +10,6 @@ import {
 } from "@/features/reports/report-engine";
 import {
   type ColumnConfig,
-  type ColumnDefinition,
   getColumnCatalog,
   type ReportBaseType,
   type ReportTemplate,

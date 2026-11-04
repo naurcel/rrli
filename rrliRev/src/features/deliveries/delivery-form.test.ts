@@ -2,11 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  calculateTripExpenseTotal,
-  createConfirmedExpenseStates,
   type ExpenseResolutionStatus,
-  type TripExpenseBreakdown,
-  type TripExpenseStates,
 } from "./delivery-domain.ts";
 
 /**

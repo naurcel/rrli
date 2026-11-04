@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
-import { TruckPhoto } from "@/components/truck-photo";
 import { DeliveryCrewSection, parsePersonnelNames } from "@/components/delivery-crew-section";
 import {
   useGlobalDateRange,

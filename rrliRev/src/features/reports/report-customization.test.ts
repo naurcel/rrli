@@ -4,25 +4,19 @@ import test from "node:test";
 import { canManageReportTemplates, hasPermission, USER_ROLES } from "../../lib/auth/rbac.ts";
 import { type DeliveryTripRecord } from "../deliveries/delivery-domain.ts";
 import {
-  downloadReportCsvFile,
   filterDeliveriesForTemplate,
   formatCellValue,
   generateReportCsv,
-  generateReportRows,
   processReport,
   resolveTemplateColumns,
 } from "./report-engine.ts";
 import {
   deleteServerReportTemplate,
   findServerReportTemplateById,
-  listServerReportTemplates,
   saveServerReportTemplate,
 } from "./report-template-store.ts";
 import {
   BUILTIN_REPORT_TEMPLATES,
-  DEFAULT_ACTIVITY_TEMPLATE,
-  DEFAULT_EXPENSES_TEMPLATE,
-  DEFAULT_PROFITABILITY_TEMPLATE,
   DEFAULT_REVENUE_TEMPLATE,
   DEFAULT_TRIP_LEDGER_TEMPLATE,
   getColumnCatalog,

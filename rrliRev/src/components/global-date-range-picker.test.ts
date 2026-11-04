@@ -6,7 +6,6 @@ import {
   isDateInRange,
   parseDateValue,
   presetRange,
-  startOfDay,
   toDateKey,
   type DateRange,
 } from "./date-range-utils.ts";
