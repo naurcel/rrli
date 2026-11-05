@@ -236,12 +236,15 @@ export function ReportCustomizerModal({
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span
                 style={{
-                  display: "inline-block",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  minHeight: "18px",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
                   background: "rgba(180, 83, 9, 0.12)",
                   color: "var(--color-accent)",
-                  fontSize: "10.5px",
+                  border: "1px solid rgba(180, 83, 9, 0.25)",
+                  fontSize: "10px",
                   fontWeight: 700,
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",

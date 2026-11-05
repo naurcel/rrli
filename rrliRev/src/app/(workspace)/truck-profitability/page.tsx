@@ -555,7 +555,7 @@ export default function TruckProfitabilityPage() {
                 Ranked by: <strong>{OWNED_TRUCK_SORT_OPTIONS.find((o) => o.value === ownedTruckSort)?.label}</strong>
               </span>
               <span className="truck-criteria-count">
-                {refrigeratedCount} Cold Storage (Reefer) · {dryCount} Dry / Ambient
+                {refrigeratedCount} Cold Storage · {dryCount} Dry Cargo
               </span>
             </div>
           </div>
@@ -580,10 +580,10 @@ export default function TruckProfitabilityPage() {
                     <div className="truck-card-photo-wrap">
                       <TruckPhoto plateNumber={truck.plateNumber} />
                       <span className={`truck-capability-pill ${isRefrigerated ? "refrigerated" : "ambient"}`}>
-                        {isRefrigerated ? "❄ Cold Storage" : "📦 Dry Cargo"}
+                        {isRefrigerated ? "Cold Storage" : "Dry Cargo"}
                       </span>
                       {isPerformanceSort && (
-                        <span className={`truck-rank-badge ${index === 0 ? "rank-1" : index === 1 ? "rank-2" : index === 2 ? "rank-3" : "rank-n"}`}>
+                        <span className="truck-rank-badge">
                           #{index + 1}
                         </span>
                       )}
@@ -594,9 +594,6 @@ export default function TruckProfitabilityPage() {
                           <h2>{truck.plateNumber}</h2>
                           <div className="truck-type-meta-row">
                             <span className="truck-spec-badge">{truck.truckType}</span>
-                            <span className={`truck-storage-tag ${isRefrigerated ? "refrigerated" : "dry"}`}>
-                              {isRefrigerated ? "Reefer" : "Ambient"}
-                            </span>
                           </div>
                         </div>
                         <span className={`fleet-status ${ownedTruckSort === "deliveries" ? "highlight-metric" : ""}`}>
@@ -664,7 +661,7 @@ export default function TruckProfitabilityPage() {
                       <td><span className="truck-table-spec">{truck.truckType}</span></td>
                       <td>
                         <span className={`truck-capability-pill-small ${isRefrigerated ? "refrigerated" : "ambient"}`}>
-                          {isRefrigerated ? "❄ Cold Storage (Reefer)" : "📦 Dry Cargo (Ambient)"}
+                          {isRefrigerated ? "Cold Storage (Reefer)" : "Dry Cargo (Ambient)"}
                         </span>
                       </td>
                       <td>{truck.provider}</td>
@@ -799,8 +796,8 @@ export default function TruckProfitabilityPage() {
                     <RoundedSelect
                       value={storageCapability}
                       options={[
-                        { value: "Refrigerated", label: "❄ Cold Storage (Reefer)" },
-                        { value: "Dry", label: "📦 Dry / Ambient Cargo" },
+                        { value: "Refrigerated", label: "Cold Storage (Reefer)" },
+                        { value: "Dry", label: "Dry / Ambient Cargo" },
                       ]}
                       onChange={(value) => setStorageCapability(value as TruckStorageCapability)}
                       ariaLabel="Select storage capability"

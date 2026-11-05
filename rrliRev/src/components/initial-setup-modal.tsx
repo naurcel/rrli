@@ -113,14 +113,17 @@ export function InitialSetupModal({ username }: { username: string }) {
         <div style={{ marginBottom: "20px" }}>
           <span
             style={{
-              display: "inline-block",
-              padding: "3px 8px",
-              borderRadius: "999px",
-              background: "var(--color-accent-soft)",
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: "18px",
+              padding: "2px 6px",
+              borderRadius: "4px",
+              background: "rgba(245, 158, 11, 0.12)",
               color: "var(--color-accent-deep)",
+              border: "1px solid rgba(245, 158, 11, 0.25)",
               fontSize: "10px",
               fontWeight: 700,
-              letterSpacing: ".06em",
+              letterSpacing: "0.04em",
               textTransform: "uppercase",
               marginBottom: "8px",
             }}

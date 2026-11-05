@@ -64,7 +64,7 @@ export function DeliveryTruckInfoSection({
             className={`truck-capability-pill ${storageCapability === "Refrigerated" ? "reefer" : "dry"}`}
             title={`Cargo storage: ${storageCapability}`}
           >
-            {storageCapability === "Refrigerated" ? "❄ Cold Storage" : "📦 Dry Cargo"}
+            {storageCapability === "Refrigerated" ? "Cold Storage" : "Dry Cargo"}
           </span>
         </div>
 

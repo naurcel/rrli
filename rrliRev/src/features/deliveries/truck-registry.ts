@@ -73,8 +73,8 @@ export function getTruckClassificationLabel(
 
 export const TRUCK_CLASSIFICATION_FILTER_OPTIONS = [
   { value: "all", label: "All Classifications" },
-  { value: "refrigerated", label: "❄ Refrigerated / Cold Storage" },
-  { value: "dry", label: "📦 Dry / Ambient Cargo" },
+  { value: "refrigerated", label: "Refrigerated / Cold Storage" },
+  { value: "dry", label: "Dry / Ambient Cargo" },
   { value: "reefer-6w", label: "Refrigerated · 6-Wheeler" },
   { value: "reefer-4w", label: "Refrigerated · 4-Wheeler" },
   { value: "dry-10w", label: "Dry Cargo · 10-Wheeler" },

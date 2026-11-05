@@ -130,8 +130,8 @@ export default function TruckProfilePage({
                     style={{ position: "static", boxShadow: "none" }}
                   >
                     {getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability) === "Refrigerated"
-                      ? "❄ Cold Storage (Reefer)"
-                      : "📦 Dry Cargo (Ambient)"}
+                      ? "Cold Storage (Reefer)"
+                      : "Dry Cargo (Ambient)"}
                   </span>
                   <span className="truck-profile-date-range" style={{ color: "var(--color-text-muted)", fontSize: "13px" }}>
                     · {formatDateRange(range)}
