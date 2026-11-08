@@ -19,9 +19,9 @@ RouteX is a centralized logistics web application designed specifically for **Re
   - Digital Proof of Delivery (POD) document viewing (images, PDFs) and attachment.
   - Custom report template authoring and CSV/Excel data export.
   - User identity lifecycle, Argon2id security, password recovery, and immutable audit logging.
-* **Out of Scope (Explicit Domain Boundaries):**
+* **Out of Scope & Critical Governance Boundaries:**
   - **No Live GPS / Dispatching:** RouteX is an operations ledger and profitability auditor, not a real-time driver GPS tracking tool.
-  - **No Hard Deletes:** Data records (deliveries, trucks, users) are preserved for auditing; user accounts use soft deactivation (`isActive: false`).
+  - **Admin Deletion Authority with Mandatory Confirmation Screen:** Administrators are authorized to make deletion decisions (e.g. deleting delivery records, deleting trucks, deleting custom report templates, and removing staff accounts). Every deletion decision strictly requires an explicit confirmation screen/modal before execution, accompanied by immutable audit event logging. Non-admin roles (Operations, Finance, HR, Secretary, Customer Rep) have zero deletion authority.
   - **No Open Self-Registration:** All system accounts are provisioned by an Administrator; guest users cannot register themselves.
 
 ---
@@ -113,6 +113,7 @@ Below is the complete list of system use cases, their descriptions, primary acto
 | **UC-11** | **Assign Vehicle & Crew** | Operations, Admin | `<<include>>` UC-09, `<<include>>` UC-12 | Select truck plate (owned/subcontracted), assign driver, and assign up to two helpers with respective wage rates. |
 | **UC-12** | **Edit Delivery Record** | Operations, Admin | `<<include>>` UC-08 | Modify operational or financial attributes of an existing delivery. |
 | **UC-13** | **Calculate Trip Financials & Margin** | System / Automated | `<<include>>` UC-09, `<<include>>` UC-12 | Automatically compute revenue, total expenses, net income, and profit margin percent. |
+| **UC-13B** | **Delete Delivery Record** | Admin | `<<include>>` UC-08, `<<include>>` UC-35 | Permanently delete an invalid delivery record via an audited confirmation screen. |
 
 ---
 
@@ -156,7 +157,7 @@ Below is the complete list of system use cases, their descriptions, primary acto
 | **UC-26** | **Export Report to CSV / Excel** | Operations, Admin | `<<include>>` UC-24 | Export RFC 4180-compliant CSV containing metadata, active filters, column headings, and calculated summary totals. |
 | **UC-27** | **Print / Save Report as PDF** | View-Only Staff, Operations, Admin | `<<include>>` UC-24 | Open clean browser print dialogue optimized for formal paper or PDF archiving. |
 | **UC-28** | **Author Custom Report Template** | Admin | `<<extend>>` UC-24 *(Condition: Admin customizes layout)* | Customize column visibility, display labels, ordering, and aggregation groupings. |
-| **UC-29** | **Delete Custom Report Template** | Admin | `<<include>>` UC-28 | Delete user-created templates (built-in system default templates cannot be deleted). |
+| **UC-29** | **Delete Custom Report Template** | Admin | `<<include>>` UC-28, `<<include>>` UC-35 | Delete user-created templates via an audited confirmation screen (built-in system default templates cannot be deleted). |
 
 ---
 
@@ -167,8 +168,17 @@ Below is the complete list of system use cases, their descriptions, primary acto
 | **UC-30** | **View User Directory** | Admin | `<<include>>` UC-01 | View list of system staff, assigned roles, email addresses, and account status (`Active` vs. `Inactive`). |
 | **UC-31** | **Provision New User Account** | Admin | `<<include>>` UC-30 | Create account with temporary credentials and assign canonical role. |
 | **UC-32** | **Modify User Role & Status** | Admin | `<<include>>` UC-30 | Change staff role assignment or toggle active status (soft-disable without deleting records). |
+| **UC-32B** | **Delete User Account** | Admin | `<<include>>` UC-30, `<<include>>` UC-35 | Permanently delete staff user account (preventing primary admin self-deletion) via an audited confirmation screen. |
 | **UC-33** | **Reset User Password (Admin-Assisted)** | Admin | `<<include>>` UC-30 | Issue temporary password to unlock an account when user forgets security question answers. |
 | **UC-34** | **Inspect System Audit Logs** | Admin | `<<include>>` UC-30 | View audit trail capturing security events, credential updates, and record diffs showing old vs. new state changes. |
+
+---
+
+### Subsystem 8: Critical Confirmation & Governance
+
+| UC ID | Use Case Name | Primary Actor | Relationships & Triggers | Brief Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **UC-35** | **Confirm Critical Deletion Decision** | Admin | `<<included by>>` UC-13B, UC-29, UC-32B | Present an explicit modal confirmation screen displaying entity details and destructive warnings before executing permanent deletion. |
 
 ---
 
@@ -184,6 +194,7 @@ This matrix maps system permissions directly to the **6 Canonical Roles**:
 | View Delivery Ledger & Details | `deliveries:view` | ✅ | ✅ | 👁 (Read) | 👁 (Read) | 👁 (Read) | 👁 (Read) |
 | Create New Delivery | `deliveries:create` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Edit Existing Delivery | `deliveries:edit` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Delete Delivery Record | `deliveries:delete` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Complete / Finalize Trip | `deliveries:complete` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Manage Store Drop-offs | `dropoffs:manage` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Excel Batch Staging** | | | | | | | |
@@ -202,6 +213,7 @@ This matrix maps system permissions directly to the **6 Canonical Roles**:
 | **Administration & IAM** | | | | | | | |
 | View User Accounts Directory | `users:view` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Manage Accounts, Roles & Resets | `users:manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Delete User Account | `users:manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | View Audit Logs & Transitions | `users:manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | View Settings Page | `settings:view` | ✅ | ✅ | 👁 (Read) | 👁 (Read) | 👁 (Read) | 👁 (Read) |
 | Manage System Configuration | `settings:manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -245,6 +257,7 @@ flowchart LR
             UC10(["UC-10: Record Multi-Store Drop-offs"])
             UC11(["UC-11: Assign Vehicle & Crew"])
             UC12(["UC-12: Edit Delivery Record"])
+            UC13B(["UC-13B: Delete Delivery Record"])
             UC14(["UC-14: Upload Excel Trip File"])
             UC16(["UC-16: Commit Batch Staged Import"])
             UC17(["UC-17: View POD Document"])
@@ -263,14 +276,20 @@ flowchart LR
             UC26(["UC-26: Export Report to CSV"])
             UC27(["UC-27: Print / Save Report as PDF"])
             UC28(["UC-28: Author Custom Report Template"])
+            UC29(["UC-29: Delete Custom Report Template"])
         end
 
         subgraph AdminSub["5. Administration & Audit"]
             UC30(["UC-30: View User Directory"])
             UC31(["UC-31: Provision New User Account"])
             UC32(["UC-32: Modify Role & Status"])
+            UC32B(["UC-32B: Delete User Account"])
             UC33(["UC-33: Reset User Password"])
             UC34(["UC-34: Inspect Audit Logs & Diffs"])
+        end
+
+        subgraph Governance["6. Confirmation & Governance"]
+            UC35(["UC-35: Confirm Critical Deletion Decision"])
         end
 
     end
@@ -302,10 +321,13 @@ flowchart LR
     Ops --> UC23
     Ops --> UC26
 
+    Admin --> UC13B
     Admin --> UC28
+    Admin --> UC29
     Admin --> UC30
     Admin --> UC31
     Admin --> UC32
+    Admin --> UC32B
     Admin --> UC33
     Admin --> UC34
 
@@ -316,9 +338,12 @@ flowchart LR
     UC09 -.->|«include»| UC11
     UC12 -.->|«include»| UC10
     UC12 -.->|«include»| UC11
+    UC13B -.->|«include»| UC35
     UC16 -.->|«include»| UC14
     UC19 -.->|«extend»| UC17
     UC28 -.->|«extend»| UC24
+    UC29 -.->|«include»| UC35
+    UC32B -.->|«include»| UC35
 ```
 
 ---

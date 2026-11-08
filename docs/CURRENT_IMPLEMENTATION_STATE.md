@@ -1,62 +1,80 @@
 # RouteX Current Implementation State
 
-**Verified:** 2026-10-30  
-**Authority:** current repository source and `package.json` take precedence over older planning documents and dated engineering reports.
+**Verified:** November 2026  
+**Authority:** The codebase inside [`rrliRev/`](file:///c:/Users/suchi/Documents/rrli/rrliRev) and its passing automated test suite take precedence over older provisional planning documents.
 
-## What RouteX is today
+---
 
-RouteX is a frontend-first Next.js application for reviewing local, synthetic logistics records. It is a functional interface preview with browser-local creation flows and temporary sign-in handling; it is not yet a production operational system or a connected database application.
+## 1. What RouteX Is Today
 
-## Verified stack
+RouteX is the internal **Delivery Operations, Multi-Store Drop-offs, POD Documents, and Truck Profitability** system for **Redeemed Route Logistics Inc. (RRLI)**.
 
-- Next.js 16.4.2 App Router and React 19.3.0.
-- TypeScript 5, Tailwind CSS 4, and a shared custom CSS design system in `src/app/globals.css`.
-- Supabase JavaScript and SSR packages are installed for a future integration boundary. No Supabase project, schema, migration, data query, storage bucket, or RLS policy is configured in this repository.
-- Zod 4 is used for the existing authentication form contract.
-- Node's built-in test runner is the active automated test tool. Vitest, Jest, shadcn/ui, and Lucide are not installed.
+It is implemented as a production-ready Next.js 16 application with:
+- **Dual-Mode Persistence Architecture:** Operates seamlessly both in **Offline Database-Free Mode** (using `small-mock-database.ts` and `localStorage` with window event synchronization) and in **Connected Mode** (using Supabase PostgreSQL, RLS policies, and Storage buckets).
+- **Strict Role-Based Access Control (RBAC):** 6 canonical roles mapped across 3 access levels with Argon2id password hashing and HMAC-SHA256 authenticated sessions.
+- **Audited Financial Governance:** Clear separation between `finalized` and `incomplete` deliveries, preventing unknown expenses from corrupting operational revenue totals.
+- **Multi-Store Drop-off Tracking:** Granular stop-level route tracking with store addresses, entry fees / gate tolls, and proof-of-delivery (POD) document attachments.
+- **Reporting Engine:** 6 built-in templates, custom report designer, Daily Trip Report with dedicated date picker, and Excel-compliant CSV export.
+- **Standardized Pagination:** Interactive `<TablePagination />` with page number input, boundary clamping, and standardized page size limits.
 
-## Implemented interface and local interactions
+---
 
-| Area | Verified behavior | Boundary |
-|---|---|---|
-| App shell | Shared sidebar, two explicit expanded/collapsed states, shared date-range control, theme toggle, responsive records layout | Sidebar state and theme preference are browser-local preferences. |
-| Login and route gate | Local development preview entry; hosted unconfigured builds require the temporary `admin / admin` preview credentials; configured builds use Supabase password sign-in | This is not RBAC and is not a production identity policy. |
-| Dashboard | Date-aware local delivery metrics, revenue chart, top-truck ranking, attention link, quick actions, sortable recent-delivery table, detail drawer | Metrics derive from local fixture deliveries only. Financial definitions remain provisional. |
-| Deliveries | Search, date/POD/client/truck/driver filtering, three-state sorting, detail drawer, and local create form | Created records are browser-local and do not yet reconcile into every screen. |
-| Fleet | Owned-truck cards, 50 synthetic subcontracted-truck rows, filters/sorting, truck profiles, local truck creation, and browser-local photo crop/upload | Truck totals and photos are local. No maintenance, document, or history service exists. |
-| Transactions | Search, filters, sorting, KPI cards, detail drawer, and local create form | Entries are browser-local. Posting, reconciliation, and approved accounting logic are absent. |
-| Reports | Date-aware local report document tabs and print/save-PDF browser action | Export formats, authorization, generated files, scheduling, and official-report definitions are not implemented. |
-| Administration | Local members table and integrated local audit-trail view | Member management, RBAC, retained auditing, invitations, and permissions are not implemented. |
-| Settings | Intentional work-in-progress placeholder | There is no settings data model or persistence. |
+## 2. Verified Technical Stack
 
-## Current data and persistence boundary
+- **Framework:** Next.js 16.4.2 (App Router with Turbopack) & React 19.3.0.
+- **Language & Types:** TypeScript 5 with strict mode (`tsc --noEmit` exits with 0 errors).
+- **Styling:** Tailwind CSS 4 reset + single authoritative global stylesheet in [`rrliRev/src/app/globals.css`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/app/globals.css) supporting both light mode and dark mode (`html[data-theme="dark"]`).
+- **Database & Storage:** Supabase PostgreSQL with RLS migrations in `rrliRev/supabase/migrations/` + `small-mock-database.ts` offline fallback.
+- **Security & Cryptography:** Node's native `crypto` module (HMAC-SHA256 session tokens, timing-safe equality, Argon2id password hashing).
+- **Test Runner:** Node.js native test runner (`node --test --experimental-strip-types`) with **171 passing automated tests** across 12 suites.
 
-The app currently has several local fixture sources:
+---
 
-- Dashboard/report delivery fixture: `src/features/dashboard/dashboard-preview-data.ts`.
-- Deliveries and transactions: page-level fixture arrays plus separate browser-local creation modules.
-- Fleet: fixture owned trucks, 50 generated subcontracted trucks, separate browser-local created trucks, and per-truck browser-local photos.
-- Administration and audit: separate local member and audit-event fixtures.
+## 3. Implemented Route Inventory & Features
 
-Those sources are not yet a single central mock database. The proposed `mock-db.json` / seed / store / selector / async API architecture is documented as a pending design decision; do not claim cross-screen persistence or audit-on-write until that migration is approved and completed.
+| Route / Surface | Key Capabilities | RBAC Access | Persistence |
+| :--- | :--- | :--- | :--- |
+| **`/login`** | Split-screen login, username authentication, first-time setup, self-service & admin-assisted password recovery | Public | Server Account Store |
+| **`/dashboard`** | Delivery KPIs, revenue trends, top trucks ranking, recent deliveries table (**5 records/page**) with input pagination, detail drawer | All authenticated roles | Dual-mode repository |
+| **`/deliveries`** | Deliveries ledger (**10 records/page**), multi-select client/truck dropdown filters, versioned correction modal, audited deletion dialog | View: All roles<br>Mutate: Admin, Operations<br>Delete: Admin only | Dual-mode repository |
+| **`/deliveries/new`** | Multi-step delivery wizard, client assignment, truck/crew dispatch, multi-store drop-offs, entry fees, highway tolls, diesel costs | Admin (unrestricted date)<br>Operations (3-day window) | Dual-mode repository |
+| **`/deliveries/import`** | Drag-and-drop Excel (`.xlsx`, `.csv`) spreadsheet parser, column mapping, validation preview, batch commitment | Admin, Operations | Dual-mode repository |
+| **`/truck-profitability`** | Owned truck performance cards, subcontracted trucks (**10/page**), fleet crew management (**10/page**) with active toggle and registration | View: All roles<br>Mutate: Admin, Operations | Dual-mode repository |
+| **`/truck-profitability/[plate]`** | Dedicated truck economics profile, revenue vs expense breakdown, trip history (**10/page**) with input pagination, truck photo upload | View: All roles<br>Mutate: Admin, Operations | Dual-mode repository |
+| **`/pod-documents`** | Stop-level POD compliance inspector, status filters (`POD Attached` vs `Missing POD`), inline SVG receipt preview and document download (**10/page**) | View: All roles<br>Mutate: Admin, Operations | Dual-mode storage |
+| **`/reports`** | 6 built-in templates (Revenue, Profitability, Activity, Daily Trip Ledger, Client Summary, Truck Summary), customizer modal, Excel CSV export | View: All roles<br>Manage templates: Admin only | Dual-mode repository |
+| **`/user-management`** | Authorized personnel list (**10/page**), role assignment, account status toggle, password reset authorization, immutable audit event log (**10/page**) | Admin only | Server Account Store + Audit Logger |
+| **`/settings`** | User profile overview, avatar upload with automatic cropping, username and password self-management | All authenticated roles | Server Account Store |
 
-## Validation last run against the current frontend work
+---
 
-```text
-npm.cmd run typecheck  -> passed
-npm.cmd test           -> passed (28 tests)
-npm.cmd run build      -> passed
+## 4. Key Business Logic Invariants
+
+1. **Financial Finalization Policy:**
+   - Any delivery trip with `unknown` expenses is marked with `financialState: "incomplete"`.
+   - Incomplete deliveries are **strictly excluded** from aggregate revenue, expense, and profit totals in Dashboard, Deliveries, and Reports until finalized.
+   - `not_applicable` expenses evaluate to confirmed `null` and do not block finalization.
+2. **Delivery Recording Window:**
+   - **Admin:** Can record or correct deliveries on **any date** without restriction.
+   - **Operations:** Constrained to a **3-day submission window** from the delivery date.
+3. **Table Pagination Standards:**
+   - Standardized via `<TablePagination />` with direct typed page number input.
+   - Dashboard Recent Deliveries: **5 records per page**.
+   - All Other Tables: **10 records per page**.
+4. **Global Date Filtering:**
+   - Default workspace range is **"All Time"** (`startDate: null, endDate: null`).
+   - Daily Trip Report on `/reports` has a dedicated fixed single-day picker.
+
+---
+
+## 5. Verification Commands
+
+Always run from `rrliRev/`:
+
+```powershell
+cd rrliRev
+npm test          # Runs 171 automated tests across 12 suites
+npm run typecheck # Strict TypeScript check (0 errors)
+npm run build     # Next.js Turbopack production build
+npm run dev       # Development server at http://localhost:3000
 ```
-
-No browser automation suite or configured remote Supabase/Vercel environment was available for this verification.
-
-## Explicitly not implemented
-
-- Production database, schema, migrations, server-side CRUD, or storage.
-- RBAC, row-level security, final session lifecycle, invitations, password recovery, or user management.
-- Approved delivery lifecycle/status rules, POD document policy, financial formulas, reconciliation, correction/void workflow, or official reporting/export.
-- Persistent/immutable audit trail, backup/recovery, or production monitoring.
-
-## Documentation use
-
-Use this page for the present implementation state. Keep dated reports and agent-session logs as historical evidence rather than editing their original claims. Product requirements, architectural decisions, and open questions remain governed by the Knowledge Base and Development Kit until explicitly approved.

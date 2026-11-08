@@ -6,28 +6,61 @@
 
 ## 1. Directory Structure & Architectural Boundaries
 
-RouteX uses the **Next.js App Router** (`src/app/`) with **React 19** and **TypeScript**, separating route entrypoints, reusable UI primitives, domain feature logic, and cross-cutting utilities into four top-level directories under `src/`:
+RouteX uses the **Next.js App Router** (`src/app/`) with **React 19** and **TypeScript**, organized cleanly into route groups, reusable UI primitives, domain feature logic, and cross-cutting libraries:
 
 ```text
-src/
-├── app/                  # Next.js App Router pages, layouts, templates, and globals.css
-│   ├── globals.css       # Single authoritative stylesheet for all tokens, shell, and components
-│   ├── layout.tsx        # Root HTML shell, Google Fonts loader, theme init script, MouseReactiveShadows
-│   ├── template.tsx      # Route transition wrapper (.route-transition-shell + ThemeToggle)
-│   ├── error.tsx         # Global client error boundary (.fallback-page)
-│   ├── not-found.tsx     # Global 404 boundary (.minimal-not-found)
-│   ├── login/            # Unauthenticated split-screen login route
-│   ├── dashboard/        # Executive & operational overview route
-│   ├── deliveries/       # Delivery log table, filters, and /deliveries/new wizard
-│   ├── fleet/            # Fleet card grid, /fleet/[slug] profile, and /fleet/new form
-│   ├── transactions/     # Expense log table, filters, and /transactions/new form
-│   ├── reports/          # Reports workspace, CSV export, and printable breakdown table
-│   ├── administration/   # System posture, role scope, and audit trail route
-│   ├── hr/               # HR & Payroll workspace (preview/deferred boundary)
-│   └── settings/         # Read-only configuration overview route
-├── components/           # Shared application shell and reusable UI primitives
-├── features/             # Domain data models, pure calculation helpers, and local preview storage adapters
-└── lib/                  # Cross-cutting utilities (currency/date formatting, auth/route policy, env)
+rrliRev/src/
+├── app/                              # Next.js App Router entrypoints & global styles
+│   ├── (auth)/                       # Unauthenticated route group
+│   │   └── login/                    # Split-screen credentials & recovery route
+│   ├── (workspace)/                  # Authenticated operational workspace route group
+│   │   ├── dashboard/                # Executive overview, KPIs, and recent deliveries
+│   │   ├── deliveries/               # Deliveries ledger, detail drawer, and filters
+│   │   │   ├── new/                  # Multi-step delivery recording wizard
+│   │   │   └── import/               # Excel spreadsheet bulk delivery importer
+│   │   ├── truck-profitability/      # Fleet performance, owned trucks, subcontracted trucks, and crew
+│   │   │   └── [plate]/              # Dedicated truck unit-economics profile & history
+│   │   ├── pod-documents/            # Proof-of-delivery document compliance & inspector
+│   │   ├── reports/                  # Report templates engine, daily trip report, and CSV export
+│   │   ├── settings/                 # Account profile & credentials self-management
+│   │   └── user-management/          # Authorized staff provisioning & immutable audit logs (Admin)
+│   ├── api/                          # Next.js Server Route Handlers
+│   │   ├── audit/                    # Audit event querying
+│   │   ├── auth/                     # Session, login, logout, password recovery
+│   │   ├── deliveries/               # Delivery CRUD, documents, import, and summaries
+│   │   ├── drivers/                  # Fleet crew status and registration
+│   │   ├── reports/                  # Custom report template persistence
+│   │   ├── trucks/                   # Truck registration and deletion
+│   │   └── users/                    # User account provisioning, roles, and status
+│   └── globals.css                   # Single authoritative stylesheet for tokens, shell, and components
+├── components/                       # Shared application shell and reusable UI primitives
+│   ├── operational-sidebar.tsx       # Collapsible navigation rail (expanded/collapsed states)
+│   ├── operational-topbar.tsx        # Top bar with GlobalDateRangePicker & AccountControl
+│   ├── global-date-range-picker.tsx  # Workspace date range filter (defaults to "All Time")
+│   ├── table-pagination.tsx          # Page-number input pagination primitive
+│   ├── delivery-filter-dropdown.tsx  # Multi-select client & truck filter dropdown
+│   ├── truck-filter-dropdown.tsx     # Fleet classification & performance filter dropdown
+│   ├── delivery-dropoff-timeline.tsx # Store drop-off sequence & POD badge timeline
+│   ├── delivery-financial-breakdown.tsx # Unit economics & expense attribution cards
+│   ├── delivery-pod-documents.tsx    # Inline document upload and viewing
+│   ├── record-detail-drawer.tsx      # Slide-over record inspection panel
+│   ├── rounded-select.tsx            # Custom accessible dropdown select
+│   └── sortable-table-header.tsx     # Three-state column sorting header
+├── features/                         # Domain data models, pure calculation helpers, and repository logic
+│   ├── audit/                        # Audit event formatting and UI state transformers
+│   ├── deliveries/                   # Delivery domain models, validation, mock database, server repository
+│   │   ├── delivery-domain.ts        # Pure calculation engine (revenue, expenses, net profit, margin)
+│   │   ├── small-mock-database.ts    # Seeded fixture database for offline demo mode
+│   │   ├── truck-registry.ts         # Truck fleet catalog and capabilities
+│   │   ├── driver-registry.ts        # Fleet crew catalog (drivers and helpers)
+│   │   └── server/                   # Server-only delivery repository adapters
+│   ├── reports/                      # Report template definitions, aggregation, and Excel CSV generator
+│   └── users/                        # User profile photo helpers and settings logic
+└── lib/                              # Cross-cutting utilities & infrastructure
+    ├── auth/                         # RBAC rules, session guards, password policies, Argon2id hashing
+    ├── config/                       # Environment variable validation
+    ├── format/                       # Currency (PHP), percentage, and date formatters
+    └── supabase/                     # Supabase client boundaries (browser & server SSR)
 ```
 
 ### Separation of Responsibilities
@@ -98,10 +131,15 @@ Because [`src/app/globals.css`](../../../src/app/globals.css) evolved across mul
 
 Never render raw `<select>` elements or browser `window.alert()` / `window.confirm()` dialogs in RouteX:
 
-- **Single-Value Selection:** Always use [`<RoundedSelect />`](../../../src/components/rounded-select.tsx) (`src/components/rounded-select.tsx`).
-- **Date Range Filtering:** Always use [`<GlobalDateRangePicker />`](../../../src/components/global-date-range-picker.tsx) inside `<OperationalTopbar />`.
-- **Sortable Table Columns:** Always use [`<SortableTableHeader />`](../../../src/components/sortable-table-header.tsx) paired with `sortItems()` from [`src/components/table-sorting.ts`](../../../src/components/table-sorting.ts).
-- **Record Inspection:** Always use [`<RecordDetailDrawer />`](../../../src/components/record-detail-drawer.tsx) (`src/components/record-detail-drawer.tsx`) to inspect row details without navigating away from the table context.
+- **Single-Value Selection:** Always use [`<RoundedSelect />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/rounded-select.tsx) (`src/components/rounded-select.tsx`).
+- **Multi-Select Filtering:** Always use [`<DeliveryFilterDropdown />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/delivery-filter-dropdown.tsx) or [`<TruckFilterDropdown />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/truck-filter-dropdown.tsx).
+- **Table Pagination:** Always use [`<TablePagination />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/table-pagination.tsx) (`5` items for Dashboard, `10` items for all other tables).
+- **Date Range Filtering:** Always use [`<GlobalDateRangePicker />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/global-date-range-picker.tsx) inside `<OperationalTopbar />`.
+- **Sortable Table Columns:** Always use [`<SortableTableHeader />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/sortable-table-header.tsx).
+- **Record Inspection:** Always use [`<RecordDetailDrawer />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/record-detail-drawer.tsx) to inspect row details without navigating away from the table context.
+- **Route & Store Drop-offs:** Always use [`<DeliveryDropoffTimeline />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/delivery-dropoff-timeline.tsx) to display stop sequence and POD badges.
+- **Financial Breakdown:** Always use [`<DeliveryFinancialBreakdown />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/delivery-financial-breakdown.tsx) for single delivery unit economics, and [`<AggregateExpenseBreakdown />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/delivery-financial-breakdown.tsx) for aggregate ledger summaries.
+- **Audited Deletions:** Always use [`<ConfirmDeliveryDeletionDialog />`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/confirm-delivery-deletion-dialog.tsx) or the truck deletion dialog instead of browser confirm dialogs.
 
 ### B. Popover Dismissal & Keyboard Escape Pattern
 

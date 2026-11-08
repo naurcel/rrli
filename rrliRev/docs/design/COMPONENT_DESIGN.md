@@ -82,13 +82,14 @@ Placed as the first child of `.filters` toolbars ([globals.css:52, 100, 112, 428
 
 ---
 
-## 5. Tables & Sortable Column Headers
+## 5. Tables & Input-Based Pagination
 
-All data tables live inside a `.records-card` container ([globals.css:52-53, 102-125, 456-457, 500, 509](file:///c:/Users/suchi/Documents/rrli/src/app/globals.css#L52-L53)):
+### 5.1 Tables & Sortable Column Headers
+All data tables live inside a `.records-card` container ([globals.css](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/app/globals.css)):
 - **Scroll Wrapper (`.table-wrap`):** `width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-color: #c7cdd6 transparent` (`10px` custom webkit scrollbar thumb with hover accent color).
 - **Table Element (`table`):** `width: 100%; border-collapse: collapse; min-width: 1100px` (`min-width: 680px; table-layout: fixed` inside `.dashboard-columns .table-wrap table`; `min-width: 560px` inside `.report-document table`).
   - Surface: `background: rgba(255, 255, 255, .82)` (`rgba(25, 33, 42, .86)` in dark mode); `border-radius: var(--radius-card)` (`10px`).
-- **Column Headers (`th` & [`SortableTableHeader`](file:///c:/Users/suchi/Documents/rrli/src/components/sortable-table-header.tsx)):**
+- **Column Headers (`th` & [`SortableTableHeader`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/sortable-table-header.tsx)):**
   - `th`: `padding: 12px 14px` (`padding-left: 23px` on `first-child`, `padding-right: 23px; text-align: right` on `last-child`); `background: transparent`; `color: #96a19c` (`var(--color-text-muted)` in dark mode); `font-size: 9px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase`.
   - `.sortable-table-header`: `display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 3px 1px; border: 0; background: transparent; cursor: pointer`.
   - Sort indicator (`b`): `width: 12px; font-size: 12px; color: var(--color-text-muted)` (`↕` neutral, `↑` `.asc`, `↓` `.desc` colored `var(--color-accent)`).
@@ -98,9 +99,18 @@ All data tables live inside a `.records-card` container ([globals.css:52-53, 102
     - `.record-link`: `color: #277859; font-weight: 700` (underlines on hover).
     - `.truck-code`: `color: #66766f; font-variant-numeric: tabular-nums`.
     - `.money`: `color: var(--ink); font-weight: 700`.
-- **Table Footer & Pagination (`.table-footer`, `.pagination`):**
-  - `.table-footer`: `display: flex; align-items: center; justify-content: space-between; padding: 15px 23px; font-size: 11px; color: #98a49f; border-top: 1px solid rgba(210, 216, 224, .65)`.
-  - `.pagination`: `display: flex; align-items: center; gap: 5px`. Buttons and page indicator `span` are `25px × 25px`, `border-radius: 5px`. Active page `span` uses `background: var(--color-accent-soft); border-color: #f5d89b; color: var(--color-accent); font-weight: 700`.
+
+### 5.2 Input-Based Page Number Pagination (`TablePagination` — [src/components/table-pagination.tsx](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/table-pagination.tsx))
+Standardized across all application tables:
+- **Container (`.table-footer` & `.pagination-container`):** `display: flex; align-items: center; justify-content: space-between; padding: 14px 23px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--color-text-muted)`.
+- **Item Count Summary:** Displays `Showing X to Y of Z items` with grammatical singular/plural handling.
+- **Direct Page Input Controls (`.pagination-controls` & `.pagination-input-wrap`):**
+  - Previous / Next buttons: `min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--glass-surface-strong); font-size: 11.5px; font-weight: 600`.
+  - Direct Page Number Input (`.pagination-page-input`): Compact numerical input field (`width: 44px; height: 28px; text-align: center; border-radius: 6px; font-size: 12px; font-weight: 700; border: 1px solid var(--glass-border)`).
+  - Users can type any page number and press `Enter` or blur to jump directly to that page; values are automatically clamped between `1` and `pageCount`.
+- **Page Size Limits by Surface:**
+  - **Dashboard Recent Deliveries Table:** Strictly **5 records per page**.
+  - **All Other Tables:** Strictly **10 records per page** (`/deliveries`, `/reports`, `/truck-profitability/[plate]`, `/pod-documents`, `/truck-profitability`, `/user-management`).
 
 ---
 
@@ -150,7 +160,56 @@ RouteX implements three segmented tab variations:
 - Anchored above `.sidebar-footer` (`position: absolute; z-index: 20; left: 8px; right: 8px; bottom: 54px; padding: 10px; border-radius: 12px; background: var(--glass-surface-strong); box-shadow: var(--glass-shadow-strong); backdrop-filter: blur(14px)`).
 - When `.sidebar.collapsed` is active, it repositions to the right of the collapsed rail (`left: calc(100% + 9px); bottom: 0; width: 174px`).
 
-### 8.4 Chart & Ranking Hover Tooltips ([globals.css:485, 550](file:///c:/Users/suchi/Documents/rrli/src/app/globals.css#L485))
+### 8.4 Chart & Ranking Hover Tooltips ([globals.css](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/app/globals.css))
 - **SVG Revenue Chart Tooltip (`.chart-point-tooltip`):** `146px × 42px` `<rect rx="8">` filled with opaque `var(--color-surface)` and stroked with `color-mix(in srgb, var(--color-accent-highlight) 34%, var(--color-border))`, displaying date (`.chart-tooltip-label`, `9px`) and formatted peso amount (`.chart-tooltip-value`, `11px` bold).
 - **Top Truck Profile Preview Pill (`.top-truck-preview`):** `min-width: 126px; padding: 9px 11px; border-radius: 9px; background: var(--glass-surface-strong); box-shadow: var(--glass-shadow-strong)` revealed on hover/focus of `.top-truck-link`.
+
+---
+
+## 9. Multi-Select Filter Dropdowns
+
+### 9.1 DeliveryFilterDropdown & TruckFilterDropdown ([src/components/delivery-filter-dropdown.tsx](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/delivery-filter-dropdown.tsx), [src/components/truck-filter-dropdown.tsx](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/truck-filter-dropdown.tsx))
+Replaces single-value select popovers with dedicated multi-criteria filter dropdowns:
+- **Trigger Button (`.filter-dropdown-btn`):**
+  - Displays filter category label (e.g., `Client & Truck filters` or `Fleet filters`) with an active count badge (`.filter-badge-pill`, `background: var(--color-accent); color: #fff; font-size: 10px; font-weight: 800; border-radius: 999px; min-width: 18px; text-align: center`).
+  - Animated chevron indicator flips `180deg` on open.
+- **Menu Container (`.delivery-filter-menu`, `.truck-filter-menu`):**
+  - `position: absolute; z-index: 50; top: calc(100% + 8px); left: 0; min-width: 290px; padding: 12px; border: 1px solid var(--glass-border); border-radius: 14px; background: var(--color-surface); box-shadow: var(--glass-shadow-strong)`.
+  - Search input at the top filters list items in real time.
+- **Filter Groups:** Checkbox items with custom checkbox styling, item counts, and category headers.
+- **Footer Actions:** `Clear all` button resets active filters; `Apply` confirms selection and dismisses menu. Active filter chips are rendered outside the dropdown with removable `×` tags.
+
+---
+
+## 10. Route & Store Drop-off Sequence Timeline
+
+### 10.1 DeliveryDropoffTimeline ([src/components/delivery-dropoff-timeline.tsx](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/delivery-dropoff-timeline.tsx))
+Renders the step-by-step route sequence in detail drawers and inspectors:
+- **Timeline Rail (`.drawer-dropoff-timeline`):** Vertical rail connecting drop-off nodes with a subtle vertical line (`width: 2px; background: var(--color-border-subtle)`).
+- **Stop Node (`.drawer-dropoff-node`):** Circular numbered badge (`28px × 28px; border-radius: 50%; background: var(--color-accent); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center`).
+- **Stop Card (`.drawer-dropoff-card`):**
+  - Surface: `padding: 12px 14px; border-radius: 12px; background: var(--glass-surface-strong); border: 1px solid var(--glass-border)`.
+  - Header: Displays `Store Drop-off #N` label alongside a document badge:
+    - `✓ POD Attached`: Green pill (`rgba(16, 185, 129, 0.12)`, text `#059669`).
+    - `POD Attached • Docs Pending`: Amber pill (`rgba(245, 158, 11, 0.12)`, text `#d97706`).
+    - `Missing POD`: Grey outline pill (`var(--color-border)`, text `var(--color-text-muted)`).
+  - Body: Store name (`font-weight: 700; font-size: 13px`) and destination area (`font-size: 11.5px; color: var(--color-text-muted)`).
+  - Footer: Entry fee / gate toll indicator (`Entry fee: ₱150.00` or `None (₱0)` or `Not applicable`).
+
+---
+
+## 11. Financial Attribution & Deletion Governance
+
+### 11.1 Financial Breakdown Cards ([src/components/delivery-financial-breakdown.tsx](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/delivery-financial-breakdown.tsx))
+Provides complete unit economics attribution inside record drawers:
+- **Revenue Card:** `Delivery Revenue` with green highlight badge.
+- **Expense Grid:** Itemizes **Diesel Fuel**, **Highway Tolls**, **Store Entry Fees**, and **Crew Compensation**.
+- **Net Calculation:** Shows **Net Profit** (`Delivery Revenue - Trip Expenses`) and **Profit Margin** percentage with conditional alert coloring for negative return trips.
+
+### 11.2 Audited Deletion Dialogs ([src/components/confirm-delivery-deletion-dialog.tsx](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/confirm-delivery-deletion-dialog.tsx), `truck-profitability/page.tsx`)
+Enforces governance standards for destructive administrative actions:
+- Restricted strictly to the `admin` role via RBAC verification.
+- Renders high-contrast warning icon, item identification (waybill number or plate number), and explicit consequences notice.
+- Modal backdrop traps focus and supports `Esc` key dismissal. Action button displays loading spinner during async deletion and audit event emission.
+
 
