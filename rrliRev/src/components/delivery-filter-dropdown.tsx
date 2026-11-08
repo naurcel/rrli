@@ -24,10 +24,16 @@ export function DeliveryFilterDropdown({
   onClearAll,
   className = "",
 }: DeliveryFilterDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dropdownId = useId();
+  const [clientOpen, setClientOpen] = useState(false);
+  const [truckOpen, setTruckOpen] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+  const [truckSearch, setTruckSearch] = useState("");
+
+  const clientContainerRef = useRef<HTMLDivElement>(null);
+  const truckContainerRef = useRef<HTMLDivElement>(null);
+
+  const clientDropdownId = useId();
+  const truckDropdownId = useId();
 
   const totalActive = selectedClients.length + selectedTrucks.length;
 
@@ -41,44 +47,47 @@ export function DeliveryFilterDropdown({
     [trucks],
   );
 
-  // Search filtering with space-insensitive matching for plate numbers
-  const searchNormalized = search.trim().toLowerCase();
-  const searchClean = searchNormalized.replace(/\s+/g, "");
-
+  // Search filtering
+  const clientSearchNormalized = clientSearch.trim().toLowerCase();
   const visibleClients = useMemo(
     () =>
-      searchNormalized
-        ? clients.filter((c) => c.label.toLowerCase().includes(searchNormalized))
+      clientSearchNormalized
+        ? clients.filter((c) => c.label.toLowerCase().includes(clientSearchNormalized))
         : clients,
-    [clients, searchNormalized],
+    [clients, clientSearchNormalized],
   );
+
+  const truckSearchNormalized = truckSearch.trim().toLowerCase();
+  const truckSearchClean = truckSearchNormalized.replace(/\s+/g, "");
+
   const visibleOwnedTrucks = useMemo(
     () =>
-      searchNormalized
+      truckSearchNormalized
         ? ownedTrucks.filter((t) => {
             const labelNorm = t.label.toLowerCase();
             const labelClean = labelNorm.replace(/\s+/g, "");
             return (
-              labelNorm.includes(searchNormalized) ||
-              (searchClean.length > 0 && labelClean.includes(searchClean))
+              labelNorm.includes(truckSearchNormalized) ||
+              (truckSearchClean.length > 0 && labelClean.includes(truckSearchClean))
             );
           })
         : ownedTrucks,
-    [ownedTrucks, searchClean, searchNormalized],
+    [ownedTrucks, truckSearchClean, truckSearchNormalized],
   );
+
   const visibleSubcontractedTrucks = useMemo(
     () =>
-      searchNormalized
+      truckSearchNormalized
         ? subcontractedTrucks.filter((t) => {
             const labelNorm = t.label.toLowerCase();
             const labelClean = labelNorm.replace(/\s+/g, "");
             return (
-              labelNorm.includes(searchNormalized) ||
-              (searchClean.length > 0 && labelClean.includes(searchClean))
+              labelNorm.includes(truckSearchNormalized) ||
+              (truckSearchClean.length > 0 && labelClean.includes(truckSearchClean))
             );
           })
         : subcontractedTrucks,
-    [subcontractedTrucks, searchClean, searchNormalized],
+    [subcontractedTrucks, truckSearchClean, truckSearchNormalized],
   );
 
   // Custom typed plates that may not be in registered trucks list
@@ -96,19 +105,52 @@ export function DeliveryFilterDropdown({
     );
   }, [selectedTrucks, trucks]);
 
+  // Labels for the dropdown buttons
+  const clientTriggerLabel = useMemo(() => {
+    if (selectedClients.length === 0) return "All Clients";
+    if (selectedClients.length === 1) {
+      const match = clients.find((c) => c.id === selectedClients[0]);
+      return match?.label ?? selectedClients[0];
+    }
+    return `Clients (${selectedClients.length})`;
+  }, [clients, selectedClients]);
+
+  const truckTriggerLabel = useMemo(() => {
+    if (selectedTrucks.length === 0) return "All Trucks";
+    if (selectedTrucks.length === 1) {
+      const match = trucks.find(
+        (t) =>
+          t.id === selectedTrucks[0] ||
+          t.label.toUpperCase() === selectedTrucks[0].toUpperCase(),
+      );
+      return match?.label ?? selectedTrucks[0];
+    }
+    return `Trucks (${selectedTrucks.length})`;
+  }, [trucks, selectedTrucks]);
+
   // Close on outside click or Escape
   useEffect(() => {
-    if (!open) return;
-
     function handlePointerDown(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
+      if (
+        clientOpen &&
+        clientContainerRef.current &&
+        !clientContainerRef.current.contains(event.target as Node)
+      ) {
+        setClientOpen(false);
+      }
+      if (
+        truckOpen &&
+        truckContainerRef.current &&
+        !truckContainerRef.current.contains(event.target as Node)
+      ) {
+        setTruckOpen(false);
       }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setOpen(false);
+        setClientOpen(false);
+        setTruckOpen(false);
       }
     }
 
@@ -118,7 +160,7 @@ export function DeliveryFilterDropdown({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, [clientOpen, truckOpen]);
 
   function toggleClient(clientId: string) {
     if (selectedClients.includes(clientId)) {
@@ -143,287 +185,409 @@ export function DeliveryFilterDropdown({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`delivery-filter-dropdown-container${open ? " is-open" : ""}${className ? ` ${className}` : ""}`}
-    >
-      <button
-        type="button"
-        className={`delivery-filter-trigger ui-tooltip${totalActive > 0 ? " has-active-filters" : ""}`}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={dropdownId}
-        aria-label={totalActive > 0 ? `Filter deliveries (${totalActive} active)` : "Filter deliveries"}
-        data-tooltip={totalActive > 0 ? `Filter deliveries (${totalActive} active)` : "Filter deliveries"}
-        title={totalActive > 0 ? `Filter deliveries (${totalActive} active)` : "Filter deliveries"}
-        onClick={() => setOpen((prev) => !prev)}
+    <div className={`delivery-filter-group${className ? ` ${className}` : ""}`}>
+      {/* Client Dropdown */}
+      <div
+        ref={clientContainerRef}
+        className={`delivery-filter-dropdown-container${clientOpen ? " is-open" : ""}`}
       >
-        <span className="filter-trigger-icon" aria-hidden="true">
-          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M1.5 2.5h13l-5.2 6.1v4.7l-2.6-1.5V8.6L1.5 2.5Z" />
-          </svg>
-        </span>
-        {totalActive > 0 && (
-          <span className="filter-active-badge" aria-hidden="true">
-            {totalActive}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <div
-          id={dropdownId}
-          className="delivery-filter-popover"
-          role="dialog"
-          aria-label="Delivery filters"
+        <button
+          type="button"
+          className={`filter-dropdown-btn${selectedClients.length > 0 ? " has-active" : ""}`}
+          aria-haspopup="dialog"
+          aria-expanded={clientOpen}
+          aria-controls={clientDropdownId}
+          aria-label={
+            selectedClients.length > 0
+              ? `Filter by client: ${clientTriggerLabel}`
+              : "Filter by client"
+          }
+          onClick={() => {
+            setClientOpen((prev) => !prev);
+            setTruckOpen(false);
+          }}
         >
-          <header className="filter-popover-header">
-            <div className="filter-popover-title-row">
-              <span className="filter-popover-title">Filter by Client & Truck</span>
-              {totalActive > 0 && (
-                <button
-                  type="button"
-                  className="filter-popover-clear"
-                  onClick={handleClearAll}
-                >
-                  Clear all
-                </button>
-              )}
-            </div>
+          <span className="filter-dropdown-label">{clientTriggerLabel}</span>
+          {selectedClients.length > 1 && (
+            <span className="filter-dropdown-badge">{selectedClients.length}</span>
+          )}
+          <span className="filter-dropdown-arrow" aria-hidden="true">▾</span>
+        </button>
 
-            <div className="filter-popover-search">
-              <span className="search-icon" aria-hidden="true">⌕</span>
-              <input
-                type="search"
-                placeholder="Type plate number or client…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (visibleOwnedTrucks.length > 0) {
-                      toggleTruck(visibleOwnedTrucks[0].id);
-                    } else if (visibleSubcontractedTrucks.length > 0) {
-                      toggleTruck(visibleSubcontractedTrucks[0].id);
-                    } else if (visibleClients.length > 0) {
-                      toggleClient(visibleClients[0].id);
-                    } else if (search.trim().length >= 2) {
-                      const plate = search.trim().toUpperCase();
-                      if (!selectedTrucks.includes(plate)) {
-                        onTrucksChange([...selectedTrucks, plate]);
-                      }
-                      setSearch("");
-                    }
-                  }
-                }}
-                autoFocus
-              />
-              {search && (
-                <button
-                  type="button"
-                  className="search-clear-btn"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-
-            {search.trim().length >= 2 &&
-              !visibleOwnedTrucks.some(
-                (t) => t.label.toUpperCase() === search.trim().toUpperCase(),
-              ) &&
-              !visibleSubcontractedTrucks.some(
-                (t) => t.label.toUpperCase() === search.trim().toUpperCase(),
-              ) && (
-                <div className="filter-type-plate-action">
+        {clientOpen && (
+          <div
+            id={clientDropdownId}
+            className="delivery-filter-popover"
+            role="dialog"
+            aria-label="Filter by client"
+          >
+            <header className="filter-popover-header">
+              <div className="filter-popover-title-row">
+                <span className="filter-popover-title">Filter by Client</span>
+                {selectedClients.length > 0 && (
                   <button
                     type="button"
-                    className="filter-type-plate-btn"
-                    onClick={() => {
-                      const plate = search.trim().toUpperCase();
-                      if (!selectedTrucks.includes(plate)) {
-                        onTrucksChange([...selectedTrucks, plate]);
-                      }
-                      setSearch("");
-                    }}
+                    className="filter-popover-clear"
+                    onClick={() => onClientsChange([])}
                   >
-                    + Filter by typed plate: <strong>{search.trim().toUpperCase()}</strong>
+                    Clear
                   </button>
-                </div>
-              )}
-          </header>
-
-          <div className="filter-popover-body">
-            {/* Clients Section */}
-            <section className="filter-popover-section">
-              <div className="filter-section-header">
-                <span className="filter-section-title">Clients</span>
-                {selectedClients.length > 0 && (
-                  <span className="filter-section-count">
-                    {selectedClients.length} selected
-                  </span>
                 )}
               </div>
-              {visibleClients.length === 0 ? (
-                <div className="filter-section-empty">No clients match “{search}”</div>
-              ) : (
-                <div className="filter-options-list">
-                  {visibleClients.map((client) => {
-                    const isChecked = selectedClients.includes(client.id);
-                    return (
-                      <label
-                        key={client.id}
-                        className={`filter-option-row${isChecked ? " is-checked" : ""}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleClient(client.id)}
-                        />
-                        <span className="filter-checkbox-box" aria-hidden="true">
-                          {isChecked && (
+
+              <div className="filter-popover-search">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="search-icon"
+                  aria-hidden="true"
+                  style={{ flexShrink: 0 }}
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="search"
+                  placeholder="Search clients…"
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (visibleClients.length > 0) {
+                        toggleClient(visibleClients[0].id);
+                      }
+                    }
+                  }}
+                  autoFocus
+                />
+                {clientSearch && (
+                  <button
+                    type="button"
+                    className="search-clear-btn"
+                    onClick={() => setClientSearch("")}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </header>
+
+            <div className="filter-popover-body">
+              <section className="filter-popover-section">
+                {visibleClients.length === 0 ? (
+                  <div className="filter-section-empty">No clients match “{clientSearch}”</div>
+                ) : (
+                  <div className="filter-options-list">
+                    {visibleClients.map((client) => {
+                      const isChecked = selectedClients.includes(client.id);
+                      return (
+                        <label
+                          key={client.id}
+                          className={`filter-option-row${isChecked ? " is-checked" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleClient(client.id)}
+                          />
+                          <span className="filter-checkbox-box" aria-hidden="true">
+                            {isChecked && (
+                              <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2.5 6.2 4.8 8.5 9.5 3.5" />
+                              </svg>
+                            )}
+                          </span>
+                          <span className="filter-option-label">{client.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <footer className="filter-popover-footer">
+              <span className="filter-footer-summary">
+                {selectedClients.length === 0
+                  ? "All clients shown"
+                  : `${selectedClients.length} client${selectedClients.length === 1 ? "" : "s"} selected`}
+              </span>
+              <button
+                type="button"
+                className="filter-footer-done"
+                onClick={() => setClientOpen(false)}
+              >
+                Done
+              </button>
+            </footer>
+          </div>
+        )}
+      </div>
+
+      {/* Truck Dropdown */}
+      <div
+        ref={truckContainerRef}
+        className={`delivery-filter-dropdown-container${truckOpen ? " is-open" : ""}`}
+      >
+        <button
+          type="button"
+          className={`filter-dropdown-btn${selectedTrucks.length > 0 ? " has-active" : ""}`}
+          aria-haspopup="dialog"
+          aria-expanded={truckOpen}
+          aria-controls={truckDropdownId}
+          aria-label={
+            selectedTrucks.length > 0
+              ? `Filter by truck: ${truckTriggerLabel}`
+              : "Filter by truck"
+          }
+          onClick={() => {
+            setTruckOpen((prev) => !prev);
+            setClientOpen(false);
+          }}
+        >
+          <span className="filter-dropdown-label">{truckTriggerLabel}</span>
+          {selectedTrucks.length > 1 && (
+            <span className="filter-dropdown-badge">{selectedTrucks.length}</span>
+          )}
+          <span className="filter-dropdown-arrow" aria-hidden="true">▾</span>
+        </button>
+
+        {truckOpen && (
+          <div
+            id={truckDropdownId}
+            className="delivery-filter-popover"
+            role="dialog"
+            aria-label="Filter by truck"
+          >
+            <header className="filter-popover-header">
+              <div className="filter-popover-title-row">
+                <span className="filter-popover-title">Filter by Truck</span>
+                {selectedTrucks.length > 0 && (
+                  <button
+                    type="button"
+                    className="filter-popover-clear"
+                    onClick={() => onTrucksChange([])}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              <div className="filter-popover-search">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="search-icon"
+                  aria-hidden="true"
+                  style={{ flexShrink: 0 }}
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="search"
+                  placeholder="Type plate number…"
+                  value={truckSearch}
+                  onChange={(e) => setTruckSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (visibleOwnedTrucks.length > 0) {
+                        toggleTruck(visibleOwnedTrucks[0].id);
+                      } else if (visibleSubcontractedTrucks.length > 0) {
+                        toggleTruck(visibleSubcontractedTrucks[0].id);
+                      } else if (truckSearch.trim().length >= 2) {
+                        const plate = truckSearch.trim().toUpperCase();
+                        if (!selectedTrucks.includes(plate)) {
+                          onTrucksChange([...selectedTrucks, plate]);
+                        }
+                        setTruckSearch("");
+                      }
+                    }
+                  }}
+                  autoFocus
+                />
+                {truckSearch && (
+                  <button
+                    type="button"
+                    className="search-clear-btn"
+                    onClick={() => setTruckSearch("")}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {truckSearch.trim().length >= 2 &&
+                !visibleOwnedTrucks.some(
+                  (t) => t.label.toUpperCase() === truckSearch.trim().toUpperCase(),
+                ) &&
+                !visibleSubcontractedTrucks.some(
+                  (t) => t.label.toUpperCase() === truckSearch.trim().toUpperCase(),
+                ) && (
+                  <div className="filter-type-plate-action">
+                    <button
+                      type="button"
+                      className="filter-type-plate-btn"
+                      onClick={() => {
+                        const plate = truckSearch.trim().toUpperCase();
+                        if (!selectedTrucks.includes(plate)) {
+                          onTrucksChange([...selectedTrucks, plate]);
+                        }
+                        setTruckSearch("");
+                      }}
+                    >
+                      + Filter by typed plate: <strong>{truckSearch.trim().toUpperCase()}</strong>
+                    </button>
+                  </div>
+                )}
+            </header>
+
+            <div className="filter-popover-body">
+              <section className="filter-popover-section">
+                {/* Owned Trucks */}
+                {visibleOwnedTrucks.length > 0 && (
+                  <div className="filter-subsection">
+                    <span className="filter-subsection-label">Owned Fleet</span>
+                    <div className="filter-options-list">
+                      {visibleOwnedTrucks.map((truck) => {
+                        const isChecked = selectedTrucks.includes(truck.id);
+                        return (
+                          <label
+                            key={truck.id}
+                            className={`filter-option-row${isChecked ? " is-checked" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleTruck(truck.id)}
+                            />
+                            <span className="filter-checkbox-box" aria-hidden="true">
+                              {isChecked && (
+                                <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M2.5 6.2 4.8 8.5 9.5 3.5" />
+                                </svg>
+                              )}
+                            </span>
+                            <span className="filter-option-label">{truck.label}</span>
+                            <span className="filter-option-tag owned">Owned</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Subcontracted Trucks */}
+                {visibleSubcontractedTrucks.length > 0 && (
+                  <div className="filter-subsection">
+                    <span className="filter-subsection-label">Subcontracted</span>
+                    <div className="filter-options-list">
+                      {visibleSubcontractedTrucks.map((truck) => {
+                        const isChecked = selectedTrucks.includes(truck.id);
+                        return (
+                          <label
+                            key={truck.id}
+                            className={`filter-option-row${isChecked ? " is-checked" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleTruck(truck.id)}
+                            />
+                            <span className="filter-checkbox-box" aria-hidden="true">
+                              {isChecked && (
+                                <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M2.5 6.2 4.8 8.5 9.5 3.5" />
+                                </svg>
+                              )}
+                            </span>
+                            <span className="filter-option-label">{truck.label}</span>
+                            <span className="filter-option-tag subcontracted">Subcon</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Typed Plates */}
+                {customSelectedPlates.length > 0 && (
+                  <div className="filter-subsection">
+                    <span className="filter-subsection-label">Custom Typed Plates</span>
+                    <div className="filter-options-list">
+                      {customSelectedPlates.map((plate) => (
+                        <label key={plate} className="filter-option-row is-checked">
+                          <input
+                            type="checkbox"
+                            checked={true}
+                            onChange={() =>
+                              onTrucksChange(selectedTrucks.filter((p) => p !== plate))
+                            }
+                          />
+                          <span className="filter-checkbox-box" aria-hidden="true">
                             <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M2.5 6.2 4.8 8.5 9.5 3.5" />
                             </svg>
-                          )}
-                        </span>
-                        <span className="filter-option-label">{client.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            {/* Trucks Section */}
-            <section className="filter-popover-section">
-              <div className="filter-section-header">
-                <span className="filter-section-title">Trucks</span>
-                {selectedTrucks.length > 0 && (
-                  <span className="filter-section-count">
-                    {selectedTrucks.length} selected
-                  </span>
+                          </span>
+                          <span className="filter-option-label">{plate}</span>
+                          <span className="filter-option-tag custom">Typed</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </div>
 
-              {/* Owned Trucks */}
-              {visibleOwnedTrucks.length > 0 && (
-                <div className="filter-subsection">
-                  <span className="filter-subsection-label">Owned Fleet</span>
-                  <div className="filter-options-list">
-                    {visibleOwnedTrucks.map((truck) => {
-                      const isChecked = selectedTrucks.includes(truck.id);
-                      return (
-                        <label
-                          key={truck.id}
-                          className={`filter-option-row${isChecked ? " is-checked" : ""}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggleTruck(truck.id)}
-                          />
-                          <span className="filter-checkbox-box" aria-hidden="true">
-                            {isChecked && (
-                              <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M2.5 6.2 4.8 8.5 9.5 3.5" />
-                              </svg>
-                            )}
-                          </span>
-                          <span className="filter-option-label">{truck.label}</span>
-                          <span className="filter-option-tag owned">Owned</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                {visibleOwnedTrucks.length === 0 && visibleSubcontractedTrucks.length === 0 && (
+                  <div className="filter-section-empty">No trucks match “{truckSearch}”</div>
+                )}
+              </section>
+            </div>
 
-              {/* Subcontracted Trucks */}
-              {visibleSubcontractedTrucks.length > 0 && (
-                <div className="filter-subsection">
-                  <span className="filter-subsection-label">Subcontracted</span>
-                  <div className="filter-options-list">
-                    {visibleSubcontractedTrucks.map((truck) => {
-                      const isChecked = selectedTrucks.includes(truck.id);
-                      return (
-                        <label
-                          key={truck.id}
-                          className={`filter-option-row${isChecked ? " is-checked" : ""}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggleTruck(truck.id)}
-                          />
-                          <span className="filter-checkbox-box" aria-hidden="true">
-                            {isChecked && (
-                              <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M2.5 6.2 4.8 8.5 9.5 3.5" />
-                              </svg>
-                            )}
-                          </span>
-                          <span className="filter-option-label">{truck.label}</span>
-                          <span className="filter-option-tag subcontracted">Subcon</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Custom Typed Plates */}
-              {customSelectedPlates.length > 0 && (
-                <div className="filter-subsection">
-                  <span className="filter-subsection-label">Custom Typed Plates</span>
-                  <div className="filter-options-list">
-                    {customSelectedPlates.map((plate) => (
-                      <label key={plate} className="filter-option-row is-checked">
-                        <input
-                          type="checkbox"
-                          checked={true}
-                          onChange={() =>
-                            onTrucksChange(selectedTrucks.filter((p) => p !== plate))
-                          }
-                        />
-                        <span className="filter-checkbox-box" aria-hidden="true">
-                          <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M2.5 6.2 4.8 8.5 9.5 3.5" />
-                          </svg>
-                        </span>
-                        <span className="filter-option-label">{plate}</span>
-                        <span className="filter-option-tag custom">Typed</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {visibleOwnedTrucks.length === 0 && visibleSubcontractedTrucks.length === 0 && (
-                <div className="filter-section-empty">No trucks match “{search}”</div>
-              )}
-            </section>
+            <footer className="filter-popover-footer">
+              <span className="filter-footer-summary">
+                {selectedTrucks.length === 0
+                  ? "All trucks shown"
+                  : `${selectedTrucks.length} truck${selectedTrucks.length === 1 ? "" : "s"} selected`}
+              </span>
+              <button
+                type="button"
+                className="filter-footer-done"
+                onClick={() => setTruckOpen(false)}
+              >
+                Done
+              </button>
+            </footer>
           </div>
+        )}
+      </div>
 
-          <footer className="filter-popover-footer">
-            <span className="filter-footer-summary">
-              {totalActive === 0
-                ? "Showing all deliveries"
-                : `${totalActive} filter${totalActive === 1 ? "" : "s"} active`}
-            </span>
-            <button
-              type="button"
-              className="filter-footer-done"
-              onClick={() => setOpen(false)}
-            >
-              Done
-            </button>
-          </footer>
-        </div>
+      {/* Clear all active filters */}
+      {totalActive > 0 && (
+        <button
+          type="button"
+          className="filter-clear-action-btn"
+          onClick={handleClearAll}
+          title="Clear all active filters"
+        >
+          Clear filters
+        </button>
       )}
     </div>
   );
 }
-

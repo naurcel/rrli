@@ -98,23 +98,26 @@ export const FLEET_TRUCKS: readonly FleetTruck[] = [
 ];
 
 export const dynamicFleetTrucks: FleetTruck[] = [];
+export const deletedTruckPlateNumbers = new Set<string>();
 
 export function getFleetTrucks(): readonly FleetTruck[] {
-  return [...FLEET_TRUCKS, ...dynamicFleetTrucks];
+  return [...FLEET_TRUCKS, ...dynamicFleetTrucks].filter(
+    (t) => !deletedTruckPlateNumbers.has(t.plateNumber.toUpperCase()),
+  );
 }
 
 export function getOwnedTrucks(): readonly FleetTruck[] {
   return [
     ...OWNED_TRUCKS,
     ...dynamicFleetTrucks.filter((truck) => truck.ownershipType === "Owned"),
-  ];
+  ].filter((t) => !deletedTruckPlateNumbers.has(t.plateNumber.toUpperCase()));
 }
 
 export function getSubcontractedTrucks(): readonly FleetTruck[] {
   return [
     ...SUBCONTRACTED_TRUCKS,
     ...dynamicFleetTrucks.filter((truck) => truck.ownershipType === "Subcontracted"),
-  ];
+  ].filter((t) => !deletedTruckPlateNumbers.has(t.plateNumber.toUpperCase()));
 }
 
 export function registerFleetTruck(truck: FleetTruck): { ok: true; truck: FleetTruck } | { ok: false; error: string } {
@@ -135,9 +138,30 @@ export function registerFleetTruck(truck: FleetTruck): { ok: true; truck: FleetT
     plateNumber: normalizedPlate,
   };
   dynamicFleetTrucks.push(registered);
+  deletedTruckPlateNumbers.delete(normalizedPlate);
   return { ok: true, truck: registered };
+}
+
+export function deleteFleetTruck(identifier: string): { ok: true } | { ok: false; error: string } {
+  const normalized = identifier.trim().toUpperCase();
+  const all = [...FLEET_TRUCKS, ...dynamicFleetTrucks];
+  const target = all.find(
+    (t) => t.id === identifier || t.plateNumber.toUpperCase() === normalized,
+  );
+  if (!target || deletedTruckPlateNumbers.has(target.plateNumber.toUpperCase())) {
+    return { ok: false, error: "TRUCK_NOT_FOUND" };
+  }
+  deletedTruckPlateNumbers.add(target.plateNumber.toUpperCase());
+  const dynIndex = dynamicFleetTrucks.findIndex(
+    (t) => t.id === target.id || t.plateNumber.toUpperCase() === target.plateNumber.toUpperCase(),
+  );
+  if (dynIndex >= 0) {
+    dynamicFleetTrucks.splice(dynIndex, 1);
+  }
+  return { ok: true };
 }
 
 export function resetDynamicFleetTrucks(): void {
   dynamicFleetTrucks.length = 0;
+  deletedTruckPlateNumbers.clear();
 }

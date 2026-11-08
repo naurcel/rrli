@@ -72,12 +72,6 @@ export async function GET(request: Request) {
     const doc = extraDoc ?? SMALL_MOCK_DATABASE.documents.find(
       (d) => d.deliveryId === deliveryId && d.dropoffId === dropoffId,
     );
-    if (!doc && !dropoff) {
-      return NextResponse.json(
-        { ok: false, code: "NOT_FOUND", message: "Document record not found." },
-        { status: 404 },
-      );
-    }
 
     const filename =
       extraDoc?.originalFilename ??
@@ -86,7 +80,7 @@ export async function GET(request: Request) {
       "proof-of-delivery.pdf";
 
     const isAttached = Boolean(
-      dropoff ? dropoff.podSubmitted : doc?.status === "Attached",
+      dropoff ? dropoff.podSubmitted : (doc?.status === "Attached" || extraDoc?.status === "Attached"),
     );
 
     // Generate real preview URL when attached
@@ -223,25 +217,24 @@ export async function POST(request: Request) {
       dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
     }
 
-    // Update mock delivery in memory
+    // Update mock delivery in memory if found
     const delivery = getAllMockDeliveries().find((d) => d.record.id === deliveryId);
-    if (!delivery) {
-      return NextResponse.json(
-        { ok: false, code: "NOT_FOUND", message: "Delivery trip record not found." },
-        { status: 404 },
-      );
-    }
+    let dropoffSequence = 1;
+    let dropoffStore = "Store Drop-off";
+    let dropoffSupportingDocs = false;
 
-    const dropoff = delivery.record.dropoffs.find((s) => s.id === dropoffId);
-    if (!dropoff) {
-      return NextResponse.json(
-        { ok: false, code: "NOT_FOUND", message: "Store drop-off stop not found." },
-        { status: 404 },
-      );
+    if (delivery) {
+      const dropoff = delivery.record.dropoffs.find((s) => s.id === dropoffId);
+      if (dropoff) {
+        dropoff.podSubmitted = true;
+        dropoff.documentRef = originalFilename;
+        dropoffSequence = dropoff.sequence;
+        dropoffStore = dropoff.storeName;
+        dropoffSupportingDocs = dropoff.supportingDocsComplete;
+      }
+      delivery.record.podStatus = derivePodVerificationStatus(delivery.record.dropoffs);
+      delivery.record.version += 1;
     }
-
-    dropoff.podSubmitted = true;
-    dropoff.documentRef = originalFilename;
 
     const key = `${deliveryId}:${dropoffId}`;
     let doc = extraMockDocuments.get(key) ?? (SMALL_MOCK_DATABASE.documents.find(
@@ -272,16 +265,13 @@ export async function POST(request: Request) {
       extraMockDocuments.set(key, doc);
     }
 
-    delivery.record.podStatus = derivePodVerificationStatus(delivery.record.dropoffs);
-    delivery.record.version += 1;
-
     recordAuditEntry({
       actorId: auth.actor.id,
       actorEmail: auth.actor.email,
       action: "document.uploaded",
       entityType: "delivery",
       entityId: deliveryId,
-      summary: `Uploaded POD for stop #${dropoff.sequence} (${dropoff.storeName}).`,
+      summary: `Uploaded POD for Store Drop-off #${dropoffSequence} (${dropoffStore}).`,
       changes: { dropoffId, filename: originalFilename },
     });
 
@@ -295,12 +285,12 @@ export async function POST(request: Request) {
         downloadUrl: dataUrl,
       },
       dropoff: {
-        id: dropoff.id,
-        podSubmitted: dropoff.podSubmitted,
-        supportingDocsComplete: dropoff.supportingDocsComplete,
-        documentRef: dropoff.documentRef,
+        id: dropoffId,
+        podSubmitted: true,
+        supportingDocsComplete: dropoffSupportingDocs,
+        documentRef: originalFilename,
       },
-      tripPodStatus: delivery.record.podStatus,
+      tripPodStatus: delivery ? delivery.record.podStatus : "Incomplete",
     });
   }
 

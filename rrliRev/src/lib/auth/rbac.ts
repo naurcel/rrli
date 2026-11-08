@@ -196,6 +196,10 @@ export function canManageTrucks(role: UserRole): boolean {
   return hasPermission(role, "profitability:manage");
 }
 
+export function canManageDrivers(role: UserRole): boolean {
+  return canMutateDeliveryRecords(role);
+}
+
 export function canManageReportTemplates(role: UserRole): boolean {
   return hasPermission(role, "reports:manage_templates");
 }

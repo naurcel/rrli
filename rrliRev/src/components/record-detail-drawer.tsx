@@ -7,6 +7,8 @@ export type DetailSection = {
   title: string;
   eyebrow?: string;
   fullWidth?: boolean;
+  rowSpan?: 1 | 2;
+  className?: string;
   rows?: readonly {
     label: string;
     value: string;
@@ -132,7 +134,7 @@ export function RecordDetailDrawer({
         <div className="record-detail-content">
           {sections.map((section) => (
             <section
-              className={`record-detail-section${section.fullWidth ? " full-width" : ""}`}
+              className={`record-detail-section${section.fullWidth ? " full-width" : ""}${section.rowSpan === 2 ? " row-span-2" : ""}${section.className ? ` ${section.className}` : ""}`}
               key={section.title}
             >
               {section.eyebrow ? <p className="record-detail-section-eyebrow">{section.eyebrow}</p> : null}

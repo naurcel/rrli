@@ -1,29 +1,62 @@
 "use client";
 
 import Link from "next/link";
-import { use, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { use, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { useAuthenticatedActor } from "@/components/auth-context";
+import { DeliveryCrewSection, parsePersonnelNames } from "@/components/delivery-crew-section";
+import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline";
+import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
+import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
+import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
+import {
+  RecordDetailDrawer,
+  type DetailSection,
+} from "@/components/record-detail-drawer";
 import {
   formatDateRange,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { TruckPhoto } from "@/components/truck-photo";
-import { summarizeTruckProfitability } from "@/features/deliveries/delivery-domain";
+import {
+  summarizeTruckProfitability,
+  type ExpenseResolutionStatus,
+} from "@/features/deliveries/delivery-domain";
+import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
   getFleetTrucks,
   getTruckStorageCapability,
 } from "@/features/deliveries/truck-registry";
-import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
+import {
+  deleteBrowserPreviewTruck,
+  readBrowserPreviewTrucks,
+} from "@/features/deliveries/browser-preview-trucks";
+import { upsertBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
+import { canManageDocuments } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
+
+function formatExpenseResolution(
+  value: number | null | undefined,
+  status: ExpenseResolutionStatus | null | undefined,
+): string {
+  if (status === "not_applicable") return "N/A";
+  if (status === "unknown" || value == null || !Number.isFinite(value)) return "Unknown (Pending)";
+  return `${formatPeso(value)} · Confirmed`;
+}
 
 export default function TruckProfilePage({
   params,
 }: {
   params: Promise<{ plate: string }>;
 }) {
+  const router = useRouter();
+  const actor = useAuthenticatedActor();
   const { plate } = use(params);
   let decodedPlate = plate;
   try {
@@ -35,19 +68,125 @@ export default function TruckProfilePage({
   const { range } = useGlobalDateRange();
   const { deliveries, loading, error } = usePersistedDeliveries(range);
   const [historySort, setHistorySort] = useState<{ key: string; direction: TableSortDirection }>({ key: "date", direction: "desc" });
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [selectedTrip, setSelectedTrip] = useState<DeliveryLedgerItem | null>(null);
+
+  const drawerSections: DetailSection[] = useMemo(() => {
+    if (!selectedTrip) return [];
+
+    const driverCount = parsePersonnelNames(selectedTrip.driverName).length;
+    const helperCount = parsePersonnelNames(selectedTrip.helperName).length;
+
+    return [
+      {
+        title: "Delivery Overview",
+        eyebrow: "Trip details",
+        rows: [
+          { label: "Waybill Number", value: selectedTrip.waybillNumber },
+          { label: "Delivery Date", value: selectedTrip.deliveryDate },
+          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const }] : []),
+          { label: "Client Account", value: selectedTrip.clientName },
+          { label: "Origin Hub", value: selectedTrip.origin },
+          { label: "Distance", value: `${selectedTrip.distanceKm} km` },
+          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L` },
+          { label: "Delivery Status", value: selectedTrip.deliveryStatus || "Completed" },
+        ],
+      },
+      {
+        title: "Assigned Vehicle",
+        eyebrow: "Fleet Asset",
+        customContent: (
+          <DeliveryTruckInfoSection
+            plateNumber={selectedTrip.plateNumber}
+            truckType={selectedTrip.truckType}
+            truckTemperature={selectedTrip.truckTemperature}
+            truckOwnership={selectedTrip.truckOwnership}
+            rateBasis={selectedTrip.rateBasis}
+          />
+        ),
+      },
+      {
+        title: `Crew Assignment (${driverCount} Driver${driverCount === 1 ? "" : "s"} · ${helperCount} Helper${helperCount === 1 ? "" : "s"})`,
+        eyebrow: "Dispatch Personnel",
+        fullWidth: true,
+        customContent: (
+          <DeliveryCrewSection
+            driverName={selectedTrip.driverName}
+            helperName={selectedTrip.helperName}
+            driverRateText={`${formatExpenseResolution(selectedTrip.expenses.driverDailyRate, selectedTrip.expenseStates?.driverDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.driverAllowance, selectedTrip.expenseStates?.driverAllowance)}`}
+            helperRateText={`${formatExpenseResolution(selectedTrip.expenses.helperDailyRate, selectedTrip.expenseStates?.helperDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.helperAllowance, selectedTrip.expenseStates?.helperAllowance)}`}
+          />
+        ),
+      },
+      {
+        title: `Route & Store Drop-offs (${selectedTrip.dropoffs.length} ${selectedTrip.dropoffs.length === 1 ? "drop-off" : "drop-offs"})`,
+        eyebrow: "Store drop-off sequence & documents",
+        fullWidth: true,
+        customContent: <DeliveryDropoffTimeline dropoffs={selectedTrip.dropoffs} />,
+      },
+      {
+        title: "Financial Breakdown",
+        eyebrow: "Revenue, expenses, and profitability",
+        fullWidth: true,
+        customContent: <DeliveryFinancialBreakdown trip={selectedTrip} />,
+      },
+      {
+        title: "POD & Supporting Documents",
+        eyebrow: "Stop-level files",
+        fullWidth: true,
+        description: "Attach or view POD documents for each drop-off. Click 'Pending upload' to attach files inline.",
+        customContent: (
+          <DeliveryPodDocuments
+            trip={selectedTrip}
+            canVerify={canManageDocuments(actor.role)}
+            roleLabel={actor.roleLabel}
+            onTripChange={(nextTrip) => {
+              const updated = { ...selectedTrip, ...nextTrip };
+              upsertBrowserPreviewDelivery(updated);
+              setSelectedTrip(updated);
+            }}
+          />
+        ),
+      },
+    ];
+  }, [actor.role, actor.roleLabel, selectedTrip]);
 
   const truckTrips = useMemo(
     () =>
       deliveries.filter(
-        (trip) => trip.plateNumber.toUpperCase() === normalizedPlate,
+        (trip) =>
+          trip.plateNumber.trim().replace(/\s+/g, " ").toUpperCase() === normalizedPlate ||
+          trip.plateNumber.replace(/\s+/g, "").toUpperCase() === normalizedPlate.replace(/\s+/g, ""),
       ),
     [deliveries, normalizedPlate],
+  );
+
+  const totalDropoffsCount = useMemo(
+    () => truckTrips.reduce((sum, trip) => sum + (trip.dropoffs?.length ?? 0), 0),
+    [truckTrips],
+  );
+
+  const finalizedTripsCount = useMemo(
+    () => truckTrips.filter((t) => t.financialState === "finalized").length,
+    [truckTrips],
+  );
+
+  const pendingRevenue = useMemo(
+    () =>
+      truckTrips
+        .filter((t) => t.financialState !== "finalized")
+        .reduce((sum, trip) => sum + (trip.deliveryRate ?? 0), 0),
+    [truckTrips],
   );
 
   const truck = useMemo(
     () =>
       summarizeTruckProfitability(deliveries).find(
-        (summary) => summary.plateNumber.toUpperCase() === normalizedPlate,
+        (summary) =>
+          summary.plateNumber.trim().replace(/\s+/g, " ").toUpperCase() === normalizedPlate ||
+          summary.plateNumber.replace(/\s+/g, "").toUpperCase() === normalizedPlate.replace(/\s+/g, ""),
       ) ?? null,
     [deliveries, normalizedPlate],
   );
@@ -57,17 +196,44 @@ export default function TruckProfilePage({
     return all.find((candidate) => candidate.plateNumber.toUpperCase() === normalizedPlate) ?? null;
   }, [normalizedPlate]);
 
-  const activeTruck = truck ?? (registeredTruck ? {
-    plateNumber: registeredTruck.plateNumber,
-    truckType: registeredTruck.truckType,
-    completedTrips: 0,
-    totalEarnings: 0,
-    totalExpenses: 0,
-    netProfit: 0,
-    marginPercent: null,
-    totalStoresServed: 0,
-    totalDistanceKm: 0,
-  } : null);
+  const activeTruck = useMemo(() => {
+    if (truck) {
+      return {
+        ...truck,
+        completedTrips: Math.max(truck.completedTrips, truckTrips.length),
+        totalStoresServed: Math.max(truck.totalStoresServed, totalDropoffsCount),
+      };
+    }
+    if (truckTrips.length > 0) {
+      const finalized = truckTrips.filter((t) => t.financialState === "finalized");
+      const totalEarnings = finalized.reduce((sum, trip) => sum + (trip.deliveryRate ?? 0), 0);
+      const totalExpenses = finalized.reduce((sum, trip) => sum + (trip.totalExpenses ?? 0), 0);
+      const netProfit = totalEarnings - totalExpenses;
+      const totalDistance = truckTrips.reduce((sum, trip) => sum + (trip.distanceKm ?? 0), 0);
+      return {
+        plateNumber: normalizedPlate,
+        truckType: truckTrips[0]?.truckType ?? registeredTruck?.truckType ?? "6-Wheeler",
+        completedTrips: truckTrips.length,
+        totalEarnings,
+        totalExpenses,
+        netProfit,
+        marginPercent: totalEarnings > 0 ? (netProfit / totalEarnings) * 100 : null,
+        totalStoresServed: totalDropoffsCount,
+        totalDistanceKm: totalDistance,
+      };
+    }
+    return registeredTruck ? {
+      plateNumber: registeredTruck.plateNumber,
+      truckType: registeredTruck.truckType,
+      completedTrips: 0,
+      totalEarnings: 0,
+      totalExpenses: 0,
+      netProfit: 0,
+      marginPercent: null,
+      totalStoresServed: 0,
+      totalDistanceKm: 0,
+    } : null;
+  }, [truck, truckTrips, totalDropoffsCount, normalizedPlate, registeredTruck]);
 
   const sortedTruckTrips = useMemo(() => {
     const multiplier = historySort.direction === "asc" ? 1 : -1;
@@ -88,6 +254,55 @@ export default function TruckProfilePage({
       return compared * multiplier || left.id.localeCompare(right.id);
     });
   }, [historySort, truckTrips]);
+
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PAGE_SIZE = 10;
+  const historyPageCount = Math.max(1, Math.ceil(sortedTruckTrips.length / HISTORY_PAGE_SIZE));
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [range, historySort, normalizedPlate]);
+
+  const paginatedTruckTrips = useMemo(() => {
+    const start = (historyPage - 1) * HISTORY_PAGE_SIZE;
+    return sortedTruckTrips.slice(start, start + HISTORY_PAGE_SIZE);
+  }, [sortedTruckTrips, historyPage]);
+
+  async function handleDeleteTruck() {
+    if (!activeTruck) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const browserLocal = readBrowserPreviewTrucks().some(
+        (truck) => truck.plateNumber.toUpperCase() === activeTruck.plateNumber.toUpperCase(),
+      );
+      const deleteParams = new URLSearchParams({
+        plateNumber: activeTruck.plateNumber,
+        ...(browserLocal ? { browserLocal: "true" } : {}),
+      });
+      const response = await fetch(`/api/trucks?${deleteParams.toString()}`, {
+        method: "DELETE",
+        headers: {
+          "x-actor-role": actor.role,
+          "x-actor-username": actor.username,
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.message || "Failed to delete truck.");
+      }
+
+      deleteBrowserPreviewTruck(activeTruck.plateNumber);
+      router.push("/truck-profitability");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete truck.");
+      setIsDeleting(false);
+    }
+  }
 
   return (
     <>
@@ -116,7 +331,7 @@ export default function TruckProfilePage({
           </section>
         ) : (
           <>
-            <header className="page-intro truck-profile-page-intro">
+            <header className="page-intro truck-profile-page-intro" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <h1>{activeTruck.plateNumber}</h1>
                 <div className="truck-profile-subtitle-wrap">
@@ -138,6 +353,30 @@ export default function TruckProfilePage({
                   </span>
                 </div>
               </div>
+
+              {actor.role === "admin" && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{
+                    borderColor: "rgba(220, 38, 38, 0.3)",
+                    color: "#dc2626",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 14px",
+                  }}
+                  onClick={() => setIsDeleteModalOpen(true)}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                  Delete Truck
+                </button>
+              )}
             </header>
 
             <section className="truck-profile-hero" aria-label="Truck profile overview">
@@ -153,17 +392,40 @@ export default function TruckProfilePage({
                   </div>
                 </div>
                 <div className="truck-performance-kpis" aria-label="Truck performance metrics">
-                  <article className="stat-card"><span className="stat-label">Total deliveries</span><strong>{activeTruck.completedTrips}</strong></article>
-                  <article className="stat-card"><span className="stat-label">Store drop-offs</span><strong>{activeTruck.totalStoresServed}</strong></article>
-                  <article className="stat-card"><span className="stat-label">Revenue</span><strong>{formatPeso(activeTruck.totalEarnings)}</strong></article>
-                  <article className="stat-card"><span className="stat-label">Total expenses</span><strong>{formatPeso(activeTruck.totalExpenses)}</strong></article>
-                  <article className="stat-card"><span className="stat-label">Net profit</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPeso(activeTruck.netProfit)}</strong></article>
-                  <article className="stat-card"><span className="stat-label">Profit margin</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPercent(activeTruck.marginPercent)}</strong></article>
+                  <article
+                    className="stat-card"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      document.getElementById("truck-delivery-history")?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    title="Click to view delivery history below"
+                  >
+                    <span className="stat-label">TOTAL DELIVERIES</span>
+                    <strong>{activeTruck.completedTrips}</strong>
+                    {finalizedTripsCount < truckTrips.length ? (
+                      <span className="stat-meta" style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>
+                        {finalizedTripsCount} finalized
+                      </span>
+                    ) : null}
+                  </article>
+                  <article className="stat-card"><span className="stat-label">STORE DROP-OFFS</span><strong>{activeTruck.totalStoresServed}</strong></article>
+                  <article className="stat-card">
+                    <span className="stat-label">DELIVERY REVENUE</span>
+                    <strong>{formatPeso(activeTruck.totalEarnings)}</strong>
+                    {pendingRevenue > 0 ? (
+                      <span className="stat-meta" style={{ display: "block", fontSize: "11px", color: "var(--color-accent, #d97706)", marginTop: "2px", fontWeight: 500 }}>
+                        + {formatPeso(pendingRevenue)} pending
+                      </span>
+                    ) : null}
+                  </article>
+                  <article className="stat-card"><span className="stat-label">TRIP EXPENSES</span><strong>{formatPeso(activeTruck.totalExpenses)}</strong></article>
+                  <article className="stat-card"><span className="stat-label">NET PROFIT</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPeso(activeTruck.netProfit)}</strong></article>
+                  <article className="stat-card"><span className="stat-label">PROFIT MARGIN</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPercent(activeTruck.marginPercent)}</strong></article>
                 </div>
               </article>
             </section>
 
-            <section className="records-card truck-profile-deliveries" aria-label="Truck delivery history">
+            <section className="records-card truck-profile-deliveries" id="truck-delivery-history" aria-label="Truck delivery history">
               <div className="records-heading">
                 <div>
                   <h2>Delivery History</h2>
@@ -182,33 +444,212 @@ export default function TruckProfilePage({
                       <tr>
                         <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Client" sortKey="client" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Store Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Delivery Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Trip Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedTruckTrips.map((trip) => (
-                        <tr key={trip.id}>
-                          <td><strong>{trip.waybillNumber}</strong><br /><small>{trip.deliveryDate}</small></td>
-                          <td>{trip.clientName}</td>
-                          <td>{trip.dropoffs.length} stores</td>
-                          <td>{trip.distanceKm} km</td>
-                          <td className="money">{formatPeso(trip.deliveryRate)}</td>
-                          <td>{formatPeso(trip.totalExpenses)}</td>
-                          <td className="money">{formatPeso(trip.netIncome)}</td>
-                        </tr>
-                      ))}
+                      {paginatedTruckTrips.map((trip) => {
+                        const isIncomplete = trip.financialState === "incomplete";
+                        return (
+                          <tr
+                            key={trip.id}
+                            className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
+                            tabIndex={0}
+                            onClick={() => setSelectedTrip(trip)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedTrip(trip);
+                              }
+                            }}
+                            title={`Click to view delivery details for waybill ${trip.waybillNumber}`}
+                          >
+                            <td>
+                              <strong className="record-link">#{trip.waybillNumber}</strong>
+                              <br />
+                              <small>{trip.deliveryDate}</small>
+                            </td>
+                            <td>{trip.clientName}</td>
+                            <td>{trip.dropoffs.length} drop-offs</td>
+                            <td>{trip.distanceKm} km</td>
+                            <td className="money">{formatPeso(trip.deliveryRate)}</td>
+                            <td>{formatPeso(trip.totalExpenses)}</td>
+                            <td className="money">{formatPeso(trip.netIncome)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
+              {sortedTruckTrips.length > 0 ? (
+                <TablePagination
+                  page={historyPage}
+                  pageCount={historyPageCount}
+                  totalItems={sortedTruckTrips.length}
+                  pageSize={HISTORY_PAGE_SIZE}
+                  onPageChange={setHistoryPage}
+                  itemLabel="deliveries"
+                  itemCountInPage={paginatedTruckTrips.length}
+                />
+              ) : null}
             </section>
           </>
         )}
       </div>
+
+      <RecordDetailDrawer
+        open={Boolean(selectedTrip)}
+        eyebrow={selectedTrip ? `WAYBILL #${selectedTrip.waybillNumber}` : ""}
+        title={selectedTrip ? selectedTrip.clientName : ""}
+        statusLabel={selectedTrip?.deliveryStatus || "Completed"}
+        statusTone="success"
+        sections={drawerSections}
+        footer={
+          selectedTrip ? (
+            <div style={{ display: "flex", gap: "10px", width: "100%", justifyContent: "flex-end" }}>
+              <Link
+                href={`/deliveries?q=${encodeURIComponent(selectedTrip.waybillNumber || "")}`}
+                className="secondary-button"
+                style={{
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  minHeight: "36px",
+                  fontSize: "12px",
+                }}
+              >
+                Open in Deliveries Ledger →
+              </Link>
+            </div>
+          ) : null
+        }
+        onClose={() => setSelectedTrip(null)}
+      />
+
+      {isDeleteModalOpen && activeTruck && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-truck-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div className="routex-dialog-backdrop" onClick={() => !isDeleting && setIsDeleteModalOpen(false)} />
+              <div className="routex-dialog" style={{ maxWidth: "460px" }}>
+                <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
+                  <div>
+                    <h2 id="delete-truck-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
+                      Confirm Truck Deletion
+                    </h2>
+                    <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
+                      This deletion decision requires explicit confirmation and will be logged.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="routex-dialog-close"
+                    aria-label="Close confirmation dialog"
+                    disabled={isDeleting}
+                    onClick={() => setIsDeleteModalOpen(false)}
+                  >
+                    ×
+                  </button>
+                </header>
+
+                <div className="routex-dialog-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {deleteError && (
+                    <div className="notice" role="alert" style={{ marginBottom: "0" }}>
+                      <span className="notice-icon" aria-hidden="true">!</span>
+                      <div>
+                        <strong>Error:</strong>
+                        <span>{deleteError}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)" }}>
+                    Are you sure you want to delete truck <strong>{activeTruck.plateNumber}</strong> ({activeTruck.truckType}) from the fleet registry?
+                  </p>
+
+                  <div
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      background: "var(--color-surface-subtle)",
+                      border: "1px solid var(--color-border)",
+                      fontSize: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>Plate Number: </span>
+                      <strong>{activeTruck.plateNumber}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>Vehicle Type: </span>
+                      <span>{activeTruck.truckType}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>Completed Deliveries: </span>
+                      <span>{activeTruck.completedTrips}</span>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "6px",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      color: "#dc2626",
+                      fontSize: "11px",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <strong>Warning:</strong> Deleting this vehicle removes it from active fleet selection and registers an admin audit entry.
+                  </div>
+                </div>
+
+                <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={isDeleting}
+                    onClick={() => setIsDeleteModalOpen(false)}
+                    style={{ minHeight: "38px", padding: "0 16px", fontSize: "13px" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-action-button"
+                    disabled={isDeleting}
+                    onClick={handleDeleteTruck}
+                    style={{
+                      minHeight: "38px",
+                      padding: "0 16px",
+                      fontSize: "13px",
+                      background: "#dc2626",
+                      borderColor: "#dc2626",
+                      color: "#ffffff",
+                    }}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete Truck"}
+                  </button>
+                </footer>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }

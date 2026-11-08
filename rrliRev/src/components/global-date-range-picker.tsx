@@ -116,7 +116,7 @@ export function GlobalDateRangeProvider({ children }: { children: ReactNode }) {
       memoryInitialized = true;
       return stored;
     }
-    const fallback = presetRange("last7");
+    const fallback = presetRange("all");
     memoryCachedRange = fallback;
     return fallback;
   });
@@ -197,39 +197,21 @@ export function GlobalDateRangePicker() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  // Calendar month state
-  const [month, setMonth] = useState(() => new Date(2026, 10, 1)); // Default to Nov 2026
-  const [viewMode, setViewMode] = useState<"days" | "months" | "years">("days");
+  const [month, setMonth] = useState(() => new Date(2026, 10, 1));
+  const [viewMode, setViewMode] = useState<"days" | "months">("days");
 
   const { range, setRange } = useGlobalDateRange();
   const [draftStart, setDraftStart] = useState<Date | null>(range.startDate);
   const [draftEnd, setDraftEnd] = useState<Date | null>(range.endDate);
-  const [hoverDate, setHoverDate] = useState<Date | null>(null);
-
-  // Available years for dropdown selection
-  const yearOptions = useMemo(() => {
-    const current = month.getFullYear();
-    const min = Math.min(2020, current);
-    const max = Math.max(2032, current);
-    return Array.from({ length: max - min + 1 }, (_, i) => min + i);
-  }, [month]);
-
-  // Year decade block for years view
-  const decadeStart = Math.floor(month.getFullYear() / 12) * 12;
-  const decadeYears = useMemo(() => {
-    return Array.from({ length: 12 }, (_, i) => decadeStart + i);
-  }, [decadeStart]);
 
   const closePopover = (restoreFocus = false) => {
     setOpen(false);
     setIsClosing(true);
-    setHoverDate(null);
     if (restoreFocus) {
       triggerRef.current?.focus();
     }
   };
 
-  // Sync draft states when range changes
   useEffect(() => {
     setMonth(startOfDay(new Date()));
   }, []);
@@ -238,7 +220,6 @@ export function GlobalDateRangePicker() {
     setDraftStart(range.startDate);
     setDraftEnd(range.endDate);
     if (range.endDate) {
-      setMonth(range.endDate);
       setMonth(new Date(range.endDate.getFullYear(), range.endDate.getMonth(), 1));
     } else if (range.startDate) {
       setMonth(new Date(range.startDate.getFullYear(), range.startDate.getMonth(), 1));
@@ -295,38 +276,20 @@ export function GlobalDateRangePicker() {
     const normalized = startOfDay(date);
 
     if (!draftStart || (draftStart && draftEnd)) {
-      setDraftStart(date);
       setDraftStart(normalized);
       setDraftEnd(null);
-      setHoverDate(null);
       return;
     }
 
-    // Second click: finalize range selection
     const start = startOfDay(draftStart);
-    const end = normalized;
     const nextRange =
-      date < draftStart
-        ? { startDate: date, endDate: draftStart }
-        : { startDate: draftStart, endDate: date };
-      end.getTime() < start.getTime()
-        ? { startDate: end, endDate: start }
-        : { startDate: start, endDate: end };
+      normalized.getTime() < start.getTime()
+        ? { startDate: normalized, endDate: start }
+        : { startDate: start, endDate: normalized };
 
     setDraftStart(nextRange.startDate);
     setDraftEnd(nextRange.endDate);
-    setHoverDate(null);
     setRange(nextRange);
-    closePopover(true);
-  };
-
-  const applySingleDay = (targetDate: Date) => {
-    const normalized = startOfDay(targetDate);
-    const singleRange: DateRange = { startDate: normalized, endDate: normalized };
-    setDraftStart(normalized);
-    setDraftEnd(normalized);
-    setHoverDate(null);
-    setRange(singleRange);
     closePopover(true);
   };
 
@@ -335,7 +298,6 @@ export function GlobalDateRangePicker() {
     setRange(next);
     setDraftStart(next.startDate);
     setDraftEnd(next.endDate);
-    setHoverDate(null);
     if (next.endDate) {
       setMonth(new Date(next.endDate.getFullYear(), next.endDate.getMonth(), 1));
     } else if (next.startDate) {
@@ -346,11 +308,6 @@ export function GlobalDateRangePicker() {
 
   const chooseMonth = (monthIndex: number) => {
     setMonth(new Date(month.getFullYear(), monthIndex, 1));
-    setViewMode("days");
-  };
-
-  const chooseYear = (year: number) => {
-    setMonth(new Date(year, month.getMonth(), 1));
     setViewMode("days");
   };
 
@@ -403,7 +360,6 @@ export function GlobalDateRangePicker() {
             if (isClosing) setIsClosing(false);
           }}
         >
-          {/* View Mode 1: Month Grid Selector */}
           {viewMode === "months" ? (
             <div className="date-picker-month-selector">
               <div className="date-picker-month">
@@ -417,23 +373,6 @@ export function GlobalDateRangePicker() {
                   ‹
                 </button>
                 <strong aria-live="polite">{month.getFullYear()}</strong>
-                <div className="date-picker-month-year-labels">
-                  <select
-                    className="date-picker-year-dropdown"
-                    aria-label="Select year"
-                    value={month.getFullYear()}
-                    onChange={(e) => {
-                      const yr = Number(e.target.value);
-                      setMonth(new Date(yr, month.getMonth(), 1));
-                    }}
-                  >
-                    {yearOptions.map((yr) => (
-                      <option key={yr} value={yr}>
-                        {yr}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <button
                   type="button"
                   aria-label="Next year"
@@ -460,77 +399,8 @@ export function GlobalDateRangePicker() {
                   </button>
                 ))}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
-                <button
-                  type="button"
-                  className="date-picker-back-btn"
-                  onClick={() => setViewMode("years")}
-                >
-                  Browse Years »
-                </button>
-                <button
-                  type="button"
-                  className="date-picker-back-btn"
-                  onClick={() => setViewMode("days")}
-                >
-                  ← Back to Days
-                </button>
-              </div>
-            </div>
-          ) : viewMode === "years" ? (
-            /* View Mode 2: Multi-Year Grid Selector */
-            <div className="date-picker-year-selector">
-              <div className="date-picker-month">
-                <button
-                  type="button"
-                  aria-label="Previous 12 years"
-                  onClick={() =>
-                    setMonth(new Date(month.getFullYear() - 12, month.getMonth(), 1))
-                  }
-                >
-                  ‹
-                </button>
-                <strong aria-live="polite">
-                  {decadeYears[0]} – {decadeYears[decadeYears.length - 1]}
-                </strong>
-                <button
-                  type="button"
-                  aria-label="Next 12 years"
-                  onClick={() =>
-                    setMonth(new Date(month.getFullYear() + 12, month.getMonth(), 1))
-                  }
-                >
-                  ›
-                </button>
-              </div>
-              <div
-                className="date-picker-months"
-                role="group"
-                aria-label={`Choose a year between ${decadeYears[0]} and ${decadeYears[decadeYears.length - 1]}`}
-              >
-                {decadeYears.map((yr) => (
-                  <button
-                    key={yr}
-                    className={yr === month.getFullYear() ? "selected" : ""}
-                    type="button"
-                    onClick={() => chooseYear(yr)}
-                  >
-                    {yr}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
-                <button
-                  type="button"
-                  className="date-picker-back-btn"
-                  onClick={() => setViewMode("days")}
-                >
-                  ← Back to Days
-                </button>
-              </div>
             </div>
           ) : (
-            /* View Mode 3: Standard Days Calendar */
             <>
               <div className="date-picker-month">
                 <button
@@ -542,34 +412,14 @@ export function GlobalDateRangePicker() {
                 >
                   ‹
                 </button>
-                <strong aria-live="polite">
+                <strong
+                  aria-live="polite"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setViewMode("months")}
+                  title="Click to select month"
+                >
                   {monthNames[month.getMonth()]} {month.getFullYear()}
                 </strong>
-                <div className="date-picker-month-year-labels">
-                  <button
-                    type="button"
-                    className="date-picker-mode-btn"
-                    aria-label="Choose month"
-                    onClick={() => setViewMode("months")}
-                  >
-                    {monthNames[month.getMonth()]} ▾
-                  </button>
-                  <select
-                    className="date-picker-year-dropdown"
-                    aria-label="Select year"
-                    value={month.getFullYear()}
-                    onChange={(e) => {
-                      const yr = Number(e.target.value);
-                      setMonth(new Date(yr, month.getMonth(), 1));
-                    }}
-                  >
-                    {yearOptions.map((yr) => (
-                      <option key={yr} value={yr}>
-                        {yr}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <button
                   type="button"
                   aria-label="Next month"
@@ -586,18 +436,15 @@ export function GlobalDateRangePicker() {
                 aria-label="Choose month and year"
                 onClick={() => setViewMode("months")}
               />
-
               <div className="date-picker-weekdays" aria-hidden="true">
                 {weekDays.map((day, index) => (
                   <span key={`${day}-${index}`}>{day}</span>
                 ))}
               </div>
-
               <div
                 className="date-picker-grid"
                 role="group"
                 aria-label={`${monthNames[month.getMonth()]} ${month.getFullYear()}`}
-                onMouseLeave={() => setHoverDate(null)}
               >
                 {days.map((date) => {
                   const current = date.getMonth() === month.getMonth();
@@ -605,44 +452,20 @@ export function GlobalDateRangePicker() {
                     (draftStart && dayKey(date) === dayKey(draftStart)) ||
                       (draftEnd && dayKey(date) === dayKey(draftEnd)),
                   );
-                  const inConfirmedRange = isBetween(date, {
+                  const inRange = isBetween(date, {
                     startDate: draftStart,
                     endDate: draftEnd,
                   });
-                  const inHoverPreview = Boolean(
-                    draftStart &&
-                      !draftEnd &&
-                      hoverDate &&
-                      isBetween(date, {
-                        startDate: draftStart,
-                        endDate: hoverDate,
-                      }),
-                  );
-
                   return (
                     <button
                       type="button"
                       key={dayKey(date)}
                       className={`${current ? "" : "outside-month "}${
                         selected ? "selected " : ""
-                      }${
-                        isBetween(date, {
-                          startDate: draftStart,
-                          endDate: draftEnd,
-                        })
-                          ? "in-range"
-                          : ""
-                      }${inConfirmedRange ? "in-range " : ""}${
-                        inHoverPreview ? "in-range-preview " : ""
-                      }`}
+                      }${inRange ? "in-range" : ""}`}
                       aria-label={date.toDateString()}
                       aria-pressed={selected}
                       onClick={() => chooseDate(date)}
-                      onMouseEnter={() => {
-                        if (draftStart && !draftEnd) {
-                          setHoverDate(date);
-                        }
-                      }}
                     >
                       {date.getDate()}
                     </button>
@@ -651,58 +474,19 @@ export function GlobalDateRangePicker() {
               </div>
             </>
           )}
+
           <p className="date-picker-summary">
             {draftStart && !draftEnd
               ? "Select an end date"
               : range.startDate
                 ? `${formatShort(range.startDate)}${
-                    range.endDate ? ` – ${formatShort(range.endDate)}` : ""
+                    range.endDate && dayKey(range.startDate) !== dayKey(range.endDate)
+                      ? ` – ${formatShort(range.endDate)}`
+                      : ""
                   }`
-                : "Select a start and end date"}
+                : "All time records"}
           </p>
 
-          {/* Interactive Date Selection Summary & Single-Day Apply */}
-          <div className="date-picker-summary-container">
-            {draftStart && !draftEnd ? (
-              <div className="date-picker-pending-selection">
-                <span className="date-picker-pending-text">
-                  Start: <strong>{formatShort(draftStart)}</strong> · Select end date
-                </span>
-                <div className="date-picker-pending-actions">
-                  <button
-                    type="button"
-                    className="date-picker-action-btn"
-                    onClick={() => applySingleDay(draftStart)}
-                  >
-                    Filter Just This Day
-                  </button>
-                  <button
-                    type="button"
-                    className="date-picker-cancel-btn"
-                    onClick={() => {
-                      setDraftStart(null);
-                      setDraftEnd(null);
-                      setHoverDate(null);
-                    }}
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="date-picker-summary">
-                {range.startDate
-                  ? `${formatShort(range.startDate)}${
-                      range.endDate && dayKey(range.startDate) !== dayKey(range.endDate)
-                        ? ` – ${formatShort(range.endDate)}`
-                        : ""
-                    }`
-                  : "All time records"}
-              </p>
-            )}
-          </div>
-
-          {/* Preset Buttons */}
           <div className="date-picker-presets" aria-label="Date range presets">
             {(
               [
@@ -741,4 +525,3 @@ export function GlobalDateRangePicker() {
     </div>
   );
 }
-

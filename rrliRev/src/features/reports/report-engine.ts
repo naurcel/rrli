@@ -151,18 +151,22 @@ export function generateReportRows(
   const activeTruckPlates = new Set<string>();
 
   for (const delivery of filtered) {
-    grossEarnings += delivery.deliveryRate ?? 0;
-    totalExpenses += delivery.totalExpenses ?? 0;
-    totalStoreDropoffs += delivery.dropoffs.length;
-    totalDieselExpenses += delivery.expenses.dieselExpenses ?? 0;
-    totalTollExpenses += delivery.expenses.tollGateExpenses ?? 0;
+    const isFinalized = delivery.financialState === "finalized";
+    if (isFinalized) {
+      grossEarnings += delivery.deliveryRate ?? 0;
+      totalExpenses += delivery.totalExpenses ?? 0;
+      totalDieselExpenses += delivery.expenses.dieselExpenses ?? 0;
+      totalTollExpenses += delivery.expenses.tollGateExpenses ?? 0;
 
-    const crewCost =
-      (delivery.expenses.driverDailyRate ?? 0) +
-      (delivery.expenses.driverAllowance ?? 0) +
-      (delivery.expenses.helperDailyRate ?? 0) +
-      (delivery.expenses.helperAllowance ?? 0);
-    totalCrewCosts += crewCost;
+      const crewCost =
+        (delivery.expenses.driverDailyRate ?? 0) +
+        (delivery.expenses.driverAllowance ?? 0) +
+        (delivery.expenses.helperDailyRate ?? 0) +
+        (delivery.expenses.helperAllowance ?? 0);
+      totalCrewCosts += crewCost;
+    }
+
+    totalStoreDropoffs += delivery.dropoffs.length;
 
     if (delivery.plateNumber) {
       activeTruckPlates.add(delivery.plateNumber);
@@ -287,11 +291,11 @@ export function generateReportRows(
       fuelRate: d.fuelRate,
       revenue: d.deliveryRate ?? 0,
       diesel: d.expenses.dieselExpenses ?? 0,
-      toll: d.expenses.tollGateExpenses ?? 0,
+      toll: d.expenses.tollGateExpenses,
       entryFee: d.expenses.entryFees ?? 0,
       crewCost,
-      expenses: d.totalExpenses ?? 0,
-      netIncome: d.netIncome ?? 0,
+      expenses: d.totalExpenses,
+      netIncome: d.netIncome,
       margin: d.marginPercent,
       dropoffCount: d.dropoffs.length,
       financialState: d.financialState === "finalized" ? "Finalized" : "Incomplete",
@@ -374,11 +378,11 @@ export function generateReportCsv(
   const summaryValues: string[] = [];
 
   if (processed.template.breakdown.showGrossEarnings) {
-    summaryHeaders.push("Gross Earnings (PHP)");
+    summaryHeaders.push("Delivery Revenue (PHP)");
     summaryValues.push(processed.totals.grossEarnings.toFixed(2));
   }
   if (processed.template.breakdown.showTotalExpenses) {
-    summaryHeaders.push("Total Expenses (PHP)");
+    summaryHeaders.push("Trip Expenses (PHP)");
     summaryValues.push(processed.totals.totalExpenses.toFixed(2));
   }
   if (processed.template.breakdown.showNetProfit) {
@@ -386,7 +390,7 @@ export function generateReportCsv(
     summaryValues.push(processed.totals.netProfit.toFixed(2));
   }
   if (processed.template.breakdown.showProfitMargin) {
-    summaryHeaders.push("Net Margin %");
+    summaryHeaders.push("Profit Margin");
     summaryValues.push(processed.totals.marginPercent != null ? `${processed.totals.marginPercent.toFixed(1)}%` : "N/A");
   }
   if (processed.template.breakdown.showActiveTrucks) {

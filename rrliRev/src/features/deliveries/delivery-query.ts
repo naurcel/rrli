@@ -59,7 +59,7 @@ const querySchema = z.object({
   sort: z.enum(DELIVERY_SORT_FIELDS).default("delivery_date"),
   direction: z.enum(["asc", "desc"]).default("desc"),
   page: z.number().int().min(1).default(1),
-  pageSize: pageSizeSchema.default(25),
+  pageSize: pageSizeSchema.default(10),
 });
 
 function nullableParameter(params: URLSearchParams, key: string): string | null {
@@ -101,7 +101,7 @@ export function parseDeliveryListQuery(params: URLSearchParams):
     sort: params.get("sort") ?? "delivery_date",
     direction: params.get("direction") ?? "desc",
     page: Number(params.get("page") ?? 1),
-    pageSize: Number(params.get("pageSize") ?? 25),
+    pageSize: Number(params.get("pageSize") ?? 10),
   });
 
   if (!parsed.success) {

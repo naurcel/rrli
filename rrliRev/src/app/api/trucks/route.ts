@@ -5,6 +5,7 @@ import * as z from "zod";
 import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 
 import {
+  deleteFleetTruck,
   getFleetTrucks,
   registerFleetTruck,
   type FleetTruck,
@@ -21,6 +22,7 @@ const createTruckSchema = z.object({
     .max(12, "Plate number must not exceed 12 characters.")
     .regex(/^[A-Za-z0-9\s-]+$/, "Plate number contains invalid characters."),
   truckType: z.enum(["4-Wheeler", "6-Wheeler", "10-Wheeler"]),
+  storageCapability: z.enum(["Refrigerated", "Dry"]),
   ownershipType: z.enum(["Owned", "Subcontracted"]).default("Owned"),
   rateBasis: z.enum(["Redeemed Rate", "Trucker Rate"]).optional(),
   provider: z.string().trim().nullable().optional(),
@@ -56,7 +58,7 @@ export async function GET() {
     const supabase = await createServerSupabaseClient();
     const { data: rows, error } = await supabase
       .from("trucks")
-      .select("id, plate_number, truck_type, is_active")
+      .select("id, plate_number, truck_type, storage_capability, ownership_type, rate_basis, provider, contact_person, is_active")
       .eq("is_active", true)
       .order("plate_number");
 
@@ -68,10 +70,11 @@ export async function GET() {
       id: row.id,
       plateNumber: row.plate_number,
       truckType: row.truck_type as FleetTruck["truckType"],
-      ownershipType: "Owned",
-      rateBasis: "Redeemed Rate",
-      provider: null,
-      contactPerson: null,
+      storageCapability: row.storage_capability === "Dry" ? "Dry" : "Refrigerated",
+      ownershipType: row.ownership_type === "Subcontracted" ? "Subcontracted" : "Owned",
+      rateBasis: row.rate_basis === "Trucker Rate" ? "Trucker Rate" : "Redeemed Rate",
+      provider: row.provider ?? null,
+      contactPerson: row.contact_person ?? null,
     }));
 
     return NextResponse.json({ ok: true, source: "database", trucks });
@@ -122,6 +125,7 @@ export async function POST(request: Request) {
     id: randomUUID(),
     plateNumber: normalizedPlate,
     truckType: parsed.data.truckType,
+    storageCapability: parsed.data.storageCapability,
     ownershipType: parsed.data.ownershipType,
     rateBasis,
     provider: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.provider?.trim() ?? null) : null,
@@ -178,6 +182,11 @@ export async function POST(request: Request) {
       id: newTruck.id,
       plate_number: newTruck.plateNumber,
       truck_type: newTruck.truckType,
+      storage_capability: newTruck.storageCapability,
+      ownership_type: newTruck.ownershipType,
+      rate_basis: newTruck.rateBasis,
+      provider: newTruck.provider,
+      contact_person: newTruck.contactPerson,
       is_active: true,
     });
 
@@ -216,6 +225,93 @@ export async function POST(request: Request) {
         code: "TRUCK_CREATE_FAILED",
         message: error instanceof Error ? error.message : "Unable to register truck.",
       },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  const auth = await verifyServerPermission("profitability:manage");
+  if (!auth.ok) {
+    return NextResponse.json(
+      { ok: false, code: auth.code, message: auth.message },
+      { status: auth.status },
+    );
+  }
+
+  // Deletion decisions strictly restricted to Admin role
+  if (auth.actor.role !== "admin") {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "FORBIDDEN",
+        message: "Only System Administrators are authorized to make truck deletion decisions.",
+      },
+      { status: 403 },
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const identifier = searchParams.get("id") || searchParams.get("plateNumber");
+  const isBrowserLocal = searchParams.get("browserLocal") === "true";
+  if (!identifier) {
+    return NextResponse.json(
+      { ok: false, message: "Truck plate number or ID is required." },
+      { status: 400 },
+    );
+  }
+
+  if (!isSupabaseConfigured()) {
+    const deleteResult = deleteFleetTruck(identifier);
+    if (!deleteResult.ok && !isBrowserLocal) {
+      return NextResponse.json({ ok: false, message: "Truck not found." }, { status: 404 });
+    }
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "truck.deleted",
+      entityType: "truck",
+      entityId: identifier,
+      summary: `Admin deleted truck ${identifier}.`,
+      changes: {
+        isDeleted: true,
+        storage: isBrowserLocal && !deleteResult.ok ? "browser-local" : "bundled-mock",
+      },
+    });
+    return NextResponse.json({
+      ok: true,
+      source: isBrowserLocal && !deleteResult.ok ? "browser-local" : "bundled-mock",
+    });
+  }
+
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: deactivatedTruck, error } = await supabase
+      .from("trucks")
+      .update({ is_active: false })
+      .or(`id.eq.${identifier},plate_number.eq.${identifier.toUpperCase()}`)
+      .select("id")
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!deactivatedTruck && !isBrowserLocal) {
+      return NextResponse.json({ ok: false, code: "TRUCK_NOT_FOUND", message: "Truck not found." }, { status: 404 });
+    }
+
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "truck.deleted",
+      entityType: "truck",
+      entityId: identifier,
+      summary: `Admin deleted truck ${identifier}.`,
+      changes: { isDeleted: true },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, message: error instanceof Error ? error.message : "Unable to delete truck." },
       { status: 500 },
     );
   }

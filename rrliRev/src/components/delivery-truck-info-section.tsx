@@ -35,8 +35,6 @@ export function DeliveryTruckInfoSection({
   );
   const classificationLabel = getTruckClassificationLabel(truckType, storageCapability);
   const provider = truckMeta?.provider;
-  const effectiveRateBasis =
-    rateBasis || truckMeta?.rateBasis || (truckOwnership === "Owned" ? "Redeemed Rate" : "Trucker Rate");
 
   return (
     <div className="delivery-truck-banner">
@@ -76,10 +74,6 @@ export function DeliveryTruckInfoSection({
           <div>
             <span>Cargo Temp</span>
             <strong>{truckTemperature}</strong>
-          </div>
-          <div>
-            <span>Rate Basis</span>
-            <strong>{effectiveRateBasis}</strong>
           </div>
           <div>
             <span>{truckOwnership === "Subcontracted" ? "Provider" : "Fleet Type"}</span>

@@ -11,6 +11,7 @@ import { getRoleMetadata, isValidUserRole, type UserRole } from "@/lib/auth/rbac
 import {
   authorizeServerAccountReset,
   createServerAccountProfile,
+  deleteServerAccount,
   findServerAccountById,
   listServerAccountProfiles,
   updateServerAccountProfile,
@@ -383,5 +384,65 @@ export async function PATCH(request: Request) {
       accessLevel: meta.accessLevel,
       accessLevelLabel: meta.accessLevelLabel,
     },
+  });
+}
+
+export async function DELETE(request: Request) {
+  const auth = await verifyServerPermission("users:manage");
+  if (!auth.ok) {
+    return NextResponse.json(
+      { ok: false, code: auth.code, message: auth.message },
+      { status: auth.status },
+    );
+  }
+
+  // Deletion decisions strictly restricted to Admin
+  if (auth.actor.role !== "admin") {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "FORBIDDEN",
+        message: "Only System Administrators are authorized to make user deletion decisions.",
+      },
+      { status: 403 },
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get("userId") || searchParams.get("id");
+  if (!userId) {
+    return NextResponse.json({ ok: false, message: "User ID is required." }, { status: 400 });
+  }
+
+  if (userId === auth.actor.id) {
+    return NextResponse.json(
+      { ok: false, message: "You cannot delete your own active Admin account." },
+      { status: 400 },
+    );
+  }
+
+  const user = findServerAccountById(userId);
+  if (!user) {
+    return NextResponse.json({ ok: false, message: "User account was not found." }, { status: 404 });
+  }
+
+  const result = deleteServerAccount(userId);
+  if (!result.ok) {
+    return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
+  }
+
+  recordAuditEntry({
+    actorId: auth.actor.id,
+    actorEmail: auth.actor.email,
+    action: "user.deleted",
+    entityType: "user",
+    entityId: userId,
+    summary: `Deleted user @${user.username} (${user.fullName}).`,
+  });
+
+  return NextResponse.json({
+    ok: true,
+    message: `User @${user.username} has been deleted.`,
+    userId,
   });
 }

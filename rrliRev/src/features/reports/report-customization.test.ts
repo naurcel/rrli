@@ -17,6 +17,7 @@ import {
 } from "./report-template-store.ts";
 import {
   BUILTIN_REPORT_TEMPLATES,
+  DEFAULT_DAILY_TRIP_TEMPLATE,
   DEFAULT_REVENUE_TEMPLATE,
   DEFAULT_TRIP_LEDGER_TEMPLATE,
   getColumnCatalog,
@@ -209,14 +210,15 @@ const MOCK_DELIVERIES: readonly DeliveryTripRecord[] = [
 // 1. Built-in Standards & Default Protection
 // ============================================================================
 
-test("BUILTIN_REPORT_TEMPLATES provides all 5 standard company layouts as defaults", () => {
-  assert.equal(BUILTIN_REPORT_TEMPLATES.length, 5);
+test("BUILTIN_REPORT_TEMPLATES provides all 6 standard company layouts as defaults", () => {
+  assert.equal(BUILTIN_REPORT_TEMPLATES.length, 6);
   const ids = BUILTIN_REPORT_TEMPLATES.map((t) => t.id);
   assert.ok(ids.includes("default-revenue"));
   assert.ok(ids.includes("default-expenses"));
   assert.ok(ids.includes("default-profitability"));
   assert.ok(ids.includes("default-activity"));
   assert.ok(ids.includes("default-trip-ledger"));
+  assert.ok(ids.includes("default-daily-trip"));
 
   for (const t of BUILTIN_REPORT_TEMPLATES) {
     assert.equal(t.isDefault, true, `Template ${t.id} must be marked as isDefault`);
@@ -250,6 +252,17 @@ test("Default templates cannot be deleted or overwritten by ID", () => {
   });
   assert.equal(overwriteResult.ok, false);
   assert.match(overwriteResult.message, /cannot be overwritten/i);
+});
+
+test("DEFAULT_DAILY_TRIP_TEMPLATE provides fixed daily trip ledger format", () => {
+  assert.equal(DEFAULT_DAILY_TRIP_TEMPLATE.id, "default-daily-trip");
+  assert.equal(DEFAULT_DAILY_TRIP_TEMPLATE.baseType, "trip_ledger");
+  assert.equal(DEFAULT_DAILY_TRIP_TEMPLATE.isDefault, true);
+
+  const result = processReport(MOCK_DELIVERIES, DEFAULT_DAILY_TRIP_TEMPLATE);
+  assert.equal(result.template.id, "default-daily-trip");
+  assert.ok(result.columns.length > 0);
+  assert.equal(result.totals.totalTrips, MOCK_DELIVERIES.length);
 });
 
 // ============================================================================
@@ -486,4 +499,38 @@ test("enforces that reports:manage_templates is granted exclusively to Admin rol
       `Role ${role} must not have reports:manage_templates`,
     );
   }
+});
+
+test("processReport preserves null for unknown expenses and calculates summary totals strictly from finalized trips", () => {
+  const finalizedTrip = MOCK_DELIVERIES[0]; // Rate 24000, Exp 7950, Net 16050
+  const incompleteTrip: DeliveryTripRecord = {
+    ...MOCK_DELIVERIES[1],
+    id: "del-incomplete",
+    waybillNumber: "WB-INCOMPLETE",
+    deliveryRate: 21000,
+    expenses: {
+      ...MOCK_DELIVERIES[1].expenses,
+      tollGateExpenses: null,
+    },
+    totalExpenses: null,
+    netIncome: null,
+    marginPercent: null,
+    financialState: "incomplete",
+  };
+
+  const processed = processReport([finalizedTrip, incompleteTrip], DEFAULT_TRIP_LEDGER_TEMPLATE);
+  assert.equal(processed.rows.length, 2);
+
+  const incRow = processed.rows.find((r) => r.waybillNumber === "WB-INCOMPLETE");
+  assert.ok(incRow, "Incomplete row must be present in trip ledger");
+  assert.equal(incRow.toll, null, "Unknown toll must remain null in report row");
+  assert.equal(incRow.expenses, null, "Unknown total expenses must remain null in report row");
+  assert.equal(incRow.netIncome, null, "Unknown net income must remain null in report row");
+  assert.equal(incRow.margin, null, "Unknown margin must remain null in report row");
+
+  // Summary totals must strictly reflect finalized trips and not blend unfinalized revenue with zero expenses
+  assert.equal(processed.totals.grossEarnings, 25000);
+  assert.equal(processed.totals.totalExpenses, 15000);
+  assert.equal(processed.totals.netProfit, 10000);
+  assert.equal(processed.totals.totalTrips, 2);
 });

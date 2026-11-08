@@ -31,7 +31,7 @@ test("extractStateChanges accurately pairs old and new field transitions", () =>
   assert.equal(parsedFinancial.hasChanges, true);
   assert.equal(parsedFinancial.transitions.length, 1);
   assert.equal(parsedFinancial.transitions[0].field, "tollGateExpenses");
-  assert.equal(parsedFinancial.transitions[0].label, "Toll Gate Expenses");
+  assert.equal(parsedFinancial.transitions[0].label, "Highway Tolls");
   assert.equal(parsedFinancial.transitions[0].oldValue, 1750);
   assert.equal(parsedFinancial.transitions[0].newValue, 1600);
   assert.equal(parsedFinancial.attributes.length, 1);

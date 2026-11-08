@@ -25,10 +25,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, code: "INVALID_QUERY", message: "Invalid reporting date range." }, { status: 400 });
   }
   if (!isSupabaseConfigured()) {
+    const summary = getSmallMockProfitabilitySummary(parsed.data);
     return NextResponse.json({
       ok: true,
       source: "bundled-mock",
-      summary: getSmallMockProfitabilitySummary(parsed.data),
+      includedDeliveryIds: summary.deliveryIds,
+      summary,
     });
   }
   const supabase = await createServerSupabaseClient();

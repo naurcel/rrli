@@ -6,6 +6,7 @@ import { useAuthenticatedActor } from "@/components/auth-context";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
 import { RoundedSelect } from "@/components/rounded-select";
+import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { AuditStateChanges } from "@/components/audit-state-changes";
 import { getActionVisuals } from "@/features/audit/audit-formatters";
@@ -50,7 +51,7 @@ type AuditEntry = {
 
 const ROLE_OPTIONS = USER_ROLES.map((role) => ({
   value: role,
-  label: `${ROLE_METADATA[role].label} (${ROLE_METADATA[role].accessLevelLabel})`,
+  label: ROLE_METADATA[role].label,
 }));
 
 export default function UserManagementPage() {
@@ -76,6 +77,10 @@ export default function UserManagementPage() {
   const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
   const [editUsernameError, setEditUsernameError] = useState<string | null>(null);
 
+  // Delete user confirmation dialog state
+  const [userToDelete, setUserToDelete] = useState<ManagedUserRecord | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
@@ -90,6 +95,28 @@ export default function UserManagementPage() {
     tone: "success" | "error";
     text: string;
   } | null>(null);
+  const [openActionMenuUserId, setOpenActionMenuUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openActionMenuUserId) return;
+    function handleGlobalClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".table-row-actions")) {
+        setOpenActionMenuUserId(null);
+      }
+    }
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpenActionMenuUserId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleGlobalClick);
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleGlobalClick);
+      document.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [openActionMenuUserId]);
 
   useEffect(() => {
     fetch("/api/users")
@@ -184,6 +211,19 @@ export default function UserManagementPage() {
     });
   }, [auditEntries, auditSearch, actionFilter, entityFilter]);
 
+  const [auditPage, setAuditPage] = useState(1);
+  const AUDIT_PAGE_SIZE = 10;
+  const auditPageCount = Math.max(1, Math.ceil(filteredAuditEntries.length / AUDIT_PAGE_SIZE));
+
+  useEffect(() => {
+    setAuditPage(1);
+  }, [auditSearch, actionFilter, entityFilter]);
+
+  const paginatedAuditEntries = useMemo(() => {
+    const start = (auditPage - 1) * AUDIT_PAGE_SIZE;
+    return filteredAuditEntries.slice(start, start + AUDIT_PAGE_SIZE);
+  }, [filteredAuditEntries, auditPage]);
+
   const auditStats = useMemo(() => {
     const total = auditEntries.length;
     const deliveryAndFinance = auditEntries.filter(
@@ -222,6 +262,19 @@ export default function UserManagementPage() {
       return compared * multiplier || left.id.localeCompare(right.id);
     });
   }, [userSort, users]);
+
+  const [userPage, setUserPage] = useState(1);
+  const USER_PAGE_SIZE = 10;
+  const userPageCount = Math.max(1, Math.ceil(sortedUsers.length / USER_PAGE_SIZE));
+
+  useEffect(() => {
+    setUserPage(1);
+  }, [userSort]);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * USER_PAGE_SIZE;
+    return sortedUsers.slice(start, start + USER_PAGE_SIZE);
+  }, [sortedUsers, userPage]);
 
   async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -492,6 +545,40 @@ export default function UserManagementPage() {
       setEditUsernameError("Network or server error while updating username.");
     } finally {
       setIsUpdatingUsername(false);
+    }
+  }
+
+  async function handleConfirmDeleteUser() {
+    if (!userToDelete || isDeletingUser) return;
+    setIsDeletingUser(true);
+
+    try {
+      const response = await fetch(`/api/users?userId=${userToDelete.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        setFeedback({
+          tone: "error",
+          text: data.message ?? "Could not delete user account.",
+        });
+        return;
+      }
+
+      setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+      setFeedback({
+        tone: "success",
+        text: `User account @${userToDelete.username} (${userToDelete.fullName}) was deleted.`,
+      });
+      setUserToDelete(null);
+      void loadAuditEntries(true);
+    } catch {
+      setFeedback({
+        tone: "error",
+        text: "Network error while deleting user account.",
+      });
+    } finally {
+      setIsDeletingUser(false);
     }
   }
 
@@ -786,18 +873,24 @@ export default function UserManagementPage() {
                         defaultDirection="desc"
                         onSort={(key, direction) => setUserSort({ key, direction })}
                       />
-                      <th>Actions</th>
+                      <th><span className="sr-only">More actions</span></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedUsers.map((user) => {
+                    {paginatedUsers.map((user) => {
                       const isRecoveryActive = Boolean(
                         user.recoveryExpiresAt && new Date(user.recoveryExpiresAt) > new Date(),
                       );
                       const isSelf = user.id === actor.id;
 
                       return (
-                        <tr key={user.id}>
+                        <tr
+                          key={user.id}
+                          style={{
+                            position: "relative",
+                            zIndex: openActionMenuUserId === user.id ? 25 : undefined,
+                          }}
+                        >
                           <td>
                             <strong>{user.fullName}</strong>
                             <br />
@@ -806,37 +899,15 @@ export default function UserManagementPage() {
                             </small>
                           </td>
                           <td>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span
-                                style={{
-                                  fontFamily: "monospace",
-                                  fontWeight: 600,
-                                  color: "var(--color-text-primary)",
-                                }}
-                              >
-                                @{user.username}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingUser(user);
-                                  setNewUsernameInput(user.username);
-                                  setEditUsernameError(null);
-                                }}
-                                title={`Edit username for ${user.fullName}`}
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  padding: "2px 4px",
-                                  fontSize: "11px",
-                                  color: "var(--color-accent-deep)",
-                                  textDecoration: "underline",
-                                }}
-                              >
-                                Edit
-                              </button>
-                            </div>
+                            <span
+                              style={{
+                                fontFamily: "monospace",
+                                fontWeight: 600,
+                                color: "var(--color-text-primary)",
+                              }}
+                            >
+                              @{user.username}
+                            </span>
                           </td>
                           <td>
                             <RoundedSelect
@@ -849,7 +920,7 @@ export default function UserManagementPage() {
                             />
                           </td>
                           <td>
-                            <span className={`access-pill ${user.accessLevel}`}>
+                            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 500 }}>
                               {user.accessLevelLabel}
                             </span>
                           </td>
@@ -859,13 +930,10 @@ export default function UserManagementPage() {
                                 style={{
                                   display: "inline-flex",
                                   alignItems: "center",
-                                  gap: "5px",
-                                  padding: "3px 8px",
-                                  borderRadius: "999px",
-                                  background: "rgba(217, 119, 6, 0.15)",
+                                  gap: "6px",
+                                  fontSize: "12px",
                                   color: "#b45309",
-                                  fontSize: "11px",
-                                  fontWeight: 700,
+                                  fontWeight: 500,
                                 }}
                                 title={`Reset authorized until ${new Date(user.recoveryExpiresAt!).toLocaleTimeString()}`}
                               >
@@ -875,6 +943,7 @@ export default function UserManagementPage() {
                                     height: "6px",
                                     borderRadius: "50%",
                                     background: "#d97706",
+                                    flexShrink: 0,
                                   }}
                                 />
                                 Reset Authorized (24h)
@@ -884,13 +953,10 @@ export default function UserManagementPage() {
                                 style={{
                                   display: "inline-flex",
                                   alignItems: "center",
-                                  gap: "5px",
-                                  padding: "3px 8px",
-                                  borderRadius: "999px",
-                                  background: "rgba(59, 130, 246, 0.12)",
+                                  gap: "6px",
+                                  fontSize: "12px",
                                   color: "#2563eb",
-                                  fontSize: "11px",
-                                  fontWeight: 700,
+                                  fontWeight: 500,
                                 }}
                               >
                                 <span
@@ -899,6 +965,7 @@ export default function UserManagementPage() {
                                     height: "6px",
                                     borderRadius: "50%",
                                     background: "#3b82f6",
+                                    flexShrink: 0,
                                   }}
                                 />
                                 Initial Setup Pending
@@ -908,13 +975,10 @@ export default function UserManagementPage() {
                                 style={{
                                   display: "inline-flex",
                                   alignItems: "center",
-                                  gap: "5px",
-                                  padding: "3px 8px",
-                                  borderRadius: "999px",
-                                  background: "rgba(16, 185, 129, 0.12)",
+                                  gap: "6px",
+                                  fontSize: "12px",
                                   color: "#059669",
-                                  fontSize: "11px",
-                                  fontWeight: 700,
+                                  fontWeight: 500,
                                 }}
                               >
                                 <span
@@ -923,6 +987,7 @@ export default function UserManagementPage() {
                                     height: "6px",
                                     borderRadius: "50%",
                                     background: "#10b981",
+                                    flexShrink: 0,
                                   }}
                                 />
                                 Setup Complete
@@ -931,46 +996,118 @@ export default function UserManagementPage() {
                           </td>
                           <td>
                             <span
-                              className={`pod-status ${user.isActive ? "attached" : "missing"}`}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                fontSize: "12px",
+                                color: user.isActive ? "#059669" : "var(--color-text-muted)",
+                                fontWeight: 500,
+                              }}
                             >
-                              <i aria-hidden="true" />
+                              <span
+                                style={{
+                                  width: "6px",
+                                  height: "6px",
+                                  borderRadius: "50%",
+                                  background: user.isActive ? "#10b981" : "#9ca3af",
+                                  flexShrink: 0,
+                                }}
+                              />
                               {user.isActive ? "Active" : "Deactivated"}
                             </span>
                           </td>
-                          <td>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <td style={{ textAlign: "right" }}>
+                            <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
                               <button
                                 type="button"
-                                className="filter-button"
-                                disabled={isSelf}
-                                onClick={() => {
-                                  setAuthorizingUser(user);
-                                  setAuthorizeError(null);
+                                className="row-action-more-btn"
+                                aria-label={`Actions for ${user.fullName}`}
+                                aria-haspopup="menu"
+                                aria-expanded={openActionMenuUserId === user.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenActionMenuUserId((curr) => (curr === user.id ? null : user.id));
                                 }}
-                                title={
-                                  isSelf
-                                    ? "Admins cannot authorize reset for their own account"
-                                    : "Authorize 24h password reset via Forgot Password without security question"
-                                }
-                                style={{ fontSize: "11px", whiteSpace: "nowrap" }}
+                                title="Show more actions"
                               >
-                                Authorize Reset
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                  <circle cx="8" cy="3" r="1.5" />
+                                  <circle cx="8" cy="8" r="1.5" />
+                                  <circle cx="8" cy="13" r="1.5" />
+                                </svg>
                               </button>
 
-                              <button
-                                type="button"
-                                className="filter-button"
-                                disabled={isSelf}
-                                onClick={() => handleToggleActive(user)}
-                                title={
-                                  isSelf
-                                    ? "Cannot deactivate your own active Admin account"
-                                    : undefined
-                                }
-                                style={{ fontSize: "11px" }}
-                              >
-                                {user.isActive ? "Deactivate" : "Reactivate"}
-                              </button>
+                              {openActionMenuUserId === user.id && (
+                                <div
+                                  className="row-action-menu"
+                                  role="menu"
+                                  aria-label={`Actions for ${user.fullName}`}
+                                >
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      setOpenActionMenuUserId(null);
+                                      setEditingUser(user);
+                                      setNewUsernameInput(user.username);
+                                      setEditUsernameError(null);
+                                    }}
+                                  >
+                                    Edit Username
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    disabled={isSelf}
+                                    onClick={() => {
+                                      setOpenActionMenuUserId(null);
+                                      setAuthorizingUser(user);
+                                      setAuthorizeError(null);
+                                    }}
+                                    title={
+                                      isSelf
+                                        ? "Admins cannot authorize reset for their own account"
+                                        : undefined
+                                    }
+                                  >
+                                    Authorize Password Reset
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    disabled={isSelf}
+                                    onClick={() => {
+                                      setOpenActionMenuUserId(null);
+                                      handleToggleActive(user);
+                                    }}
+                                    title={
+                                      isSelf
+                                        ? "Cannot deactivate your own active Admin account"
+                                        : undefined
+                                    }
+                                  >
+                                    {user.isActive ? "Deactivate User" : "Reactivate User"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    disabled={isSelf}
+                                    style={{ color: isSelf ? undefined : "var(--color-danger, #dc2626)" }}
+                                    onClick={() => {
+                                      setOpenActionMenuUserId(null);
+                                      setUserToDelete(user);
+                                    }}
+                                    title={
+                                      isSelf
+                                        ? "Cannot delete your own active Admin account"
+                                        : undefined
+                                    }
+                                  >
+                                    Delete User
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -979,6 +1116,18 @@ export default function UserManagementPage() {
                   </tbody>
                 </table>
               </div>
+
+              {sortedUsers.length > 0 ? (
+                <TablePagination
+                  page={userPage}
+                  pageCount={userPageCount}
+                  totalItems={sortedUsers.length}
+                  pageSize={USER_PAGE_SIZE}
+                  onPageChange={setUserPage}
+                  itemLabel="users"
+                  itemCountInPage={paginatedUsers.length}
+                />
+              ) : null}
             </section>
           </>
         ) : (
@@ -1131,7 +1280,7 @@ export default function UserManagementPage() {
                           </td>
                         </tr>
                       ) : (
-                        filteredAuditEntries.map((entry) => (
+                        paginatedAuditEntries.map((entry) => (
                           <tr key={entry.id}>
                             <td>
                               <div className="audit-timestamp">
@@ -1181,11 +1330,17 @@ export default function UserManagementPage() {
                 </div>
               )}
 
-              <div className="table-footer">
-                <span>
-                  Showing {filteredAuditEntries.length} of {auditEntries.length} recorded audit events
-                </span>
-              </div>
+              {filteredAuditEntries.length > 0 ? (
+                <TablePagination
+                  page={auditPage}
+                  pageCount={auditPageCount}
+                  totalItems={filteredAuditEntries.length}
+                  pageSize={AUDIT_PAGE_SIZE}
+                  onPageChange={setAuditPage}
+                  itemLabel="events"
+                  itemCountInPage={paginatedAuditEntries.length}
+                />
+              ) : null}
             </section>
           </>
         )}
@@ -1403,6 +1558,110 @@ export default function UserManagementPage() {
               </button>
             </div>
           </form>
+        </div>
+      ) : null}
+
+      {/* Delete User Confirmation Screen */}
+      {userToDelete ? (
+        <div className="routex-dialog-layer" role="dialog" aria-modal="true" aria-labelledby="delete-user-dialog-title">
+          <div className="routex-dialog-backdrop" onClick={() => !isDeletingUser && setUserToDelete(null)} />
+          <div className="routex-dialog" style={{ maxWidth: "460px" }}>
+            <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
+              <div>
+                <h2 id="delete-user-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
+                  Confirm User Deletion
+                </h2>
+                <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
+                  This deletion decision requires explicit confirmation and will be logged.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="routex-dialog-close"
+                aria-label="Close confirmation dialog"
+                disabled={isDeletingUser}
+                onClick={() => setUserToDelete(null)}
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="routex-dialog-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)" }}>
+                Are you sure you want to delete the user account for <strong>{userToDelete.fullName}</strong> (<code>@{userToDelete.username}</code>)?
+              </p>
+
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "8px",
+                  background: "var(--color-surface-subtle)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                }}
+              >
+                <div>
+                  <span style={{ color: "var(--color-text-muted)" }}>Assigned Role: </span>
+                  <strong>{userToDelete.roleLabel}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "var(--color-text-muted)" }}>Email: </span>
+                  <span>{userToDelete.email}</span>
+                </div>
+                <div>
+                  <span style={{ color: "var(--color-text-muted)" }}>Account Status: </span>
+                  <span>{userToDelete.isActive ? "Active" : "Deactivated"}</span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  background: "rgba(239, 68, 68, 0.08)",
+                  border: "1px solid rgba(239, 68, 68, 0.2)",
+                  color: "#dc2626",
+                  fontSize: "11px",
+                  lineHeight: 1.4,
+                }}
+              >
+                <strong>Warning:</strong> Deleting this account will permanently remove their login access.
+              </div>
+            </div>
+
+            <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={isDeletingUser}
+                onClick={() => setUserToDelete(null)}
+                style={{ minHeight: "38px", padding: "0 16px", fontSize: "13px" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingUser}
+                onClick={handleConfirmDeleteUser}
+                style={{
+                  background: "#dc2626",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "0 18px",
+                  minHeight: "38px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: isDeletingUser ? "not-allowed" : "pointer",
+                }}
+              >
+                {isDeletingUser ? "Deleting Account…" : "Confirm Delete"}
+              </button>
+            </footer>
+          </div>
         </div>
       ) : null}
     </>

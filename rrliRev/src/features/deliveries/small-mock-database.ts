@@ -52,6 +52,8 @@ export type SmallMockDelivery = {
   truckId: string;
   driverId: string;
   helperId: string;
+  driverName?: string | null;
+  helperName?: string | null;
   scenario: string;
 };
 

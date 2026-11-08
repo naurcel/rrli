@@ -56,6 +56,7 @@ export type DeliveryTripRecord = {
   id: string;
   waybillNumber: string;
   deliveryDate: string; // YYYY-MM-DD
+  recordingDelayed?: boolean;
   clientName: string;
   plateNumber: string;
   truckType: TruckType;
@@ -76,6 +77,7 @@ export type DeliveryTripRecord = {
   version: number;
   dropoffs: readonly DeliveryStoreDropoff[];
   podStatus: PodVerificationStatus;
+  supportingDocuments?: readonly string[];
 };
 
 export type TruckProfitabilitySummary = {
@@ -143,6 +145,7 @@ export function buildDeliveryTripRecord(input: {
   id: string;
   waybillNumber: string;
   deliveryDate: string;
+  recordingDelayed?: boolean;
   clientName: string;
   plateNumber: string;
   truckType: TruckType;
@@ -157,6 +160,7 @@ export function buildDeliveryTripRecord(input: {
   expenseStates?: Partial<TripExpenseStates>;
   financialState?: FinancialState;
   version?: number;
+  supportingDocuments?: readonly string[];
   dropoffs: readonly (Omit<DeliveryStoreDropoff, "entryFeeStatus"> & {
     entryFeeStatus?: ExpenseResolutionStatus;
   })[];
@@ -206,6 +210,7 @@ export function buildDeliveryTripRecord(input: {
     id: input.id,
     waybillNumber: input.waybillNumber,
     deliveryDate: input.deliveryDate,
+    recordingDelayed: input.recordingDelayed ?? false,
     clientName: input.clientName,
     plateNumber: input.plateNumber,
     truckType: input.truckType,
@@ -231,6 +236,7 @@ export function buildDeliveryTripRecord(input: {
     version: input.version ?? 1,
     dropoffs: normalizedDropoffs,
     podStatus: derivePodVerificationStatus(normalizedDropoffs),
+    supportingDocuments: input.supportingDocuments ?? [],
   };
 }
 
@@ -486,7 +492,8 @@ export function summarizeTruckProfitability(
     ) {
       continue;
     }
-    const existing = byPlate.get(trip.plateNumber);
+    const plateKey = trip.plateNumber.trim().toUpperCase();
+    const existing = byPlate.get(plateKey);
     const crewCosts =
       (trip.expenses.driverAllowance ?? 0) +
       (trip.expenses.driverDailyRate ?? 0) +
@@ -497,7 +504,7 @@ export function summarizeTruckProfitability(
 
     if (!existing) {
       const netProfit = trip.deliveryRate - trip.totalExpenses;
-      byPlate.set(trip.plateNumber, {
+      byPlate.set(plateKey, {
         plateNumber: trip.plateNumber,
         truckType: trip.truckType,
         completedTrips: 1,
@@ -517,7 +524,7 @@ export function summarizeTruckProfitability(
       const totalExpenses = existing.totalExpenses + trip.totalExpenses;
       const netProfit = totalEarnings - totalExpenses;
 
-      byPlate.set(trip.plateNumber, {
+      byPlate.set(plateKey, {
         ...existing,
         completedTrips: existing.completedTrips + 1,
         totalStoresServed: existing.totalStoresServed + trip.dropoffs.length,

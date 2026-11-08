@@ -42,8 +42,8 @@ export function computeDonutArcs(
 
   const cx = options.cx ?? 100;
   const cy = options.cy ?? 100;
-  const R = options.outerRadius ?? 78;
-  const r = options.innerRadius ?? 50;
+  const R = options.outerRadius ?? 80;
+  const r = options.innerRadius ?? 0;
 
   // Only slices with valid confirmed amounts > 0 contribute to SVG geometry
   const validSlices = slices.filter(
@@ -58,20 +58,25 @@ export function computeDonutArcs(
   if (validSlices.length === 1) {
     const single = validSlices[0];
     const percentage = 100;
-    // Draw two 180-degree arcs to form a complete donut ring without degenerate SVG arc errors
+    // Draw complete circle (full pie) or complete donut ring without degenerate SVG arc errors
     const topOuter = `${cx} ${cy - R}`;
     const bottomOuter = `${cx} ${cy + R}`;
-    const topInner = `${cx} ${cy - r}`;
-    const bottomInner = `${cx} ${cy + r}`;
-    const pathD = [
-      `M ${topOuter}`,
-      `A ${R} ${R} 0 1 1 ${bottomOuter}`,
-      `A ${R} ${R} 0 1 1 ${topOuter}`,
-      `M ${topInner}`,
-      `A ${r} ${r} 0 1 0 ${bottomInner}`,
-      `A ${r} ${r} 0 1 0 ${topInner}`,
-      "Z",
-    ].join(" ");
+    const pathD = r > 0
+      ? [
+          `M ${topOuter}`,
+          `A ${R} ${R} 0 1 1 ${bottomOuter}`,
+          `A ${R} ${R} 0 1 1 ${topOuter}`,
+          `M ${cx} ${cy - r}`,
+          `A ${r} ${r} 0 1 0 ${cx} ${cy + r}`,
+          `A ${r} ${r} 0 1 0 ${cx} ${cy - r}`,
+          "Z",
+        ].join(" ")
+      : [
+          `M ${topOuter}`,
+          `A ${R} ${R} 0 1 1 ${bottomOuter}`,
+          `A ${R} ${R} 0 1 1 ${topOuter}`,
+          "Z",
+        ].join(" ");
 
     return [
       {
@@ -100,20 +105,29 @@ export function computeDonutArcs(
     const x2 = cx + R * Math.cos(endAngle);
     const y2 = cy + R * Math.sin(endAngle);
 
-    const x3 = cx + r * Math.cos(endAngle);
-    const y3 = cy + r * Math.sin(endAngle);
-    const x4 = cx + r * Math.cos(startAngle);
-    const y4 = cy + r * Math.sin(startAngle);
-
     const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
 
-    const pathD = [
-      `M ${x1.toFixed(3)} ${y1.toFixed(3)}`,
-      `A ${R} ${R} 0 ${largeArcFlag} 1 ${x2.toFixed(3)} ${y2.toFixed(3)}`,
-      `L ${x3.toFixed(3)} ${y3.toFixed(3)}`,
-      `A ${r} ${r} 0 ${largeArcFlag} 0 ${x4.toFixed(3)} ${y4.toFixed(3)}`,
-      "Z",
-    ].join(" ");
+    let pathD: string;
+    if (r > 0) {
+      const x3 = cx + r * Math.cos(endAngle);
+      const y3 = cy + r * Math.sin(endAngle);
+      const x4 = cx + r * Math.cos(startAngle);
+      const y4 = cy + r * Math.sin(startAngle);
+      pathD = [
+        `M ${x1.toFixed(3)} ${y1.toFixed(3)}`,
+        `A ${R} ${R} 0 ${largeArcFlag} 1 ${x2.toFixed(3)} ${y2.toFixed(3)}`,
+        `L ${x3.toFixed(3)} ${y3.toFixed(3)}`,
+        `A ${r} ${r} 0 ${largeArcFlag} 0 ${x4.toFixed(3)} ${y4.toFixed(3)}`,
+        "Z",
+      ].join(" ");
+    } else {
+      pathD = [
+        `M ${cx} ${cy}`,
+        `L ${x1.toFixed(3)} ${y1.toFixed(3)}`,
+        `A ${R} ${R} 0 ${largeArcFlag} 1 ${x2.toFixed(3)} ${y2.toFixed(3)}`,
+        "Z",
+      ].join(" ");
+    }
 
     arcs.push({
       slice,
@@ -183,7 +197,7 @@ export function resolveTripFinancialGroups(
   if (trip.expenseStates.helperDailyRate === "unknown" || trip.expenseStates.helperAllowance === "unknown") {
     unknownList.push("Helper Compensation");
   }
-  if (trip.expenseStates.otherExpenses === "unknown") unknownList.push("Other Trip Expenses");
+  if (trip.expenseStates.otherExpenses === "unknown") unknownList.push("Other Expenses");
 
   const isFinanciallyComplete = trip.financialState === "finalized" && unknownList.length === 0;
 

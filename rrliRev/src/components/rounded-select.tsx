@@ -17,6 +17,8 @@ export function RoundedSelect({
   placeholder = "Select an option",
   emptyMessage = "No options available",
   searchable = false,
+  allowCustomValue = false,
+  searchPlaceholder = "Type to search...",
 }: {
   value: string;
   options: readonly (string | SelectOption)[];
@@ -26,6 +28,8 @@ export function RoundedSelect({
   placeholder?: string;
   emptyMessage?: string;
   searchable?: boolean;
+  allowCustomValue?: boolean;
+  searchPlaceholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -46,10 +50,17 @@ export function RoundedSelect({
     [options],
   );
 
-  const selectedOption =
-    normalizedOptions.find((option) => option.value === value) ??
-    normalizedOptions[0];
-  const triggerLabel = selectedOption?.label ?? (value.trim() || placeholder);
+  const matchedOption = normalizedOptions.find((option) => option.value === value);
+  const selectedOption = matchedOption ?? (!allowCustomValue ? normalizedOptions[0] : undefined);
+  const triggerLabel = matchedOption?.label ?? (value.trim() || selectedOption?.label || placeholder);
+  const trimmedQuery = query.trim();
+  const canUseCustomValue = Boolean(
+    allowCustomValue &&
+    trimmedQuery &&
+    !normalizedOptions.some(
+      (option) => option.label.toLocaleLowerCase() === trimmedQuery.toLocaleLowerCase(),
+    ),
+  );
   const visibleOptions =
     searchable && query.trim()
       ? normalizedOptions.filter((option) =>
@@ -140,41 +151,65 @@ export function RoundedSelect({
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Type to search…"
+                placeholder={searchPlaceholder}
                 aria-label={`Search ${ariaLabel.toLocaleLowerCase()}`}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && canUseCustomValue) {
+                    event.preventDefault();
+                    onChange(trimmedQuery);
+                    setOpen(false);
+                  }
+                }}
               />
             </div>
           ) : null}
-          {visibleOptions.length === 0 ? (
+          {visibleOptions.length === 0 && !canUseCustomValue ? (
             <p className="rounded-select-empty">{query ? "No matching options" : emptyMessage}</p>
           ) : (
-            visibleOptions.map((option, index) => {
-              const isSelected = option.value === value;
-              const showGroup =
-                option.group && option.group !== visibleOptions[index - 1]?.group;
-              return (
-                <div
-                  className="rounded-select-option-group"
-                  key={`${option.group ?? "default"}:${option.value}:${index}`}
-                >
-                  {showGroup ? (
-                    <span className="rounded-select-group-label">{option.group}</span>
-                  ) : null}
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={isSelected}
-                    className={isSelected ? "selected" : undefined}
-                    onClick={() => {
-                      onChange(option.value);
-                      setOpen(false);
-                    }}
+            <>
+              {visibleOptions.map((option, index) => {
+                const isSelected = option.value === value;
+                const showGroup =
+                  option.group && option.group !== visibleOptions[index - 1]?.group;
+                return (
+                  <div
+                    className="rounded-select-option-group"
+                    key={`${option.group ?? "default"}:${option.value}:${index}`}
                   >
-                    {option.label}
-                  </button>
-                </div>
-              );
-            })
+                    {showGroup ? (
+                      <span className="rounded-select-group-label">{option.group}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={isSelected ? "selected" : undefined}
+                      onClick={() => {
+                        onChange(option.value);
+                        setOpen(false);
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  </div>
+                );
+              })}
+              {canUseCustomValue ? (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  className="rounded-select-custom-option"
+                  onClick={() => {
+                    onChange(trimmedQuery);
+                    setOpen(false);
+                  }}
+                >
+                  <span>Add new</span>
+                  <strong>{trimmedQuery}</strong>
+                </button>
+              ) : null}
+            </>
           )}
         </div>
       )}

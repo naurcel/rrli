@@ -77,8 +77,8 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
               dateTo: activeRange.endDate ? toDateKey(activeRange.endDate) : undefined,
             })
           : [];
-        const ids = new Set(persisted.map((item) => item.id));
-        setDeliveries([...local.filter((item) => !ids.has(item.id)), ...persisted]);
+        const localIds = new Set(local.map((item) => item.id));
+        setDeliveries([...local, ...persisted.filter((item) => !localIds.has(item.id))]);
       })
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;

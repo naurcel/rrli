@@ -159,7 +159,7 @@ export function DeliveryExcelImportClient({
       const validationIssue = !waybillNumber
         ? "Waybill number required"
         : deliveryRate <= 0
-          ? "Delivery rate must be positive"
+          ? "Delivery revenue must be positive"
           : undefined;
 
       parsed.push({
@@ -461,12 +461,12 @@ export function DeliveryExcelImportClient({
                   <th>Date</th>
                   <th>Waybill Number</th>
                   <th>Client Name</th>
-                  <th>Truck Plate</th>
+                  <th>Plate Number</th>
                   <th>Temperature</th>
-                  <th>Delivery Rate</th>
+                  <th>Delivery Revenue</th>
                   <th>Diesel</th>
-                  <th>Toll</th>
-                  <th>Store Stops</th>
+                  <th>Highway Tolls</th>
+                  <th>Store Drop-offs</th>
                 </tr>
               </thead>
               <tbody>

@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
+import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-deletion-dialog";
 import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
 import { DeliveryCrewSection, parsePersonnelNames } from "@/components/delivery-crew-section";
+import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline";
 import {
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
@@ -16,13 +18,22 @@ import {
   type DetailSection,
 } from "@/components/record-detail-drawer";
 import { DeliveryFilterDropdown } from "@/components/delivery-filter-dropdown";
+import { TablePagination } from "@/components/table-pagination";
 import {
   AggregateExpenseBreakdown,
   DeliveryFinancialBreakdown,
 } from "@/components/delivery-financial-breakdown";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
+import { RoundedSelect } from "@/components/rounded-select";
 import type {
+  DeliveryStoreDropoff,
   ExpenseResolutionStatus,
+  FinancialState,
+} from "@/features/deliveries/delivery-domain";
+import {
+  calculateProfitMargin,
+  calculateTripExpenseTotal,
+  derivePodVerificationStatus,
 } from "@/features/deliveries/delivery-domain";
 import type {
   DeliveryFilterOption,
@@ -34,7 +45,12 @@ import {
   canMutateDeliveryRecords,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
-import { selectBrowserPreviewDeliveries } from "@/features/deliveries/browser-preview-deliveries";
+import {
+  readBrowserPreviewDeliveries,
+  selectBrowserPreviewDeliveries,
+  upsertBrowserPreviewDelivery,
+} from "@/features/deliveries/browser-preview-deliveries";
+import { deleteDeliveryRecord } from "@/features/deliveries/delivery-deletion-client";
 
 function toDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -52,12 +68,109 @@ function formatExpenseResolution(
   return `${formatPeso(value)} · Confirmed`;
 }
 
+type CorrectionDropoffDraft = {
+  id: string;
+  storeName: string;
+  destinationArea: string;
+  entryFee: string;
+  entryFeeStatus: ExpenseResolutionStatus;
+  podSubmitted: boolean;
+  supportingDocsComplete: boolean;
+  documentRef: string;
+};
+
+function sortDeliveryLedgerItems(
+  items: readonly DeliveryLedgerItem[],
+  sortField: string,
+  direction: TableSortDirection,
+): DeliveryLedgerItem[] {
+  const multiplier = direction === "asc" ? 1 : -1;
+
+  return [...items].sort((left, right) => {
+    let leftVal: string | number | null = null;
+    let rightVal: string | number | null = null;
+
+    switch (sortField) {
+      case "waybill":
+        leftVal = (left.waybillNumber ?? "").toLowerCase();
+        rightVal = (right.waybillNumber ?? "").toLowerCase();
+        break;
+      case "delivery_date":
+        leftVal = left.deliveryDate ?? "";
+        rightVal = right.deliveryDate ?? "";
+        break;
+      case "client":
+        leftVal = (left.clientName ?? "").toLowerCase();
+        rightVal = (right.clientName ?? "").toLowerCase();
+        break;
+      case "truck":
+        leftVal = (left.plateNumber ?? "").toLowerCase();
+        rightVal = (right.plateNumber ?? "").toLowerCase();
+        break;
+      case "temperature": {
+        const parseTemp = (t?: string | null) => {
+          const raw = t ?? "";
+          const num = Number(raw.replace(/°?c/i, "").trim());
+          return Number.isFinite(num) ? num : raw.toLowerCase();
+        };
+        leftVal = parseTemp(left.truckTemperature);
+        rightVal = parseTemp(right.truckTemperature);
+        break;
+      }
+      case "origin":
+        leftVal = (left.origin ?? "").toLowerCase();
+        rightVal = (right.origin ?? "").toLowerCase();
+        break;
+      case "dropoffs":
+        leftVal = left.dropoffs?.length ?? 0;
+        rightVal = right.dropoffs?.length ?? 0;
+        break;
+      case "distance":
+        leftVal = left.distanceKm ?? 0;
+        rightVal = right.distanceKm ?? 0;
+        break;
+      case "delivery_rate":
+        leftVal = left.deliveryRate;
+        rightVal = right.deliveryRate;
+        break;
+      case "total_expenses":
+        leftVal = left.totalExpenses;
+        rightVal = right.totalExpenses;
+        break;
+      case "net_income":
+        leftVal = left.netIncome;
+        rightVal = right.netIncome;
+        break;
+      case "profit_margin":
+        leftVal = left.marginPercent;
+        rightVal = right.marginPercent;
+        break;
+      default:
+        leftVal = left.deliveryDate ?? "";
+        rightVal = right.deliveryDate ?? "";
+        break;
+    }
+
+    if (leftVal == null && rightVal == null) return 0;
+    if (leftVal == null) return 1;
+    if (rightVal == null) return -1;
+
+    const compared =
+      typeof leftVal === "number" && typeof rightVal === "number"
+        ? leftVal - rightVal
+        : String(leftVal).localeCompare(String(rightVal));
+
+    return compared * multiplier || left.id.localeCompare(right.id);
+  });
+}
+
 export default function DeliveriesPage() {
   const actor = useAuthenticatedActor();
   const { range } = useGlobalDateRange();
   const [deliveries, setDeliveries] = useState<readonly DeliveryLedgerItem[]>([]);
   const [clients, setClients] = useState<DeliveryFilterOption[]>([]);
   const [trucks, setTrucks] = useState<DeliveryFilterOption[]>([]);
+  const [drivers, setDrivers] = useState<DeliveryFilterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,6 +181,9 @@ export default function DeliveriesPage() {
   const [pageCount, setPageCount] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedTrip, setSelectedTrip] = useState<DeliveryLedgerItem | null>(null);
+  const [deliveryToDelete, setDeliveryToDelete] = useState<DeliveryLedgerItem | null>(null);
+  const [isDeletingDelivery, setIsDeletingDelivery] = useState(false);
+  const [deleteDeliveryError, setDeleteDeliveryError] = useState<string | null>(null);
   const [activeKpi, setActiveKpi] = useState<"earnings" | "expenses" | "profit" | null>(null);
   const [financialActionPending, setFinancialActionPending] = useState(false);
   const [financialActionMessage, setFinancialActionMessage] = useState<string | null>(null);
@@ -75,15 +191,80 @@ export default function DeliveriesPage() {
   const [correctingTrip, setCorrectingTrip] = useState<DeliveryLedgerItem | null>(null);
   const [correctionReason, setCorrectionReason] = useState("");
   const [correctionDeliveryRate, setCorrectionDeliveryRate] = useState<string>("");
+  const [correctionDriverName, setCorrectionDriverName] = useState("");
+  const [correctionHelperName, setCorrectionHelperName] = useState("");
   const [correctionExpenses, setCorrectionExpenses] = useState<{ [key: string]: string }>({});
   const [correctionStatuses, setCorrectionStatuses] = useState<{ [key: string]: "confirmed" | "not_applicable" | "unknown" }>({});
+  const [correctionExistingSupportingDocs, setCorrectionExistingSupportingDocs] = useState<string[]>([]);
+  const [correctionSupportingFiles, setCorrectionSupportingFiles] = useState<File[]>([]);
+  const [correctionDropoffs, setCorrectionDropoffs] = useState<CorrectionDropoffDraft[]>([]);
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const handledEditLink = useRef<string | null>(null);
+
+  function addCorrectionDropoff() {
+    setCorrectionDropoffs((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        storeName: "",
+        destinationArea: "",
+        entryFee: "",
+        entryFeeStatus: "not_applicable",
+        podSubmitted: false,
+        supportingDocsComplete: false,
+        documentRef: "",
+      },
+    ]);
+  }
+
+  function removeCorrectionDropoff(index: number) {
+    setCorrectionDropoffs((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  function updateCorrectionDropoff(
+    index: number,
+    field: keyof CorrectionDropoffDraft,
+    val: any,
+  ) {
+    setCorrectionDropoffs((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const updated = { ...item, [field]: val };
+        if (field === "entryFeeStatus" && val !== "confirmed") {
+          updated.entryFee = "";
+        }
+        return updated;
+      }),
+    );
+  }
+
+  const correctionEntryFeeSummary = useMemo(() => {
+    const hasUnknown = correctionDropoffs.some((d) => d.entryFeeStatus === "unknown");
+    const allNa = correctionDropoffs.length > 0 && correctionDropoffs.every((d) => d.entryFeeStatus === "not_applicable");
+    if (hasUnknown) return "Unknown · requires confirmation";
+    if (allNa) return "Not applicable";
+    const total = correctionDropoffs.reduce((sum, d) => {
+      if (d.entryFeeStatus === "confirmed" && d.entryFee !== "") {
+        const num = Number(d.entryFee);
+        return sum + (Number.isFinite(num) ? num : 0);
+      }
+      return sum;
+    }, 0);
+    return formatPeso(total);
+  }, [correctionDropoffs]);
 
   function openCorrectionModal(trip: DeliveryLedgerItem) {
     setCorrectingTrip(trip);
     setCorrectionReason("");
     setCorrectionDeliveryRate(trip.deliveryRate != null ? String(trip.deliveryRate) : "");
+    setCorrectionDriverName(trip.driverName ?? "");
+    setCorrectionHelperName(trip.helperName ?? "");
+    setCorrectionExistingSupportingDocs(trip.supportingDocuments ? [...trip.supportingDocuments] : []);
+    setCorrectionSupportingFiles([]);
     setCorrectionExpenses({
       dieselExpenses: trip.expenses.dieselExpenses != null ? String(trip.expenses.dieselExpenses) : "",
       tollGateExpenses: trip.expenses.tollGateExpenses != null ? String(trip.expenses.tollGateExpenses) : "",
@@ -102,8 +283,33 @@ export default function DeliveriesPage() {
       helperDailyRate: trip.expenseStates.helperDailyRate,
       otherExpenses: trip.expenseStates.otherExpenses,
     });
+    const dropoffsDraft: CorrectionDropoffDraft[] = (trip.dropoffs && trip.dropoffs.length > 0)
+      ? trip.dropoffs.map((d) => ({
+          id: d.id || crypto.randomUUID(),
+          storeName: d.storeName,
+          destinationArea: d.destinationArea,
+          entryFee: d.entryFee != null ? String(d.entryFee) : "",
+          entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
+          podSubmitted: Boolean(d.podSubmitted),
+          supportingDocsComplete: Boolean(d.supportingDocsComplete),
+          documentRef: d.documentRef ?? "",
+        }))
+      : [
+          {
+            id: crypto.randomUUID(),
+            storeName: "",
+            destinationArea: "",
+            entryFee: "",
+            entryFeeStatus: "not_applicable",
+            podSubmitted: false,
+            supportingDocsComplete: false,
+            documentRef: "",
+          },
+        ];
+    setCorrectionDropoffs(dropoffsDraft);
     setCorrectionSubmitting(false);
     setCorrectionError(null);
+    setSelectedTrip(null);
   }
 
   function closeCorrectionModal() {
@@ -117,14 +323,44 @@ export default function DeliveriesPage() {
       helperDailyRate: correctingTrip.expenses.helperDailyRate != null ? String(correctingTrip.expenses.helperDailyRate) : "",
       otherExpenses: correctingTrip.expenses.otherExpenses != null ? String(correctingTrip.expenses.otherExpenses) : "",
     } : {};
+    const initialDropoffs = (correctingTrip?.dropoffs ?? []).map((d) => ({
+      storeName: d.storeName,
+      destinationArea: d.destinationArea,
+      entryFee: d.entryFee != null ? String(d.entryFee) : "",
+      entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
+    }));
+    const currentDropoffsClean = correctionDropoffs.map((d) => ({
+      storeName: d.storeName,
+      destinationArea: d.destinationArea,
+      entryFee: d.entryFee,
+      entryFeeStatus: d.entryFeeStatus,
+    }));
     const dirty = Boolean(correctingTrip) && (
       correctionReason.trim().length > 0 ||
       correctionDeliveryRate !== (correctingTrip?.deliveryRate != null ? String(correctingTrip.deliveryRate) : "") ||
+      correctionDriverName !== (correctingTrip?.driverName ?? "") ||
+      correctionHelperName !== (correctingTrip?.helperName ?? "") ||
+      correctionSupportingFiles.length > 0 ||
+      JSON.stringify(correctionExistingSupportingDocs) !== JSON.stringify(correctingTrip?.supportingDocuments ?? []) ||
       JSON.stringify(correctionExpenses) !== JSON.stringify(initialExpenses) ||
+      JSON.stringify(initialDropoffs) !== JSON.stringify(currentDropoffsClean) ||
       Object.entries(correctionStatuses).some(([key, value]) => value !== correctingTrip?.expenseStates[key as keyof DeliveryLedgerItem["expenseStates"]])
     );
     if (dirty && !window.confirm("Discard the unsaved delivery correction?")) return;
+    setSelectedTrip(correctingTrip);
     setCorrectingTrip(null);
+  }
+
+  function openDeleteDeliveryModal(trip: DeliveryLedgerItem) {
+    setSelectedTrip(null);
+    setDeleteDeliveryError(null);
+    setDeliveryToDelete(trip);
+  }
+
+  function closeDeleteDeliveryModal() {
+    if (isDeletingDelivery) return;
+    setDeleteDeliveryError(null);
+    setDeliveryToDelete(null);
   }
 
   async function submitCorrection(e: React.FormEvent) {
@@ -138,8 +374,32 @@ export default function DeliveriesPage() {
 
     const numRate = Number(correctionDeliveryRate);
     if (!Number.isFinite(numRate) || numRate <= 0) {
-      setCorrectionError("Please enter a valid positive delivery rate.");
+      setCorrectionError("Please enter a valid positive delivery revenue.");
       return;
+    }
+
+    if (correctionDropoffs.length === 0) {
+      setCorrectionError("At least one store drop-off is required.");
+      return;
+    }
+
+    for (let i = 0; i < correctionDropoffs.length; i++) {
+      const stop = correctionDropoffs[i];
+      if (!stop.storeName.trim()) {
+        setCorrectionError(`Store name is required for Store Drop-off #${i + 1}.`);
+        return;
+      }
+      if (!stop.destinationArea.trim()) {
+        setCorrectionError(`Destination area is required for Store Drop-off #${i + 1}.`);
+        return;
+      }
+      if (stop.entryFeeStatus === "confirmed") {
+        const feeNum = stop.entryFee === "" ? null : Number(stop.entryFee);
+        if (feeNum === null || !Number.isFinite(feeNum) || feeNum < 0) {
+          setCorrectionError(`Please enter a valid positive entry fee for Store Drop-off #${i + 1}.`);
+          return;
+        }
+      }
     }
 
     setCorrectionSubmitting(true);
@@ -161,6 +421,77 @@ export default function DeliveriesPage() {
       }
     }
 
+    const finalSupportingDocs = [
+      ...correctionExistingSupportingDocs,
+      ...correctionSupportingFiles.map((f) => f.name),
+    ];
+    const hasSupporting = finalSupportingDocs.length > 0;
+    const updatedDropoffs: DeliveryStoreDropoff[] = correctionDropoffs.map((stop, index) => {
+      const feeNum = stop.entryFeeStatus === "confirmed" && stop.entryFee !== ""
+        ? Number(stop.entryFee)
+        : null;
+      return {
+        id: stop.id,
+        sequence: index + 1,
+        storeName: stop.storeName.trim(),
+        destinationArea: stop.destinationArea.trim(),
+        entryFee: feeNum,
+        entryFeeStatus: stop.entryFeeStatus,
+        podSubmitted: stop.podSubmitted,
+        supportingDocsComplete: hasSupporting || stop.supportingDocsComplete,
+        documentRef: stop.documentRef || "",
+      };
+    });
+
+    const hasUnknownEntryFee = updatedDropoffs.some((d) => d.entryFeeStatus === "unknown");
+    const allNaEntryFee = updatedDropoffs.length > 0 && updatedDropoffs.every((d) => d.entryFeeStatus === "not_applicable");
+    let aggregatedEntryFeeTotal: number | null = null;
+    let aggregatedEntryFeeStatus: ExpenseResolutionStatus = "confirmed";
+
+    if (hasUnknownEntryFee) {
+      aggregatedEntryFeeTotal = null;
+      aggregatedEntryFeeStatus = "unknown";
+    } else if (allNaEntryFee) {
+      aggregatedEntryFeeTotal = null;
+      aggregatedEntryFeeStatus = "not_applicable";
+    } else {
+      aggregatedEntryFeeTotal = updatedDropoffs.reduce((sum, d) => sum + (d.entryFee ?? 0), 0);
+      aggregatedEntryFeeStatus = "confirmed";
+    }
+
+    expensesPayload.entryFees = aggregatedEntryFeeTotal;
+    const finalStatuses: Record<string, ExpenseResolutionStatus> = {
+      ...correctionStatuses,
+      entryFees: aggregatedEntryFeeStatus,
+    };
+
+    const nextPodStatus = derivePodVerificationStatus(updatedDropoffs);
+    const updatedExpenses = { ...correctingTrip.expenses, ...expensesPayload };
+    const updatedStates = { ...correctingTrip.expenseStates, ...finalStatuses };
+    const totalExp = calculateTripExpenseTotal(updatedExpenses, updatedStates);
+    const net = totalExp == null ? null : numRate - totalExp;
+    const margin = calculateProfitMargin(numRate, net);
+    const expenseKeys = [
+      "dieselExpenses",
+      "tollGateExpenses",
+      "entryFees",
+      "driverAllowance",
+      "driverDailyRate",
+      "helperAllowance",
+      "helperDailyRate",
+      "otherExpenses",
+    ] as const;
+    const financialIntegrityIssues = expenseKeys.flatMap((key) => {
+      const status = updatedStates[key];
+      if (status === "unknown") return [`${key} is unresolved.`];
+      if (status === "confirmed" && updatedExpenses[key] == null) {
+        return [`${key} has no confirmed amount.`];
+      }
+      return [];
+    });
+    const nextFinancialState: FinancialState =
+      financialIntegrityIssues.length === 0 ? "finalized" : "incomplete";
+
     try {
       const response = await fetch("/api/deliveries", {
         method: "PATCH",
@@ -173,44 +504,71 @@ export default function DeliveriesPage() {
           reason: correctionReason.trim(),
           changes: {
             deliveryRate: numRate,
+            driverName: correctionDriverName.trim() || null,
+            helperName: correctionHelperName.trim() || null,
             expenses: expensesPayload,
-            expenseStates: correctionStatuses,
+            expenseStates: finalStatuses,
+            supportingDocuments: finalSupportingDocs,
+            dropoffs: updatedDropoffs,
+            financialState: nextFinancialState,
           },
+          fallbackRecord: correctingTrip,
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      let newVersion = correctingTrip.version + 1;
+
       if (!response.ok || !data.ok) {
         if (response.status === 409 || data.code === "VERSION_CONFLICT") {
           setCorrectionError(
             "Version Conflict: This delivery record was modified concurrently by another user. Your inputs have been preserved. Please review and retry.",
           );
-        } else {
-          setCorrectionError(data.message ?? "Failed to save correction.");
+          return;
         }
-        return;
-      }
 
-      const newVersion = data.result?.version ?? correctingTrip.version + 1;
-      const totalExp = Object.values(expensesPayload).reduce<number>((a, b) => a + (b ?? 0), 0);
-      const net = numRate - totalExp;
-      const margin = numRate > 0 ? (net / numRate) * 100 : null;
+        const hasBrowserRecord = readBrowserPreviewDeliveries().some(
+          (item) => item.id === correctingTrip.id,
+        );
+        const isNotFound =
+          response.status === 404 ||
+          data.code === "NOT_FOUND" ||
+          String(data.message).includes("NOT_FOUND") ||
+          String(data.message).toLowerCase().includes("delivery_not_found");
+
+        if (!isNotFound || !hasBrowserRecord) {
+          setCorrectionError(data.message ?? "Failed to save correction.");
+          return;
+        }
+      } else {
+        newVersion = data.result?.version ?? correctingTrip.version + 1;
+      }
 
       const updated = {
         ...correctingTrip,
         deliveryRate: numRate,
-        expenses: { ...correctingTrip.expenses, ...expensesPayload },
-        expenseStates: { ...correctingTrip.expenseStates, ...correctionStatuses },
+        driverName: correctionDriverName.trim() || null,
+        helperName: correctionHelperName.trim() || null,
+        expenses: updatedExpenses,
+        expenseStates: updatedStates,
         totalExpenses: totalExp,
         netIncome: net,
         marginPercent: margin,
+        financialState: nextFinancialState,
+        financialIntegrityIssues,
         version: newVersion,
+        supportingDocuments: finalSupportingDocs,
+        dropoffs: updatedDropoffs,
+        podStatus: nextPodStatus,
       };
 
       setFinancialActionMessage(
-        `Financial correction successfully recorded (Version ${newVersion}). Reason: "${correctionReason.trim()}".`,
+        nextFinancialState === "finalized"
+          ? `Financial details saved and delivery finalized (Version ${newVersion}). Reason: "${correctionReason.trim()}".`
+          : `Financial correction recorded (Version ${newVersion}). Reason: "${correctionReason.trim()}".`,
       );
       setSelectedTrip(updated);
+      upsertBrowserPreviewDelivery(updated);
       setDeliveries((prev) =>
         prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
       );
@@ -222,10 +580,29 @@ export default function DeliveriesPage() {
     }
   }
 
+  async function handleConfirmDeleteDelivery() {
+    if (!deliveryToDelete || isDeletingDelivery) return;
+    setIsDeletingDelivery(true);
+    setDeleteDeliveryError(null);
+
+    try {
+      await deleteDeliveryRecord(deliveryToDelete.id);
+      setDeliveries((prev) => prev.filter((d) => d.id !== deliveryToDelete.id));
+      setTotal((current) => Math.max(0, current - 1));
+      setFinancialActionMessage(`Delivery record "${deliveryToDelete.waybillNumber}" was successfully deleted.`);
+      setDeliveryToDelete(null);
+      setSelectedTrip(null);
+    } catch (error) {
+      setDeleteDeliveryError(error instanceof Error ? error.message : "Network error while deleting delivery record.");
+    } finally {
+      setIsDeletingDelivery(false);
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => {
-      const params = new URLSearchParams({ page: String(page), pageSize: "25" });
+      const params = new URLSearchParams({ page: String(page), pageSize: "10" });
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
       if (selectedClients.length > 0) params.set("clientIds", selectedClients.join(","));
       if (selectedTrucks.length > 0) params.set("truckIds", selectedTrucks.join(","));
@@ -248,6 +625,7 @@ export default function DeliveriesPage() {
             filters?: {
               clients?: DeliveryFilterOption[];
               trucks?: DeliveryFilterOption[];
+              drivers?: DeliveryFilterOption[];
             };
             source?: string;
           };
@@ -264,11 +642,12 @@ export default function DeliveriesPage() {
               })
             : [];
           const remote = data.items ?? [];
-          const remoteIds = new Set(remote.map((item) => item.id));
-          setDeliveries([...local.filter((item) => !remoteIds.has(item.id)), ...remote]);
+          const localIds = new Set(local.map((item) => item.id));
+          const combined = [...local, ...remote.filter((item) => !localIds.has(item.id))];
+          setDeliveries(sortDeliveryLedgerItems(combined, sortField, direction as TableSortDirection));
           const combinedTotal = (data.total ?? 0) + local.length;
           setTotal(combinedTotal);
-          setPageCount(Math.max(data.pageCount ?? 1, Math.ceil(combinedTotal / 25)));
+          setPageCount(Math.max(data.pageCount ?? 1, Math.ceil(combinedTotal / 10)));
           const remoteClients = data.filters?.clients ?? [];
           const existingClientIds = new Set(remoteClients.map((c) => c.id));
           const extraPreviewClients: DeliveryFilterOption[] = [];
@@ -280,6 +659,20 @@ export default function DeliveriesPage() {
           }
           setClients([...remoteClients, ...extraPreviewClients]);
           setTrucks(data.filters?.trucks ?? []);
+
+          const remoteDrivers = data.filters?.drivers ?? [];
+          const existingDriverNames = new Set(remoteDrivers.map((d) => d.label.toLowerCase()));
+          const extraPreviewDrivers: DeliveryFilterOption[] = [];
+          for (const item of local) {
+            if (item.driverName && !existingDriverNames.has(item.driverName.toLowerCase())) {
+              existingDriverNames.add(item.driverName.toLowerCase());
+              extraPreviewDrivers.push({
+                id: `driver-${item.driverName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+                label: item.driverName,
+              });
+            }
+          }
+          setDrivers([...remoteDrivers, ...extraPreviewDrivers]);
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
@@ -299,7 +692,21 @@ export default function DeliveriesPage() {
     setPage(1);
   }, [range, searchQuery, selectedClients, selectedTrucks, sort]);
 
-  const filteredDeliveries = deliveries;
+  useEffect(() => {
+    const requestedId = new URLSearchParams(window.location.search).get("edit");
+    if (!requestedId || handledEditLink.current === requestedId) return;
+    const requestedTrip =
+      deliveries.find((trip) => trip.id === requestedId) ??
+      readBrowserPreviewDeliveries().find((trip) => trip.id === requestedId);
+    if (!requestedTrip) return;
+    handledEditLink.current = requestedId;
+    openCorrectionModal(requestedTrip);
+  }, [deliveries]);
+
+  const filteredDeliveries = useMemo(() => {
+    const [sortField, direction] = sort.split(":") as [string, TableSortDirection];
+    return sortDeliveryLedgerItems(deliveries, sortField, direction || "desc");
+  }, [deliveries, sort]);
 
   const summary = useMemo(() => {
     const finalized = filteredDeliveries.filter((item) => item.financialState === "finalized");
@@ -427,12 +834,10 @@ export default function DeliveriesPage() {
       return [
         {
           eyebrow: "CALCULATION FORMULA",
-          title: "Total Delivery Earnings",
-          description:
-            "Delivery earnings represent the gross contracted revenue across all finalized delivery trips currently displayed. Incomplete or pending trips are excluded from earnings until finalized.",
+          title: "Delivery Revenue",
           rows: [
-            { label: "Formula", value: "∑ (Delivery Rate for all Finalized Trips)" },
-            { label: "Total Finalized Earnings", value: formatPeso(summary.rateTotal), tone: "success" },
+            { label: "Formula", value: "∑ (Delivery Revenue for all Finalized Deliveries)" },
+            { label: "Delivery Revenue", value: formatPeso(summary.rateTotal), tone: "success" },
             { label: "Finalized Trips", value: `${kpiBreakdown.finalizedCount} of ${kpiBreakdown.totalTrips} records` },
             {
               label: "Incomplete Financials",
@@ -447,7 +852,11 @@ export default function DeliveriesPage() {
           rows: [
             { label: "Average per Finalized Trip", value: formatPeso(kpiBreakdown.avgRevenuePerTrip) },
             { label: "Average per Store Drop-off", value: formatPeso(kpiBreakdown.avgRevenuePerStop) },
-            { label: "Total Store Stops Served", value: `${kpiBreakdown.totalStops} stops` },
+            { label: "Total Store Drop-offs Served", value: `${kpiBreakdown.totalStops} drop-offs` },
+            {
+              label: "Average Drop-offs per Trip",
+              value: `${kpiBreakdown.finalizedCount > 0 ? (kpiBreakdown.totalStops / kpiBreakdown.finalizedCount).toFixed(1) : "0"} drop-offs`,
+            },
           ],
         },
         ...(clientRows.length > 0
@@ -464,12 +873,16 @@ export default function DeliveriesPage() {
           title: "Owned vs. Subcontracted Revenue",
           rows: [
             {
-              label: "Owned Fleet",
+              label: "Owned Trucks",
               value: `${formatPeso(kpiBreakdown.ownershipRevenue.Owned.total)} (${sharePercent(kpiBreakdown.ownershipRevenue.Owned.total, summary.rateTotal)}) · ${kpiBreakdown.ownershipRevenue.Owned.trips} trips`,
             },
             {
-              label: "Subcontracted Fleet",
+              label: "Subcontracted Trucks",
               value: `${formatPeso(kpiBreakdown.ownershipRevenue.Subcontracted.total)} (${sharePercent(kpiBreakdown.ownershipRevenue.Subcontracted.total, summary.rateTotal)}) · ${kpiBreakdown.ownershipRevenue.Subcontracted.trips} trips`,
+            },
+            {
+              label: "Total Fleet Trips",
+              value: `${kpiBreakdown.ownershipRevenue.Owned.trips + kpiBreakdown.ownershipRevenue.Subcontracted.trips} trips`,
             },
           ],
         },
@@ -481,7 +894,7 @@ export default function DeliveriesPage() {
       return [
         {
           eyebrow: "EXPENSE DISTRIBUTION VISUALIZATION",
-          title: "Operating Expenses Distribution",
+          title: "Trip Expenses Distribution",
           fullWidth: true,
           customContent: (
             <AggregateExpenseBreakdown
@@ -492,31 +905,29 @@ export default function DeliveriesPage() {
         },
         {
           eyebrow: "CALCULATION FORMULA",
-          title: "Total Operational Expenses",
-          description:
-            "Trip expenses aggregate all disbursements incurred during delivery runs, including fuel, highway tolls, client store entry fees, crew wages/allowances, and miscellaneous charges across finalized trips.",
+          title: "Trip Expenses",
           rows: [
-            { label: "Formula", value: "Diesel + Tolls + Entry Fees + Crew Costs + Other" },
-            { label: "Total Trip Expenses", value: formatPeso(expTotal), tone: "warning" },
+            { label: "Formula", value: "Diesel Fuel + Highway Tolls + Store Entry Fees + Crew Compensation + Other Expenses" },
+            { label: "Trip Expenses", value: formatPeso(expTotal), tone: "warning" },
             { label: "Finalized Trips Included", value: `${kpiBreakdown.finalizedCount} trips` },
-            { label: "Average Cost per Trip", value: formatPeso(kpiBreakdown.avgExpensePerTrip) },
-            { label: "Average Cost per Store Drop-off", value: formatPeso(kpiBreakdown.avgExpensePerStop) },
+            { label: "Average Expense per Trip", value: formatPeso(kpiBreakdown.avgExpensePerTrip) },
+            { label: "Average Expense per Store Drop-off", value: formatPeso(kpiBreakdown.avgExpensePerStop) },
           ],
         },
         {
           eyebrow: "ITEMIZED EXPENSE BREAKDOWN",
           title: "Cost Categories",
           rows: [
-            { label: "Diesel Fuel Expenses", value: `${formatPeso(kpiBreakdown.diesel)} (${sharePercent(kpiBreakdown.diesel, expTotal)})` },
-            { label: "Toll Gate Charges", value: `${formatPeso(kpiBreakdown.toll)} (${sharePercent(kpiBreakdown.toll, expTotal)})` },
+            { label: "Diesel Fuel", value: `${formatPeso(kpiBreakdown.diesel)} (${sharePercent(kpiBreakdown.diesel, expTotal)})` },
+            { label: "Highway Tolls", value: `${formatPeso(kpiBreakdown.toll)} (${sharePercent(kpiBreakdown.toll, expTotal)})` },
             { label: "Store Entry Fees", value: `${formatPeso(kpiBreakdown.entryFees)} (${sharePercent(kpiBreakdown.entryFees, expTotal)})` },
-            { label: "Crew Payroll & Allowances", value: `${formatPeso(kpiBreakdown.crewTotal)} (${sharePercent(kpiBreakdown.crewTotal, expTotal)})` },
-            { label: "Other Trip Expenses", value: `${formatPeso(kpiBreakdown.otherExpenses)} (${sharePercent(kpiBreakdown.otherExpenses, expTotal)})` },
+            { label: "Crew Compensation", value: `${formatPeso(kpiBreakdown.crewTotal)} (${sharePercent(kpiBreakdown.crewTotal, expTotal)})` },
+            { label: "Other Expenses", value: `${formatPeso(kpiBreakdown.otherExpenses)} (${sharePercent(kpiBreakdown.otherExpenses, expTotal)})` },
           ],
         },
         {
           eyebrow: "CREW COMPENSATION BREAKDOWN",
-          title: "Driver & Helper Payroll",
+          title: "Crew Compensation",
           rows: [
             { label: "Driver Daily Rates", value: formatPeso(kpiBreakdown.driverDailyRate) },
             { label: "Driver Allowances", value: formatPeso(kpiBreakdown.driverAllowance) },
@@ -534,12 +945,10 @@ export default function DeliveriesPage() {
       return [
         {
           eyebrow: "CALCULATION FORMULA",
-          title: "Net Operating Margin Equation",
-          description:
-            "Net profit is the net operating contribution derived by deducting all verified operational expenses from gross finalized delivery earnings.",
+          title: "Net Profit Calculation",
           rows: [
-            { label: "Profit Equation", value: "Delivery Earnings − Total Trip Expenses" },
-            { label: "Delivery Earnings (+)", value: formatPeso(summary.rateTotal), tone: "success" },
+            { label: "Profit Equation", value: "Delivery Revenue − Trip Expenses" },
+            { label: "Delivery Revenue (+)", value: formatPeso(summary.rateTotal), tone: "success" },
             { label: "Trip Expenses (−)", value: formatPeso(summary.expenseTotal), tone: "warning" },
             {
               label: "Net Profit (=)",
@@ -553,7 +962,7 @@ export default function DeliveriesPage() {
           title: "Profitability Metrics",
           rows: [
             {
-              label: "Operating Profit Margin",
+              label: "Profit Margin",
               value: formatPercent(margin),
               tone: margin != null && margin >= 15 ? "success" : margin != null && margin < 0 ? "warning" : undefined,
             },
@@ -594,7 +1003,7 @@ export default function DeliveriesPage() {
       case "earnings":
         return {
           eyebrow: "METRIC BREAKDOWN & CALCULATION",
-          title: "Delivery Earnings",
+          title: "Delivery Revenue",
           statusLabel: formatPeso(summary.rateTotal),
           statusTone: "success" as const,
         };
@@ -608,7 +1017,7 @@ export default function DeliveriesPage() {
       case "profit":
         return {
           eyebrow: "METRIC BREAKDOWN & CALCULATION",
-          title: "Net Operating Profit",
+          title: "Net Profit",
           statusLabel: formatPeso(summary.netTotal),
           statusTone: summary.netTotal >= 0 ? ("success" as const) : ("warning" as const),
         };
@@ -636,20 +1045,39 @@ export default function DeliveriesPage() {
           deliveryId: selectedTrip.id,
           expectedVersion: selectedTrip.version,
           idempotencyKey: crypto.randomUUID(),
+          fallbackRecord: selectedTrip,
         }),
       });
-      const payload = await response.json() as {
+      const payload = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
         message?: string;
+        code?: string;
         result?: { version?: number };
       };
-      if (!response.ok || !payload.ok) throw new Error(payload.message ?? "Unable to finalize financials.");
+      let newVersion = selectedTrip.version + 1;
+      if (!response.ok || !payload.ok) {
+        const hasBrowserRecord = readBrowserPreviewDeliveries().some(
+          (item) => item.id === selectedTrip.id,
+        );
+        const isNotFound =
+          response.status === 404 ||
+          payload.code === "NOT_FOUND" ||
+          String(payload.message).includes("NOT_FOUND") ||
+          String(payload.message).toLowerCase().includes("delivery_not_found");
+
+        if (!isNotFound || !hasBrowserRecord) {
+          throw new Error(payload.message ?? "Unable to finalize financials.");
+        }
+      } else {
+        newVersion = payload.result?.version ?? selectedTrip.version + 1;
+      }
       const updated = {
         ...selectedTrip,
         financialState: "finalized" as const,
-        version: payload.result?.version ?? selectedTrip.version + 1,
+        version: newVersion,
       };
       setSelectedTrip(updated);
+      upsertBrowserPreviewDelivery(updated);
       setDeliveries((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
       setFinancialActionMessage("Financials finalized and recorded in the audit history.");
     } catch (reason) {
@@ -674,16 +1102,12 @@ export default function DeliveriesPage() {
         rows: [
           { label: "Waybill Number", value: selectedTrip.waybillNumber },
           { label: "Delivery Date", value: selectedTrip.deliveryDate },
+          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const }] : []),
           { label: "Client Account", value: selectedTrip.clientName },
           { label: "Origin Hub", value: selectedTrip.origin },
           { label: "Distance", value: `${selectedTrip.distanceKm} km` },
           { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L` },
           { label: "Delivery Status", value: selectedTrip.deliveryStatus || "Completed" },
-          {
-            label: "Financial Status",
-            value: selectedTrip.financialState === "finalized" ? "Finalized" : "Incomplete",
-            tone: selectedTrip.financialState === "finalized" ? "success" : "warning",
-          },
         ],
       },
       {
@@ -713,18 +1137,10 @@ export default function DeliveriesPage() {
         ),
       },
       {
-        title: `Route & Drop-offs (${selectedTrip.dropoffs.length} stops)`,
-        eyebrow: "Stop sequence and documents",
+        title: `Route & Store Drop-offs (${selectedTrip.dropoffs.length} ${selectedTrip.dropoffs.length === 1 ? "drop-off" : "drop-offs"})`,
+        eyebrow: "Store drop-off sequence & documents",
         fullWidth: true,
-        rows: [
-          ...selectedTrip.dropoffs.map((stop) => ({
-            label: `#${stop.sequence} ${stop.storeName} (${stop.destinationArea})`,
-            value: `Entry fee: ${formatExpenseResolution(stop.entryFee, stop.entryFeeStatus)} · ${
-              stop.podSubmitted ? `Attached (${stop.documentRef})` : stop.documentRef
-            }`,
-            tone: stop.podSubmitted ? ("success" as const) : ("warning" as const),
-          })),
-        ],
+        customContent: <DeliveryDropoffTimeline dropoffs={selectedTrip.dropoffs} />,
       },
       {
         title: "Financial Breakdown",
@@ -736,7 +1152,7 @@ export default function DeliveriesPage() {
         title: "POD & Supporting Documents",
         eyebrow: "Stop-level files",
         fullWidth: true,
-        description: "Select a drop-off to view its POD or upload a replacement when authorized.",
+        description: "Attach or view POD documents for each drop-off. Click 'Pending upload' to attach files inline.",
         customContent: (
           <DeliveryPodDocuments
             trip={selectedTrip}
@@ -744,6 +1160,7 @@ export default function DeliveriesPage() {
             roleLabel={actor.roleLabel}
             onTripChange={(nextTrip) => {
               const updated = { ...selectedTrip, ...nextTrip };
+              upsertBrowserPreviewDelivery(updated);
               setSelectedTrip(updated);
               setDeliveries((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
             }}
@@ -793,6 +1210,43 @@ export default function DeliveriesPage() {
           </div>
         </header>
 
+        {financialActionMessage ? (
+          <div
+            className="notice"
+            role="status"
+            style={{
+              padding: "10px 14px",
+              marginBottom: "16px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              background: "rgba(16, 185, 129, 0.08)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+              borderRadius: "8px",
+              color: "#047857",
+              fontSize: "12px",
+            }}
+          >
+            <span>{financialActionMessage}</span>
+            <button
+              type="button"
+              onClick={() => setFinancialActionMessage(null)}
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: "inherit",
+                fontWeight: "bold",
+                padding: "0 4px",
+                fontSize: "14px",
+              }}
+              aria-label="Dismiss notice"
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
+
         <section className="stat-grid" aria-label="Current delivery page totals">
           <button
             type="button"
@@ -802,10 +1256,10 @@ export default function DeliveriesPage() {
               setActiveKpi((curr) => (curr === "earnings" ? null : "earnings"));
             }}
             aria-expanded={activeKpi === "earnings"}
-            aria-label="Delivery earnings breakdown and calculation"
+            aria-label="Delivery revenue breakdown and calculation"
           >
             <div className="stat-card-header">
-              <span className="stat-label">DELIVERY EARNINGS</span>
+              <span className="stat-label">DELIVERY REVENUE</span>
               <span className="kpi-click-pill">Breakdown ›</span>
             </div>
             <strong>{formatPeso(summary.rateTotal)}</strong>
@@ -829,7 +1283,7 @@ export default function DeliveriesPage() {
             </div>
             <strong>{formatPeso(summary.expenseTotal)}</strong>
             <span className="stat-meta">
-              Diesel, toll gates, entry fees & crew costs
+              Diesel, highway tolls, entry fees & crew compensation
             </span>
           </button>
           <button
@@ -848,7 +1302,7 @@ export default function DeliveriesPage() {
             </div>
             <strong>{formatPeso(summary.netTotal)}</strong>
             <span className={`stat-meta ${summary.netTotal >= 0 ? "positive" : "warning"}`}>
-              {kpiBreakdown.marginPercent !== null ? `${formatPercent(kpiBreakdown.marginPercent)} margin · ` : ""}Profit for shown records
+              {kpiBreakdown.marginPercent !== null ? `${formatPercent(kpiBreakdown.marginPercent)} profit margin · ` : ""}Profit for shown records
             </span>
           </button>
         </section>
@@ -864,7 +1318,7 @@ export default function DeliveriesPage() {
             </div>
             <div className="records-heading-meta">
               <span className="ledger-total-badge">
-                {total} total trips · {summary.stopCount} store stops
+                {total} total trips · {summary.stopCount} store drop-offs
               </span>
             </div>
           </div>
@@ -874,7 +1328,21 @@ export default function DeliveriesPage() {
               <span className="sr-only">
                 Search by waybill or truck plate number
               </span>
-              <span aria-hidden="true">⌕</span>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ flexShrink: 0 }}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
               <input
                 type="search"
                 placeholder="Search by waybill or plate number…"
@@ -997,41 +1465,38 @@ export default function DeliveriesPage() {
                     <SortableTableHeader label="Truck" sortKey="truck" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Temp" sortKey="temperature" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Origin" sortKey="origin" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
-                    <SortableTableHeader label="Stores" sortKey="dropoffs" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Store Drop-offs" sortKey="dropoffs" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
-                    <SortableTableHeader label="Delivery Rate" sortKey="delivery_rate" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
-                    <SortableTableHeader label="Expenses" sortKey="total_expenses" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Delivery Revenue" sortKey="delivery_rate" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Trip Expenses" sortKey="total_expenses" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Net Profit" sortKey="net_income" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredDeliveries.map((trip) => (
-                    <tr
-                      key={trip.id}
-                      className="record-row"
-                      tabIndex={0}
-                      onClick={() => {
-                        setActiveKpi(null);
-                        setSelectedTrip(trip);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
+                  {filteredDeliveries.map((trip) => {
+                    const isIncomplete = trip.financialState === "incomplete";
+                    return (
+                      <tr
+                        key={trip.id}
+                        className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
+                        tabIndex={0}
+                        onClick={() => {
                           setActiveKpi(null);
                           setSelectedTrip(trip);
-                        }
-                      }}
-                    >
-                      <td className="cell-waybill">
-                        <div className="waybill-badge-stack">
-                          <strong className="waybill-code">#{trip.waybillNumber}</strong>
-                          {trip.financialState === "incomplete" ? (
-                            <span className="incomplete-ledger-pill" title="Incomplete: Contains unverified or unknown expenses">
-                              Pending
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setActiveKpi(null);
+                            setSelectedTrip(trip);
+                          }
+                        }}
+                      >
+                        <td className="cell-waybill">
+                          <div className="waybill-badge-stack">
+                            <strong className="waybill-code">#{trip.waybillNumber}</strong>
+                          </div>
+                        </td>
                       <td className="cell-date">
                         <span className="date-main">{trip.deliveryDate}</span>
                       </td>
@@ -1091,36 +1556,23 @@ export default function DeliveriesPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
+                  );
+                })}
+              </tbody>
               </table>
             </div>
           )}
 
-          <div className="table-footer">
-            <span>
-              Showing {filteredDeliveries.length} of {total} completed deliveries
-            </span>
-            <div className="pagination" aria-label="Delivery pages">
-              <button
-                type="button"
-                disabled={page <= 1 || loading}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-              >
-                Previous
-              </button>
-              <span>
-                Page {page} of {pageCount}
-              </span>
-              <button
-                type="button"
-                disabled={page >= pageCount || loading}
-                onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <TablePagination
+            page={page}
+            pageCount={pageCount}
+            totalItems={total}
+            pageSize={10}
+            onPageChange={setPage}
+            loading={loading}
+            itemLabel="completed deliveries"
+            itemCountInPage={filteredDeliveries.length}
+          />
         </section>
       </div>
 
@@ -1142,22 +1594,40 @@ export default function DeliveriesPage() {
         statusTone="success"
         sections={drawerSections}
         footer={selectedTrip && canWrite ? (
-          <>
-            {financialActionMessage ? <span className="financial-action-status">{financialActionMessage}</span> : null}
-            <button type="button" className="secondary-button" onClick={() => openCorrectionModal(selectedTrip)}>
+          <div style={{ display: "flex", gap: "10px", width: "100%", justifyContent: "flex-end" }}>
+            {actor.role === "admin" ? (
+              <button
+                type="button"
+                className="icon-only-action danger ui-tooltip"
+                aria-label="Delete delivery"
+                data-tooltip="Delete delivery"
+                title="Delete delivery"
+                onClick={() => openDeleteDeliveryModal(selectedTrip)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 7h16M9 7V4.5h6V7m3 0-1 13H7L6 7m4 4v5m4-5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ) : null}
+            {selectedTrip.financialState === "incomplete" ? (
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={financialActionPending || selectedTrip.financialIntegrityIssues.length > 0}
+                title={
+                  selectedTrip.financialIntegrityIssues.length > 0
+                    ? "Resolve unknown expenses via 'Edit delivery' before finalization"
+                    : "Finalize this delivery record"
+                }
+                onClick={finalizeFinancials}
+              >
+                {financialActionPending ? "Finalizing…" : "Finalize financials"}
+              </button>
+            ) : null}
+            <button type="button" className="primary-action-button" onClick={() => openCorrectionModal(selectedTrip)}>
               Edit delivery
             </button>
-            {selectedTrip.financialState === "incomplete" ? (
-            <button
-              type="button"
-              className="primary-action"
-              disabled={financialActionPending || selectedTrip.financialIntegrityIssues.length > 0}
-              onClick={finalizeFinancials}
-            >
-              {financialActionPending ? "Finalizing…" : "Finalize financials"}
-            </button>
-            ) : null}
-          </>
+          </div>
         ) : null}
         onClose={() => setSelectedTrip(null)}
       />
@@ -1165,7 +1635,7 @@ export default function DeliveriesPage() {
       {correctingTrip ? (
         <div className="routex-dialog-layer" role="dialog" aria-modal="true" aria-labelledby="correction-dialog-title">
           <div className="routex-dialog-backdrop" onClick={closeCorrectionModal} />
-          <div className="routex-dialog">
+          <div className="routex-dialog edit-delivery-dialog">
             <header className="routex-dialog-header">
               <div>
                 <h2 id="correction-dialog-title">Edit Delivery Financials</h2>
@@ -1181,247 +1651,431 @@ export default function DeliveriesPage() {
               </button>
             </header>
 
-            <form onSubmit={submitCorrection}>
-              <div className="routex-dialog-body">
+            <form
+              onSubmit={submitCorrection}
+              style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
+            >
+              <div className="routex-dialog-body" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                 {correctionError ? (
                   <div className="delivery-form-alert" role="alert">
                     {correctionError}
                   </div>
                 ) : null}
 
-                <div className="routex-dialog-field">
-                  <label htmlFor="corr-rate">Delivery Rate / Revenue (₱)</label>
-                  <input
-                    id="corr-rate"
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    required
-                    className="no-spin-stepper"
-                    style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                    placeholder="₱ 0.00"
-                    value={correctionDeliveryRate}
-                    onChange={(e) => setCorrectionDeliveryRate(e.target.value)}
-                  />
+                {/* Delivery Revenue */}
+                <div className="delivery-rate-banner">
+                  <div className="delivery-rate-banner-header">
+                    <h3 className="delivery-finance-group-title">Delivery Revenue</h3>
+                  </div>
+                  <div className="delivery-rate-input-row">
+                    <label htmlFor="corr-rate" className="field-label-text">
+                      Delivery Revenue (₱)
+                    </label>
+                    <div className="peso-input-wrap">
+                      <span className="peso-prefix" aria-hidden="true">₱</span>
+                      <input
+                        id="corr-rate"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        inputMode="decimal"
+                        required
+                        className="no-spin-stepper peso-input"
+                        style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                        placeholder="0.00"
+                        value={correctionDeliveryRate}
+                        onChange={(e) => setCorrectionDeliveryRate(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="routex-dialog-grid-2">
-                  <div className="routex-dialog-field">
-                    <label htmlFor="corr-diesel">Diesel (₱)</label>
-                    <input
+                {/* Route & Store Drop-offs */}
+                <div className="routex-dialog-section">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+                    <div>
+                      <h3 className="delivery-finance-group-title" style={{ margin: 0 }}>Route &amp; Store Drop-offs</h3>
+                      <p style={{ margin: "2px 0 0", fontSize: "11.5px", color: "var(--color-text-muted)" }}>
+                        Sequence, store names, destination areas, and store entry fees / gate tolls
+                      </p>
+                    </div>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-accent-deep)" }}>
+                      Total Entry Fees: {correctionEntryFeeSummary}
+                    </span>
+                  </div>
+
+                  <div className="dropoff-editor">
+                    {correctionDropoffs.map((dropoff, index) => (
+                      <div key={dropoff.id} className="dropoff-row">
+                        <div className="dropoff-row-header">
+                          <span className="dropoff-row-title">Store Drop-off #{index + 1}</span>
+                          {correctionDropoffs.length > 1 ? (
+                            <button
+                              type="button"
+                              className="dropoff-remove"
+                              onClick={() => removeCorrectionDropoff(index)}
+                              title="Remove this drop-off stop"
+                            >
+                              × Remove
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="dropoff-fields">
+                          <div className="dropoff-field">
+                            <label htmlFor={`corr-dropoff-store-${index}`} className="field-label-text">
+                              Store Name
+                            </label>
+                            <input
+                              id={`corr-dropoff-store-${index}`}
+                              type="text"
+                              required
+                              placeholder="e.g. Wilcon Depot - Las Piñas"
+                              value={dropoff.storeName}
+                              onChange={(e) => updateCorrectionDropoff(index, "storeName", e.target.value)}
+                            />
+                          </div>
+                          <div className="dropoff-field">
+                            <label htmlFor={`corr-dropoff-dest-${index}`} className="field-label-text">
+                              Destination / Area
+                            </label>
+                            <input
+                              id={`corr-dropoff-dest-${index}`}
+                              type="text"
+                              required
+                              placeholder="e.g. Almanza Uno, Las Piñas"
+                              value={dropoff.destinationArea}
+                              onChange={(e) => updateCorrectionDropoff(index, "destinationArea", e.target.value)}
+                            />
+                          </div>
+                          <div className="dropoff-field dropoff-entry-fee-wrap">
+                            <DialogExpenseField
+                              id={`corr-dropoff-fee-${index}`}
+                              label="Entry Fee / Toll"
+                              value={dropoff.entryFee}
+                              status={dropoff.entryFeeStatus}
+                              onValueChange={(val) => updateCorrectionDropoff(index, "entryFee", val)}
+                              onStatusChange={(st) => updateCorrectionDropoff(index, "entryFeeStatus", st)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="dropoff-actions-bar" style={{ marginTop: "12px" }}>
+                    <button
+                      type="button"
+                      className="button-tertiary add-dropoff"
+                      onClick={addCorrectionDropoff}
+                    >
+                      + Add Store Drop-off
+                    </button>
+                    <span className="dropoff-counter">
+                      {correctionDropoffs.length} {correctionDropoffs.length === 1 ? "store drop-off" : "store drop-offs"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Trip Expenses */}
+                <div className="routex-dialog-section">
+                  <h3 className="delivery-finance-group-title">Trip Expenses</h3>
+                  <div className="routex-dialog-grid-2">
+                    <DialogExpenseField
                       id="corr-diesel"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      disabled={correctionStatuses.dieselExpenses !== "confirmed"}
-                      className="no-spin-stepper"
-                      style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                      placeholder="₱ 0.00"
+                      label="Diesel"
                       value={correctionExpenses.dieselExpenses ?? ""}
-                      onChange={(e) => setCorrectionExpenses((prev) => ({ ...prev, dieselExpenses: e.target.value }))}
-                    />
-                    <select
-                      value={correctionStatuses.dieselExpenses ?? "confirmed"}
-                      onChange={(e) => {
-                        const st = e.target.value as "confirmed" | "not_applicable" | "unknown";
+                      status={correctionStatuses.dieselExpenses ?? "confirmed"}
+                      onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, dieselExpenses: val }))}
+                      onStatusChange={(st) => {
                         setCorrectionStatuses((prev) => ({ ...prev, dieselExpenses: st }));
                         if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, dieselExpenses: "" }));
                       }}
-                    >
-                      <option value="confirmed">Confirmed Amount</option>
-                      <option value="not_applicable">Not Applicable</option>
-                      <option value="unknown">Unknown</option>
-                    </select>
-                  </div>
-
-                  <div className="routex-dialog-field">
-                    <label htmlFor="corr-toll">Tolls (₱)</label>
-                    <input
-                      id="corr-toll"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      disabled={correctionStatuses.tollGateExpenses !== "confirmed"}
-                      className="no-spin-stepper"
-                      style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                      placeholder="₱ 0.00"
-                      value={correctionExpenses.tollGateExpenses ?? ""}
-                      onChange={(e) => setCorrectionExpenses((prev) => ({ ...prev, tollGateExpenses: e.target.value }))}
                     />
-                    <select
-                      value={correctionStatuses.tollGateExpenses ?? "confirmed"}
-                      onChange={(e) => {
-                        const st = e.target.value as "confirmed" | "not_applicable" | "unknown";
+                    <DialogExpenseField
+                      id="corr-toll"
+                      label="Highway tolls"
+                      value={correctionExpenses.tollGateExpenses ?? ""}
+                      status={correctionStatuses.tollGateExpenses ?? "confirmed"}
+                      onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, tollGateExpenses: val }))}
+                      onStatusChange={(st) => {
                         setCorrectionStatuses((prev) => ({ ...prev, tollGateExpenses: st }));
                         if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, tollGateExpenses: "" }));
                       }}
-                    >
-                      <option value="confirmed">Confirmed Amount</option>
-                      <option value="not_applicable">Not Applicable</option>
-                      <option value="unknown">Unknown</option>
-                    </select>
-                  </div>
-
-                </div>
-
-                <div className="routex-dialog-field-group">
-                  <span className="routex-dialog-group-title">Driver</span>
-                  <div className="routex-dialog-grid-2">
-                    <div className="routex-dialog-field">
-                      <label htmlFor="corr-driver-rate">Daily Rate (₱)</label>
-                      <input
-                        id="corr-driver-rate"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={correctionStatuses.driverDailyRate !== "confirmed"}
-                        className="no-spin-stepper"
-                        style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                        placeholder="₱ 0.00"
-                        value={correctionExpenses.driverDailyRate ?? ""}
-                        onChange={(e) => setCorrectionExpenses((prev) => ({ ...prev, driverDailyRate: e.target.value }))}
-                      />
-                      <select
-                        value={correctionStatuses.driverDailyRate ?? "confirmed"}
-                        onChange={(e) => {
-                          const st = e.target.value as "confirmed" | "not_applicable" | "unknown";
-                          setCorrectionStatuses((prev) => ({ ...prev, driverDailyRate: st }));
-                          if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, driverDailyRate: "" }));
-                        }}
-                      >
-                        <option value="confirmed">Confirmed Amount</option>
-                        <option value="not_applicable">Not Applicable</option>
-                        <option value="unknown">Unknown</option>
-                      </select>
-                    </div>
-
-                    <div className="routex-dialog-field">
-                      <label htmlFor="corr-driver-allow">Allowance (₱)</label>
-                      <input
-                        id="corr-driver-allow"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={correctionStatuses.driverAllowance !== "confirmed"}
-                        className="no-spin-stepper"
-                        style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                        placeholder="₱ 0.00"
-                        value={correctionExpenses.driverAllowance ?? ""}
-                        onChange={(e) => setCorrectionExpenses((prev) => ({ ...prev, driverAllowance: e.target.value }))}
-                      />
-                      <select
-                        value={correctionStatuses.driverAllowance ?? "confirmed"}
-                        onChange={(e) => {
-                          const st = e.target.value as "confirmed" | "not_applicable" | "unknown";
-                          setCorrectionStatuses((prev) => ({ ...prev, driverAllowance: st }));
-                          if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, driverAllowance: "" }));
-                        }}
-                      >
-                        <option value="confirmed">Confirmed Amount</option>
-                        <option value="not_applicable">Not Applicable</option>
-                        <option value="unknown">Unknown</option>
-                      </select>
-                    </div>
+                    />
                   </div>
                 </div>
 
-                <div className="routex-dialog-field-group">
-                  <span className="routex-dialog-group-title">Helper</span>
-                  <div className="routex-dialog-grid-2">
-                    <div className="routex-dialog-field">
-                      <label htmlFor="corr-helper-rate">Daily Rate (₱)</label>
-                      <input
-                        id="corr-helper-rate"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={correctionStatuses.helperDailyRate !== "confirmed"}
-                        className="no-spin-stepper"
-                        style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                        placeholder="₱ 0.00"
-                        value={correctionExpenses.helperDailyRate ?? ""}
-                        onChange={(e) => setCorrectionExpenses((prev) => ({ ...prev, helperDailyRate: e.target.value }))}
-                      />
-                      <select
-                        value={correctionStatuses.helperDailyRate ?? "confirmed"}
-                        onChange={(e) => {
-                          const st = e.target.value as "confirmed" | "not_applicable" | "unknown";
-                          setCorrectionStatuses((prev) => ({ ...prev, helperDailyRate: st }));
-                          if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, helperDailyRate: "" }));
-                        }}
-                      >
-                        <option value="confirmed">Confirmed Amount</option>
-                        <option value="not_applicable">Not Applicable</option>
-                        <option value="unknown">Unknown</option>
-                      </select>
-                    </div>
+                {/* Crew Rates & Allowances */}
+                <div className="routex-dialog-section">
+                  <h3 className="delivery-finance-group-title">Crew Rates & Allowances</h3>
+                  <div className="crew-cards-grid">
+                    {/* Driver Card */}
+                    <section className="crew-expense-group">
+                      <div className="crew-card-title-row">
+                        <span className="crew-role-pill driver">Driver</span>
+                        <RoundedSelect
+                          value={correctionDriverName}
+                          options={drivers.map((driver) => ({
+                            value: driver.label,
+                            label: driver.label,
+                          }))}
+                          onChange={setCorrectionDriverName}
+                          ariaLabel="Driver name"
+                          className="crew-name-select"
+                          placeholder="Select or add driver"
+                          emptyMessage="No saved drivers"
+                          searchable
+                          allowCustomValue
+                          searchPlaceholder="Search or enter a new driver"
+                        />
+                      </div>
+                      <div className="routex-dialog-grid-2">
+                        <DialogExpenseField
+                          id="corr-driver-rate"
+                          label="Daily rate"
+                          value={correctionExpenses.driverDailyRate ?? ""}
+                          status={correctionStatuses.driverDailyRate ?? "confirmed"}
+                          onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, driverDailyRate: val }))}
+                          onStatusChange={(st) => {
+                            setCorrectionStatuses((prev) => ({ ...prev, driverDailyRate: st }));
+                            if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, driverDailyRate: "" }));
+                          }}
+                        />
+                        <DialogExpenseField
+                          id="corr-driver-allow"
+                          label="Allowance"
+                          value={correctionExpenses.driverAllowance ?? ""}
+                          status={correctionStatuses.driverAllowance ?? "confirmed"}
+                          onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, driverAllowance: val }))}
+                          onStatusChange={(st) => {
+                            setCorrectionStatuses((prev) => ({ ...prev, driverAllowance: st }));
+                            if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, driverAllowance: "" }));
+                          }}
+                        />
+                      </div>
+                    </section>
 
-                    <div className="routex-dialog-field">
-                      <label htmlFor="corr-helper-allow">Allowance (₱)</label>
-                      <input
-                        id="corr-helper-allow"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={correctionStatuses.helperAllowance !== "confirmed"}
-                        className="no-spin-stepper"
-                        style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                        placeholder="₱ 0.00"
-                        value={correctionExpenses.helperAllowance ?? ""}
-                        onChange={(e) => setCorrectionExpenses((prev) => ({ ...prev, helperAllowance: e.target.value }))}
-                      />
-                      <select
-                        value={correctionStatuses.helperAllowance ?? "confirmed"}
-                        onChange={(e) => {
-                          const st = e.target.value as "confirmed" | "not_applicable" | "unknown";
-                          setCorrectionStatuses((prev) => ({ ...prev, helperAllowance: st }));
-                          if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, helperAllowance: "" }));
-                        }}
-                      >
-                        <option value="confirmed">Confirmed Amount</option>
-                        <option value="not_applicable">Not Applicable</option>
-                        <option value="unknown">Unknown</option>
-                      </select>
-                    </div>
+                    {/* Helper Card */}
+                    <section className="crew-expense-group">
+                      <div className="crew-card-title-row">
+                        <span className="crew-role-pill helper">Helper</span>
+                        <input
+                          aria-label="Helper name"
+                          className="crew-name-input"
+                          placeholder="Helper name"
+                          value={correctionHelperName}
+                          onChange={(e) => setCorrectionHelperName(e.target.value)}
+                        />
+                      </div>
+                      <div className="routex-dialog-grid-2">
+                        <DialogExpenseField
+                          id="corr-helper-rate"
+                          label="Daily rate"
+                          value={correctionExpenses.helperDailyRate ?? ""}
+                          status={correctionStatuses.helperDailyRate ?? "confirmed"}
+                          onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, helperDailyRate: val }))}
+                          onStatusChange={(st) => {
+                            setCorrectionStatuses((prev) => ({ ...prev, helperDailyRate: st }));
+                            if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, helperDailyRate: "" }));
+                          }}
+                        />
+                        <DialogExpenseField
+                          id="corr-helper-allow"
+                          label="Allowance"
+                          value={correctionExpenses.helperAllowance ?? ""}
+                          status={correctionStatuses.helperAllowance ?? "confirmed"}
+                          onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, helperAllowance: val }))}
+                          onStatusChange={(st) => {
+                            setCorrectionStatuses((prev) => ({ ...prev, helperAllowance: st }));
+                            if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, helperAllowance: "" }));
+                          }}
+                        />
+                      </div>
+                    </section>
                   </div>
                 </div>
 
-                <div className="routex-dialog-field">
-                  <label htmlFor="corr-other">Other (₱)</label>
-                  <input
+                {/* Other Expenses */}
+                <div className="routex-dialog-section">
+                  <h3 className="delivery-finance-group-title">Other Expenses</h3>
+                  <DialogExpenseField
                     id="corr-other"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    disabled={correctionStatuses.otherExpenses !== "confirmed"}
-                    className="no-spin-stepper"
-                    style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                    placeholder="₱ 0.00"
+                    label="Other expenses"
                     value={correctionExpenses.otherExpenses ?? ""}
-                    onChange={(e) => setCorrectionExpenses((prev) => ({ ...prev, otherExpenses: e.target.value }))}
-                  />
-                  <select
-                    value={correctionStatuses.otherExpenses ?? "confirmed"}
-                    onChange={(e) => {
-                      const st = e.target.value as "confirmed" | "not_applicable" | "unknown";
+                    status={correctionStatuses.otherExpenses ?? "confirmed"}
+                    onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, otherExpenses: val }))}
+                    onStatusChange={(st) => {
                       setCorrectionStatuses((prev) => ({ ...prev, otherExpenses: st }));
                       if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, otherExpenses: "" }));
                     }}
-                  >
-                    <option value="confirmed">Confirmed Amount</option>
-                    <option value="not_applicable">Not Applicable</option>
-                    <option value="unknown">Unknown</option>
-                  </select>
+                  />
                 </div>
 
-                <div className="routex-dialog-field">
-                  <label htmlFor="corr-reason">
-                    Correction Reason (Required for audit history · min 5 chars)
+                {/* Supporting Documents */}
+                <div className="routex-dialog-section">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
+                    <h3 className="delivery-finance-group-title" style={{ margin: 0 }}>Supporting Documents</h3>
+                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Receiving slips, invoices, or attachments</span>
+                  </div>
+
+                  {correctionExistingSupportingDocs.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+                      {correctionExistingSupportingDocs.map((docName, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "5px 10px",
+                            background: "var(--color-surface-subtle, #f3f4f6)",
+                            border: "1px solid var(--line, #e5e7eb)",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                            color: "var(--color-text-primary)",
+                          }}
+                        >
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                            style={{ flexShrink: 0 }}
+                          >
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                          </svg>
+                          <strong>{docName}</strong>
+                          <button
+                            type="button"
+                            title={`Remove ${docName}`}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              color: "#dc2626",
+                              fontSize: "15px",
+                              lineHeight: 1,
+                              padding: "0 2px",
+                            }}
+                            onClick={() => {
+                              setCorrectionExistingSupportingDocs((prev) => prev.filter((_, i) => i !== idx));
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {correctionSupportingFiles.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+                      {correctionSupportingFiles.map((file, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "5px 10px",
+                            background: "rgba(224, 86, 36, 0.08)",
+                            border: "1px solid rgba(224, 86, 36, 0.25)",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                            color: "var(--color-brand, #e05624)",
+                          }}
+                        >
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                            style={{ flexShrink: 0 }}
+                          >
+                            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                          </svg>
+                          <strong>{file.name}</strong>
+                          <small style={{ color: "var(--color-text-muted)" }}>({(file.size / 1024).toFixed(1)} KB)</small>
+                          <button
+                            type="button"
+                            title={`Remove ${file.name}`}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              color: "#dc2626",
+                              fontSize: "15px",
+                              lineHeight: 1,
+                              padding: "0 2px",
+                            }}
+                            onClick={() => {
+                              setCorrectionSupportingFiles((prev) => prev.filter((_, i) => i !== idx));
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <label
+                      htmlFor="corr-supporting-files"
+                      className="secondary-button"
+                      style={{
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "7px 13px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      <span>+ Add Supporting Document</span>
+                      <input
+                        id="corr-supporting-files"
+                        type="file"
+                        multiple
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const selected = Array.from(e.target.files ?? []);
+                          if (selected.length > 0) {
+                            setCorrectionSupportingFiles((prev) => [...prev, ...selected]);
+                          }
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                      PDF, PNG, or JPG up to 10 MB
+                    </span>
+                  </div>
+                </div>
+
+                {/* Correction Reason */}
+                <div className="routex-dialog-section">
+                  <label htmlFor="corr-reason" className="field-label-text">
+                    Correction Reason <span className="field-required-tag">(Required for audit history · min 5 chars)</span>
                   </label>
                   <textarea
                     id="corr-reason"
                     rows={3}
                     required
+                    className="correction-reason-textarea"
                     placeholder="e.g. Fuel receipt adjustment after monthly reconciliation"
                     value={correctionReason}
                     onChange={(e) => setCorrectionReason(e.target.value)}
@@ -1429,7 +2083,7 @@ export default function DeliveriesPage() {
                 </div>
               </div>
 
-              <footer className="routex-dialog-footer">
+              <footer className="routex-dialog-footer" style={{ flexShrink: 0 }}>
                 <button
                   type="button"
                   className="secondary-button"
@@ -1443,14 +2097,101 @@ export default function DeliveriesPage() {
                   className="primary-action-button"
                   disabled={correctionSubmitting || correctionReason.trim().length < 5}
                 >
-                  {correctionSubmitting ? "Saving correction…" : "Save Audited Correction"}
+                  {correctionSubmitting ? "Saving changes…" : "Save changes"}
                 </button>
               </footer>
             </form>
           </div>
         </div>
       ) : null}
+
+      <ConfirmDeliveryDeletionDialog
+        delivery={deliveryToDelete}
+        pending={isDeletingDelivery}
+        error={deleteDeliveryError}
+        onCancel={closeDeleteDeliveryModal}
+        onConfirm={handleConfirmDeleteDelivery}
+      />
     </>
+  );
+}
+
+function DialogExpenseField({
+  id,
+  label,
+  value,
+  status,
+  onValueChange,
+  onStatusChange,
+}: {
+  id?: string;
+  label: string;
+  value: string;
+  status: "confirmed" | "not_applicable" | "unknown";
+  onValueChange: (val: string) => void;
+  onStatusChange: (st: "confirmed" | "not_applicable" | "unknown") => void;
+}) {
+  const displayLabel = label.includes("₱") ? label : `${label} (₱)`;
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleWrapperClick = () => {
+    if (status !== "confirmed") {
+      onStatusChange("confirmed");
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  };
+
+  return (
+    <div className="expense-resolution-field">
+      <label htmlFor={id} className="field-label-text">{displayLabel}</label>
+      <div className="expense-resolution-controls">
+        <span
+          className={`peso-input-wrap ${status !== "confirmed" ? "is-disabled" : ""}`}
+          onClick={handleWrapperClick}
+          style={status !== "confirmed" ? { cursor: "pointer" } : undefined}
+          title={status !== "confirmed" ? "Click to enter amount" : undefined}
+        >
+          {status === "confirmed" ? <span className="peso-prefix" aria-hidden="true">₱</span> : null}
+          <input
+            ref={inputRef}
+            id={id}
+            aria-label={`${displayLabel} amount`}
+            disabled={status !== "confirmed"}
+            min="0"
+            step="0.01"
+            type="number"
+            inputMode="decimal"
+            className={`no-spin-stepper ${status === "confirmed" ? "peso-input" : ""}`}
+            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+            value={status === "confirmed" ? value : ""}
+            placeholder={status === "confirmed" ? "0.00" : status === "unknown" ? "Amount unknown (click to enter)" : "N/A (click to enter)"}
+            onChange={(e) => onValueChange(e.target.value)}
+          />
+        </span>
+        <div className="expense-resolution-options" role="group" aria-label={`${displayLabel} resolution`}>
+          {([
+            ["confirmed", "Amount"],
+            ["not_applicable", "N/A"],
+            ["unknown", "Unknown"],
+          ] as const).map(([val, text]) => (
+            <button
+              type="button"
+              key={val}
+              className={status === val ? "active" : ""}
+              aria-pressed={status === val}
+              onClick={() => {
+                onStatusChange(val);
+                if (val !== "confirmed") onValueChange("");
+              }}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

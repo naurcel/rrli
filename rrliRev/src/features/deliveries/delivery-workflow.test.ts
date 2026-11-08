@@ -52,13 +52,14 @@ test("audited financial correction updates delivery financials and increments ve
   assert.equal(delivery.record.deliveryRate, initialRate + 2000);
   assert.equal(delivery.record.expenses.dieselExpenses, 3500);
   assert.equal(delivery.record.version, initialVersion + 1);
+  assert.equal(delivery.record.financialState, "incomplete", "Corrections must require explicit re-finalization.");
   assert.ok(delivery.record.netIncome !== null);
   assert.ok(delivery.record.marginPercent !== null);
 });
 
 test("financial finalization protects incomplete trips and prevents duplicate finalization with wrong version", () => {
   const incompleteTrip = SMALL_MOCK_DATABASE.deliveries.find(
-    (d) => d.record.financialState === "incomplete",
+    (d) => d.record.financialState === "incomplete" && d.record.financialIntegrityIssues.length > 0,
   );
   assert.ok(incompleteTrip, "Mock database must contain an incomplete trip fixture.");
 
@@ -70,6 +71,34 @@ test("financial finalization protects incomplete trips and prevents duplicate fi
   assert.equal(finalizeIncomplete.ok, false);
   if (!finalizeIncomplete.ok) {
     assert.match(finalizeIncomplete.error, /FINANCIALS_INCOMPLETE/);
+  }
+});
+
+test("financial correction with resolved fields transitions incomplete delivery to finalized", () => {
+  const incompleteTrip = SMALL_MOCK_DATABASE.deliveries.find(
+    (d) => d.record.financialState === "incomplete" && d.record.financialIntegrityIssues.length > 0,
+  );
+  assert.ok(incompleteTrip, "Mock database must contain an incomplete trip fixture.");
+
+  const prevVersion = incompleteTrip.record.version;
+  const resolveResult = correctSmallMockDelivery({
+    deliveryId: incompleteTrip.record.id,
+    expectedVersion: prevVersion,
+    changes: {
+      deliveryRate: 21000,
+      expenses: { tollGateExpenses: 450 },
+      expenseStates: { tollGateExpenses: "confirmed" },
+      financialState: "finalized",
+    },
+    reason: "Confirmed SLEX toll receipt amount with operations",
+  });
+
+  assert.equal(resolveResult.ok, true);
+  if (resolveResult.ok) {
+    assert.equal(resolveResult.record.financialState, "finalized");
+    assert.equal(resolveResult.record.financialIntegrityIssues.length, 0);
+    assert.ok(resolveResult.record.totalExpenses !== null);
+    assert.ok(resolveResult.record.netIncome !== null);
   }
 });
 

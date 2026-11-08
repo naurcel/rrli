@@ -703,3 +703,24 @@ export function updateServerAccountAvatar(
 
   return { ok: true, profile: stripSensitiveFields(existing) };
 }
+
+/**
+ * Deletes a user account from the server account store.
+ * The primary system admin account cannot be deleted.
+ */
+export function deleteServerAccount(
+  userId: string,
+): { ok: true } | { ok: false; message: string } {
+  const store = getStore();
+  const existing = store.get(userId);
+  if (!existing) {
+    return { ok: false, message: "The specified user account was not found." };
+  }
+
+  if (existing.role === "admin" && existing.username === "admin") {
+    return { ok: false, message: "The primary System Admin account cannot be deleted." };
+  }
+
+  store.delete(userId);
+  return { ok: true };
+}

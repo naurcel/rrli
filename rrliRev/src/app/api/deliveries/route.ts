@@ -5,6 +5,7 @@ import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 
 import { parseDeliveryListQuery } from "@/features/deliveries/delivery-query";
 import { buildDeliveryTripRecord, type TruckTemperature } from "@/features/deliveries/delivery-domain";
+import { validateDeliveryDateWindow } from "@/features/deliveries/delivery-recording-policy";
 import {
   getMockClients,
   registerMockClient,
@@ -12,12 +13,15 @@ import {
 } from "@/features/deliveries/small-mock-database";
 import {
   correctSmallMockDelivery,
+  deleteSmallMockDelivery,
   dynamicMockDeliveries,
   finalizeSmallMockDelivery,
   listSmallMockDeliveryRecords,
+  savePersistedMockDeliveries,
 } from "@/features/deliveries/small-mock-repository";
 import { listDeliveryRecords } from "@/features/deliveries/server/delivery-repository";
 import { getFleetTrucks, registerFleetTruck } from "@/features/deliveries/truck-registry";
+import { registerFleetDriver } from "@/features/deliveries/driver-registry";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -37,7 +41,7 @@ const createDeliverySchema = z.object({
   origin: z.string().trim().min(2, "Origin is required."),
   distanceKm: moneySchema,
   fuelRate: moneySchema,
-  deliveryRate: z.number().finite().positive("Delivery rate must be greater than zero."),
+  deliveryRate: z.number().finite().positive("Delivery revenue must be greater than zero."),
   idempotencyKey: z.string().uuid(),
   dieselExpenses: optionalMoneySchema,
   dieselExpensesStatus: expenseStatusSchema,
@@ -48,12 +52,13 @@ const createDeliverySchema = z.object({
   driverAllowanceStatus: expenseStatusSchema,
   driverDailyRate: optionalMoneySchema,
   driverDailyRateStatus: expenseStatusSchema,
-  driverName: z.string().trim().optional().nullable(),
+  driverName: z.string().trim().min(2, "Driver name is required."),
+  recordingDelayed: z.boolean().default(false),
   helperAllowance: optionalMoneySchema,
   helperAllowanceStatus: expenseStatusSchema,
   helperDailyRate: optionalMoneySchema,
   helperDailyRateStatus: expenseStatusSchema,
-  helperName: z.string().trim().optional().nullable(),
+  helperName: z.string().trim().min(2, "Helper name is required."),
   hasSecondHelper: z.boolean().default(false),
   helper2Allowance: optionalMoneySchema.optional().nullable(),
   helper2AllowanceStatus: expenseStatusSchema.optional().default("not_applicable"),
@@ -75,6 +80,7 @@ const createDeliverySchema = z.object({
       }),
     )
     .min(1, "At least one store drop-off is required."),
+  supportingDocuments: z.array(z.string().trim()).optional().default([]),
 }).superRefine((data, context) => {
   const pairs = [
     ["dieselExpenses", data.dieselExpenses, data.dieselExpensesStatus],
@@ -122,6 +128,7 @@ const finalizeFinancialsSchema = z.object({
   deliveryId: z.string().trim().min(1),
   expectedVersion: z.number().int().positive(),
   idempotencyKey: z.string().trim().default(() => crypto.randomUUID()),
+  fallbackRecord: z.record(z.string(), z.unknown()).optional(),
 });
 
 const correctFinancialsSchema = z.object({
@@ -131,6 +138,7 @@ const correctFinancialsSchema = z.object({
   idempotencyKey: z.string().trim().default(() => crypto.randomUUID()),
   reason: z.string().trim().min(5),
   changes: z.record(z.string(), z.unknown()),
+  fallbackRecord: z.record(z.string(), z.unknown()).optional(),
 });
 
 const deliveryMutationSchema = z.discriminatedUnion("action", [
@@ -199,6 +207,28 @@ export async function POST(request: Request) {
           path: issue.path.join("."),
           message: issue.message,
         })),
+      },
+      { status: 400 },
+    );
+  }
+
+  const deliveryDatePolicy = validateDeliveryDateWindow(
+    parsed.data.deliveryDate,
+    undefined,
+    auth.actor.role,
+  );
+  if (!deliveryDatePolicy.ok) {
+    return NextResponse.json(
+      { ok: false, code: "DELIVERY_DATE_OUTSIDE_WINDOW", message: deliveryDatePolicy.message },
+      { status: 400 },
+    );
+  }
+  if (deliveryDatePolicy.isLate && typeof rawBody?.recordingDelayed !== "boolean") {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "DELAY_CONFIRMATION_REQUIRED",
+        message: "Confirm whether this delivery was recorded late.",
       },
       { status: 400 },
     );
@@ -295,6 +325,7 @@ export async function POST(request: Request) {
       id: parsed.data.idempotencyKey,
       waybillNumber: parsed.data.waybillNumber,
       deliveryDate: parsed.data.deliveryDate,
+      recordingDelayed: parsed.data.recordingDelayed,
       clientName: client.name,
       plateNumber: truck.plateNumber,
       truckType: truck.truckType,
@@ -329,9 +360,29 @@ export async function POST(request: Request) {
         id: `${parsed.data.idempotencyKey}-stop-${index + 1}`,
         sequence: index + 1,
       })),
+      supportingDocuments: parsed.data.supportingDocuments,
     });
     recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "delivery.created", entityType: "delivery", entityId: record.id, summary: `Recorded completed delivery ${record.waybillNumber}.`, changes: { clientName: record.clientName, plateNumber: record.plateNumber, deliveryRate: record.deliveryRate } });
-    dynamicMockDeliveries.push({ record, clientId: client.id, truckId: truck.id, driverId: "", helperId: "", scenario: "User-recorded completed delivery." });
+    if (parsed.data.driverName) {
+      registerFleetDriver({ fullName: parsed.data.driverName, assignmentType: "Driver" });
+    }
+    if (parsed.data.helperName) {
+      registerFleetDriver({ fullName: parsed.data.helperName, assignmentType: "Helper" });
+    }
+    if (parsed.data.helper2Name) {
+      registerFleetDriver({ fullName: parsed.data.helper2Name, assignmentType: "Helper" });
+    }
+    dynamicMockDeliveries.push({
+      record,
+      clientId: client.id,
+      truckId: truck.id,
+      driverId: "",
+      helperId: "",
+      driverName: parsed.data.driverName,
+      helperName: helperNames,
+      scenario: "User-recorded completed delivery.",
+    });
+    savePersistedMockDeliveries();
     return NextResponse.json({
       ok: true,
       source: "browser-local",
@@ -341,7 +392,7 @@ export async function POST(request: Request) {
         clientId: client.id,
         truckId: truck.id,
         deliveryStatus: "Completed",
-        driverName: parsed.data.driverName || null,
+        driverName: parsed.data.driverName,
         helperName: helperNames,
       },
       recordedBy: { id: auth.actor.id, email: auth.actor.email, role: auth.actor.role },
@@ -369,11 +420,17 @@ export async function POST(request: Request) {
         .toUpperCase()
         .slice(0, 6) || "CLI";
 
-    await supabase.from("clients").insert({
+    const { error: clientInsertError } = await supabase.from("clients").insert({
       name: rawClientName,
       code: clientCode,
       is_active: true,
     });
+    if (clientInsertError && clientInsertError.code !== "23505") {
+      return NextResponse.json(
+        { ok: false, code: "CLIENT_CREATE_FAILED", message: clientInsertError.message },
+        { status: 400 },
+      );
+    }
   }
 
   // Ensure truck exists in public.trucks so RPC does not throw INVALID_TRUCK
@@ -386,13 +443,70 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (!existingTruck) {
-    await supabase.from("trucks").insert({
+    const { error: truckInsertError } = await supabase.from("trucks").insert({
       plate_number: rawPlate,
       truck_type: "6-Wheeler",
       ownership_type: "Owned",
       rate_basis: "Redeemed Rate",
       is_active: true,
     });
+    if (truckInsertError && truckInsertError.code !== "23505") {
+      return NextResponse.json(
+        { ok: false, code: "TRUCK_CREATE_FAILED", message: truckInsertError.message },
+        { status: 400 },
+      );
+    }
+  }
+
+  const normalizedDriverName = parsed.data.driverName.trim();
+  const { data: existingDriver, error: driverLookupError } = await supabase
+    .from("employees")
+    .select("id")
+    .ilike("full_name", normalizedDriverName)
+    .eq("assignment_type", "Driver")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (driverLookupError) {
+    return NextResponse.json(
+      { ok: false, code: "DRIVER_LOOKUP_FAILED", message: driverLookupError.message },
+      { status: 400 },
+    );
+  }
+  let driverId = existingDriver?.id ?? null;
+  if (!driverId) {
+    const { data: createdDriver, error: driverInsertError } = await supabase
+      .from("employees")
+      .insert({
+        employee_code: `DRV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+        full_name: normalizedDriverName,
+        assignment_type: "Driver",
+        is_active: true,
+      })
+      .select("id")
+      .single();
+    if (driverInsertError?.code === "23505") {
+      const { data: concurrentDriver, error: concurrentLookupError } = await supabase
+        .from("employees")
+        .select("id")
+        .ilike("full_name", normalizedDriverName)
+        .eq("assignment_type", "Driver")
+        .eq("is_active", true)
+        .single();
+      if (concurrentLookupError || !concurrentDriver) {
+        return NextResponse.json(
+          { ok: false, code: "DRIVER_LOOKUP_FAILED", message: concurrentLookupError?.message ?? "Unable to reuse driver." },
+          { status: 400 },
+        );
+      }
+      driverId = concurrentDriver.id;
+    } else if (driverInsertError || !createdDriver) {
+      return NextResponse.json(
+        { ok: false, code: "DRIVER_CREATE_FAILED", message: driverInsertError?.message ?? "Unable to save driver." },
+        { status: 400 },
+      );
+    } else {
+      driverId = createdDriver.id;
+    }
   }
 
   const { data: deliveryId, error } = await supabase.rpc("create_delivery_record", {
@@ -402,6 +516,7 @@ export async function POST(request: Request) {
       helperAllowanceStatus: combinedHelperAllowanceStatus,
       helperDailyRate: combinedHelperDailyRate,
       helperDailyRateStatus: combinedHelperDailyRateStatus,
+      driverId,
     },
     p_dropoffs: parsed.data.dropoffs,
   });
@@ -472,12 +587,14 @@ export async function PATCH(request: Request) {
       ? finalizeSmallMockDelivery({
           deliveryId: mutation.deliveryId,
           expectedVersion: mutation.expectedVersion,
+          fallbackRecord: mutation.fallbackRecord as any,
         })
       : correctSmallMockDelivery({
           deliveryId: mutation.deliveryId,
           expectedVersion: mutation.expectedVersion,
           changes: mutation.changes,
           reason: mutation.reason,
+          fallbackRecord: mutation.fallbackRecord as any,
         });
 
     if (!mockResult.ok) {
@@ -532,6 +649,21 @@ export async function PATCH(request: Request) {
   }
 
   const supabase = await createServerSupabaseClient();
+  const correctionChanges = mutation.action === "correct_financials"
+    ? {
+        deliveryRate: mutation.changes.deliveryRate,
+        ...((mutation.changes.expenses && typeof mutation.changes.expenses === "object")
+          ? mutation.changes.expenses
+          : {}),
+        ...Object.fromEntries(
+          Object.entries(
+            mutation.changes.expenseStates && typeof mutation.changes.expenseStates === "object"
+              ? mutation.changes.expenseStates
+              : {},
+          ).map(([key, value]) => [`${key}Status`, value]),
+        ),
+      }
+    : null;
   const response = mutation.action === "finalize_financials"
     ? await supabase.rpc("finalize_delivery_financials", {
         p_delivery_id: mutation.deliveryId,
@@ -541,7 +673,7 @@ export async function PATCH(request: Request) {
     : await supabase.rpc("correct_delivery_financials", {
         p_delivery_id: mutation.deliveryId,
         p_expected_version: mutation.expectedVersion,
-        p_changes: mutation.changes,
+        p_changes: correctionChanges,
         p_reason: mutation.reason,
         p_idempotency_key: mutation.idempotencyKey,
       });
@@ -566,6 +698,83 @@ export async function PATCH(request: Request) {
       },
       { status: notFound ? 404 : conflict ? 409 : 400 },
     );
+  }
+
+  if (mutation.action === "correct_financials" && typeof mutation.changes.driverName === "string") {
+    const driverName = mutation.changes.driverName.trim();
+    if (driverName) {
+      let { data: emp } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("assignment_type", "Driver")
+        .ilike("full_name", driverName)
+        .maybeSingle();
+      if (!emp) {
+        const { data: newEmp } = await supabase
+          .from("employees")
+          .insert({
+            full_name: driverName,
+            assignment_type: "Driver",
+            is_active: true,
+          })
+          .select("id")
+          .single();
+        emp = newEmp;
+      }
+      if (emp) {
+        await supabase.from("deliveries").update({ driver_id: emp.id }).eq("id", mutation.deliveryId);
+      }
+    }
+  }
+
+  if (mutation.action === "correct_financials" && typeof mutation.changes.helperName === "string") {
+    const helperName = mutation.changes.helperName.trim();
+    if (helperName) {
+      let { data: emp } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("assignment_type", "Helper")
+        .ilike("full_name", helperName)
+        .maybeSingle();
+      if (!emp) {
+        const { data: newEmp } = await supabase
+          .from("employees")
+          .insert({
+            full_name: helperName,
+            assignment_type: "Helper",
+            is_active: true,
+          })
+          .select("id")
+          .single();
+        emp = newEmp;
+      }
+      if (emp) {
+        await supabase.from("deliveries").update({ helper_id: emp.id }).eq("id", mutation.deliveryId);
+      }
+    }
+  }
+
+  if (mutation.action === "correct_financials" && Array.isArray(mutation.changes.dropoffs)) {
+    try {
+      await supabase.from("delivery_dropoffs").delete().eq("delivery_id", mutation.deliveryId);
+      if (mutation.changes.dropoffs.length > 0) {
+        await supabase.from("delivery_dropoffs").insert(
+          (mutation.changes.dropoffs as any[]).map((d: any, idx: number) => ({
+            delivery_id: mutation.deliveryId,
+            sequence_number: idx + 1,
+            store_name: d.storeName ?? "",
+            destination_area: d.destinationArea ?? "",
+            entry_fee: d.entryFee ?? null,
+            entry_fee_status: d.entryFeeStatus ?? "confirmed",
+            pod_submitted: Boolean(d.podSubmitted),
+            supporting_docs_complete: Boolean(d.supportingDocsComplete),
+            document_ref: d.documentRef ?? "",
+          }))
+        );
+      }
+    } catch {
+      // dropoff table sync fallback
+    }
   }
 
   if (mutation.action === "finalize_financials") {
@@ -596,4 +805,77 @@ export async function PATCH(request: Request) {
     result: data,
     changedBy: { id: auth.actor.id, email: auth.actor.email, role: auth.actor.role },
   });
+}
+
+export async function DELETE(request: Request) {
+  const auth = await verifyServerPermission("deliveries:edit");
+  if (!auth.ok) {
+    return NextResponse.json(
+      { ok: false, code: auth.code, message: auth.message },
+      { status: auth.status },
+    );
+  }
+
+  // Deletion decisions strictly restricted to Admin
+  if (auth.actor.role !== "admin") {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "FORBIDDEN",
+        message: "Only System Administrators are authorized to make delivery deletion decisions.",
+      },
+      { status: 403 },
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const deliveryId = searchParams.get("id");
+  const isBrowserLocal = searchParams.get("browserLocal") === "true";
+  if (!deliveryId) {
+    return NextResponse.json({ ok: false, message: "Delivery ID is required." }, { status: 400 });
+  }
+
+  if (!isSupabaseConfigured()) {
+    const res = deleteSmallMockDelivery(deliveryId);
+    if (!res.ok && !isBrowserLocal) {
+      return NextResponse.json({ ok: false, message: res.error }, { status: 404 });
+    }
+
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "delivery.deleted",
+      entityType: "delivery",
+      entityId: deliveryId,
+      summary: `Deleted delivery record ID ${deliveryId}.`,
+      changes: { storage: !res.ok ? "browser-local" : "bundled-mock" },
+    });
+
+    return NextResponse.json({ ok: true, message: "Delivery record deleted successfully.", deliveryId, source: !res.ok ? "browser-local" : "bundled-mock" });
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data: deletedDelivery, error } = await supabase
+    .from("deliveries")
+    .delete()
+    .eq("id", deliveryId)
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    return NextResponse.json({ ok: false, message: error.message }, { status: 400 });
+  }
+  if (!deletedDelivery && !isBrowserLocal) {
+    return NextResponse.json({ ok: false, code: "DELIVERY_NOT_FOUND", message: "Delivery record was not found." }, { status: 404 });
+  }
+
+  recordAuditEntry({
+    actorId: auth.actor.id,
+    actorEmail: auth.actor.email,
+    action: "delivery.deleted",
+    entityType: "delivery",
+    entityId: deliveryId,
+    summary: `Deleted delivery record ID ${deliveryId}.`,
+  });
+
+  return NextResponse.json({ ok: true, message: "Delivery record deleted successfully.", deliveryId });
 }

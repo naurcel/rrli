@@ -25,7 +25,7 @@ const importRowSchema = z.object({
   origin: z.string().trim().default("Central Depot"),
   distanceKm: z.number().min(0).default(50),
   fuelRate: z.number().min(0).default(85),
-  deliveryRate: z.number().positive("Delivery rate must be positive."),
+  deliveryRate: z.number().positive("Delivery revenue must be positive."),
   dieselExpenses: z.number().nullable().default(null),
   dieselExpensesStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("confirmed"),
   tollGateExpenses: z.number().nullable().default(null),

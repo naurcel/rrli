@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { parseDeliveryListQuery } from "./delivery-query.ts";
 import {
+  correctSmallMockDelivery,
   getSmallMockProfitabilitySummary,
   listSmallMockDeliveryRecords,
 } from "./small-mock-repository.ts";
@@ -47,6 +48,8 @@ test("mock profitability honors dates and excludes financially incomplete trips"
     dateTo: "2026-11-02",
   });
   assert.equal(full.deliveries, 8);
+  assert.equal(full.deliveryIds.length, full.deliveries);
+  assert.equal(new Set(full.deliveryIds).size, full.deliveries);
   assert.equal(full.trucks.length, 7);
   assert.equal(full.netIncome, full.revenue - full.expenses);
 
@@ -90,6 +93,143 @@ test("mock repository allows searching and filtering by typed plate numbers", ()
   const filterByPlate = listSmallMockDeliveryRecords(query("truckIds=NGS%204281&pageSize=10"));
   assert.equal(filterByPlate.total, 2);
   assert.ok(filterByPlate.items.every((item) => item.plateNumber === "NGS 4281"));
+});
+
+test("correctSmallMockDelivery updates drop-offs and automatically recalculates entry fees and net income", () => {
+  const deliveries = listSmallMockDeliveryRecords(query(
+    "dateFrom=2026-10-27&dateTo=2026-11-02&sort=delivery_date&direction=desc&page=1&pageSize=10",
+  ));
+  const target = deliveries.items[0];
+  assert.ok(target);
+
+  const updatedDropoffs = [
+    {
+      id: "stop-1",
+      sequence: 1,
+      storeName: "Wilcon Depot - Las Piñas",
+      destinationArea: "Almanza Uno, Las Piñas City, Metro Manila",
+      entryFee: 250,
+      entryFeeStatus: "confirmed" as const,
+      podSubmitted: true,
+      supportingDocsComplete: true,
+      documentRef: "DOC-001",
+    },
+    {
+      id: "stop-2",
+      sequence: 2,
+      storeName: "S&R Membership Shopping - Imus",
+      destinationArea: "Anabu I-D, Imus City, Cavite",
+      entryFee: 175,
+      entryFeeStatus: "confirmed" as const,
+      podSubmitted: true,
+      supportingDocsComplete: true,
+      documentRef: "DOC-002",
+    },
+  ];
+
+  const result = correctSmallMockDelivery({
+    deliveryId: target.id,
+    expectedVersion: target.version,
+    reason: "Updated gate passes and store entry tolls",
+    changes: {
+      dropoffs: updatedDropoffs,
+    },
+  });
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.record.dropoffs.length, 2);
+    assert.equal(result.record.dropoffs[0].entryFee, 250);
+    assert.equal(result.record.dropoffs[1].entryFee, 175);
+    assert.equal(result.record.expenses.entryFees, 425);
+    assert.equal(result.record.expenseStates.entryFees, "confirmed");
+  }
+});
+
+test("correctSmallMockDelivery recovers and updates delivery when provided fallbackRecord", () => {
+  const missingId = "custom-missing-delivery-999";
+  const fallbackRecord: any = {
+    id: missingId,
+    waybillNumber: "WB-FALLBACK-01",
+    deliveryDate: "2026-11-01",
+    clientName: "Universal Robina Corporation (URC)",
+    clientId: "10000000-0000-4000-8000-000000000002",
+    plateNumber: "NFD 5821",
+    truckId: "30000000-0000-4000-8000-000000000001",
+    truckType: "6-Wheeler",
+    truckTemperature: "-18°C",
+    origin: "Laguna Hub",
+    distanceKm: 50,
+    fuelRate: 85,
+    deliveryRate: 20000,
+    expenses: {
+      dieselExpenses: 3000,
+      tollGateExpenses: 500,
+      entryFees: 150,
+      driverAllowance: 300,
+      driverDailyRate: 800,
+      helperAllowance: 200,
+      helperDailyRate: 600,
+      otherExpenses: 100,
+    },
+    expenseStates: {
+      dieselExpenses: "confirmed",
+      tollGateExpenses: "confirmed",
+      entryFees: "confirmed",
+      driverAllowance: "confirmed",
+      driverDailyRate: "confirmed",
+      helperAllowance: "confirmed",
+      helperDailyRate: "confirmed",
+      otherExpenses: "confirmed",
+    },
+    dropoffs: [],
+    financialState: "incomplete",
+    version: 1,
+  };
+
+  const result = correctSmallMockDelivery({
+    deliveryId: missingId,
+    expectedVersion: 1,
+    reason: "Updated missing preview record",
+    changes: {
+      deliveryRate: 22000,
+    },
+    fallbackRecord,
+  });
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.record.id, missingId);
+    assert.equal(result.record.deliveryRate, 22000);
+    assert.equal(result.record.version, 2);
+  }
+});
+
+test("mock repository sorts incomplete null expenses to the bottom when sorting ascending", () => {
+  const ascExpenses = listSmallMockDeliveryRecords({
+    page: 1,
+    pageSize: 50,
+    search: "",
+    clientId: null,
+    clientIds: [],
+    truckId: null,
+    truckIds: [],
+    status: null,
+    podStatus: null,
+    dateFrom: null,
+    dateTo: null,
+    sort: "total_expenses",
+    direction: "asc",
+  });
+
+  const lastItem = ascExpenses.items[ascExpenses.items.length - 1];
+  assert.equal(lastItem.waybillNumber, "WB-261102", "Incomplete trip with null expenses must sort to the end in asc order");
+  assert.equal(lastItem.totalExpenses, null);
+
+  // First item must have lowest confirmed expenses, not null
+  const firstItem = ascExpenses.items[0];
+  assert.ok(firstItem.totalExpenses !== null && firstItem.totalExpenses > 0, "First item must be lowest confirmed expense");
+  assert.equal(firstItem.waybillNumber, "WB-261029", "WB-261029 has lowest expenses (4,400)");
 });
 
 

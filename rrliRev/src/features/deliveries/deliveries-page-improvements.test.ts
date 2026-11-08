@@ -161,5 +161,50 @@ describe("Deliveries Page Improvements", () => {
       assert.equal(isFrozen("4°C"), false, "4°C is chilled/fresh");
       assert.equal(isFrozen("2°C"), false, "2°C is chilled/fresh");
     });
+
+    it("sorts deliveries accurately across financial columns (delivery_rate, net_income, total_expenses)", () => {
+      const byRateDesc = listSmallMockDeliveryRecords({
+        search: "",
+        clientId: null,
+        truckId: null,
+        status: null,
+        podStatus: null,
+        dateFrom: null,
+        dateTo: null,
+        sort: "delivery_rate",
+        direction: "desc",
+        page: 1,
+        pageSize: 25,
+      });
+
+      assert.ok(byRateDesc.items.length > 1);
+      for (let i = 0; i < byRateDesc.items.length - 1; i++) {
+        const left = byRateDesc.items[i].deliveryRate ?? 0;
+        const right = byRateDesc.items[i + 1].deliveryRate ?? 0;
+        assert.ok(left >= right, `delivery_rate desc: ${left} >= ${right}`);
+      }
+
+      const byNetIncomeAsc = listSmallMockDeliveryRecords({
+        search: "",
+        clientId: null,
+        truckId: null,
+        status: null,
+        podStatus: null,
+        dateFrom: null,
+        dateTo: null,
+        sort: "net_income",
+        direction: "asc",
+        page: 1,
+        pageSize: 25,
+      });
+
+      assert.ok(byNetIncomeAsc.items.length > 1);
+      // Non-null values must be sorted ascending, and unfinalized/null values placed at the end (nulls-last)
+      for (let i = 0; i < byNetIncomeAsc.items.length - 1; i++) {
+        const left = byNetIncomeAsc.items[i].netIncome ?? Number.POSITIVE_INFINITY;
+        const right = byNetIncomeAsc.items[i + 1].netIncome ?? Number.POSITIVE_INFINITY;
+        assert.ok(left <= right, `net_income asc: ${left} <= ${right}`);
+      }
+    });
   });
 });

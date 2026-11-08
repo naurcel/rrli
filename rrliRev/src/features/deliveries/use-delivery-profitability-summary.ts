@@ -48,10 +48,16 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
     setError(null);
     const load = () => fetch(`/api/deliveries/summary?${params}`, { signal: controller.signal })
       .then(async (response) => {
-        const payload = await response.json() as { ok?: boolean; message?: string; source?: string; summary?: PersistedProfitabilitySummary };
+        const payload = await response.json() as {
+          ok?: boolean;
+          message?: string;
+          source?: string;
+          summary?: PersistedProfitabilitySummary;
+          includedDeliveryIds?: string[];
+        };
         if (!response.ok || !payload.ok || !payload.summary) throw new Error(payload.message ?? "Unable to load profitability summary.");
         setSummary(payload.source === "bundled-mock"
-          ? mergeBrowserPreviewSummary(payload.summary, start, end)
+          ? mergeBrowserPreviewSummary(payload.summary, start, end, payload.includedDeliveryIds)
           : payload.summary);
       })
       .catch((reason: unknown) => {

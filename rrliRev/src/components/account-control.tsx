@@ -174,14 +174,6 @@ export function AccountControl() {
               </small>
             </div>
           </div>
-          <a
-            href="/settings"
-            role="menuitem"
-            className="account-menu-settings-link"
-            onClick={() => setIsOpen(false)}
-          >
-            ⚙ Account Settings
-          </a>
           <button
             type="button"
             role="menuitem"

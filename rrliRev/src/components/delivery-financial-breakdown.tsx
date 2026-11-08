@@ -31,7 +31,7 @@ export function ExpenseDonutPieChart({
   totalExpenses,
   isComplete,
   unknownItems = [],
-  title = "Trip Expenses Breakdown",
+  title = "Trip Expenses Distribution",
 }: {
   slices: readonly ExpenseCategorySlice[];
   totalExpenses: number | null;
@@ -56,155 +56,190 @@ export function ExpenseDonutPieChart({
 
   return (
     <div className="breakdown-chart-wrapper">
-      <div className="breakdown-donut-container">
-        <svg
-          className="breakdown-donut-svg"
-          viewBox="0 0 200 200"
-          role="img"
-          aria-labelledby={`${chartId}-title ${chartId}-desc`}
-        >
-          <title id={`${chartId}-title`}>{title}</title>
-          <desc id={`${chartId}-desc`}>
-            {isComplete && totalExpenses != null
-              ? `Interactive donut chart displaying expense categories totaling ${formatPeso(totalExpenses)}.`
-              : "Expense visualization deferred due to unconfirmed expenses."}
-          </desc>
+      <div className="breakdown-chart-visual">
+        <div className="breakdown-donut-container">
+          <svg
+            className="breakdown-donut-svg"
+            viewBox="0 0 200 200"
+            role="img"
+            aria-labelledby={`${chartId}-title ${chartId}-desc`}
+          >
+            <title id={`${chartId}-title`}>{title}</title>
+            <desc id={`${chartId}-desc`}>
+              {isComplete && totalExpenses != null
+                ? `Interactive pie chart displaying expense categories totaling ${formatPeso(totalExpenses)}.`
+                : "Expense visualization deferred due to unconfirmed expenses."}
+            </desc>
 
-          {/* Background circle / empty track */}
-          <circle
-            cx="100"
-            cy="100"
-            r="64"
-            fill="none"
-            stroke="var(--color-border, rgba(148, 163, 184, 0.2))"
-            strokeWidth="28"
-          />
+            {/* Background circle / empty track */}
+            <circle
+              cx="100"
+              cy="100"
+              r="80"
+              fill="var(--color-surface-subtle, #f8fafc)"
+              stroke="var(--color-border, rgba(148, 163, 184, 0.25))"
+              strokeWidth="1"
+            />
 
-          {!isComplete ? (
-            /* Incomplete / Unconfirmed state */
-            <g className="donut-incomplete-group">
-              <circle
-                cx="100"
-                cy="100"
-                r="64"
-                fill="none"
-                stroke="#f59e0b"
-                strokeWidth="28"
-                strokeDasharray="8 6"
-                opacity="0.85"
-              />
-              <text
-                x="100"
-                y="94"
-                textAnchor="middle"
-                className="donut-center-hero-warn"
-              >
-                ⚠️
-              </text>
-              <text
-                x="100"
-                y="114"
-                textAnchor="middle"
-                className="donut-center-sub-warn"
-              >
-                Unconfirmed
-              </text>
-            </g>
-          ) : totalExpenses === 0 ? (
-            /* Zero expenses confirmed */
-            <g className="donut-zero-group">
-              <text
-                x="100"
-                y="95"
-                textAnchor="middle"
-                className="donut-center-hero-val"
-              >
-                ₱0.00
-              </text>
-              <text
-                x="100"
-                y="114"
-                textAnchor="middle"
-                className="donut-center-sub"
-              >
-                Zero Expenses
-              </text>
-            </g>
-          ) : (
-            /* Confirmed expense arcs */
-            <g className="donut-arcs-group">
-              {arcs.map((arc) => {
-                const isHovered = hoveredSliceId === arc.slice.id;
-                return (
+            {!isComplete ? (
+              /* Incomplete / Unconfirmed state */
+              <g className="donut-incomplete-group">
+                <circle
+                  cx="100"
+                  cy="100"
+                  r="80"
+                  fill="rgba(245, 158, 11, 0.05)"
+                  stroke="#f59e0b"
+                  strokeWidth="2"
+                  strokeDasharray="6 4"
+                  opacity="0.85"
+                />
+                <g transform="translate(90, 72)" aria-hidden="true">
                   <path
-                    key={arc.slice.id}
-                    d={arc.pathD}
-                    fill={arc.slice.color}
-                    className={`donut-slice ${isHovered ? "is-hovered" : ""}`}
-                    stroke="var(--color-surface, #ffffff)"
-                    strokeWidth="1.5"
+                    d="m10 2 9 16H1L10 2z"
+                    fill="none"
+                    stroke="#d97706"
+                    strokeWidth="2"
+                    strokeLinecap="round"
                     strokeLinejoin="round"
-                    tabIndex={0}
-                    role="graphics-symbol"
-                    aria-label={`${arc.slice.label}: ${formatPeso(arc.slice.amount)} (${arc.percentage.toFixed(1)}%)`}
-                    onMouseEnter={() => setHoveredSliceId(arc.slice.id)}
-                    onMouseLeave={() => setHoveredSliceId(null)}
-                    onFocus={() => setHoveredSliceId(arc.slice.id)}
-                    onBlur={() => setHoveredSliceId(null)}
                   />
-                );
-              })}
+                  <line x1="10" y1="8" x2="10" y2="12" stroke="#d97706" strokeWidth="2" strokeLinecap="round" />
+                  <circle cx="10" cy="15" r="1" fill="#d97706" />
+                </g>
+                <text
+                  x="100"
+                  y="114"
+                  textAnchor="middle"
+                  className="donut-center-sub-warn"
+                >
+                  Unconfirmed
+                </text>
+              </g>
+            ) : totalExpenses === 0 ? (
+              /* Zero expenses confirmed */
+              <g className="donut-zero-group">
+                <text
+                  x="100"
+                  y="95"
+                  textAnchor="middle"
+                  className="donut-center-hero-val"
+                >
+                  ₱0.00
+                </text>
+                <text
+                  x="100"
+                  y="114"
+                  textAnchor="middle"
+                  className="donut-center-sub"
+                >
+                  Zero Expenses
+                </text>
+              </g>
+            ) : (
+              /* Confirmed expense pie slices */
+              <g className="donut-arcs-group">
+                {arcs.map((arc) => {
+                  const isHovered = hoveredSliceId === arc.slice.id;
+                  return (
+                    <path
+                      key={arc.slice.id}
+                      d={arc.pathD}
+                      fill={arc.slice.color}
+                      className={`donut-slice ${isHovered ? "is-hovered" : ""}`}
+                      stroke="var(--color-surface, #ffffff)"
+                      strokeWidth="1.5"
+                      strokeLinejoin="round"
+                      tabIndex={0}
+                      role="graphics-symbol"
+                      aria-label={`${arc.slice.label}: ${formatPeso(arc.slice.amount)} (${arc.percentage.toFixed(1)}%)`}
+                      onMouseEnter={() => setHoveredSliceId(arc.slice.id)}
+                      onMouseLeave={() => setHoveredSliceId(null)}
+                      onFocus={() => setHoveredSliceId(arc.slice.id)}
+                      onBlur={() => setHoveredSliceId(null)}
+                    />
+                  );
+                })}
+              </g>
+            )}
+          </svg>
+        </div>
 
-              {/* Center Readout */}
-              {activeHovered ? (
-                <g className="donut-center-active">
-                  <text
-                    x="100"
-                    y="93"
-                    textAnchor="middle"
-                    className="donut-center-hero-val"
+        {/* Dedicated readout below the full pie chart with consistent footprint */}
+        <div className="breakdown-pie-readout" aria-live="polite">
+          <div className="breakdown-pie-amount">
+            {activeHovered
+              ? formatPeso(activeHovered.slice.amount)
+              : isComplete && totalExpenses != null
+                ? formatPeso(totalExpenses)
+                : "—"}
+          </div>
+          <div
+            className="breakdown-pie-label"
+            title={
+              activeHovered
+                ? `${activeHovered.percentage.toFixed(1)}% · ${activeHovered.slice.label}`
+                : isComplete && totalExpenses != null
+                  ? "100.0% · Trip Expenses"
+                  : "Unconfirmed Expenses"
+            }
+          >
+            {activeHovered ? (
+              <>
+                <span className="pie-share-pill">{activeHovered.percentage.toFixed(1)}%</span>
+                <span className="pie-category-name">{activeHovered.slice.label}</span>
+              </>
+            ) : isComplete && totalExpenses != null ? (
+              <>
+                <span className="pie-share-pill">100%</span>
+                <span className="pie-category-name">Trip Expenses</span>
+              </>
+            ) : (
+              <>
+                <span className="pie-share-pill" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#d97706"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
                   >
-                    {formatPeso(activeHovered.slice.amount)}
-                  </text>
-                  <text
-                    x="100"
-                    y="112"
-                    textAnchor="middle"
-                    className="donut-center-sub"
-                  >
-                    {activeHovered.percentage.toFixed(1)}% · {activeHovered.slice.label}
-                  </text>
-                </g>
-              ) : (
-                <g className="donut-center-default">
-                  <text
-                    x="100"
-                    y="93"
-                    textAnchor="middle"
-                    className="donut-center-hero-val"
-                  >
-                    {formatPeso(totalExpenses)}
-                  </text>
-                  <text
-                    x="100"
-                    y="112"
-                    textAnchor="middle"
-                    className="donut-center-sub"
-                  >
-                    Total Expenses
-                  </text>
-                </g>
-              )}
-            </g>
-          )}
-        </svg>
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </span>
+                <span className="pie-category-name">Unconfirmed</span>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Legend & Breakdown Items */}
       <div className="breakdown-legend-container">
         {!isComplete ? (
           <div className="breakdown-incomplete-notice">
-            <span className="notice-icon">⚠️</span>
+            <span className="notice-icon" aria-hidden="true">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#d97706"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ flexShrink: 0 }}
+              >
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </span>
             <div>
               <p className="notice-title">Expense distribution deferred</p>
               <p className="notice-body">
@@ -278,11 +313,27 @@ export function DeliveryFinancialBreakdown({
       {/* 1. Incomplete Alert Banner if any unknown expense exists */}
       {!model.isFinanciallyComplete ? (
         <div className="breakdown-alert-incomplete" role="alert">
-          <span className="alert-icon">⚠️</span>
+          <span className="alert-icon" aria-hidden="true">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#d97706"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ flexShrink: 0 }}
+            >
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </span>
           <div className="alert-text">
             <strong>Incomplete Financial Record</strong>
             <p>
-              Trip contains unconfirmed expenses ({model.unknownList.join(", ")}). Operational totals and expense distributions cannot be finalized until all expenses are confirmed.
+              Trip contains unconfirmed expenses ({model.unknownList.join(", ")}). Operational totals and expense distributions require all expenses to be confirmed.
             </p>
           </div>
         </div>
@@ -290,20 +341,20 @@ export function DeliveryFinancialBreakdown({
 
       {/* 2. Hero Summary Metrics Bar (Prominent Monetary Figures) */}
       <div className="breakdown-hero-metrics">
-        {/* Gross Revenue */}
+        {/* Delivery Revenue */}
         <div className="hero-metric-card revenue-card">
-          <span className="hero-metric-eyebrow">GROSS REVENUE</span>
+          <span className="hero-metric-eyebrow">DELIVERY REVENUE</span>
           <div className="hero-metric-amount revenue-text">
             {model.grossRevenue != null ? formatPeso(model.grossRevenue) : "₱0.00"}
           </div>
           <span className="hero-metric-sub">
-            {trip.rateBasis ? `${trip.rateBasis} · ` : ""}Delivery Rate
+            Agreed billing rate per waybill
           </span>
         </div>
 
-        {/* Total Expenses */}
+        {/* Trip Expenses */}
         <div className="hero-metric-card expenses-card">
-          <span className="hero-metric-eyebrow">TOTAL EXPENSES</span>
+          <span className="hero-metric-eyebrow">TRIP EXPENSES</span>
           <div className={`hero-metric-amount ${model.isFinanciallyComplete ? "expenses-text" : "warn-text"}`}>
             {model.isFinanciallyComplete && model.totalExpenses != null
               ? formatPeso(model.totalExpenses)
@@ -314,9 +365,9 @@ export function DeliveryFinancialBreakdown({
           </span>
         </div>
 
-        {/* Net Operating Contribution */}
+        {/* Net Profit */}
         <div className="hero-metric-card profit-card">
-          <span className="hero-metric-eyebrow">NET CONTRIBUTION</span>
+          <span className="hero-metric-eyebrow">NET PROFIT</span>
           <div
             className={`hero-metric-amount ${
               model.isFinanciallyComplete && model.netIncome != null && model.netIncome >= 0
@@ -337,10 +388,10 @@ export function DeliveryFinancialBreakdown({
                   model.marginPercent >= 15 ? "pill-success" : model.marginPercent >= 0 ? "pill-neutral" : "pill-warn"
                 }`}
               >
-                {formatPercent(model.marginPercent)} Margin
+                {formatPercent(model.marginPercent)} Profit Margin
               </span>
             ) : (
-              <span className="margin-pill pill-warn">Pending Margin</span>
+              <span className="margin-pill pill-warn">Pending Profit Margin</span>
             )}
           </div>
         </div>
@@ -349,7 +400,7 @@ export function DeliveryFinancialBreakdown({
       {/* 3. Expense Distribution Pie Chart Section */}
       <section className="breakdown-chart-section" aria-label="Expense Distribution Visualization">
         <div className="section-head-compact">
-          <h4 className="section-title">Expense Distribution</h4>
+          <h4 className="section-title">Trip Expenses Distribution</h4>
           <span className="section-tag">
             {model.isFinanciallyComplete ? "Verified Distribution" : "Pending Verification"}
           </span>
@@ -385,7 +436,7 @@ export function DeliveryFinancialBreakdown({
               <div className="item-meta">
                 <span className="item-color-indicator" style={{ backgroundColor: "#f59e0b" }} />
                 <div>
-                  <span className="item-name">Diesel Fuel Expenses</span>
+                  <span className="item-name">Diesel Fuel</span>
                   <span className="item-detail">
                     {trip.fuelRate ? `Fuel rate: ₱${trip.fuelRate.toFixed(2)}/L` : "Trip fuel consumption"}
                   </span>
@@ -402,12 +453,12 @@ export function DeliveryFinancialBreakdown({
               </div>
             </div>
 
-            {/* Toll Gate Charges */}
+            {/* Highway Tolls */}
             <div className="breakdown-item-row">
               <div className="item-meta">
                 <span className="item-color-indicator" style={{ backgroundColor: "#6366f1" }} />
                 <div>
-                  <span className="item-name">Highway Toll Gate Fees</span>
+                  <span className="item-name">Highway Tolls</span>
                   <span className="item-detail">
                     {trip.expenses.tollGateBreakdown || "Expressways & pass gates"}
                   </span>
@@ -446,12 +497,12 @@ export function DeliveryFinancialBreakdown({
               </div>
             </div>
 
-            {/* Other Trip Expenses */}
+            {/* Other Expenses */}
             <div className="breakdown-item-row">
               <div className="item-meta">
                 <span className="item-color-indicator" style={{ backgroundColor: "#8b5cf6" }} />
                 <div>
-                  <span className="item-name">Other Trip Expenses</span>
+                  <span className="item-name">Other Expenses</span>
                   <span className="item-detail">Incidentals, permits, parking</span>
                 </div>
               </div>
@@ -472,8 +523,8 @@ export function DeliveryFinancialBreakdown({
         <div className="breakdown-group-card">
           <div className="group-card-header">
             <div>
-              <span className="group-eyebrow">CREW PAYROLL</span>
-              <h4 className="group-title">Crew Compensation & Allowances</h4>
+              <span className="group-eyebrow">CREW COMPENSATION</span>
+              <h4 className="group-title">Crew Compensation</h4>
             </div>
             {model.isCrewComplete && model.crewSubtotal != null ? (
               <span className="group-subtotal">{formatPeso(model.crewSubtotal)}</span>
@@ -653,7 +704,7 @@ export function AggregateExpenseBreakdown({
         slices={slices}
         totalExpenses={summary.expenseTotal}
         isComplete={true}
-        title="Overall Operating Expense Distribution"
+        title="Overall Trip Expenses Distribution"
       />
     </div>
   );

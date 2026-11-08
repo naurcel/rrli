@@ -36,6 +36,8 @@ export function ReportCustomizerModal({
 }: ReportCustomizerModalProps) {
   const [activeTab, setActiveTab] = useState<CustomizerTab>("columns");
   const [name, setName] = useState(currentTemplate.name);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [description, setDescription] = useState(currentTemplate.description);
   const [baseType, setBaseType] = useState<ReportBaseType>(currentTemplate.baseType);
   const [title, setTitle] = useState(currentTemplate.layout.title);
@@ -653,15 +655,15 @@ export function ReportCustomizerModal({
                   }}
                 >
                   {[
-                    { key: "showGrossEarnings", label: "Gross Delivery Earnings" },
-                    { key: "showTotalExpenses", label: "Total Trip Expenses" },
-                    { key: "showNetProfit", label: "Net Profit (Net Income)" },
-                    { key: "showProfitMargin", label: "Profit Margin %" },
-                    { key: "showActiveTrucks", label: "Active Trucks Count" },
-                    { key: "showStoreDropoffs", label: "Store Drop-offs Count" },
-                    { key: "showDieselExpenses", label: "Diesel / Fuel Breakdown" },
-                    { key: "showTollExpenses", label: "Tollway Expenses Breakdown" },
-                    { key: "showCrewCosts", label: "Crew Driver/Helper Costs" },
+                    { key: "showGrossEarnings", label: "Delivery Revenue" },
+                    { key: "showTotalExpenses", label: "Trip Expenses" },
+                    { key: "showNetProfit", label: "Net Profit" },
+                    { key: "showProfitMargin", label: "Profit Margin" },
+                    { key: "showActiveTrucks", label: "Active Trucks" },
+                    { key: "showStoreDropoffs", label: "Store Drop-offs" },
+                    { key: "showDieselExpenses", label: "Diesel Fuel" },
+                    { key: "showTollExpenses", label: "Highway Tolls" },
+                    { key: "showCrewCosts", label: "Crew Compensation" },
                   ].map(({ key, label }) => (
                     <label
                       key={key}
@@ -873,19 +875,57 @@ export function ReportCustomizerModal({
         >
           <div>
             {!currentTemplate.isDefault && onDeleteTemplate ? (
-              <button
-                type="button"
-                className="filter-button"
-                onClick={async () => {
-                  if (confirm(`Delete custom template "${currentTemplate.name}"?`)) {
-                    await onDeleteTemplate(currentTemplate.id);
-                    onClose();
-                  }
-                }}
-                style={{ color: "#dc2626", fontSize: "12px" }}
-              >
-                Delete Custom Template
-              </button>
+              isConfirmingDelete ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "11px", color: "#dc2626", fontWeight: 600 }}>
+                    Confirm deletion of &ldquo;{currentTemplate.name}&rdquo;?
+                  </span>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={isDeleting}
+                    onClick={() => setIsConfirmingDelete(false)}
+                    style={{ minHeight: "30px", padding: "0 10px", fontSize: "11px" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={async () => {
+                      setIsDeleting(true);
+                      try {
+                        await onDeleteTemplate(currentTemplate.id);
+                        onClose();
+                      } finally {
+                        setIsDeleting(false);
+                      }
+                    }}
+                    style={{
+                      minHeight: "30px",
+                      padding: "0 12px",
+                      fontSize: "11px",
+                      background: "#dc2626",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {isDeleting ? "Deleting…" : "Confirm Delete"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() => setIsConfirmingDelete(true)}
+                  style={{ color: "#dc2626", fontSize: "12px" }}
+                >
+                  Delete Custom Template
+                </button>
+              )
             ) : null}
           </div>
 

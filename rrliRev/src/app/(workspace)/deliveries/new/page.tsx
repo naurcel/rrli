@@ -6,6 +6,7 @@ import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
+import { useAuthenticatedActor } from "@/components/auth-context";
 import { RoundedSelect } from "@/components/rounded-select";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RecordDetailDrawer, type DetailSection } from "@/components/record-detail-drawer";
@@ -13,10 +14,11 @@ import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
   readBrowserPreviewDeliveries,
-  saveBrowserPreviewDelivery,
+  upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
 import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
 import type { ExpenseResolutionStatus } from "@/features/deliveries/delivery-domain";
+import { getDeliveryDateWindow } from "@/features/deliveries/delivery-recording-policy";
 import { formatPeso } from "@/lib/format";
 
 type DropoffDraft = {
@@ -30,6 +32,7 @@ type DropoffDraft = {
 type ReferenceData = {
   clients: DeliveryFilterOption[];
   trucks: DeliveryFilterOption[];
+  drivers: DeliveryFilterOption[];
 };
 
 type ExpenseFormKey =
@@ -64,7 +67,10 @@ function todayKey(): string {
 
 export default function NewCompletedDeliveryPage() {
   const router = useRouter();
-  const [references, setReferences] = useState<ReferenceData>({ clients: [], trucks: [] });
+  const actor = useAuthenticatedActor();
+  const isAdmin = actor.role === "admin";
+  const deliveryDateWindow = useMemo(() => getDeliveryDateWindow(), []);
+  const [references, setReferences] = useState<ReferenceData>({ clients: [], trucks: [], drivers: [] });
   const [referencesLoading, setReferencesLoading] = useState(true);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -82,6 +88,7 @@ export default function NewCompletedDeliveryPage() {
   // Delivery crew state with support for up to 2 helpers
   const [hasSecondHelper, setHasSecondHelper] = useState(false);
   const [driverName, setDriverName] = useState("");
+  const [recordingDelayed, setRecordingDelayed] = useState<boolean | null>(false);
   const [helper1Name, setHelper1Name] = useState("");
   const [helper2Name, setHelper2Name] = useState("");
 
@@ -128,7 +135,7 @@ export default function NewCompletedDeliveryPage() {
         if (!response.ok || !payload.ok) {
           throw new Error(payload.message ?? "Unable to load active clients and trucks.");
         }
-        const nextReferences = payload.filters ?? { clients: [], trucks: [] };
+        const nextReferences = payload.filters ?? { clients: [], trucks: [], drivers: [] };
 
         // Merge custom clients from locally recorded deliveries
         const localDeliveries = readBrowserPreviewDeliveries();
@@ -155,7 +162,23 @@ export default function NewCompletedDeliveryPage() {
           ...nextReferences.trucks,
           ...localTrucks.filter((t) => !existingPlates.has(t.label.toUpperCase())),
         ];
-        const mergedReferences = { clients: mergedClients, trucks: mergedTrucks };
+        const browserDrivers = localDeliveries
+          .map((delivery) => delivery.driverName?.trim())
+          .filter((name): name is string => Boolean(name));
+        const driverNames = new Set((nextReferences.drivers ?? []).map((driver) => driver.label.toLowerCase()));
+        const extraDrivers = browserDrivers
+          .filter((name) => {
+            const key = name.toLowerCase();
+            if (driverNames.has(key)) return false;
+            driverNames.add(key);
+            return true;
+          })
+          .map((name) => ({ id: `driver-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, label: name }));
+        const mergedReferences = {
+          clients: mergedClients,
+          trucks: mergedTrucks,
+          drivers: [...(nextReferences.drivers ?? []), ...extraDrivers],
+        };
         setReferences(mergedReferences);
         setClientName(mergedReferences.clients[0]?.label ?? "");
         setPlateNumber(mergedReferences.trucks[0]?.label ?? "");
@@ -236,6 +259,7 @@ export default function NewCompletedDeliveryPage() {
       clientName,
       plateNumber,
       truckTemperature: `${truckTemperature}°C`,
+      recordingDelayed: values.deliveryDate < deliveryDateWindow.max ? recordingDelayed : false,
       distanceKm: numberValue(values.distanceKm),
       fuelRate: numberValue(values.fuelRate),
       deliveryRate: numberValue(values.deliveryRate),
@@ -246,7 +270,7 @@ export default function NewCompletedDeliveryPage() {
       driverName: driverName.trim() || null,
       helperAllowance: numberValue(values.helperAllowance),
       helperDailyRate: numberValue(values.helperDailyRate),
-      helperName: helper1Name.trim() || null,
+      helperName: helper1Name.trim(),
       hasSecondHelper,
       helper2Allowance: hasSecondHelper ? numberValue(values.helper2Allowance) : null,
       helper2DailyRate: hasSecondHelper ? numberValue(values.helper2DailyRate) : null,
@@ -261,13 +285,14 @@ export default function NewCompletedDeliveryPage() {
       helper2AllowanceStatus: hasSecondHelper ? expenseStatuses.helper2Allowance : "not_applicable",
       helper2DailyRateStatus: hasSecondHelper ? expenseStatuses.helper2DailyRate : "not_applicable",
       otherExpensesStatus: expenseStatuses.otherExpenses,
+      supportingDocuments: supportingFiles.map((file) => file.name),
       dropoffs: dropoffs.map((dropoff, index) => ({
         storeName: dropoff.storeName,
         destinationArea: dropoff.destinationArea,
         entryFee: numberValue(dropoff.entryFee),
         entryFeeStatus: dropoff.entryFeeStatus,
         podSubmitted: Boolean(firstPodName && index === 0),
-        supportingDocsComplete: false,
+        supportingDocsComplete: supportingFiles.length > 0,
         documentRef: index === 0 && firstPodName ? firstPodName : "Pending upload",
       })),
     };
@@ -276,6 +301,22 @@ export default function NewCompletedDeliveryPage() {
   function submitDelivery(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError(null);
+    if (driverName.trim().length < 2) {
+      setSubmitError("Select a saved driver or enter a new driver name.");
+      return;
+    }
+    if (helper1Name.trim().length < 2) {
+      setSubmitError("Enter the helper name.");
+      return;
+    }
+    if (!isAdmin && (values.deliveryDate < deliveryDateWindow.min || values.deliveryDate > deliveryDateWindow.max)) {
+      setSubmitError(`Delivery date must be between ${deliveryDateWindow.min} and ${deliveryDateWindow.max}.`);
+      return;
+    }
+    if (values.deliveryDate < deliveryDateWindow.max && recordingDelayed == null) {
+      setSubmitError("Confirm whether this delivery was recorded late.");
+      return;
+    }
     buildPayload();
     setPreviewing(true);
   }
@@ -288,7 +329,11 @@ export default function NewCompletedDeliveryPage() {
     try {
       const response = await fetch("/api/deliveries", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-actor-role": actor.role,
+          "x-actor-username": actor.username,
+        },
         body: JSON.stringify(payload),
       });
       const result = (await response.json()) as {
@@ -300,7 +345,7 @@ export default function NewCompletedDeliveryPage() {
       if (!response.ok || !result.ok) {
         throw new Error(result.message ?? "Unable to record the completed delivery.");
       }
-      if (result.previewRecord) saveBrowserPreviewDelivery(result.previewRecord);
+      if (result.previewRecord) upsertBrowserPreviewDelivery(result.previewRecord);
       router.push(`/deliveries?created=${encodeURIComponent(result.deliveryId ?? "")}`);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to record the completed delivery.");
@@ -316,6 +361,9 @@ export default function NewCompletedDeliveryPage() {
       rows: [
         { label: "Waybill", value: values.waybillNumber || "Not entered" },
         { label: "Delivery date", value: values.deliveryDate },
+        ...(values.deliveryDate < deliveryDateWindow.max
+          ? [{ label: "Late recording", value: recordingDelayed ? "Yes" : "No" }]
+          : []),
         { label: "Client", value: clientName || "Not selected" },
         { label: "Origin", value: values.origin || "Not entered" },
       ],
@@ -323,6 +371,8 @@ export default function NewCompletedDeliveryPage() {
     {
       eyebrow: "ASSIGNED VEHICLE",
       title: "Truck details",
+      rowSpan: 2,
+      className: "delivery-preview-truck-section",
       customContent: plateNumber ? (
         <DeliveryTruckInfoSection
           plateNumber={plateNumber}
@@ -366,8 +416,8 @@ export default function NewCompletedDeliveryPage() {
       ],
     },
     {
-      eyebrow: "STOP SEQUENCE",
-      title: `Route and drop-offs (${dropoffs.length})`,
+      eyebrow: "STORE DROP-OFF SEQUENCE",
+      title: `Route & Store Drop-offs (${dropoffs.length})`,
       fullWidth: true,
       customContent: (
         <ol className="delivery-preview-stops">
@@ -384,9 +434,9 @@ export default function NewCompletedDeliveryPage() {
       eyebrow: "FINANCIAL REVIEW",
       title: "Revenue and expenses",
       rows: [
-        { label: "Delivery Rate (Gross Revenue)", value: formatPeso(financialReview.revenue) },
+        { label: "Delivery Revenue", value: formatPeso(financialReview.revenue) },
         { label: "Store entry fees", value: formatPeso(financialReview.entryFees) },
-        { label: "Total expenses", value: formatPeso(financialReview.totalExpenses) },
+        { label: "Trip expenses", value: formatPeso(financialReview.totalExpenses) },
         {
           label: "Net profit",
           value: formatPeso(financialReview.netIncome),
@@ -397,10 +447,12 @@ export default function NewCompletedDeliveryPage() {
     {
       eyebrow: "FILES",
       title: "POD and supporting documents",
-      rows: [
-        { label: "Proof of delivery", value: podFiles.map((file) => file.name).join(", ") || "None attached" },
-        { label: "Supporting files", value: supportingFiles.map((file) => file.name).join(", ") || "None attached" },
-      ],
+      customContent: (
+        <DeliveryFilePreview
+          podFiles={podFiles}
+          supportingFiles={supportingFiles}
+        />
+      ),
     },
   ], [
     clientName,
@@ -415,6 +467,8 @@ export default function NewCompletedDeliveryPage() {
     supportingFiles,
     truckTemperature,
     values,
+    deliveryDateWindow.max,
+    recordingDelayed,
   ]);
 
   const noReferences =
@@ -443,11 +497,39 @@ export default function NewCompletedDeliveryPage() {
           <div className="delivery-field-grid delivery-trip-grid">
             <label>Waybill<input required value={values.waybillNumber} onChange={(event) => updateValue("waybillNumber", event.target.value)} placeholder="WB-2026-0001" /></label>
             <label>Delivery date
+              {isAdmin ? (
+                <span className="admin-date-override-pill" style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 500, color: "var(--color-accent, #d97706)" }}>
+                  (Admin: No date restriction)
+                </span>
+              ) : null}
               <span className="delivery-date-input">
-                <input required type="date" value={values.deliveryDate} onChange={(event) => updateValue("deliveryDate", event.target.value)} />
+                <input
+                  required
+                  type="date"
+                  min={isAdmin ? undefined : deliveryDateWindow.min}
+                  max={isAdmin ? undefined : deliveryDateWindow.max}
+                  value={values.deliveryDate}
+                  onChange={(event) => {
+                    updateValue("deliveryDate", event.target.value);
+                    setRecordingDelayed(event.target.value < deliveryDateWindow.max ? null : false);
+                  }}
+                />
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 3v3m10-3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
               </span>
             </label>
+            {values.deliveryDate < deliveryDateWindow.max ? (
+              <fieldset className="delivery-delay-confirmation">
+                <legend>Delayed recording?</legend>
+                <label>
+                  <input type="radio" name="recording-delayed" checked={recordingDelayed === true} onChange={() => setRecordingDelayed(true)} />
+                  Yes
+                </label>
+                <label>
+                  <input type="radio" name="recording-delayed" checked={recordingDelayed === false} onChange={() => setRecordingDelayed(false)} />
+                  No
+                </label>
+              </fieldset>
+            ) : null}
             <div className="client-field-group">
               <div className="client-field-header">
                 <label htmlFor={isNewClientMode ? "new-client-name-input" : undefined}>
@@ -498,10 +580,7 @@ export default function NewCompletedDeliveryPage() {
 
             {/* Truck Selection strictly from registered fleet trucks */}
             <div className="client-field-group">
-              <div className="client-field-header">
-                <label>Truck plate</label>
-                <span className="field-hint">Fleet registry</span>
-              </div>
+              <label>Truck plate</label>
               <RoundedSelect
                 value={plateNumber}
                 options={references.trucks.map((option) => ({
@@ -537,10 +616,10 @@ export default function NewCompletedDeliveryPage() {
             <label className="origin-field">Origin<input required value={values.origin} onChange={(event) => updateValue("origin", event.target.value)} placeholder="e.g. Marilao Depot" /></label>
             <label>Distance (km)<input required min="0" step="0.01" type="number" inputMode="decimal" className="no-spin-stepper" style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }} value={values.distanceKm} onChange={(event) => updateValue("distanceKm", event.target.value)} /></label>
 
-            {/* Fuel Rate with explicit distinction from Delivery Rate */}
+            {/* Fuel Rate */}
             <div className="fuel-rate-field-wrap">
               <label>
-                <span className="field-label-text">Fuel rate (₱ / Liter)</span>
+                <span className="field-label-text">Fuel rate (₱/L)</span>
                 <span className="peso-input-wrap">
                   <span className="peso-prefix" aria-hidden="true">₱</span>
                   <input
@@ -557,28 +636,25 @@ export default function NewCompletedDeliveryPage() {
                   />
                 </span>
               </label>
-              <span className="field-explanatory-note">
-                Pump price per liter of fuel (e.g. ₱85.00/L). Reference for diesel costs, distinct from the gross Delivery Rate.
-              </span>
             </div>
           </div>
         </section>
 
         <section className="delivery-form-section">
-          <FormHeading number="02" title="Stores & drop-offs" />
+          <FormHeading number="02" title="Store Drop-offs" />
           <div className="dropoff-editor">
             {dropoffs.map((dropoff, index) => (
               <div key={dropoff.id} className="dropoff-row">
                 <div className="dropoff-row-header">
-                  <span className="dropoff-row-title">Stop {index + 1}</span>
+                  <span className="dropoff-row-title">Store Drop-off #{index + 1}</span>
                   {dropoffs.length > 1 ? (
                     <button
                       type="button"
                       className="dropoff-remove"
                       onClick={() => setDropoffs((current) => current.filter((item) => item.id !== dropoff.id))}
-                      aria-label={`Remove Stop ${index + 1}`}
+                      aria-label={`Remove Store Drop-off #${index + 1}`}
                     >
-                      ✕ Remove
+                      × Remove
                     </button>
                   ) : null}
                 </div>
@@ -621,7 +697,7 @@ export default function NewCompletedDeliveryPage() {
                 + Add store
               </button>
               <span className="dropoff-counter">
-                {dropoffs.length} {dropoffs.length === 1 ? "stop recorded" : "stops recorded"}
+                {dropoffs.length} {dropoffs.length === 1 ? "stop" : "stops"}
               </span>
             </div>
           </div>
@@ -631,18 +707,14 @@ export default function NewCompletedDeliveryPage() {
           <FormHeading number="03" title="Revenue & expenses" />
           <div className="delivery-field-grid delivery-finance-grid">
 
-            {/* Delivery Rate with prominent clarification */}
+            {/* Delivery Revenue */}
             <div className="delivery-rate-banner wide">
               <div className="delivery-rate-banner-header">
-                <h3 className="delivery-finance-group-title">Revenue: Delivery Rate</h3>
-                <span className="delivery-rate-pill">Gross Freight Amount</span>
+                <h3 className="delivery-finance-group-title">Delivery Revenue</h3>
               </div>
-              <p className="delivery-rate-clarification">
-                <strong>Delivery Rate</strong> is the total gross billable revenue for this trip (the larger monetary amount). This is independent from the per-liter <strong>Fuel Rate</strong> above. Business formula calculation is pending formal verification.
-              </p>
               <div className="delivery-rate-input-row">
                 <MoneyField
-                  label="Delivery Rate (Gross Trip Revenue ₱)"
+                  label="Delivery revenue"
                   value={values.deliveryRate}
                   required
                   onChange={(value) => updateValue("deliveryRate", value)}
@@ -650,7 +722,7 @@ export default function NewCompletedDeliveryPage() {
               </div>
             </div>
 
-            <h3 className="delivery-finance-group-title wide">Operational Expenses</h3>
+            <h3 className="delivery-finance-group-title wide">Trip Expenses</h3>
             {(["dieselExpenses", "tollGateExpenses", "otherExpenses"] as const).map((key) => (
               <ExpenseField
                 key={key}
@@ -668,12 +740,7 @@ export default function NewCompletedDeliveryPage() {
             {/* Crew Expenses with Support for 2 Helpers */}
             <div className="crew-expense-groups wide">
               <div className="crew-expense-header-bar">
-                <div>
-                  <h4 className="crew-section-subtitle">Delivery Crew Rates & Allowances</h4>
-                  <p className="crew-section-caption">
-                    Daily compensation and travel allowances per personnel (maximum 2 helpers).
-                  </p>
-                </div>
+                <h4 className="crew-section-subtitle">Crew Compensation</h4>
                 {!hasSecondHelper ? (
                   <button
                     type="button"
@@ -687,11 +754,11 @@ export default function NewCompletedDeliveryPage() {
                       }));
                     }}
                   >
-                    + Add Second Helper
+                    + Add helper
                   </button>
                 ) : (
-                  <span className="crew-max-badge" title="Maximum limit of 2 helpers reached">
-                    ✓ 2 Helpers Assigned (Max Limit)
+                  <span className="crew-max-badge" title="Maximum 2 helpers">
+                    2 Helpers (Max)
                   </span>
                 )}
               </div>
@@ -701,12 +768,20 @@ export default function NewCompletedDeliveryPage() {
                 <section className="crew-expense-group">
                   <div className="crew-card-title-row">
                     <span className="crew-role-pill driver">Driver</span>
-                    <input
-                      type="text"
-                      className="crew-name-input"
-                      placeholder="Driver Name (Optional)"
+                    <RoundedSelect
                       value={driverName}
-                      onChange={(e) => setDriverName(e.target.value)}
+                      options={references.drivers.map((driver) => ({
+                        value: driver.label,
+                        label: driver.label,
+                      }))}
+                      onChange={setDriverName}
+                      ariaLabel="Driver name"
+                      className="crew-name-select"
+                      placeholder="Select or add driver"
+                      emptyMessage="No saved drivers"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Search or enter a new driver"
                     />
                   </div>
                   <div className="crew-expense-fields-row">
@@ -737,14 +812,17 @@ export default function NewCompletedDeliveryPage() {
                 <section className="crew-expense-group">
                   <div className="crew-card-title-row">
                     <span className="crew-role-pill helper">
-                      {hasSecondHelper ? "Helper 1 (Lead)" : "Helper"}
+                      {hasSecondHelper ? "Helper 1" : "Helper"}
                     </span>
                     <input
                       type="text"
                       className="crew-name-input"
-                      placeholder={hasSecondHelper ? "Helper 1 Name (Optional)" : "Helper Name (Optional)"}
+                      placeholder="Helper name"
                       value={helper1Name}
                       onChange={(e) => setHelper1Name(e.target.value)}
+                      required
+                      minLength={2}
+                      aria-label="Helper name"
                     />
                   </div>
                   <div className="crew-expense-fields-row">
@@ -779,7 +857,7 @@ export default function NewCompletedDeliveryPage() {
                       <input
                         type="text"
                         className="crew-name-input"
-                        placeholder="Helper 2 Name (Optional)"
+                        placeholder="Helper 2 name (optional)"
                         value={helper2Name}
                         onChange={(e) => setHelper2Name(e.target.value)}
                       />
@@ -794,7 +872,7 @@ export default function NewCompletedDeliveryPage() {
                         }}
                         title="Remove second helper"
                       >
-                        ✕ Remove
+                        × Remove
                       </button>
                     </div>
                     <div className="crew-expense-fields-row">
@@ -826,10 +904,10 @@ export default function NewCompletedDeliveryPage() {
           </div>
 
           <div className="delivery-financial-review" aria-label="Financial review">
-            <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
-            <div><span>Store entry fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
-            <div><span>Total expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
-            <div className={financialReview.netIncome != null && financialReview.netIncome < 0 ? "negative" : "positive"}><span>Net profit</span><strong>{formatPeso(financialReview.netIncome)}</strong></div>
+            <div><span>Delivery Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
+            <div><span>Store Entry Fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
+            <div><span>Trip Expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
+            <div className={financialReview.netIncome != null && financialReview.netIncome < 0 ? "negative" : "positive"}><span>Net Profit</span><strong>{formatPeso(financialReview.netIncome)}</strong></div>
           </div>
         </section>
 
@@ -846,7 +924,7 @@ export default function NewCompletedDeliveryPage() {
             <FileUploadField
               id="delivery-supporting-files"
               label="Supporting documents"
-              helper="Receiving slips and attachments"
+              helper="Receiving slips or attachments"
               files={supportingFiles}
               onChange={setSupportingFiles}
             />
@@ -859,7 +937,7 @@ export default function NewCompletedDeliveryPage() {
             Preview delivery
           </button>
         </div>
-        {noReferences ? <p className="delivery-reference-warning">At least one active client and one active Fleet truck are required before a delivery can be recorded.</p> : null}
+        {noReferences ? <p className="delivery-reference-warning">At least one client and truck required.</p> : null}
       </form>
       </div>
       <RecordDetailDrawer
@@ -871,14 +949,104 @@ export default function NewCompletedDeliveryPage() {
         onClose={() => !submitting && setPreviewing(false)}
         footer={(
           <>
-            <button type="button" className="secondary-button" disabled={submitting} onClick={() => setPreviewing(false)}>Back to edit</button>
-            <button type="button" className="primary-action-button" disabled={submitting} onClick={recordDelivery}>
-              {submitting ? "Recording delivery…" : "Confirm and record"}
+            <button
+              type="button"
+              className="record-preview-icon-action ui-tooltip"
+              disabled={submitting}
+              onClick={() => setPreviewing(false)}
+              aria-label="Back to edit"
+              data-tooltip="Back to edit"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m14.7 6.3 3 3M5 19l3.7-.8 9-9a2.1 2.1 0 0 0-3-3l-9 9L5 19Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="record-preview-icon-action primary ui-tooltip"
+              disabled={submitting}
+              onClick={recordDelivery}
+              aria-label={submitting ? "Recording delivery" : "Confirm and record delivery"}
+              data-tooltip={submitting ? "Recording delivery" : "Confirm and record"}
+            >
+              {submitting ? (
+                <span className="record-preview-spinner" aria-hidden="true" />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="m5 12.5 4.2 4.2L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
             </button>
           </>
         )}
       />
     </>
+  );
+}
+
+function DeliveryFilePreview({
+  podFiles,
+  supportingFiles,
+}: {
+  podFiles: File[];
+  supportingFiles: File[];
+}) {
+  const [previews, setPreviews] = useState<Array<{
+    file: File;
+    kind: "pod" | "supporting";
+    url: string;
+  }>>([]);
+
+  useEffect(() => {
+    const nextPreviews = [
+      ...podFiles.map((file) => ({ file, kind: "pod" as const, url: URL.createObjectURL(file) })),
+      ...supportingFiles.map((file) => ({ file, kind: "supporting" as const, url: URL.createObjectURL(file) })),
+    ];
+
+    setPreviews(nextPreviews);
+    return () => nextPreviews.forEach(({ url }) => URL.revokeObjectURL(url));
+  }, [podFiles, supportingFiles]);
+
+  if (previews.length === 0) {
+    return <p className="delivery-file-preview-empty">No files attached.</p>;
+  }
+
+  return (
+    <div className="delivery-file-preview-grid">
+      {previews.map(({ file, kind, url }, index) => (
+        <article className="delivery-file-preview-card" key={`${kind}-${file.name}-${file.lastModified}-${index}`}>
+          <div className="delivery-file-preview-visual">
+            {file.type.startsWith("image/") ? (
+              // Browser-created object URLs cannot be optimized by next/image.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={url} alt={`Preview of ${file.name}`} />
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M7 3.5h6l4 4V20.5H7V3.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                <path d="M13 3.5v4h4M9.5 12h5M9.5 15h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+              </svg>
+            )}
+          </div>
+          <div className="delivery-file-preview-copy">
+            <span>{kind === "pod" ? "POD" : "Supporting"}</span>
+            <strong title={file.name}>{file.name}</strong>
+          </div>
+          <a
+            className="delivery-file-view-action ui-tooltip"
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`View ${file.name}`}
+            data-tooltip="View file"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3.5 12s3.1-5 8.5-5 8.5 5 8.5 5-3.1 5-8.5 5-8.5-5-8.5-5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+              <circle cx="12" cy="12" r="2.2" stroke="currentColor" strokeWidth="1.7" />
+            </svg>
+          </a>
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -1013,8 +1181,8 @@ function ExpenseField({
 
 function expenseLabel(key: string): string {
   return ({
-    dieselExpenses: "Diesel (₱)",
-    tollGateExpenses: "Toll gate (₱)",
+    dieselExpenses: "Diesel fuel (₱)",
+    tollGateExpenses: "Highway tolls (₱)",
     driverAllowance: "Allowance (₱)",
     driverDailyRate: "Daily rate (₱)",
     helperAllowance: "Allowance (₱)",

@@ -4,11 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
+  addDays,
   formatDateRange,
+  formatShortDate,
+  parseDateValue,
+  toDateKey,
   useGlobalDateRange,
+  type DateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { ReportCustomizerModal } from "@/components/report-customizer-modal";
+import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import {
@@ -33,13 +39,38 @@ export default function ReportsPage() {
   const actor = useAuthenticatedActor();
   const isAdmin = canManageReportTemplates(actor.role);
   const { range } = useGlobalDateRange();
-  const { deliveries: filteredDeliveries, loading, error } = usePersistedDeliveries(range);
 
   // Template collection state
   const [templates, setTemplates] = useState<ReportTemplate[]>(() => [
     ...BUILTIN_REPORT_TEMPLATES,
   ]);
   const [activeTemplateId, setActiveTemplateId] = useState<string>("default-revenue");
+
+  // Daily trip report fixed-date state (defaults to today's date YYYY-MM-DD)
+  const [dailyDate, setDailyDate] = useState<string>(() => toDateKey(new Date()));
+
+  // Find active template
+  const activeTemplate = useMemo(() => {
+    return (
+      templates.find((t) => t.id === activeTemplateId) ||
+      BUILTIN_REPORT_TEMPLATES.find((t) => t.id === activeTemplateId) ||
+      DEFAULT_REVENUE_TEMPLATE
+    );
+  }, [templates, activeTemplateId]);
+
+  const isDailyTripReport = activeTemplate.id === "default-daily-trip";
+
+  // For Daily Trip Report, the effective date range is strictly fixed to that single day,
+  // completely ignoring whatever date filter is selected in the global topbar.
+  const effectiveRange = useMemo<DateRange>(() => {
+    if (isDailyTripReport) {
+      const parsedDay = parseDateValue(dailyDate);
+      return { startDate: parsedDay, endDate: parsedDay };
+    }
+    return range;
+  }, [isDailyTripReport, dailyDate, range]);
+
+  const { deliveries: filteredDeliveries, loading, error } = usePersistedDeliveries(effectiveRange);
 
   // Customizer modal state
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
@@ -92,6 +123,10 @@ export default function ReportsPage() {
           profitability: "default-profitability",
           activity: "default-activity",
           "trip-ledger": "default-trip-ledger",
+          ledger: "default-trip-ledger",
+          daily: "default-daily-trip",
+          "daily-trip": "default-daily-trip",
+          "daily-trips": "default-daily-trip",
           "truck-profitability": "default-profitability",
           "client-deliveries": "default-revenue",
           "pod-completeness": "default-activity",
@@ -100,19 +135,15 @@ export default function ReportsPage() {
           setActiveTemplateId(tabToId[tabParam]);
         }
       }
+
+      const dateParam = params.get("date");
+      if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+        setDailyDate(dateParam);
+      }
     } catch {
       // Ignore URL parsing errors
     }
   }, []);
-
-  // Find active template
-  const activeTemplate = useMemo(() => {
-    return (
-      templates.find((t) => t.id === activeTemplateId) ||
-      BUILTIN_REPORT_TEMPLATES.find((t) => t.id === activeTemplateId) ||
-      DEFAULT_REVENUE_TEMPLATE
-    );
-  }, [templates, activeTemplateId]);
 
   // Adjust default sort key when active template changes
   useEffect(() => {
@@ -147,6 +178,19 @@ export default function ReportsPage() {
       return String(valA ?? "").localeCompare(String(valB ?? "")) * mult;
     });
   }, [processedReport.rows, reportSort.key, reportSort.direction]);
+
+  const [reportPage, setReportPage] = useState(1);
+  const REPORT_PAGE_SIZE = 10;
+  const reportPageCount = Math.max(1, Math.ceil(sortedRows.length / REPORT_PAGE_SIZE));
+
+  useEffect(() => {
+    setReportPage(1);
+  }, [activeTemplate.id, effectiveRange, reportSort]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (reportPage - 1) * REPORT_PAGE_SIZE;
+    return sortedRows.slice(start, start + REPORT_PAGE_SIZE);
+  }, [sortedRows, reportPage]);
 
   function changeReportSort(key: string, direction: TableSortDirection) {
     setReportSort({ key, direction });
@@ -257,7 +301,7 @@ export default function ReportsPage() {
           <div>
             <h1>Reports</h1>
             <p className="subtitle">
-              Create printable and exportable delivery and financial reports.
+              Print and export delivery reports.
             </p>
           </div>
           <div className="report-actions">
@@ -266,17 +310,33 @@ export default function ReportsPage() {
                 <button
                   type="button"
                   className="page-intro-action report-customize-action"
-                  aria-label="Customize current report layout"
-                  onClick={() => handleOpenCustomizer(activeTemplate, false)}
+                  aria-label="Customize current report layout (temporarily disabled)"
+                  title="Feature temporarily disabled"
+                  disabled
                 >
-                  <span aria-hidden="true">⚙</span>
-                  {activeTemplate.isDefault ? "Customize Layout" : "Edit Layout"}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                  {activeTemplate.isDefault ? "Customize" : "Edit Layout"}
                 </button>
                 <button
                   type="button"
                   className="page-intro-action report-new-action"
-                  aria-label="Create new report format"
-                  onClick={() => handleOpenCustomizer(activeTemplate, true)}
+                  aria-label="Create new report format (temporarily disabled)"
+                  title="Feature temporarily disabled"
+                  disabled
                 >
                   <span aria-hidden="true">+</span> New Format
                 </button>
@@ -285,10 +345,11 @@ export default function ReportsPage() {
             <button
               type="button"
               className="page-intro-action report-export-action"
-              aria-label="Export report to Excel CSV"
-              onClick={() => downloadReportCsvFile(processedReport, formatDateRange(range))}
+              aria-label="Export report to Excel CSV (temporarily disabled)"
+              title="Feature temporarily disabled"
+              disabled
             >
-              <span aria-hidden="true">↓</span> Export Excel (.csv)
+              <span aria-hidden="true">↓</span> Export CSV
             </button>
             <button
               type="button"
@@ -339,7 +400,7 @@ export default function ReportsPage() {
 
         <div className={`report-workspace${loading ? " is-loading" : ""}`}>
           {/* Report Format Selection Tabs */}
-          <div className="report-tabs-bar" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "16px" }}>
+          <div className="report-tabs-bar">
             <div className="report-tabs" role="tablist" aria-label="Standard report formats">
               {BUILTIN_REPORT_TEMPLATES.map((tpl) => (
                 <button
@@ -350,15 +411,17 @@ export default function ReportsPage() {
                   className={activeTemplateId === tpl.id ? "active" : undefined}
                   onClick={() => setActiveTemplateId(tpl.id)}
                 >
-                  {tpl.layout.title.replace(" Report", "")}
+                  {tpl.id === "default-daily-trip"
+                    ? "Daily Trips"
+                    : tpl.layout.title.replace(" Report", "")}
                 </button>
               ))}
             </div>
 
             {/* Custom Saved Formats Selector */}
             {customTemplates.length > 0 && (
-              <div className="report-custom-selector" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <label htmlFor="custom-format-dropdown" style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)" }}>
+              <div className="report-custom-selector">
+                <label htmlFor="custom-format-dropdown">
                   Custom Formats:
                 </label>
                 <select
@@ -368,16 +431,6 @@ export default function ReportsPage() {
                     if (e.target.value) {
                       setActiveTemplateId(e.target.value);
                     }
-                  }}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--color-border-subtle)",
-                    backgroundColor: "var(--color-surface)",
-                    color: "var(--color-text-primary)",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    cursor: "pointer",
                   }}
                 >
                   <option value="">— Select Saved Layout ({customTemplates.length}) —</option>
@@ -391,21 +444,63 @@ export default function ReportsPage() {
             )}
           </div>
 
+          {/* Daily Trip Fixed-Day Date Navigation Controls */}
+          {isDailyTripReport && (
+            <div className="daily-trip-date-bar">
+              <div className="daily-trip-date-controls">
+                <span className="daily-trip-date-label">Trip Date:</span>
+                <button
+                  type="button"
+                  className="daily-nav-btn"
+                  onClick={() => setDailyDate((prev) => toDateKey(addDays(parseDateValue(prev), -1)))}
+                  aria-label="Previous day"
+                  title="Previous day"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                  <span>Prev Day</span>
+                </button>
+                <input
+                  type="date"
+                  className="daily-date-input"
+                  aria-label="Select report date"
+                  value={dailyDate}
+                  onChange={(e) => {
+                    if (e.target.value) setDailyDate(e.target.value);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="daily-nav-btn"
+                  onClick={() => setDailyDate((prev) => toDateKey(addDays(parseDateValue(prev), 1)))}
+                  aria-label="Next day"
+                  title="Next day"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+                >
+                  <span>Next Day</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="daily-today-btn"
+                  onClick={() => setDailyDate(toDateKey(new Date()))}
+                >
+                  Today
+                </button>
+              </div>
+              <span className="daily-trip-notice">
+                Fixed to {formatShortDate(parseDateValue(dailyDate))} · Ignores global date filter
+              </span>
+            </div>
+          )}
+
           {/* Active Template Metadata Pill */}
           {!activeTemplate.isDefault && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "8px 16px",
-                marginBottom: "16px",
-                borderRadius: "10px",
-                background: "color-mix(in srgb, var(--color-accent-soft) 40%, transparent)",
-                border: "1px solid var(--color-border-subtle)",
-                fontSize: "11px",
-              }}
-            >
+            <div className="report-custom-banner">
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ fontWeight: 700, color: "var(--color-accent)" }}>Custom Layout Active:</span>
                 <span style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>{activeTemplate.name}</span>
@@ -436,31 +531,37 @@ export default function ReportsPage() {
               <div>
                 <p>{activeTemplate.layout.documentTitle || "REDEEMED ROUTE LOGISTICS INC. · ROUTEX"}</p>
                 <h2>{activeTemplate.layout.title}</h2>
-                <span>
-                  Prepared for {actor.fullName} ({actor.roleLabel} — {actor.accessLevelLabel})
-                </span>
-                {activeTemplate.layout.subtitle && (
+                <span>Prepared for {actor.fullName}</span>
+                {isDailyTripReport ? (
+                  <p style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-muted)" }}>
+                    Daily delivery log, route drop-offs, and driver trip records for {formatShortDate(parseDateValue(dailyDate))}.
+                  </p>
+                ) : activeTemplate.layout.subtitle ? (
                   <p style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-muted)" }}>
                     {activeTemplate.layout.subtitle}
                   </p>
-                )}
+                ) : null}
               </div>
               <dl>
                 <div>
                   <dt>Period</dt>
-                  <dd>{formatDateRange(range)}</dd>
+                  <dd>
+                    {isDailyTripReport
+                      ? `${formatShortDate(parseDateValue(dailyDate))} (Daily)`
+                      : formatDateRange(range)}
+                  </dd>
                 </div>
                 <div>
-                  <dt>Trips Included</dt>
-                  <dd>{processedReport.totals.totalTrips} trips</dd>
+                  <dt>Trips</dt>
+                  <dd>{processedReport.totals.totalTrips}</dd>
                 </div>
                 <div>
-                  <dt>Store Drop-offs</dt>
-                  <dd>{processedReport.totals.totalStoreDropoffs} stores</dd>
+                  <dt>Drop-offs</dt>
+                  <dd>{processedReport.totals.totalStoreDropoffs}</dd>
                 </div>
                 <div>
-                  <dt>Layout Format</dt>
-                  <dd>{activeTemplate.isDefault ? "Standard Default" : "Custom Layout"}</dd>
+                  <dt>Layout</dt>
+                  <dd>{activeTemplate.isDefault ? "Default" : "Custom"}</dd>
                 </div>
               </dl>
             </header>
@@ -469,68 +570,56 @@ export default function ReportsPage() {
             <section className="report-summary">
               {activeTemplate.breakdown.showGrossEarnings && (
                 <div>
-                  <span>Gross Delivery Earnings</span>
+                  <span>Delivery Revenue</span>
                   <strong>{formatPeso(processedReport.totals.grossEarnings)}</strong>
-                  <em>Billed delivery rates</em>
                 </div>
               )}
               {activeTemplate.breakdown.showTotalExpenses && (
                 <div>
-                  <span>Total Trip Expenses</span>
+                  <span>Trip Expenses</span>
                   <strong>{formatPeso(processedReport.totals.totalExpenses)}</strong>
-                  <em>Diesel, tolls, crew & entry</em>
                 </div>
               )}
               {activeTemplate.breakdown.showNetProfit && (
                 <div>
                   <span>Net Profit</span>
                   <strong>{formatPeso(processedReport.totals.netProfit)}</strong>
-                  <em>
-                    {formatPercent(processedReport.totals.marginPercent)}{" "}
-                    net margin
-                  </em>
                 </div>
               )}
               {activeTemplate.breakdown.showProfitMargin && (
                 <div>
                   <span>Profit Margin</span>
                   <strong>{formatPercent(processedReport.totals.marginPercent)}</strong>
-                  <em>Net return on revenue</em>
                 </div>
               )}
               {activeTemplate.breakdown.showActiveTrucks && (
                 <div>
                   <span>Active Trucks</span>
-                  <strong>{processedReport.totals.activeTruckCount} units</strong>
-                  <em>Fleet units deployed</em>
+                  <strong>{processedReport.totals.activeTruckCount}</strong>
                 </div>
               )}
               {activeTemplate.breakdown.showStoreDropoffs && (
                 <div>
                   <span>Store Drop-offs</span>
-                  <strong>{processedReport.totals.totalStoreDropoffs} stores</strong>
-                  <em>Destination delivery points</em>
+                  <strong>{processedReport.totals.totalStoreDropoffs}</strong>
                 </div>
               )}
               {activeTemplate.breakdown.showDieselExpenses && (
                 <div>
-                  <span>Diesel Fuel Costs</span>
+                  <span>Diesel Fuel</span>
                   <strong>{formatPeso(processedReport.totals.totalDieselExpenses)}</strong>
-                  <em>Fleet fuel consumption</em>
                 </div>
               )}
               {activeTemplate.breakdown.showTollExpenses && (
                 <div>
-                  <span>Tollway Fees</span>
+                  <span>Highway Tolls</span>
                   <strong>{formatPeso(processedReport.totals.totalTollExpenses)}</strong>
-                  <em>Expressway toll costs</em>
                 </div>
               )}
               {activeTemplate.breakdown.showCrewCosts && (
                 <div>
-                  <span>Crew Wages & Allowance</span>
+                  <span>Crew Compensation</span>
                   <strong>{formatPeso(processedReport.totals.totalCrewCosts)}</strong>
-                  <em>Driver & helper rates</em>
                 </div>
               )}
             </section>
@@ -538,11 +627,20 @@ export default function ReportsPage() {
             <section className="report-table-section">
               <div className="report-table-heading">
                 <div>
-                  <h3>{activeTemplate.layout.sectionHeading}</h3>
+                  <h3>
+                    {isDailyTripReport
+                      ? `Trip Records · ${formatShortDate(parseDateValue(dailyDate))}`
+                      : activeTemplate.layout.sectionHeading}
+                  </h3>
                   <p>
                     {processedReport.rows.length}{" "}
-                    {activeTemplate.baseType === "trip_ledger" ? "trip" : "group"}
-                    {processedReport.rows.length === 1 ? "" : "s"} in the selected range
+                    {activeTemplate.baseType === "trip_ledger"
+                      ? processedReport.rows.length === 1
+                        ? "trip"
+                        : "trips"
+                      : processedReport.rows.length === 1
+                        ? "record"
+                        : "records"}
                   </p>
                 </div>
                 {activeTemplate.filters.financialState === "finalized_only" && (
@@ -555,7 +653,7 @@ export default function ReportsPage() {
                       color: "var(--color-text-muted)",
                     }}
                   >
-                    Showing Finalized Deliveries Only
+                    Finalized only
                   </span>
                 )}
               </div>
@@ -578,7 +676,7 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedRows.map((row, rowIdx) => (
+                    {paginatedRows.map((row, rowIdx) => (
                       <tr
                         key={
                           (row.waybillNumber as string) ||
@@ -625,10 +723,30 @@ export default function ReportsPage() {
                 </table>
               </div>
 
+              {processedReport.rows.length > 0 ? (
+                <TablePagination
+                  page={reportPage}
+                  pageCount={reportPageCount}
+                  totalItems={sortedRows.length}
+                  pageSize={REPORT_PAGE_SIZE}
+                  onPageChange={setReportPage}
+                  itemLabel={activeTemplate.baseType === "trip_ledger" ? "trips" : "records"}
+                  itemCountInPage={paginatedRows.length}
+                />
+              ) : null}
+
               {processedReport.rows.length === 0 ? (
                 <div className="empty-state report-empty-state">
-                  <strong>No records in this range</strong>
-                  <span>Choose a wider date range or adjust template filters to populate this report.</span>
+                  <strong>
+                    {isDailyTripReport
+                      ? "No trips recorded for this date"
+                      : "No records in this range"}
+                  </strong>
+                  <span>
+                    {isDailyTripReport
+                      ? `No delivery trips were executed on ${formatShortDate(parseDateValue(dailyDate))}. Use the date selector above to view other days.`
+                      : "Choose a wider date range or adjust template filters to populate this report."}
+                  </span>
                 </div>
               ) : null}
             </section>

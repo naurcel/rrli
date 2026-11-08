@@ -40,6 +40,7 @@ export type DeliveryListResult = {
     trucks: DeliveryFilterOption[];
     statuses: string[];
     podStatuses: PodVerificationStatus[];
+    drivers: DeliveryFilterOption[];
   };
 };
 
@@ -129,6 +130,7 @@ function mapLedgerRow(
     truckId: asString(row.truck_id),
     waybillNumber: asString(row.waybill_number),
     deliveryDate: asString(row.delivery_date),
+    recordingDelayed: row.recording_delayed === true,
     clientName: asString(row.client_name),
     plateNumber: asString(row.plate_number),
     truckType: asString(row.truck_type_snapshot || row.truck_type) as TruckType,
@@ -255,19 +257,25 @@ export async function listDeliveryRecords(
     }
   }
 
-  const [clientsResponse, trucksResponse] = await Promise.all([
+  const [clientsResponse, trucksResponse, driversResponse] = await Promise.all([
     supabase.from("clients").select("id, name").eq("is_active", true).order("name"),
     supabase
       .from("trucks")
-      .select("id, plate_number")
+      .select("id, plate_number, ownership_type")
       .eq("is_active", true)
       .order("plate_number"),
+    supabase
+      .from("employees")
+      .select("id, full_name")
+      .eq("is_active", true)
+      .eq("assignment_type", "Driver")
+      .order("full_name"),
   ]);
 
-  if (clientsResponse.error || trucksResponse.error) {
+  if (clientsResponse.error || trucksResponse.error || driversResponse.error) {
     throw new Error(
       `Unable to load delivery filters: ${
-        clientsResponse.error?.message ?? trucksResponse.error?.message
+        clientsResponse.error?.message ?? trucksResponse.error?.message ?? driversResponse.error?.message
       }`,
     );
   }
@@ -289,10 +297,15 @@ export async function listDeliveryRecords(
       trucks: (trucksResponse.data ?? []).map((row) => ({
         id: row.id,
         label: row.plate_number,
-        ownershipType: "Owned" as const,
+        ownershipType:
+          row.ownership_type === "Subcontracted" ? ("Subcontracted" as const) : ("Owned" as const),
       })),
       statuses: ["Completed"],
       podStatuses: ["Verified", "Incomplete", "Pending"],
+      drivers: (driversResponse.data ?? []).map((row) => ({
+        id: row.id,
+        label: row.full_name,
+      })),
     },
   };
 }

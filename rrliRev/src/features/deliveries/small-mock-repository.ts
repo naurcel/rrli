@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import {
   calculateProfitMargin,
   calculateTripExpenseTotal,
@@ -11,18 +14,78 @@ import {
   type SmallMockDelivery,
 } from "./small-mock-database.ts";
 import { getFleetTrucks } from "./truck-registry.ts";
+import { getFleetDrivers, registerFleetDriver } from "./driver-registry.ts";
 import type {
   DeliveryLedgerItem,
   DeliveryListResult,
 } from "./server/delivery-repository.ts";
 
 export const dynamicMockDeliveries: SmallMockDelivery[] = [];
+export const deletedDeliveryIds = new Set<string>();
+
+const isTestEnv =
+  process.env.NODE_ENV === "test" ||
+  process.execArgv.includes("--test") ||
+  process.argv.some((arg) => arg.includes("test"));
+
+const PERSISTED_MOCK_PATH = path.resolve(process.cwd(), ".mock-storage.json");
+
+export function loadPersistedMockDeliveries(): void {
+  if (isTestEnv) return;
+  try {
+    if (fs.existsSync(PERSISTED_MOCK_PATH)) {
+      const raw = fs.readFileSync(PERSISTED_MOCK_PATH, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed?.dynamicMockDeliveries)) {
+        for (const item of parsed.dynamicMockDeliveries) {
+          if (!dynamicMockDeliveries.some((existing) => existing.record.id === item.record.id)) {
+            dynamicMockDeliveries.push(item);
+          }
+        }
+      }
+      if (Array.isArray(parsed?.deletedDeliveryIds)) {
+        for (const id of parsed.deletedDeliveryIds) {
+          deletedDeliveryIds.add(id);
+        }
+      }
+    }
+  } catch {
+    // Ignore read errors
+  }
+}
+
+export function savePersistedMockDeliveries(): void {
+  if (isTestEnv) return;
+  try {
+    fs.writeFileSync(
+      PERSISTED_MOCK_PATH,
+      JSON.stringify(
+        {
+          dynamicMockDeliveries,
+          deletedDeliveryIds: Array.from(deletedDeliveryIds),
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+  } catch {
+    // Ignore write errors
+  }
+}
+
+// Initial load
+loadPersistedMockDeliveries();
 
 export function getAllMockDeliveries(): SmallMockDelivery[] {
-  return [...SMALL_MOCK_DATABASE.deliveries, ...dynamicMockDeliveries];
+  loadPersistedMockDeliveries();
+  return [...SMALL_MOCK_DATABASE.deliveries, ...dynamicMockDeliveries].filter(
+    (item) => !deletedDeliveryIds.has(item.record.id),
+  );
 }
 
 export type SmallMockProfitabilitySummary = {
+  deliveryIds: string[];
   deliveries: number;
   revenue: number;
   expenses: number;
@@ -52,28 +115,29 @@ function ledgerItems(): DeliveryLedgerItem[] {
     clientId: delivery.clientId,
     truckId: delivery.truckId,
     deliveryStatus: "Completed",
-    driverName: drivers.get(delivery.driverId) ?? null,
-    helperName: helpers.get(delivery.helperId) ?? null,
+    driverName: delivery.driverName ?? drivers.get(delivery.driverId) ?? null,
+    helperName: delivery.helperName ?? helpers.get(delivery.helperId) ?? null,
   }));
 }
 
 function sortableValue(item: DeliveryLedgerItem, sort: DeliveryListQuery["sort"]): string | number | null {
-  if (sort === "client") return item.clientName.toLocaleLowerCase();
-  if (sort === "waybill") return item.waybillNumber.toLocaleLowerCase();
-  if (sort === "truck") return item.plateNumber.toLocaleLowerCase();
+  if (sort === "client") return (item.clientName ?? "").toLocaleLowerCase();
+  if (sort === "waybill") return (item.waybillNumber ?? "").toLocaleLowerCase();
+  if (sort === "truck") return (item.plateNumber ?? "").toLocaleLowerCase();
   if (sort === "temperature") {
-    const num = Number(item.truckTemperature.replace(/°?c/i, "").trim());
-    return Number.isFinite(num) ? num : item.truckTemperature;
+    const raw = item.truckTemperature ?? "";
+    const num = Number(raw.replace(/°?c/i, "").trim());
+    return Number.isFinite(num) ? num : raw.toLowerCase();
   }
-  if (sort === "origin") return item.origin.toLocaleLowerCase();
-  if (sort === "dropoffs") return item.dropoffs.length;
-  if (sort === "distance") return item.distanceKm;
+  if (sort === "origin") return (item.origin ?? "").toLocaleLowerCase();
+  if (sort === "dropoffs") return item.dropoffs?.length ?? 0;
+  if (sort === "distance") return item.distanceKm ?? 0;
   if (sort === "delivery_rate") return item.deliveryRate;
   if (sort === "total_expenses") return item.totalExpenses;
   if (sort === "net_income") return item.netIncome;
   if (sort === "profit_margin") return item.marginPercent;
-  if (sort === "pod_status") return item.podStatus;
-  return item.deliveryDate;
+  if (sort === "pod_status") return (item.podStatus ?? "").toLowerCase();
+  return item.deliveryDate ?? "";
 }
 
 function compareValues(
@@ -164,6 +228,18 @@ export function listSmallMockDeliveryRecords(input: DeliveryListQuery): Delivery
       })),
       statuses: ["Completed"],
       podStatuses: ["Verified", "Incomplete", "Pending"],
+      drivers: [
+        ...SMALL_MOCK_DATABASE.drivers.map((driver) => ({ id: driver.id, label: driver.fullName })),
+        ...getFleetDrivers().map((driver) => ({ id: driver.id, label: driver.fullName })),
+        ...dynamicMockDeliveries
+          .filter((delivery) => Boolean(delivery.driverName))
+          .map((delivery) => ({
+            id: `driver-${delivery.driverName!.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+            label: delivery.driverName!,
+          })),
+      ].filter((driver, index, all) =>
+        all.findIndex((candidate) => candidate.label.toLowerCase() === driver.label.toLowerCase()) === index
+      ),
     },
   };
 }
@@ -187,6 +263,7 @@ export function getSmallMockProfitabilitySummary(input: {
   );
 
   return {
+    deliveryIds: eligible.map((delivery) => delivery.id),
     deliveries: eligible.length,
     revenue,
     expenses,
@@ -258,10 +335,36 @@ export function updateSmallMockPodState(input: {
 export function finalizeSmallMockDelivery(input: {
   deliveryId: string;
   expectedVersion: number;
+  fallbackRecord?: DeliveryLedgerItem;
 }): { ok: true; version: number } | { ok: false; error: string } {
-  const delivery = getAllMockDeliveries().find(
+  loadPersistedMockDeliveries();
+  let delivery = getAllMockDeliveries().find(
     (item) => item.record.id === input.deliveryId,
   );
+  if (!delivery && input.fallbackRecord) {
+    const fallback = input.fallbackRecord;
+    const client = getMockClients().find((c) => c.name === fallback.clientName || c.id === fallback.clientId) ?? {
+      id: fallback.clientId || crypto.randomUUID(),
+      name: fallback.clientName,
+    };
+    const newMockDelivery: SmallMockDelivery = {
+      record: {
+        ...fallback,
+        version: input.expectedVersion,
+      },
+      clientId: client.id,
+      truckId: fallback.truckId || "truck-1",
+      driverId: "",
+      helperId: "",
+      driverName: fallback.driverName,
+      helperName: fallback.helperName,
+      scenario: "User-recorded completed delivery.",
+    };
+    dynamicMockDeliveries.push(newMockDelivery);
+    deletedDeliveryIds.delete(input.deliveryId);
+    savePersistedMockDeliveries();
+    delivery = newMockDelivery;
+  }
   if (!delivery) {
     return { ok: false, error: "DELIVERY_NOT_FOUND" };
   }
@@ -274,6 +377,7 @@ export function finalizeSmallMockDelivery(input: {
 
   delivery.record.financialState = "finalized";
   delivery.record.version += 1;
+  savePersistedMockDeliveries();
 
   return { ok: true, version: delivery.record.version };
 }
@@ -283,10 +387,36 @@ export function correctSmallMockDelivery(input: {
   expectedVersion: number;
   changes: Record<string, unknown>;
   reason: string;
-}): { ok: true; version: number } | { ok: false; error: string } {
-  const delivery = getAllMockDeliveries().find(
+  fallbackRecord?: DeliveryLedgerItem;
+}): { ok: true; version: number; record: DeliveryLedgerItem } | { ok: false; error: string } {
+  loadPersistedMockDeliveries();
+  let delivery = getAllMockDeliveries().find(
     (item) => item.record.id === input.deliveryId,
   );
+  if (!delivery && input.fallbackRecord) {
+    const fallback = input.fallbackRecord;
+    const client = getMockClients().find((c) => c.name === fallback.clientName || c.id === fallback.clientId) ?? {
+      id: fallback.clientId || crypto.randomUUID(),
+      name: fallback.clientName,
+    };
+    const newMockDelivery: SmallMockDelivery = {
+      record: {
+        ...fallback,
+        version: input.expectedVersion,
+      },
+      clientId: client.id,
+      truckId: fallback.truckId || "truck-1",
+      driverId: "",
+      helperId: "",
+      driverName: fallback.driverName,
+      helperName: fallback.helperName,
+      scenario: "User-recorded completed delivery.",
+    };
+    dynamicMockDeliveries.push(newMockDelivery);
+    deletedDeliveryIds.delete(input.deliveryId);
+    savePersistedMockDeliveries();
+    delivery = newMockDelivery;
+  }
   if (!delivery) {
     return { ok: false, error: "DELIVERY_NOT_FOUND" };
   }
@@ -298,11 +428,46 @@ export function correctSmallMockDelivery(input: {
   if (typeof input.changes.deliveryRate === "number") {
     rec.deliveryRate = input.changes.deliveryRate;
   }
+  if (typeof input.changes.driverName === "string") {
+    const trimmed = input.changes.driverName.trim();
+    delivery.driverName = trimmed || null;
+    if (trimmed) {
+      registerFleetDriver({ fullName: trimmed, assignmentType: "Driver" });
+    }
+  }
+  if (typeof input.changes.helperName === "string") {
+    const trimmed = input.changes.helperName.trim();
+    delivery.helperName = trimmed || null;
+    if (trimmed) {
+      registerFleetDriver({ fullName: trimmed, assignmentType: "Helper" });
+    }
+  }
   if (input.changes.expenses && typeof input.changes.expenses === "object") {
     Object.assign(rec.expenses, input.changes.expenses);
   }
   if (input.changes.expenseStates && typeof input.changes.expenseStates === "object") {
     Object.assign(rec.expenseStates, input.changes.expenseStates);
+  }
+  if (Array.isArray(input.changes.supportingDocuments)) {
+    rec.supportingDocuments = input.changes.supportingDocuments as string[];
+  }
+  if (Array.isArray(input.changes.dropoffs)) {
+    rec.dropoffs = input.changes.dropoffs as typeof rec.dropoffs;
+    rec.podStatus = derivePodVerificationStatus(rec.dropoffs);
+    if (!input.changes.expenses || !("entryFees" in (input.changes.expenses as object))) {
+      const hasUnknown = rec.dropoffs.some((d) => d.entryFeeStatus === "unknown");
+      const allNa = rec.dropoffs.length > 0 && rec.dropoffs.every((d) => d.entryFeeStatus === "not_applicable");
+      if (hasUnknown) {
+        rec.expenses.entryFees = null;
+        rec.expenseStates.entryFees = "unknown";
+      } else if (allNa) {
+        rec.expenses.entryFees = null;
+        rec.expenseStates.entryFees = "not_applicable";
+      } else {
+        rec.expenses.entryFees = rec.dropoffs.reduce((sum, d) => sum + (d.entryFee ?? 0), 0);
+        rec.expenseStates.entryFees = "confirmed";
+      }
+    }
   }
 
   rec.totalExpenses = calculateTripExpenseTotal(rec.expenses, rec.expenseStates);
@@ -326,8 +491,37 @@ export function correctSmallMockDelivery(input: {
     }
     return [];
   });
-  rec.financialState = rec.financialIntegrityIssues.length === 0 ? "finalized" : "incomplete";
+  if (typeof input.changes.financialState === "string") {
+    rec.financialState =
+      input.changes.financialState === "finalized" && rec.financialIntegrityIssues.length === 0
+        ? "finalized"
+        : "incomplete";
+  } else {
+    // A correction without explicit financialState reopens the financial record.
+    // Finalization remains a separate, explicit and audited operation.
+    rec.financialState = "incomplete";
+  }
   rec.version += 1;
 
-  return { ok: true, version: rec.version };
+  savePersistedMockDeliveries();
+
+  const updated = ledgerItems().find((item) => item.id === rec.id);
+  if (!updated) return { ok: false, error: "DELIVERY_NOT_FOUND" };
+  return { ok: true, version: rec.version, record: updated };
+}
+
+export function deleteSmallMockDelivery(deliveryId: string): { ok: true } | { ok: false; error: string } {
+  loadPersistedMockDeliveries();
+  const all = [...SMALL_MOCK_DATABASE.deliveries, ...dynamicMockDeliveries];
+  const exists = all.some((item) => item.record.id === deliveryId);
+  if (!exists || deletedDeliveryIds.has(deliveryId)) {
+    return { ok: false, error: "DELIVERY_NOT_FOUND" };
+  }
+  deletedDeliveryIds.add(deliveryId);
+  const dynIndex = dynamicMockDeliveries.findIndex((item) => item.record.id === deliveryId);
+  if (dynIndex >= 0) {
+    dynamicMockDeliveries.splice(dynIndex, 1);
+  }
+  savePersistedMockDeliveries();
+  return { ok: true };
 }

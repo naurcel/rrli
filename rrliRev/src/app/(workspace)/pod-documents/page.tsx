@@ -9,8 +9,11 @@ import {
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RoundedSelect } from "@/components/rounded-select";
+import { TablePagination } from "@/components/table-pagination";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import { isImageDocument, openDocumentInNewTab, triggerDocumentDownload } from "@/features/deliveries/pod-utils";
+import { derivePodVerificationStatus } from "@/features/deliveries/delivery-domain";
+import { upsertBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
 import { canManageDocuments } from "@/lib/auth/rbac";
 
 function toDateKey(date: Date): string {
@@ -117,6 +120,19 @@ export default function PodDocumentsPage() {
     return flattenedStops;
   }, [flattenedStops, filterStatus]);
 
+  const [podPage, setPodPage] = useState(1);
+  const POD_PAGE_SIZE = 10;
+  const podPageCount = Math.max(1, Math.ceil(filteredStops.length / POD_PAGE_SIZE));
+
+  useEffect(() => {
+    setPodPage(1);
+  }, [filterStatus, range]);
+
+  const paginatedStops = useMemo(() => {
+    const start = (podPage - 1) * POD_PAGE_SIZE;
+    return filteredStops.slice(start, start + POD_PAGE_SIZE);
+  }, [filteredStops, podPage]);
+
   const counts = useMemo(() => {
     const attached = flattenedStops.filter((item) => item.hasPod).length;
     const missing = flattenedStops.length - attached;
@@ -182,11 +198,14 @@ export default function PodDocumentsPage() {
                       }
                     : stop,
                 );
-                return {
+                const updated = {
                   ...trip,
                   version: trip.version + 1,
                   dropoffs: nextDropoffs,
+                  podStatus: derivePodVerificationStatus(nextDropoffs),
                 };
+                upsertBrowserPreviewDelivery(updated);
+                return updated;
               })()
             : trip,
         ),
@@ -330,13 +349,13 @@ export default function PodDocumentsPage() {
                     <th>Waybill & Date</th>
                     <th>Client</th>
                     <th>Truck</th>
-                    <th>Stop # & Store Name</th>
+                    <th>Store Drop-off & Store Name</th>
                     <th>POD Status</th>
                     <th>Document Reference</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStops.map((item) => (
+                  {paginatedStops.map((item) => (
                     <tr
                       key={item.stop.id}
                       className="record-row"
@@ -359,7 +378,7 @@ export default function PodDocumentsPage() {
                       <td className="truck-code">{item.plateNumber}</td>
                       <td>
                         <strong>
-                          Stop #{item.stop.sequence}: {item.stop.storeName}
+                          Store Drop-off #{item.stop.sequence}: {item.stop.storeName}
                         </strong>
                         <br />
                         <small>{item.stop.destinationArea}</small>
@@ -381,6 +400,17 @@ export default function PodDocumentsPage() {
               </table>
             </div>
           )}
+          {filteredStops.length > 0 ? (
+            <TablePagination
+              page={podPage}
+              pageCount={podPageCount}
+              totalItems={filteredStops.length}
+              pageSize={POD_PAGE_SIZE}
+              onPageChange={setPodPage}
+              itemLabel="drop-offs"
+              itemCountInPage={paginatedStops.length}
+            />
+          ) : null}
         </section>
       </div>
 
@@ -392,7 +422,7 @@ export default function PodDocumentsPage() {
               <div>
                 <h2 id="doc-dialog-title">Proof of Delivery Document</h2>
                 <p>
-                  Stop #{inspectingStop.stop.sequence} · {inspectingStop.stop.storeName} ({inspectingStop.waybillNumber})
+                  Store Drop-off #{inspectingStop.stop.sequence} · {inspectingStop.stop.storeName} ({inspectingStop.waybillNumber})
                 </p>
               </div>
               <button
@@ -443,7 +473,7 @@ export default function PodDocumentsPage() {
                   </div>
                   <div className="pod-empty-content">
                     <h4>No Proof of Delivery Attached</h4>
-                    <p>No document has been uploaded for stop #{inspectingStop.stop.sequence} ({inspectingStop.stop.storeName}).</p>
+                    <p>No document has been uploaded for Store Drop-off #{inspectingStop.stop.sequence} ({inspectingStop.stop.storeName}).</p>
                     {canManage ? (
                       <span className="pod-empty-hint">Upload a scanned receipt or signed document below.</span>
                     ) : (
@@ -481,17 +511,48 @@ export default function PodDocumentsPage() {
                       <button
                         type="button"
                         className="secondary-button"
-                        style={{ padding: "6px 12px", fontSize: "12px" }}
+                        style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
                         onClick={() => void openDocumentInNewTab(docDetail.downloadUrl!, docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf")}
                       >
-                        <span aria-hidden="true">↗</span> Open in New Tab
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                          <polyline points="15 3 21 3 21 9" />
+                          <line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                        <span>Open in New Tab</span>
                       </button>
                       <button
                         type="button"
                         className="secondary-button"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                         onClick={() => void triggerDocumentDownload(docDetail.downloadUrl!, docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf")}
                       >
-                        <span aria-hidden="true">⤓</span> Download File
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        <span>Download File</span>
                       </button>
                     </div>
                   </div>

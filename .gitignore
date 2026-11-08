@@ -43,3 +43,6 @@ next-env.d.ts
 
 .tmp-edge-ui-audit/*
 rrliRev/.next/*
+*.mock-storage.json
+.mock-storage.json
+rrliRev/.mock-storage.json

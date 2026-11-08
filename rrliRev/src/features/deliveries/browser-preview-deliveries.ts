@@ -23,11 +23,32 @@ export type BrowserDeliveryFilters = {
   dateTo?: string;
 };
 
+function reconcileDeliveryFinancialState(item: DeliveryLedgerItem): DeliveryLedgerItem {
+  if (item.financialState === "incomplete") {
+    const hasUnknownExpenses = Object.values(item.expenseStates ?? {}).some(
+      (st) => st === "unknown"
+    );
+    const hasUnconfirmedAmount = Object.entries(item.expenseStates ?? {}).some(
+      ([key, st]) => st === "confirmed" && (item.expenses as unknown as Record<string, unknown>)?.[key] == null
+    );
+    const hasIssues = (item.financialIntegrityIssues?.length ?? 0) > 0;
+    if (!hasUnknownExpenses && !hasUnconfirmedAmount && !hasIssues && item.deliveryRate != null && item.deliveryRate > 0) {
+      return {
+        ...item,
+        financialState: "finalized",
+        financialIntegrityIssues: [],
+      };
+    }
+  }
+  return item;
+}
+
 export function readBrowserPreviewDeliveries(): DeliveryLedgerItem[] {
   if (typeof window === "undefined") return [];
   try {
     const value = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]") as unknown;
-    return Array.isArray(value) ? value as DeliveryLedgerItem[] : [];
+    if (!Array.isArray(value)) return [];
+    return (value as DeliveryLedgerItem[]).map(reconcileDeliveryFinancialState);
   } catch {
     return [];
   }
@@ -38,7 +59,30 @@ export function saveBrowserPreviewDelivery(delivery: DeliveryLedgerItem): void {
   if (current.some((item) => item.waybillNumber === delivery.waybillNumber)) {
     throw new Error(`Waybill ${delivery.waybillNumber} already exists in this browser.`);
   }
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify([delivery, ...current]));
+  const reconciled = reconcileDeliveryFinancialState(delivery);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify([reconciled, ...current]));
+  window.dispatchEvent(new Event(BROWSER_PREVIEW_DELIVERIES_CHANGED));
+}
+
+export function upsertBrowserPreviewDelivery(delivery: DeliveryLedgerItem): void {
+  if (typeof window === "undefined") return;
+  const current = readBrowserPreviewDeliveries();
+  const reconciled = reconcileDeliveryFinancialState(delivery);
+  const next = [
+    reconciled,
+    ...current.filter(
+      (item) => item.id !== reconciled.id && item.waybillNumber !== reconciled.waybillNumber,
+    ),
+  ];
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event(BROWSER_PREVIEW_DELIVERIES_CHANGED));
+}
+
+export function deleteBrowserPreviewDelivery(deliveryId: string): void {
+  if (typeof window === "undefined") return;
+  const current = readBrowserPreviewDeliveries();
+  const next = current.filter((item) => item.id !== deliveryId);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   window.dispatchEvent(new Event(BROWSER_PREVIEW_DELIVERIES_CHANGED));
 }
 
@@ -93,11 +137,13 @@ export function mergeBrowserPreviewSummary(
   summary: PersistedProfitabilitySummary,
   dateFrom: string | null,
   dateTo: string | null,
+  includedDeliveryIds: readonly string[] = [],
 ): PersistedProfitabilitySummary {
+  const includedIds = new Set(includedDeliveryIds);
   const local = selectBrowserPreviewDeliveries({
     dateFrom: dateFrom ?? undefined,
     dateTo: dateTo ?? undefined,
-  }).filter((item) => item.financialState === "finalized");
+  }).filter((item) => item.financialState === "finalized" && !includedIds.has(item.id));
   if (local.length === 0) return summary;
 
   const localRevenue = local.reduce((total, item) => total + (item.deliveryRate ?? 0), 0);
