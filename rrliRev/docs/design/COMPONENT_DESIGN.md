@@ -109,7 +109,7 @@ Standardized across all application tables:
   - Direct Page Number Input (`.pagination-page-input`): Compact numerical input field (`width: 44px; height: 28px; text-align: center; border-radius: 6px; font-size: 12px; font-weight: 700; border: 1px solid var(--glass-border)`).
   - Users can type any page number and press `Enter` or blur to jump directly to that page; values are automatically clamped between `1` and `pageCount`.
 - **Page Size Limits by Surface:**
-  - **Dashboard Recent Deliveries Table:** Strictly **5 records per page**.
+  - **Dashboard Recent Deliveries Table:** Strictly **5 records**, fixed without pagination (top 5 recent).
   - **All Other Tables:** Strictly **10 records per page** (`/deliveries`, `/reports`, `/truck-profitability/[plate]`, `/pod-documents`, `/truck-profitability`, `/user-management`).
 
 ---

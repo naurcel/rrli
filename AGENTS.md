@@ -79,11 +79,11 @@ Before submitting any turn or code change, run and verify:
 
 Always uphold these domain invariants:
 
-### A. Canonical Terminology
-- **"Delivery Revenue"** (Never use "rate", "billing", "gross revenue", or "sales").
-- **"Trip Expenses"** = Diesel Fuel + Highway Tolls + Store Entry Fees + Crew Compensation + Other Expenses (Never use "operational costs" or "fleet overhead").
-- **"Store Drop-offs"** (Never use "stops", "waypoints", or "drops").
-- **"Net Profit"** & **"Profit Margin"** (`(Net Profit / Delivery Revenue) * 100`).
+### A. Canonical Terminology & Simplified UI Standards
+- **"Revenue"** (or "Delivery Revenue" in formal/legal context; never use "rate", "billing", "gross revenue", or "sales"). In compact UI contexts (cards, stat headers, table columns, badges), use simplified **"Revenue"** to avoid clunky text wrapping and redundancy.
+- **"Expenses"** (or "Trip Expenses" = Diesel Fuel + Highway Tolls + Store Entry Fees + Crew Compensation + Other Expenses; never use "operational costs" or "fleet overhead"). In compact UI contexts (cards, stat headers, table columns), use simplified **"Expenses"**.
+- **"Store Drop-offs"** or **"Drop-offs"** (Never use "stops" or "waypoints"). In compact table headers, use **"Drop-offs"**.
+- **"Net Profit"** & **"Profit Margin"** (`(Net Profit / Revenue) * 100`).
 - **"POD Attached"** vs. **"Missing POD"** (Never use "Verified" / "Pending Verification").
 
 ### B. Financial Integrity & Calculation Rules
@@ -92,9 +92,11 @@ Always uphold these domain invariants:
 - Never silently zero an unknown expense!
 - `not_applicable` expenses evaluate to confirmed `null` with `0` impact and do not block finalization.
 - Under Truck Profitability, unfinalized delivery revenue may be displayed as a distinct `+ ₱X pending` indicator, but must remain separate from finalized revenue.
+- **Automatic Financial Resolution (No Manual Finalize Button):** There is no separate "Finalize Financials" button. Dispatchers simply click "Edit delivery" to resolve unknown expenses. Once all expenses are completed/resolved, the delivery is automatically marked complete and included in computations. As long as any expenses remain unresolved, the delivery is clearly marked and displayed as "Incomplete" across tables, overview, and drawer headers.
 
 ### C. Delivery Recording Window & RBAC
-- **Admin**: Can record or edit deliveries with **no date range limitation** (any past or future date).
+- **Company Foundation Boundary (2024)**: No operational deliveries, calendar selections, reports, or spreadsheet imports may precede `2024-01-01` (RRLI founding year).
+- **Admin**: Can record or edit deliveries from **2024 onward** without the 3-day window limitation.
 - **Operations**: Subject to a **3-day submission window** from the delivery date.
 - **View-Only Roles** (Finance, HR, Secretary, Customer Representative): Can browse and view records, export reports, but cannot mutate deliveries, trucks, or users.
 
@@ -102,7 +104,7 @@ Always uphold these domain invariants:
 - Use the shared `<TablePagination />` component ([`src/components/table-pagination.tsx`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/table-pagination.tsx)).
 - Supports direct typed page number input (`Page [ 1 ] of X`), Enter key, onBlur, boundary clamping, and Prev/Next buttons.
 - **Page size rules:**
-  - **Dashboard Recent Deliveries:** Strictly **5 records per page**.
+  - **Dashboard Recent Deliveries:** Strictly **5 records**, fixed without pagination (top 5 recent).
   - **All Other Tables:** Strictly **10 records per page** (`/deliveries`, `/reports`, `/truck-profitability/[plate]`, `/pod-documents`, `/truck-profitability`, `/user-management`).
 
 ### E. Date Range Filtering

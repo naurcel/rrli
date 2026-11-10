@@ -48,17 +48,18 @@ npm run dev
 
 ## 3. High-Priority Business Rules & Invariants
 
-1. **Terminology Standard:**
-   - Always use **"Delivery Revenue"** (never "rate", "billing", or "gross revenue").
-   - Always use **"Trip Expenses"** (Diesel Fuel + Highway Tolls + Store Entry Fees + Crew Compensation + Other Expenses).
-   - Always use **"Store Drop-offs"** (never "stops" or "drops").
+1. **Terminology Standard & Simplified UI:**
+   - Always use **"Revenue"** (or "Delivery Revenue" in formal/legal contexts; never "rate", "billing", "gross revenue", or "sales"). In compact UI contexts (cards, stat headers, table columns), use **"Revenue"** to prevent clunky wrapping and redundancy.
+   - Always use **"Expenses"** (or "Trip Expenses"; never "operational costs" or "fleet overhead"). In compact UI contexts, use **"Expenses"**.
+   - Always use **"Store Drop-offs"** or **"Drop-offs"** (never "stops" or "drops").
    - Always use **"Net Profit"** and **"Profit Margin"**.
    - Always use **"POD Attached"** vs **"Missing POD"** (never "Verified" / "Pending Verification").
 
-2. **Financial Calculation & Exclusion:**
-   - Any delivery with `unknown` expenses is in an `"incomplete"` financial state.
-   - Incomplete deliveries **MUST BE EXCLUDED** from aggregate revenue, expense, and profit totals until finalized.
+2. **Financial Calculation & Resolution:**
+   - Any delivery with `unknown` expenses is in an `"incomplete"` financial state and clearly marked as "Incomplete".
+   - Incomplete deliveries **MUST BE EXCLUDED** from aggregate revenue, expense, and profit totals until resolved.
    - Never silently zero an unknown expense!
+   - **No Manual Finalize Button:** Edit delivery is the single action. Once all expenses are completed/resolved, the delivery is automatically finalized and included in computations.
 
 3. **Delivery Recording Window:**
    - **Admin** has unrestricted authority to record/edit deliveries across any past or future date.
@@ -66,8 +67,8 @@ npm run dev
 
 4. **Table Pagination:**
    - Always use `<TablePagination />` from `@/components/table-pagination`.
-   - **Dashboard Recent Deliveries:** Exactly **5 records per page**.
-   - **All Other Tables:** Exactly **10 records per page**.
+   - **Dashboard Recent Deliveries:** Exactly **5 records**, fixed without pagination (top 5 recent).
+   - **All Other Tables:** Exactly **10 records per page** (with `<TablePagination />`).
    - Features typed page number input (`Page [ 1 ] of X`), Enter key, boundary clamping, and Prev/Next buttons.
 
 5. **Date Filtering:**

@@ -91,8 +91,8 @@ RouteX runs in two operating modes out of the box:
    - **Operations:** Constrained to a 3-day submission window from the delivery date.
 4. **Table Pagination Standards:**
    - Always use `<TablePagination />` from `@/components/table-pagination`.
-   - **Dashboard Recent Deliveries Table:** Strictly **5 records per page**.
-   - **All Other Tables:** Strictly **10 records per page**.
+   - **Dashboard Recent Deliveries Table:** Strictly **5 records**, fixed without pagination (top 5 recent).
+   - **All Other Tables:** Strictly **10 records per page** (with `<TablePagination />`).
    - Features typed page number input (`Page [ 1 ] of X`), Enter key, onBlur, boundary clamping, and Prev/Next buttons.
 5. **Styling Rules:**
    - All styles belong in [`rrliRev/src/app/globals.css`](./rrliRev/src/app/globals.css).
