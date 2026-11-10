@@ -77,7 +77,7 @@ export function TablePagination({
           disabled={page <= 1 || loading}
           onClick={() => onPageChange(Math.max(1, page - 1))}
           aria-label="Previous page"
-          title="Previous page"
+          title="Go to previous page"
         >
           ‹
         </button>
@@ -95,6 +95,7 @@ export function TablePagination({
             disabled={loading || safePageCount <= 1}
             className="pagination-page-input no-spin-stepper"
             aria-label="Current page number"
+            title="Type page number and press Enter to jump"
           />
           <span>of {safePageCount}</span>
         </div>
@@ -104,7 +105,7 @@ export function TablePagination({
           disabled={page >= safePageCount || loading}
           onClick={() => onPageChange(Math.min(safePageCount, page + 1))}
           aria-label="Next page"
-          title="Next page"
+          title="Go to next page"
         >
           ›
         </button>

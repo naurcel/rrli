@@ -223,16 +223,6 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (deliveryDatePolicy.isLate && typeof rawBody?.recordingDelayed !== "boolean") {
-    return NextResponse.json(
-      {
-        ok: false,
-        code: "DELAY_CONFIRMATION_REQUIRED",
-        message: "Confirm whether this delivery was recorded late.",
-      },
-      { status: 400 },
-    );
-  }
 
   let combinedHelperAllowance = parsed.data.helperAllowance;
   let combinedHelperAllowanceStatus = parsed.data.helperAllowanceStatus;
@@ -325,7 +315,7 @@ export async function POST(request: Request) {
       id: parsed.data.idempotencyKey,
       waybillNumber: parsed.data.waybillNumber,
       deliveryDate: parsed.data.deliveryDate,
-      recordingDelayed: parsed.data.recordingDelayed,
+      recordingDelayed: parsed.data.recordingDelayed || deliveryDatePolicy.isLate,
       clientName: client.name,
       plateNumber: truck.plateNumber,
       truckType: truck.truckType,

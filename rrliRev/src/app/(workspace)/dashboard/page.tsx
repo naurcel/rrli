@@ -5,13 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-deletion-dialog";
-import { TablePagination } from "@/components/table-pagination";
 import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
 import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
 import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline";
 import {
   formatDateRange,
+  toDateKey,
   useGlobalDateRange,
   type DateRange,
 } from "@/components/global-date-range-picker";
@@ -21,7 +21,12 @@ import {
   RecordDetailDrawer,
   type DetailSection,
 } from "@/components/record-detail-drawer";
-import type { DeliveryTripRecord } from "@/features/deliveries/delivery-domain";
+import {
+  type DeliveryTripRecord,
+  getDeliveryIncompleteIssues,
+  isDeliveryFinanciallyComplete,
+  isDeliveryIncomplete,
+} from "@/features/deliveries/delivery-domain";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
   useDeliveryProfitabilitySummary,
@@ -31,16 +36,25 @@ import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deli
 import { upsertBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
 import { deleteDeliveryRecord } from "@/features/deliveries/delivery-deletion-client";
 import {
+  readBrowserPreviewExpenses,
+  ROUTEX_COMPANY_EXPENSES_CHANGED,
+} from "@/features/finance/browser-preview-expenses";
+import {
+  filterExpensesByDateRange,
+  type CompanyExpense,
+} from "@/features/finance/company-expense-domain";
+import {
   canManageDocuments,
   canMutateDeliveryRecords,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
-type TruckRankingMetric = "revenue" | "netIncome" | "profitMargin";
+type TruckRankingMetric = "revenue" | "netIncome" | "expenses" | "profitMargin";
 
 const truckRankingLabels: Record<TruckRankingMetric, string> = {
   revenue: "Revenue",
   netIncome: "Net profit",
+  expenses: "Expenses",
   profitMargin: "Profit margin",
 };
 
@@ -49,6 +63,7 @@ function truckRankingValue(
   metric: TruckRankingMetric,
 ): number {
   if (metric === "revenue") return truck.revenue;
+  if (metric === "expenses") return truck.expenses;
   if (metric === "profitMargin") {
     return truck.profit_margin ?? Number.NEGATIVE_INFINITY;
   }
@@ -60,6 +75,7 @@ function formatTruckRankingValue(
   metric: TruckRankingMetric,
 ): string {
   if (metric === "profitMargin") return formatPercent(truck.profit_margin);
+  if (metric === "expenses") return formatPeso(truck.expenses);
   return formatPeso(metric === "revenue" ? truck.revenue : truck.net_income);
 }
 
@@ -169,7 +185,7 @@ function buildRevenueSeries(
 ): Array<{ date: string; revenue: number }> {
   const amounts = new Map<string, number>();
   deliveries.forEach((trip) => {
-    if (trip.deliveryRate && (trip.financialState === "finalized" || !trip.financialState)) {
+    if (isDeliveryFinanciallyComplete(trip) && trip.deliveryRate) {
       amounts.set(trip.deliveryDate, (amounts.get(trip.deliveryDate) ?? 0) + trip.deliveryRate);
     }
   });
@@ -291,10 +307,10 @@ function RevenueChart({
       <div className="records-heading">
         <div>
           <h2 id="revenue-over-time-heading">Revenue over time</h2>
-          <p>{periodLabel} · completed delivery revenue</p>
+          <p>{periodLabel} · completed revenue</p>
         </div>
         <div className="chart-legend" aria-label="Chart legend">
-          <span><i /> Delivery Revenue</span>
+          <span><i /> Revenue</span>
           <strong>{formatPeso(series.reduce((total, point) => total + point.revenue, 0))}</strong>
         </div>
       </div>
@@ -423,7 +439,10 @@ function RevenueChart({
           </svg>
         </div>
       ) : (
-        <div className="empty-state chart-empty-state">
+        <div
+          className="empty-state chart-empty-state"
+          title="No delivery revenue recorded within the selected date range"
+        >
           <strong>No revenue in this range</strong>
           <span>Choose a wider date range to view the trend.</span>
         </div>
@@ -445,6 +464,35 @@ export default function DashboardPage() {
   const [truckRankingMetric, setTruckRankingMetric] =
     useState<TruckRankingMetric>("netIncome");
   const [deliverySort, setDeliverySort] = useState<{ key: string; direction: TableSortDirection }>({ key: "date", direction: "desc" });
+  const [companyExpenses, setCompanyExpenses] = useState<CompanyExpense[]>([]);
+
+  useEffect(() => {
+    async function fetchExpenses() {
+      try {
+        const res = await fetch("/api/finance/expenses?pageSize=100");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.ok && Array.isArray(data.items)) {
+            setCompanyExpenses(data.items);
+            return;
+          }
+        }
+      } catch {
+        // Fallback
+      }
+      setCompanyExpenses(readBrowserPreviewExpenses());
+    }
+
+    fetchExpenses();
+
+    const onExpensesChanged = () => {
+      setCompanyExpenses(readBrowserPreviewExpenses());
+    };
+    window.addEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, onExpensesChanged);
+    return () => {
+      window.removeEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, onExpensesChanged);
+    };
+  }, []);
 
   async function handleConfirmDeleteDelivery() {
     if (!deliveryToDelete || isDeletingDelivery) return;
@@ -464,10 +512,13 @@ export default function DashboardPage() {
   const filteredDeliveries = deliveries;
   const deliveriesWithMissingDetails = useMemo(() => {
     return filteredDeliveries
-      .map((delivery) => ({
-        delivery,
-        issues: getDeliveryMissingDetails(delivery),
-      }))
+      .map((delivery) => {
+        const issues = getDeliveryIncompleteIssues(delivery);
+        return {
+          delivery,
+          issues: issues.map((label) => ({ label, tooltip: label })),
+        };
+      })
       .filter((item) => item.issues.length > 0);
   }, [filteredDeliveries]);
   const sortedDeliveries = useMemo(() => {
@@ -487,45 +538,48 @@ export default function DashboardPage() {
     });
   }, [deliverySort, filteredDeliveries]);
 
-  const [deliveryPage, setDeliveryPage] = useState(1);
-  const DASHBOARD_PAGE_SIZE = 5;
-  const deliveryPageCount = Math.max(1, Math.ceil(sortedDeliveries.length / DASHBOARD_PAGE_SIZE));
-
-  useEffect(() => {
-    setDeliveryPage(1);
-  }, [range, deliverySort]);
-
-  const paginatedDeliveries = useMemo(() => {
-    const start = (deliveryPage - 1) * DASHBOARD_PAGE_SIZE;
-    return sortedDeliveries.slice(start, start + DASHBOARD_PAGE_SIZE);
-  }, [sortedDeliveries, deliveryPage]);
+  const recentDeliveries = useMemo(() => {
+    return sortedDeliveries.slice(0, 5);
+  }, [sortedDeliveries]);
 
   const rangeKey = `${range.startDate?.getTime() ?? "all"}-${range.endDate?.getTime() ?? "all"}`;
 
+  const filteredCompanyExpenses = useMemo(() => {
+    return filterExpensesByDateRange(
+      companyExpenses,
+      range.startDate ? toDateKey(range.startDate) : null,
+      range.endDate ? toDateKey(range.endDate) : null,
+    );
+  }, [companyExpenses, range.startDate, range.endDate]);
+
   const totals = useMemo(() => {
-    const finalized = filteredDeliveries.filter((item) => item.financialState === "finalized");
-    const fallbackEarnings = finalized.reduce((sum, item) => sum + (item.deliveryRate ?? 0), 0);
-    const fallbackExpenses = finalized.reduce((sum, item) => sum + (item.totalExpenses ?? 0), 0);
+    const financiallyComplete = filteredDeliveries.filter(isDeliveryFinanciallyComplete);
+    const fallbackEarnings = financiallyComplete.reduce((sum, item) => sum + (item.deliveryRate ?? 0), 0);
+    const fallbackExpenses = financiallyComplete.reduce((sum, item) => sum + (item.totalExpenses ?? 0), 0);
     const earnings = persistedSummary?.revenue ?? fallbackEarnings;
-    const expenses = persistedSummary?.expenses ?? fallbackExpenses;
-    const netIncome = persistedSummary?.netIncome ?? earnings - expenses;
-    const margin = persistedSummary?.profitMargin ?? (earnings > 0 ? ((netIncome / earnings) * 100) : null);
+    const deliveryExpenses = persistedSummary?.expenses ?? fallbackExpenses;
+    const companyExpensesTotal = filteredCompanyExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const companyNetProfit = earnings - deliveryExpenses - companyExpensesTotal;
+    const companyProfitMargin = earnings > 0 ? ((companyNetProfit / earnings) * 100) : null;
     const totalStops = filteredDeliveries.reduce((sum, item) => sum + item.dropoffs.length, 0);
-    const incompleteDeliveries = filteredDeliveries.filter((item) => item.financialState === "incomplete");
-    const incompleteFinancials = incompleteDeliveries.length;
-    const finalizedCount = persistedSummary?.deliveries ?? finalized.length;
+    const incompleteDeliveries = filteredDeliveries.filter(isDeliveryIncomplete);
+    const incompleteCount = incompleteDeliveries.length;
+    const completedCount = filteredDeliveries.length - incompleteCount;
+    const finalizedCount = persistedSummary?.deliveries ?? financiallyComplete.length;
 
     return {
       earnings,
-      expenses,
-      netIncome,
-      margin,
+      deliveryExpenses,
+      companyExpenses: companyExpensesTotal,
+      companyNetProfit,
+      companyProfitMargin,
       totalStops,
-      incompleteFinancials,
+      incompleteCount,
+      completedCount,
       finalizedCount,
       totalTrips: filteredDeliveries.length,
     };
-  }, [filteredDeliveries, persistedSummary]);
+  }, [filteredDeliveries, persistedSummary, filteredCompanyExpenses]);
 
   const revenueSeries = useMemo(
     () => buildRevenueSeries(filteredDeliveries, range),
@@ -560,14 +614,27 @@ export default function DashboardPage() {
         title: "Delivery Overview",
         eyebrow: "Trip details",
         rows: [
-          { label: "Waybill Number", value: selectedTrip.waybillNumber },
-          { label: "Delivery Date", value: selectedTrip.deliveryDate },
-          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const }] : []),
-          { label: "Client Account", value: selectedTrip.clientName },
-          { label: "Origin Hub", value: selectedTrip.origin },
-          { label: "Distance", value: `${selectedTrip.distanceKm} km` },
-          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L` },
-          { label: "Delivery Status", value: selectedTrip.deliveryStatus || "Completed" },
+          { label: "Waybill Number", value: selectedTrip.waybillNumber, tooltip: `Waybill tracking code #${selectedTrip.waybillNumber}` },
+          { label: "Delivery Date", value: selectedTrip.deliveryDate, tooltip: "Operational dispatch and completion date" },
+          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const, tooltip: "Delivery recorded past standard 3-day operational window" }] : []),
+          { label: "Client Account", value: selectedTrip.clientName, tooltip: `Freight client account: ${selectedTrip.clientName}` },
+          { label: "Origin Hub", value: selectedTrip.origin, tooltip: `Origin facility: ${selectedTrip.origin}` },
+          { label: "Distance", value: `${selectedTrip.distanceKm} km`, tooltip: `Round-trip transit distance: ${selectedTrip.distanceKm} km` },
+          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L`, tooltip: `Diesel purchase benchmark: ${formatPeso(selectedTrip.fuelRate)} per liter` },
+          {
+            label: "Delivery Status",
+            value: !isDeliveryIncomplete(selectedTrip)
+              ? "Completed"
+              : !isDeliveryFinanciallyComplete(selectedTrip)
+                ? "Incomplete (Unconfirmed Expenses)"
+                : "Incomplete (Missing POD)",
+            tone: isDeliveryIncomplete(selectedTrip) ? "warning" : undefined,
+            tooltip: !isDeliveryIncomplete(selectedTrip)
+              ? "Delivery completed with all trip expenses confirmed and POD attached"
+              : !isDeliveryFinanciallyComplete(selectedTrip)
+                ? `Incomplete delivery: Unconfirmed expenses (${selectedTrip.financialIntegrityIssues.join(", ") || "requires confirmation"}). Click 'Edit delivery' to complete.`
+                : "Incomplete delivery: Missing Proof of Delivery (POD) documents for store drop-offs.",
+          },
         ],
       },
       {
@@ -591,7 +658,6 @@ export default function DashboardPage() {
       {
         title: "POD & Supporting Documents",
         fullWidth: true,
-        description: "Select a drop-off to inspect or upload documents.",
         customContent: (
           <DeliveryPodDocuments
             trip={selectedTrip}
@@ -623,7 +689,7 @@ export default function DashboardPage() {
           <div>
             <h1>Welcome back, {actor.fullName.split(" ")[0]}</h1>
             <p className="subtitle">
-              Monitor deliveries, PODs, expenses, and truck profitability.
+              Deliveries, PODs, expenses, and truck profitability.
             </p>
           </div>
           {canWrite ? (
@@ -633,6 +699,7 @@ export default function DashboardPage() {
                 href="/deliveries/import"
                 aria-label="Import an Excel trip report"
                 data-tooltip="Import an Excel trip report"
+                title="Import an Excel trip report"
               >
                 Import
               </Link>
@@ -641,6 +708,7 @@ export default function DashboardPage() {
                 href="/deliveries/new"
                 aria-label="Record a completed delivery and its trip details"
                 data-tooltip="Record a completed delivery and its trip details"
+                title="Record a completed delivery and its trip details"
               >
                 Record delivery
               </Link>
@@ -672,9 +740,7 @@ export default function DashboardPage() {
             <div>
               <strong>View-Only Access ({actor.roleLabel}):</strong>
               <span>
-                You can inspect all delivery records, store drop-offs, POD documents,
-                truck performance metrics, and reports. Creating, editing, or importing records
-                is restricted to Operations and Admin personnel.
+                Read-only access to deliveries, drop-offs, PODs, trucks, and reports.
               </span>
             </div>
             <button
@@ -698,12 +764,13 @@ export default function DashboardPage() {
 
           <section
             className="dashboard-kpi-grid"
-            aria-label="Delivery profitability summary"
+            aria-label="Company profitability summary"
           >
             <Link
               className="stat-card stat-card-link ui-tooltip"
               href="/deliveries"
               data-tooltip="View delivery revenue and records"
+              title="View delivery revenue and records"
             >
               <span className="stat-label">DELIVERY REVENUE</span>
               <strong>{formatPeso(totals.earnings)}</strong>
@@ -711,56 +778,59 @@ export default function DashboardPage() {
                 className={`stat-meta ${totals.finalizedCount > 0 ? "positive" : ""}`}
               >
                 {totals.finalizedCount > 0
-                  ? `${totals.finalizedCount} ${totals.finalizedCount === 1 ? "trip" : "trips"} · ${totals.totalStops} store drop-offs`
+                  ? `${totals.finalizedCount} completed ${totals.finalizedCount === 1 ? "trip" : "trips"} · ${totals.totalStops} drop-offs`
                   : "0 trips recorded in selected range"}
               </span>
             </Link>
 
             <Link
               className="stat-card stat-card-link ui-tooltip"
-              href="/reports?tab=truck-profitability"
-              data-tooltip="View itemized trip expenses"
+              href="/deliveries"
+              data-tooltip="View itemized delivery expenses"
+              title="View itemized delivery expenses"
             >
-              <span className="stat-label">TRIP EXPENSES</span>
-              <strong>{formatPeso(totals.expenses)}</strong>
+              <span className="stat-label">DELIVERY EXPENSES</span>
+              <strong>{formatPeso(totals.deliveryExpenses)}</strong>
               <span className="stat-meta">
-                Diesel, highway tolls, entry fees & crew compensation
+                Fuel, highway tolls, entry fees &amp; crew compensation
               </span>
             </Link>
 
             <Link
               className="stat-card stat-card-link ui-tooltip"
-              href="/truck-profitability"
-              data-tooltip="View truck net profit performance"
+              href="/finance"
+              data-tooltip="View company expense ledger"
+              title="View company expense ledger"
             >
-              <span className="stat-label">NET PROFIT</span>
-              <strong>{formatPeso(totals.netIncome)}</strong>
+              <span className="stat-label">COMPANY EXPENSES</span>
+              <strong style={{ color: "var(--color-accent-deep, #92400e)" }}>
+                {formatPeso(totals.companyExpenses)}
+              </strong>
+              <span className="stat-meta">
+                {filteredCompanyExpenses.length} operating {filteredCompanyExpenses.length === 1 ? "expense" : "expenses"} outside deliveries
+              </span>
+            </Link>
+
+            <Link
+              className="stat-card stat-card-link ui-tooltip"
+              href="/finance"
+              data-tooltip="View overall company net profit and finance ledger"
+              title="View overall company net profit and finance ledger"
+            >
+              <span className="stat-label">COMPANY NET PROFIT</span>
+              <strong className={totals.companyNetProfit >= 0 ? undefined : "warning"}>
+                {formatPeso(totals.companyNetProfit)}
+              </strong>
               <span
                 className={`stat-meta ${
-                  totals.earnings > 0 && totals.netIncome > 0
-                    ? "positive"
-                    : totals.netIncome < 0
-                      ? "warning"
-                      : ""
+                  totals.companyNetProfit >= 0 ? "positive" : "warning"
                 }`}
               >
-                {totals.earnings > 0 && totals.margin !== null
-                  ? `${formatPercent(totals.margin)} profit margin`
-                  : totals.netIncome < 0 && totals.margin !== null
-                    ? `${formatPercent(totals.margin)} loss margin`
-                    : "Profit after trip expenses"}
-              </span>
-            </Link>
-
-            <Link
-              className="stat-card stat-card-link ui-tooltip"
-              href="/deliveries"
-              data-tooltip="View completed deliveries"
-            >
-              <span className="stat-label">TOTAL DELIVERIES</span>
-              <strong>{totals.totalTrips}</strong>
-              <span className="stat-meta">
-                {totals.totalTrips === 1 ? "1 trip in this period" : `${totals.totalTrips} trips in this period`}
+                {totals.earnings > 0 && totals.companyProfitMargin !== null
+                  ? `${formatPercent(totals.companyProfitMargin)} overall profit margin`
+                  : totals.companyNetProfit < 0 && totals.companyProfitMargin !== null
+                    ? `${formatPercent(totals.companyProfitMargin)} overall loss margin`
+                    : "Overall profit after all expenses"}
               </span>
             </Link>
           </section>
@@ -771,7 +841,7 @@ export default function DashboardPage() {
             <div className="records-heading">
               <div>
                 <h2>Recent Completed Deliveries</h2>
-                <p>Select a delivery to view details.</p>
+                <p>5 most recent delivery trips.</p>
               </div>
               <Link className="secondary-button" href="/deliveries">
                 View all deliveries
@@ -789,8 +859,9 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedDeliveries.map((trip) => {
-                    const isIncomplete = trip.financialState === "incomplete";
+                  {recentDeliveries.map((trip) => {
+                    const isIncomplete = isDeliveryIncomplete(trip);
+                    const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                     return (
                       <tr
                         key={trip.id}
@@ -805,8 +876,9 @@ export default function DashboardPage() {
                         }}
                       >
                         <td>
-                          <strong>{trip.waybillNumber}</strong>
-                          <br />
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <strong>{trip.waybillNumber}</strong>
+                          </div>
                           <small>{trip.deliveryDate}</small>
                         </td>
                         <td>{trip.clientName}</td>
@@ -815,25 +887,24 @@ export default function DashboardPage() {
                           <br />
                           <small>{trip.truckType}</small>
                         </td>
-                        <td className="money">{formatPeso(trip.netIncome)}</td>
+                        <td className="money">
+                          {isFinanciallyIncomplete || trip.netIncome == null ? (
+                            <span
+                              className="profit-amount warning"
+                              title="Net profit computation deferred: Requires all trip expenses to be confirmed"
+                            >
+                              Incomplete
+                            </span>
+                          ) : (
+                            formatPeso(trip.netIncome)
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-
-            {sortedDeliveries.length > 0 ? (
-              <TablePagination
-                page={deliveryPage}
-                pageCount={deliveryPageCount}
-                totalItems={sortedDeliveries.length}
-                pageSize={DASHBOARD_PAGE_SIZE}
-                onPageChange={setDeliveryPage}
-                itemLabel="recent deliveries"
-                itemCountInPage={paginatedDeliveries.length}
-              />
-            ) : null}
           </section>
 
           <div className="dashboard-actions" style={{ display: "grid", gap: "16px", alignContent: "start" }}>
@@ -861,7 +932,9 @@ export default function DashboardPage() {
               </div>
               <ol className="top-truck-list">
                 {truckRankings.length === 0 ? (
-                  <li className="top-truck-empty">No finalized truck records in this range.</li>
+                  <li className="top-truck-empty" title="Rankings calculate exclusively from deliveries with confirmed expenses">
+                    No finalized truck records in this range.
+                  </li>
                 ) : null}
                 {truckRankings.map((truck, idx) => (
                   <li className={idx === 0 ? "is-top-truck" : undefined} key={truck.plate_number}>
@@ -874,7 +947,7 @@ export default function DashboardPage() {
                         <strong>{truck.plate_number}</strong>
                         <span>
                           {truck.deliveries} finalized trip{truck.deliveries === 1 ? "" : "s"}
-                          {truckRankingMetric === "profitMargin"
+                          {truckRankingMetric === "profitMargin" || truckRankingMetric === "expenses"
                             ? ` · ${formatPeso(truck.net_income)} net profit`
                             : ` · ${formatPercent(truck.profit_margin)} margin`}
                         </span>
@@ -946,7 +1019,10 @@ export default function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="dashboard-attention-empty">
+                <div
+                  className="dashboard-attention-empty"
+                  title="All delivery waybills have confirmed expenses and attached POD documents"
+                >
                   <span aria-hidden="true">✓</span>
                   <div>
                     <strong>All caught up</strong>
@@ -960,8 +1036,7 @@ export default function DashboardPage() {
 
         <p className="scope-note">
           <span aria-hidden="true">●</span>
-          RouteX is focused exclusively on Delivery Operations, Multi-Store Drop-offs, POD
-          Documents, and Trucks.
+          Delivery Operations, Multi-Store Drop-offs, POD Documents &amp; Trucks
         </p>
       </div>
 
@@ -969,8 +1044,16 @@ export default function DashboardPage() {
         open={Boolean(selectedTrip)}
         eyebrow={selectedTrip ? `WAYBILL ${selectedTrip.waybillNumber}` : ""}
         title={selectedTrip ? selectedTrip.clientName : ""}
-        statusLabel={selectedTrip?.deliveryStatus || "Completed"}
-        statusTone="success"
+        statusLabel={
+          selectedTrip
+            ? !isDeliveryIncomplete(selectedTrip)
+              ? "Completed"
+              : !isDeliveryFinanciallyComplete(selectedTrip)
+                ? "Incomplete (Unconfirmed Expenses)"
+                : "Incomplete (Missing POD)"
+            : undefined
+        }
+        statusTone={selectedTrip && isDeliveryIncomplete(selectedTrip) ? "warning" : "success"}
         sections={drawerSections}
         footer={selectedTrip && canWrite ? (
           <div className="record-detail-footer-actions">
@@ -980,6 +1063,7 @@ export default function DashboardPage() {
                 className="icon-only-action danger ui-tooltip"
                 aria-label="Delete delivery"
                 data-tooltip="Delete delivery"
+                title="Delete delivery"
                 onClick={() => {
                   setDeleteDeliveryError(null);
                   setDeliveryToDelete(selectedTrip);

@@ -322,7 +322,7 @@ export function DeliveryPodDocuments({
 
       {!canManage ? (
         <p className="delivery-pod-view-only" style={{ marginTop: "10px" }}>
-          {roleLabel} access can view documents. Uploads are managed by Operations or Admin.
+          View-only mode ({roleLabel}). Uploads managed by Operations or Admin.
         </p>
       ) : null}
 
@@ -377,7 +377,7 @@ export function DeliveryPodDocuments({
             ))}
           </div>
         ) : (
-          <p className="delivery-supporting-docs-empty-text">
+          <p className="delivery-supporting-docs-empty-text" title="No general documents (e.g. fuel receipts, toll tickets, gate passes) attached yet">
             No supporting documents attached yet. Click <strong>Edit delivery</strong> below to add receiving slips or files.
           </p>
         )}

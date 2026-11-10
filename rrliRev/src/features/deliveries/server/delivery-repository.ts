@@ -32,6 +32,11 @@ export type DeliveryFilterOption = {
 export type DeliveryListResult = {
   items: DeliveryLedgerItem[];
   total: number;
+  statusCounts?: {
+    all: number;
+    completed: number;
+    incomplete: number;
+  };
   page: number;
   pageSize: number;
   pageCount: number;
@@ -41,6 +46,7 @@ export type DeliveryListResult = {
     statuses: string[];
     podStatuses: PodVerificationStatus[];
     drivers: DeliveryFilterOption[];
+    helpers?: DeliveryFilterOption[];
   };
 };
 
@@ -201,6 +207,9 @@ export async function listDeliveryRecords(
     query = query.eq("truck_id", input.truckId);
   }
   if (input.status) query = query.eq("delivery_status", input.status);
+  if (input.financialState && input.financialState !== "all") {
+    query = query.eq("financial_state", input.financialState);
+  }
   if (input.podStatus) query = query.eq("pod_status", input.podStatus);
   if (input.dateFrom) query = query.gte("delivery_date", input.dateFrom);
   if (input.dateTo) query = query.lte("delivery_date", input.dateTo);
@@ -257,7 +266,7 @@ export async function listDeliveryRecords(
     }
   }
 
-  const [clientsResponse, trucksResponse, driversResponse] = await Promise.all([
+  const [clientsResponse, trucksResponse, driversResponse, helpersResponse] = await Promise.all([
     supabase.from("clients").select("id, name").eq("is_active", true).order("name"),
     supabase
       .from("trucks")
@@ -270,12 +279,21 @@ export async function listDeliveryRecords(
       .eq("is_active", true)
       .eq("assignment_type", "Driver")
       .order("full_name"),
+    supabase
+      .from("employees")
+      .select("id, full_name")
+      .eq("is_active", true)
+      .eq("assignment_type", "Helper")
+      .order("full_name"),
   ]);
 
-  if (clientsResponse.error || trucksResponse.error || driversResponse.error) {
+  if (clientsResponse.error || trucksResponse.error || driversResponse.error || helpersResponse.error) {
     throw new Error(
       `Unable to load delivery filters: ${
-        clientsResponse.error?.message ?? trucksResponse.error?.message ?? driversResponse.error?.message
+        clientsResponse.error?.message ??
+        trucksResponse.error?.message ??
+        driversResponse.error?.message ??
+        helpersResponse.error?.message
       }`,
     );
   }
@@ -303,6 +321,10 @@ export async function listDeliveryRecords(
       statuses: ["Completed"],
       podStatuses: ["Verified", "Incomplete", "Pending"],
       drivers: (driversResponse.data ?? []).map((row) => ({
+        id: row.id,
+        label: row.full_name,
+      })),
+      helpers: (helpersResponse.data ?? []).map((row) => ({
         id: row.id,
         label: row.full_name,
       })),

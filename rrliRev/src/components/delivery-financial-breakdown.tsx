@@ -243,7 +243,7 @@ export function ExpenseDonutPieChart({
             <div>
               <p className="notice-title">Expense distribution deferred</p>
               <p className="notice-body">
-                This record contains {unknownItems.length} unconfirmed expense item{unknownItems.length === 1 ? "" : "s"} ({unknownItems.join(", ")}). Percentages cannot be calculated until all expenses are confirmed to avoid misrepresenting cost distribution.
+                {unknownItems.length} unconfirmed expense{unknownItems.length === 1 ? "" : "s"} ({unknownItems.join(", ")}). Percentages deferred until expenses are resolved.
               </p>
             </div>
           </div>
@@ -333,7 +333,7 @@ export function DeliveryFinancialBreakdown({
           <div className="alert-text">
             <strong>Incomplete Financial Record</strong>
             <p>
-              Trip contains unconfirmed expenses ({model.unknownList.join(", ")}). Operational totals and expense distributions require all expenses to be confirmed.
+              Unconfirmed expenses: {model.unknownList.join(", ")}. Totals require confirmed expenses.
             </p>
           </div>
         </div>
@@ -341,10 +341,13 @@ export function DeliveryFinancialBreakdown({
 
       {/* 2. Hero Summary Metrics Bar (Prominent Monetary Figures) */}
       <div className="breakdown-hero-metrics">
-        {/* Delivery Revenue */}
+        {/* Revenue */}
         <div className="hero-metric-card revenue-card">
-          <span className="hero-metric-eyebrow">DELIVERY REVENUE</span>
-          <div className="hero-metric-amount revenue-text">
+          <span className="hero-metric-eyebrow">REVENUE</span>
+          <div
+            className="hero-metric-amount revenue-text"
+            title={model.grossRevenue != null ? `Delivery revenue: ${formatPeso(model.grossRevenue)} agreed customer billing` : "Revenue pending specification"}
+          >
             {model.grossRevenue != null ? formatPeso(model.grossRevenue) : "₱0.00"}
           </div>
           <span className="hero-metric-sub">
@@ -352,16 +355,23 @@ export function DeliveryFinancialBreakdown({
           </span>
         </div>
 
-        {/* Trip Expenses */}
+        {/* Expenses */}
         <div className="hero-metric-card expenses-card">
-          <span className="hero-metric-eyebrow">TRIP EXPENSES</span>
-          <div className={`hero-metric-amount ${model.isFinanciallyComplete ? "expenses-text" : "warn-text"}`}>
+          <span className="hero-metric-eyebrow">EXPENSES</span>
+          <div
+            className={`hero-metric-amount ${model.isFinanciallyComplete ? "expenses-text" : "warn-text"}`}
+            title={
+              model.isFinanciallyComplete
+                ? `Confirmed trip expenses: ${formatPeso(model.totalExpenses)}`
+                : `Trip expenses incomplete: ${model.unknownList.join(", ")} pending confirmation`
+            }
+          >
             {model.isFinanciallyComplete && model.totalExpenses != null
               ? formatPeso(model.totalExpenses)
-              : "Unconfirmed"}
+              : "Incomplete"}
           </div>
           <span className="hero-metric-sub">
-            {model.isFinanciallyComplete ? "Verified trip disbursements" : "Pending expense entries"}
+            {model.isFinanciallyComplete ? "Verified trip disbursements" : "Pending expense resolution"}
           </span>
         </div>
 
@@ -376,10 +386,15 @@ export function DeliveryFinancialBreakdown({
                 ? "profit-negative"
                 : "warn-text"
             }`}
+            title={
+              model.isFinanciallyComplete && model.netIncome != null
+                ? `Net profit: ${formatPeso(model.netIncome)} (Delivery Revenue − Trip Expenses)`
+                : "Net profit computation deferred until all trip expenses are confirmed"
+            }
           >
             {model.isFinanciallyComplete && model.netIncome != null
               ? formatPeso(model.netIncome)
-              : "Pending Finalization"}
+              : "Incomplete"}
           </div>
           <div className="hero-metric-badges">
             {model.isFinanciallyComplete && model.marginPercent != null ? (
@@ -387,11 +402,14 @@ export function DeliveryFinancialBreakdown({
                 className={`margin-pill ${
                   model.marginPercent >= 15 ? "pill-success" : model.marginPercent >= 0 ? "pill-neutral" : "pill-warn"
                 }`}
+                title={`Profit margin: ${formatPercent(model.marginPercent)}`}
               >
                 {formatPercent(model.marginPercent)} Profit Margin
               </span>
             ) : (
-              <span className="margin-pill pill-warn">Pending Profit Margin</span>
+              <span className="margin-pill pill-warn" title="Profit margin deferred until expenses are resolved">
+                Incomplete Profit Margin
+              </span>
             )}
           </div>
         </div>
@@ -444,9 +462,9 @@ export function DeliveryFinancialBreakdown({
               </div>
               <div className="item-value-box">
                 {trip.expenseStates.dieselExpenses === "unknown" ? (
-                  <span className="badge-warn">Unconfirmed</span>
+                  <span className="badge-warn" title="Pending confirmation: Fuel receipt amount requires confirmation">Unconfirmed</span>
                 ) : trip.expenseStates.dieselExpenses === "not_applicable" ? (
-                  <span className="badge-neutral">Not applicable</span>
+                  <span className="badge-neutral" title="Not applicable: Fuel cost not charged for this trip">Not applicable</span>
                 ) : (
                   <span className="item-val-bold">{formatPeso(trip.expenses.dieselExpenses)}</span>
                 )}
@@ -466,9 +484,9 @@ export function DeliveryFinancialBreakdown({
               </div>
               <div className="item-value-box">
                 {trip.expenseStates.tollGateExpenses === "unknown" ? (
-                  <span className="badge-warn">Unconfirmed</span>
+                  <span className="badge-warn" title="Pending confirmation: Toll gate expenses require confirmation">Unconfirmed</span>
                 ) : trip.expenseStates.tollGateExpenses === "not_applicable" ? (
-                  <span className="badge-neutral">Not applicable</span>
+                  <span className="badge-neutral" title="Not applicable: No highway toll routes used">Not applicable</span>
                 ) : (
                   <span className="item-val-bold">{formatPeso(trip.expenses.tollGateExpenses)}</span>
                 )}
@@ -488,9 +506,9 @@ export function DeliveryFinancialBreakdown({
               </div>
               <div className="item-value-box">
                 {trip.expenseStates.entryFees === "unknown" ? (
-                  <span className="badge-warn">Unconfirmed</span>
+                  <span className="badge-warn" title="Pending confirmation: Store entry fees require confirmation">Unconfirmed</span>
                 ) : trip.expenseStates.entryFees === "not_applicable" ? (
-                  <span className="badge-neutral">Not applicable</span>
+                  <span className="badge-neutral" title="Not applicable: No store entry fees charged on this route">Not applicable</span>
                 ) : (
                   <span className="item-val-bold">{formatPeso(trip.expenses.entryFees)}</span>
                 )}
@@ -508,9 +526,9 @@ export function DeliveryFinancialBreakdown({
               </div>
               <div className="item-value-box">
                 {trip.expenseStates.otherExpenses === "unknown" ? (
-                  <span className="badge-warn">Unconfirmed</span>
+                  <span className="badge-warn" title="Pending confirmation: Incidentals and other expenses require confirmation">Unconfirmed</span>
                 ) : trip.expenseStates.otherExpenses === "not_applicable" ? (
-                  <span className="badge-neutral">Not applicable</span>
+                  <span className="badge-neutral" title="Not applicable: No other incidentals incurred">Not applicable</span>
                 ) : (
                   <span className="item-val-bold">{formatPeso(trip.expenses.otherExpenses)}</span>
                 )}
@@ -529,7 +547,7 @@ export function DeliveryFinancialBreakdown({
             {model.isCrewComplete && model.crewSubtotal != null ? (
               <span className="group-subtotal">{formatPeso(model.crewSubtotal)}</span>
             ) : (
-              <span className="badge-warn">Incomplete</span>
+              <span className="badge-warn" title="Crew compensation incomplete: Requires driver or helper cost confirmation">Incomplete</span>
             )}
           </div>
 
@@ -546,9 +564,9 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {!model.isDriverComplete ? (
-                    <span className="badge-warn">Unconfirmed</span>
+                    <span className="badge-warn" title="Pending confirmation: Driver wage or allowance requires confirmation">Unconfirmed</span>
                   ) : model.driverTotal === 0 && trip.expenseStates.driverDailyRate === "not_applicable" ? (
-                    <span className="badge-neutral">Not applicable</span>
+                    <span className="badge-neutral" title="Not applicable: Driver compensation handled outside trip expenses">Not applicable</span>
                   ) : (
                     <span className="item-val-bold">{formatPeso(model.driverTotal)}</span>
                   )}
@@ -559,7 +577,16 @@ export function DeliveryFinancialBreakdown({
               <div className="crew-sub-pills">
                 <div className="crew-sub-pill">
                   <span className="sub-label">Daily Wage:</span>
-                  <span className="sub-val">
+                  <span
+                    className="sub-val"
+                    title={
+                      trip.expenseStates.driverDailyRate === "unknown"
+                        ? "Pending confirmation: Driver daily wage requires confirmation"
+                        : trip.expenseStates.driverDailyRate === "not_applicable"
+                        ? "Not applicable"
+                        : undefined
+                    }
+                  >
                     {trip.expenseStates.driverDailyRate === "unknown"
                       ? "Unconfirmed"
                       : trip.expenseStates.driverDailyRate === "not_applicable"
@@ -569,7 +596,16 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="crew-sub-pill">
                   <span className="sub-label">Trip Allowance:</span>
-                  <span className="sub-val">
+                  <span
+                    className="sub-val"
+                    title={
+                      trip.expenseStates.driverAllowance === "unknown"
+                        ? "Pending confirmation: Driver trip allowance requires confirmation"
+                        : trip.expenseStates.driverAllowance === "not_applicable"
+                        ? "Not applicable"
+                        : undefined
+                    }
+                  >
                     {trip.expenseStates.driverAllowance === "unknown"
                       ? "Unconfirmed"
                       : trip.expenseStates.driverAllowance === "not_applicable"
@@ -587,14 +623,14 @@ export function DeliveryFinancialBreakdown({
                   <span className="item-color-indicator" style={{ backgroundColor: "#0d9488" }} />
                   <div>
                     <span className="item-name">Helper Compensation</span>
-                    {trip.helperName ? <span className="item-detail">{trip.helperName}</span> : null}
+                    {trip.helperName ? <span className="item-detail">{trip.helperName}</span> : <span className="item-detail" title="Solo driver run — no helper assigned">None assigned</span>}
                   </div>
                 </div>
                 <div className="item-value-box">
                   {!model.isHelperComplete ? (
-                    <span className="badge-warn">Unconfirmed</span>
+                    <span className="badge-warn" title="Pending confirmation: Helper wage or allowance requires confirmation">Unconfirmed</span>
                   ) : model.helperTotal === 0 && trip.expenseStates.helperDailyRate === "not_applicable" ? (
-                    <span className="badge-neutral">Not applicable</span>
+                    <span className="badge-neutral" title="Not applicable: No helper compensation for this delivery">Not applicable</span>
                   ) : (
                     <span className="item-val-bold">{formatPeso(model.helperTotal)}</span>
                   )}
@@ -605,7 +641,16 @@ export function DeliveryFinancialBreakdown({
               <div className="crew-sub-pills">
                 <div className="crew-sub-pill">
                   <span className="sub-label">Daily Wage:</span>
-                  <span className="sub-val">
+                  <span
+                    className="sub-val"
+                    title={
+                      trip.expenseStates.helperDailyRate === "unknown"
+                        ? "Pending confirmation: Helper daily wage requires confirmation"
+                        : trip.expenseStates.helperDailyRate === "not_applicable"
+                        ? "Not applicable"
+                        : undefined
+                    }
+                  >
                     {trip.expenseStates.helperDailyRate === "unknown"
                       ? "Unconfirmed"
                       : trip.expenseStates.helperDailyRate === "not_applicable"
@@ -615,7 +660,16 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="crew-sub-pill">
                   <span className="sub-label">Trip Allowance:</span>
-                  <span className="sub-val">
+                  <span
+                    className="sub-val"
+                    title={
+                      trip.expenseStates.helperAllowance === "unknown"
+                        ? "Pending confirmation: Helper trip allowance requires confirmation"
+                        : trip.expenseStates.helperAllowance === "not_applicable"
+                        ? "Not applicable"
+                        : undefined
+                    }
+                  >
                     {trip.expenseStates.helperAllowance === "unknown"
                       ? "Unconfirmed"
                       : trip.expenseStates.helperAllowance === "not_applicable"

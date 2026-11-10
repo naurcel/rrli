@@ -13,6 +13,7 @@ export type DetailSection = {
     label: string;
     value: string;
     tone?: "success" | "warning";
+    tooltip?: string;
   }[];
   description?: string;
   customContent?: ReactNode;
@@ -115,7 +116,10 @@ export function RecordDetailDrawer({
           </div>
           <div className="record-detail-header-actions">
             {statusLabel ? (
-              <span className={`detail-status ${statusTone}`}>
+              <span
+                className={`detail-status ${statusTone}`}
+                title={statusLabel === "Incomplete" ? "Trip financials contain unconfirmed expenses requiring resolution" : "Delivery completed and verified"}
+              >
                 {statusLabel}
               </span>
             ) : null}
@@ -124,6 +128,7 @@ export function RecordDetailDrawer({
               type="button"
               className="record-detail-close"
               aria-label="Close details"
+              title="Close details (Esc)"
               onClick={onClose}
             >
               ×
@@ -144,7 +149,7 @@ export function RecordDetailDrawer({
                   {section.rows.map((row) => (
                     <div key={row.label}>
                       <dt>{row.label}</dt>
-                      <dd className={row.tone}>{row.value}</dd>
+                      <dd className={row.tone} title={row.tooltip}>{row.value}</dd>
                     </div>
                   ))}
                 </dl>

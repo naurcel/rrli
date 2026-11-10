@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  isDeliveryFinanciallyComplete,
+  isDeliveryIncomplete,
+} from "./delivery-domain.ts";
 import { parseDeliveryListQuery } from "./delivery-query.ts";
 import {
   correctSmallMockDelivery,
@@ -231,5 +235,25 @@ test("mock repository sorts incomplete null expenses to the bottom when sorting 
   assert.ok(firstItem.totalExpenses !== null && firstItem.totalExpenses > 0, "First item must be lowest confirmed expense");
   assert.equal(firstItem.waybillNumber, "WB-261029", "WB-261029 has lowest expenses (4,400)");
 });
+
+test("separates and filters completed vs incomplete delivery records with status counts", () => {
+  const allResult = listSmallMockDeliveryRecords(query("pageSize=10"));
+  assert.ok(allResult.statusCounts, "Must return status counts");
+  assert.equal(allResult.statusCounts.all, allResult.statusCounts.completed + allResult.statusCounts.incomplete);
+  assert.ok(allResult.statusCounts.completed > 0, "Must have completed deliveries");
+  assert.ok(allResult.statusCounts.incomplete > 0, "Must have incomplete deliveries");
+
+  const completedOnly = listSmallMockDeliveryRecords(query("status=completed&pageSize=10"));
+  assert.equal(completedOnly.total, allResult.statusCounts.completed);
+  assert.ok(completedOnly.items.every((d) => !isDeliveryIncomplete(d)));
+
+  const incompleteOnly = listSmallMockDeliveryRecords(query("status=incomplete&pageSize=10"));
+  assert.equal(incompleteOnly.total, allResult.statusCounts.incomplete);
+  assert.ok(incompleteOnly.items.every((d) => isDeliveryIncomplete(d)));
+
+  const finalizedFinancials = listSmallMockDeliveryRecords(query("financialState=finalized&pageSize=10"));
+  assert.ok(finalizedFinancials.items.every((d) => isDeliveryFinanciallyComplete(d)));
+});
+
 
 

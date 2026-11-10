@@ -15,7 +15,10 @@ import { dynamicMockDeliveries, getAllMockDeliveries } from "@/features/deliveri
 
 const importRowSchema = z.object({
   waybillNumber: z.string().trim().min(3, "Waybill number is required."),
-  deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Valid YYYY-MM-DD date required."),
+  deliveryDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Valid YYYY-MM-DD date required.")
+    .refine((d) => d >= "2024-01-01", "Delivery date cannot be earlier than company foundation year (2024)."),
   clientName: z.string().trim().min(2, "Client name is required."),
   plateNumber: z.string().trim().min(3, "Truck plate number is required."),
   truckTemperature: z

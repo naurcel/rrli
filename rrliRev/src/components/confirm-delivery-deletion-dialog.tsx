@@ -29,9 +29,18 @@ export function ConfirmDeliveryDeletionDialog({
             <h2 id="delete-delivery-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
               Confirm Delivery Deletion
             </h2>
-            <p style={{ margin: "2px 0 0", fontSize: "11px" }}>This decision requires explicit confirmation.</p>
+            <p style={{ margin: "2px 0 0", fontSize: "11px" }}>Action is audited and logged.</p>
           </div>
-          <button type="button" className="routex-dialog-close" aria-label="Close confirmation dialog" disabled={pending} onClick={onCancel}>×</button>
+          <button
+            type="button"
+            className="routex-dialog-close"
+            aria-label="Close confirmation dialog"
+            title="Close confirmation dialog (Esc)"
+            disabled={pending}
+            onClick={onCancel}
+          >
+            ×
+          </button>
         </header>
 
         <div className="routex-dialog-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -42,15 +51,15 @@ export function ConfirmDeliveryDeletionDialog({
           <div className="delete-delivery-summary">
             <div><span>Delivery Date</span><strong>{delivery.deliveryDate}</strong></div>
             <div><span>Plate Number</span><strong>{delivery.plateNumber}</strong></div>
-            <div><span>Delivery Revenue</span><strong>{formatPeso(delivery.deliveryRate)}</strong></div>
-            <div><span>Store Drop-offs</span><strong>{delivery.dropoffs.length}</strong></div>
+            <div><span>Revenue</span><strong>{formatPeso(delivery.deliveryRate)}</strong></div>
+            <div><span>Drop-offs</span><strong>{delivery.dropoffs.length}</strong></div>
           </div>
           <div className="delete-delivery-warning"><strong>Warning:</strong> This removes the record from operational and financial calculations.</div>
         </div>
 
         <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-          <button type="button" className="secondary-button" disabled={pending} onClick={onCancel}>Cancel</button>
-          <button type="button" className="danger-confirm-button" disabled={pending} onClick={onConfirm}>
+          <button type="button" className="secondary-button" disabled={pending} onClick={onCancel} title="Cancel deletion and close dialog">Cancel</button>
+          <button type="button" className="danger-confirm-button" disabled={pending} onClick={onConfirm} title="Permanently delete this delivery record">
             {pending ? "Deleting…" : "Confirm Delete"}
           </button>
         </footer>

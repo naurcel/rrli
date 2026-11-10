@@ -591,7 +591,7 @@ export default function UserManagementPage() {
           <div>
             <h1>User Management</h1>
             <p className="subtitle">
-              Manage staff accounts, credentials, and access permissions.
+              Staff accounts, credentials, and access permissions.
             </p>
           </div>
           <span className="access-pill admin">Admin Only ({actor.fullName})</span>
@@ -604,6 +604,7 @@ export default function UserManagementPage() {
             aria-selected={activeTab === "users"}
             className={activeTab === "users" ? "active" : ""}
             onClick={() => setActiveTab("users")}
+            title="Manage staff user accounts and permissions"
           >
             Staff Accounts
           </button>
@@ -613,6 +614,7 @@ export default function UserManagementPage() {
             aria-selected={activeTab === "audit"}
             className={activeTab === "audit" ? "active" : ""}
             onClick={() => setActiveTab("audit")}
+            title="Inspect administrative action and security audit logs"
           >
             Audit Log
           </button>
@@ -634,6 +636,7 @@ export default function UserManagementPage() {
                 <button
                   type="button"
                   aria-label="Dismiss notice"
+                  title="Dismiss notice"
                   onClick={() => setFeedback(null)}
                 >
                   ×
@@ -651,8 +654,7 @@ export default function UserManagementPage() {
                 <div>
                   <h2>Provision Staff Account</h2>
                   <p>
-                    Create a RouteX account with a temporary password. Users will be required to change
-                    their password and configure security recovery upon their first login.
+                    Provision staff account with temporary password. First-login setup required.
                   </p>
                 </div>
               </div>
@@ -813,6 +815,7 @@ export default function UserManagementPage() {
                     type="submit"
                     className="primary-action-button"
                     disabled={isCreating}
+                    title="Provision a new RouteX account with a temporary password"
                     style={{ minHeight: "42px", minWidth: "160px" }}
                   >
                     {isCreating ? "Provisioning…" : "+ Provision Account"}
@@ -827,7 +830,7 @@ export default function UserManagementPage() {
                 <div>
                   <h2>Authorized Personnel &amp; Role Assignments</h2>
                   <p>
-                    Manage staff usernames, access levels, setup statuses, and authorize password recovery.
+                    Staff usernames, access levels, setup status, and recovery.
                   </p>
                 </div>
               </div>
@@ -1158,8 +1161,7 @@ export default function UserManagementPage() {
                 <div>
                   <h2>Operational &amp; System Event Trail</h2>
                   <p>
-                    Review administrative actions, timestamped deliveries, financial changes, and account
-                    activity.
+                    Administrative actions, delivery changes, and system activity.
                   </p>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -1383,26 +1385,17 @@ export default function UserManagementPage() {
 
             <div
               style={{
-                padding: "14px",
-                borderRadius: "10px",
+                padding: "10px 14px",
+                borderRadius: "8px",
                 background: "rgba(217, 119, 6, 0.08)",
                 border: "1px solid rgba(217, 119, 6, 0.25)",
                 fontSize: "11px",
-                lineHeight: 1.6,
+                lineHeight: 1.5,
                 color: "var(--color-text-primary)",
-                marginBottom: "20px",
+                marginBottom: "16px",
               }}
             >
-              <div style={{ fontWeight: 700, marginBottom: "6px", color: "#b45309" }}>
-                What happens when you authorize recovery:
-              </div>
-              <ul style={{ margin: 0, paddingLeft: "16px" }}>
-                <li>Generates a secure, single-use 24-hour reset window for @{authorizingUser.username}.</li>
-                <li>The user can visit the Forgot Password page and set a new password directly without answering their security question.</li>
-                <li><strong>Admin Privacy Guarantee:</strong> You will NOT be shown or asked to provide the user&apos;s new password.</li>
-                <li>Once the user updates their password (or 24 hours pass), this recovery window expires.</li>
-                <li>This authorization is permanently recorded in the Audit Log.</li>
-              </ul>
+              Opens a single-use 24-hour password reset window for @{authorizingUser.username}. Action is audited.
             </div>
 
             {authorizeError ? (
@@ -1572,13 +1565,14 @@ export default function UserManagementPage() {
                   Confirm User Deletion
                 </h2>
                 <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
-                  This deletion decision requires explicit confirmation and will be logged.
+                  Action is audited and logged.
                 </p>
               </div>
               <button
                 type="button"
                 className="routex-dialog-close"
                 aria-label="Close confirmation dialog"
+                title="Close confirmation dialog (Esc)"
                 disabled={isDeletingUser}
                 onClick={() => setUserToDelete(null)}
               >

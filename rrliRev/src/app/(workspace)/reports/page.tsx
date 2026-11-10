@@ -32,6 +32,14 @@ import {
   DEFAULT_REVENUE_TEMPLATE,
   type ReportTemplate,
 } from "@/features/reports/report-template-types";
+import {
+  CompanyExpense,
+  filterExpensesByDateRange,
+} from "@/features/finance/company-expense-domain";
+import {
+  readBrowserPreviewExpenses,
+  ROUTEX_COMPANY_EXPENSES_CHANGED,
+} from "@/features/finance/browser-preview-expenses";
 import { canManageReportTemplates } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
@@ -107,6 +115,49 @@ export default function ReportsPage() {
       });
   }, []);
 
+  // Company expenses state for overall profitability reporting
+  const [companyExpenses, setCompanyExpenses] = useState<CompanyExpense[]>([]);
+
+  useEffect(() => {
+    async function fetchExpenses() {
+      try {
+        const res = await fetch("/api/finance/expenses?pageSize=100");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.ok && Array.isArray(data.items)) {
+            setCompanyExpenses(data.items);
+            return;
+          }
+        }
+      } catch {
+        // Fallback
+      }
+      setCompanyExpenses(readBrowserPreviewExpenses());
+    }
+
+    fetchExpenses();
+
+    const onExpensesChanged = () => {
+      setCompanyExpenses(readBrowserPreviewExpenses());
+    };
+    window.addEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, onExpensesChanged);
+    return () => {
+      window.removeEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, onExpensesChanged);
+    };
+  }, []);
+
+  const filteredCompanyExpenses = useMemo(() => {
+    return filterExpensesByDateRange(
+      companyExpenses,
+      effectiveRange.startDate ? toDateKey(effectiveRange.startDate) : null,
+      effectiveRange.endDate ? toDateKey(effectiveRange.endDate) : null,
+    );
+  }, [companyExpenses, effectiveRange]);
+
+  const companyExpensesTotal = useMemo(() => {
+    return filteredCompanyExpenses.reduce((sum, item) => sum + item.amount, 0);
+  }, [filteredCompanyExpenses]);
+
   // Handle URL query parameters for tab / template routing
   useEffect(() => {
     try {
@@ -162,8 +213,10 @@ export default function ReportsPage() {
 
   // Process report rows and metrics using the reporting engine
   const processedReport = useMemo(() => {
-    return processReport(filteredDeliveries, activeTemplate);
-  }, [filteredDeliveries, activeTemplate]);
+    const isTruckReport = activeTemplate.baseType === "truck_summary";
+    const expTotal = isTruckReport ? 0 : companyExpensesTotal;
+    return processReport(filteredDeliveries, activeTemplate, expTotal);
+  }, [filteredDeliveries, activeTemplate, companyExpensesTotal]);
 
   // Sort rows for presentation
   const sortedRows = useMemo(() => {
@@ -311,6 +364,7 @@ export default function ReportsPage() {
                   type="button"
                   className="page-intro-action report-customize-action"
                   aria-label="Customize current report layout (temporarily disabled)"
+                  data-tooltip="Customize report layout (temporarily disabled)"
                   title="Feature temporarily disabled"
                   disabled
                 >
@@ -335,6 +389,7 @@ export default function ReportsPage() {
                   type="button"
                   className="page-intro-action report-new-action"
                   aria-label="Create new report format (temporarily disabled)"
+                  data-tooltip="Create new report format (temporarily disabled)"
                   title="Feature temporarily disabled"
                   disabled
                 >
@@ -346,6 +401,7 @@ export default function ReportsPage() {
               type="button"
               className="page-intro-action report-export-action"
               aria-label="Export report to Excel CSV (temporarily disabled)"
+              data-tooltip="Export report to Excel CSV (temporarily disabled)"
               title="Feature temporarily disabled"
               disabled
             >
@@ -355,6 +411,8 @@ export default function ReportsPage() {
               type="button"
               className="report-print-button page-intro-action"
               aria-label="Print the report or save it as a PDF"
+              data-tooltip="Print report or save as PDF"
+              title="Print the report or save it as a PDF"
               onClick={() => window.print()}
             >
               Print
@@ -452,7 +510,13 @@ export default function ReportsPage() {
                 <button
                   type="button"
                   className="daily-nav-btn"
-                  onClick={() => setDailyDate((prev) => toDateKey(addDays(parseDateValue(prev), -1)))}
+                  disabled={dailyDate <= "2024-01-01"}
+                  onClick={() =>
+                    setDailyDate((prev) => {
+                      const next = toDateKey(addDays(parseDateValue(prev), -1));
+                      return next < "2024-01-01" ? "2024-01-01" : next;
+                    })
+                  }
                   aria-label="Previous day"
                   title="Previous day"
                   style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
@@ -464,11 +528,15 @@ export default function ReportsPage() {
                 </button>
                 <input
                   type="date"
+                  min="2024-01-01"
                   className="daily-date-input"
                   aria-label="Select report date"
+                  title="Select date for daily trip report (from 2024)"
                   value={dailyDate}
                   onChange={(e) => {
-                    if (e.target.value) setDailyDate(e.target.value);
+                    if (e.target.value) {
+                      setDailyDate(e.target.value < "2024-01-01" ? "2024-01-01" : e.target.value);
+                    }
                   }}
                 />
                 <button
@@ -570,13 +638,13 @@ export default function ReportsPage() {
             <section className="report-summary">
               {activeTemplate.breakdown.showGrossEarnings && (
                 <div>
-                  <span>Delivery Revenue</span>
+                  <span>Revenue</span>
                   <strong>{formatPeso(processedReport.totals.grossEarnings)}</strong>
                 </div>
               )}
               {activeTemplate.breakdown.showTotalExpenses && (
                 <div>
-                  <span>Trip Expenses</span>
+                  <span>Expenses</span>
                   <strong>{formatPeso(processedReport.totals.totalExpenses)}</strong>
                 </div>
               )}
@@ -621,6 +689,20 @@ export default function ReportsPage() {
                   <span>Crew Compensation</span>
                   <strong>{formatPeso(processedReport.totals.totalCrewCosts)}</strong>
                 </div>
+              )}
+              {activeTemplate.baseType !== "truck_summary" && (processedReport.totals.totalCompanyExpenses ?? 0) > 0 && (
+                <>
+                  <div>
+                    <span>Company Expenses</span>
+                    <strong>{formatPeso(processedReport.totals.totalCompanyExpenses ?? 0)}</strong>
+                  </div>
+                  <div>
+                    <span>Company Net Profit</span>
+                    <strong style={{ color: (processedReport.totals.companyNetProfit ?? 0) >= 0 ? "var(--color-profit, #059669)" : "var(--color-danger, #dc2626)" }}>
+                      {formatPeso(processedReport.totals.companyNetProfit ?? 0)}
+                    </strong>
+                  </div>
+                </>
               )}
             </section>
 
@@ -736,7 +818,10 @@ export default function ReportsPage() {
               ) : null}
 
               {processedReport.rows.length === 0 ? (
-                <div className="empty-state report-empty-state">
+                <div
+                  className="empty-state report-empty-state"
+                  title={isDailyTripReport ? "No delivery trips recorded for the selected single day" : "No operational records found within the selected date range"}
+                >
                   <strong>
                     {isDailyTripReport
                       ? "No trips recorded for this date"

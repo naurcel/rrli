@@ -29,7 +29,11 @@ test("delivery recording window rejects future and older dates for non-admins", 
   assert.equal(validateDeliveryDateWindow("2026-10-01", reference, "operations").ok, false);
 });
 
-test("admin role can record deliveries with no date range restriction", () => {
+test("admin role can record deliveries across dates back to company founding year (2024)", () => {
+  assert.deepEqual(validateDeliveryDateWindow("2024-01-01", reference, "admin"), {
+    ok: true,
+    isLate: true,
+  });
   assert.deepEqual(validateDeliveryDateWindow("2026-01-01", reference, "admin"), {
     ok: true,
     isLate: true,
@@ -42,5 +46,6 @@ test("admin role can record deliveries with no date range restriction", () => {
     ok: true,
     isLate: false,
   });
+  assert.equal(validateDeliveryDateWindow("2023-12-31", reference, "admin").ok, false);
   assert.equal(validateDeliveryDateWindow("not-a-date", reference, "admin").ok, false);
 });

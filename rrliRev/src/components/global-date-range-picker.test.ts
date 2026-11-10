@@ -180,3 +180,10 @@ test("presetRange calculates all standard presets correctly relative to referenc
   assert.equal(toDateKey(thisYear.startDate!), "2026-01-01");
   assert.equal(toDateKey(thisYear.endDate!), "2026-11-04");
 });
+
+test("presetRange clamps any past ranges to company foundation year (2024)", () => {
+  const earlyRef = new Date(2024, 0, 15); // Jan 15, 2024
+  const last30 = presetRange("last30", earlyRef);
+  assert.equal(toDateKey(last30.startDate!), "2024-01-01");
+  assert.equal(toDateKey(last30.endDate!), "2024-01-15");
+});

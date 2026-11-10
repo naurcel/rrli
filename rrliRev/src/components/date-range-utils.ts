@@ -144,6 +144,9 @@ export function formatDateRange(range: DateRange): string {
   return "All time";
 }
 
+export const COMPANY_FOUNDATION_YEAR = 2024;
+export const COMPANY_FOUNDATION_DATE = "2024-01-01";
+
 export function presetRange(
   preset: DatePreset,
   referenceDate: Date = new Date(),
@@ -151,22 +154,20 @@ export function presetRange(
   const today = startOfDay(referenceDate);
   if (preset === "all") return { startDate: null, endDate: null };
   if (preset === "today") return { startDate: today, endDate: today };
+  let start: Date;
   if (preset === "week") {
-    const start = addDays(today, -today.getDay());
-    return { startDate: start, endDate: today };
+    start = addDays(today, -today.getDay());
+  } else if (preset === "month") {
+    start = new Date(today.getFullYear(), today.getMonth(), 1);
+  } else if (preset === "year") {
+    start = new Date(today.getFullYear(), 0, 1);
+  } else {
+    const days = preset === "last15" ? 15 : preset === "last30" ? 30 : 7;
+    start = addDays(today, -(days - 1));
   }
-  if (preset === "month") {
-    return {
-      startDate: new Date(today.getFullYear(), today.getMonth(), 1),
-      endDate: today,
-    };
+  const minAllowed = new Date(COMPANY_FOUNDATION_YEAR, 0, 1);
+  if (start.getTime() < minAllowed.getTime()) {
+    start = minAllowed;
   }
-  if (preset === "year") {
-    return {
-      startDate: new Date(today.getFullYear(), 0, 1),
-      endDate: today,
-    };
-  }
-  const days = preset === "last15" ? 15 : preset === "last30" ? 30 : 7;
-  return { startDate: addDays(today, -(days - 1)), endDate: today };
+  return { startDate: start, endDate: today };
 }

@@ -44,6 +44,10 @@ export function getRequiredPermissionForPath(pathname: string): Permission | nul
     return "profitability:view";
   }
 
+  if (pathname === "/finance" || pathname.startsWith("/finance/") || pathname.startsWith("/api/finance")) {
+    return "finance:view";
+  }
+
   if (pathname === "/pod-documents" || pathname.startsWith("/pod-documents/")) {
     return "pod:view";
   }

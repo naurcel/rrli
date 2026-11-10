@@ -18,10 +18,10 @@ export type OwnedTruckSort =
 
 export const OWNED_TRUCK_SORT_OPTIONS = [
   { value: "netProfit", label: "Highest Net Profit" },
-  { value: "revenue", label: "Highest Delivery Revenue" },
+  { value: "revenue", label: "Highest Revenue" },
   { value: "margin", label: "Highest Profit Margin" },
   { value: "deliveries", label: "Most Deliveries" },
-  { value: "expenses", label: "Highest Trip Expenses" },
+  { value: "expenses", label: "Highest Expenses" },
   { value: "plate", label: "Plate A–Z" },
 ] as const;
 

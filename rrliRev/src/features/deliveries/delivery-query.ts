@@ -28,6 +28,7 @@ export type DeliveryListQuery = {
   truckId: string | null;
   truckIds?: string[];
   status: string | null;
+  financialState?: "finalized" | "incomplete" | "all" | null;
   podStatus: string | null;
   dateFrom: string | null;
   dateTo: string | null;
@@ -53,6 +54,7 @@ const querySchema = z.object({
   truckId: z.string().trim().min(1).nullable().default(null),
   truckIds: z.array(z.string().trim().min(1)).default([]),
   status: z.string().trim().min(1).max(40).nullable().default(null),
+  financialState: z.enum(["finalized", "incomplete", "all"]).nullable().default(null),
   podStatus: z.string().trim().min(1).max(40).nullable().default(null),
   dateFrom: dateSchema.nullable().default(null),
   dateTo: dateSchema.nullable().default(null),
@@ -95,6 +97,7 @@ export function parseDeliveryListQuery(params: URLSearchParams):
     truckId: truckIds[0] ?? null,
     truckIds,
     status: nullableParameter(params, "status"),
+    financialState: (nullableParameter(params, "financialState") as "finalized" | "incomplete" | "all" | null) ?? null,
     podStatus: nullableParameter(params, "podStatus"),
     dateFrom: nullableParameter(params, "dateFrom"),
     dateTo: nullableParameter(params, "dateTo"),

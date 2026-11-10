@@ -121,6 +121,106 @@ export function createConfirmedExpenseStates(): TripExpenseStates {
   return Object.fromEntries(EXPENSE_KEYS.map((key) => [key, "confirmed"])) as TripExpenseStates;
 }
 
+/**
+ * Returns any missing operational or financial issues for a delivery.
+ * Rule: As long as something is missing (apart from optional supporting documents), it is incomplete.
+ * Missing items: missing POD, unknown expenses, unconfirmed amounts, missing revenue, unresolved entry fees, missing driver.
+ * Supporting documents (supportingDocsComplete, supportingDocuments) are NOT required for completeness.
+ */
+export function getDeliveryIncompleteIssues(delivery: DeliveryTripRecord): string[] {
+  const issues: string[] = [];
+
+  // 1. Missing Proof of Delivery (POD) for any store drop-off
+  const missingPods = (delivery.dropoffs ?? []).filter((d) => !d.podSubmitted);
+  if (missingPods.length > 0) {
+    if (missingPods.length === 1) {
+      const fullStoreName = missingPods[0].storeName.trim();
+      const primaryStore = fullStoreName.split(/\s*[-–—@/(]\s*/)[0].trim();
+      const conciseName = primaryStore.length > 0 && primaryStore.length <= 14 ? primaryStore : "";
+      issues.push(conciseName ? `Missing POD: ${conciseName}` : "Missing POD");
+    } else {
+      issues.push(`Missing POD (${missingPods.length} drop-offs)`);
+    }
+  }
+
+  // 2. Unknown or unconfirmed expenses
+  const unknownExpenseLabels: Record<string, string> = {
+    dieselExpenses: "Diesel fuel",
+    tollGateExpenses: "Highway tolls",
+    entryFees: "Store entry fees",
+    driverAllowance: "Driver allowance",
+    driverDailyRate: "Driver daily rate",
+    helperAllowance: "Helper allowance",
+    helperDailyRate: "Helper daily rate",
+    otherExpenses: "Other expenses",
+  };
+  const unknownExpenses = Object.entries(delivery.expenseStates ?? {})
+    .filter(([_, status]) => status === "unknown")
+    .map(([key]) => unknownExpenseLabels[key] ?? key);
+
+  if (unknownExpenses.length > 0) {
+    if (unknownExpenses.length === 1) {
+      issues.push(`Unknown: ${unknownExpenses[0]}`);
+    } else {
+      issues.push(`Unknown expenses (${unknownExpenses.length})`);
+    }
+  }
+
+  // 3. Unresolved store entry fees
+  const unknownEntryFees = (delivery.dropoffs ?? []).filter((d) => d.entryFeeStatus === "unknown");
+  if (unknownEntryFees.length > 0 && !unknownExpenses.some((e) => e.toLowerCase().includes("entry fee"))) {
+    issues.push(unknownEntryFees.length === 1 ? "Unresolved entry fee" : `Unresolved entry fees (${unknownEntryFees.length})`);
+  }
+
+  // 4. Missing agreed delivery revenue
+  if (delivery.deliveryRate == null || delivery.deliveryRate <= 0) {
+    issues.push("Missing delivery revenue");
+  }
+
+  // 5. Explicit financial integrity issues
+  if (delivery.financialIntegrityIssues && delivery.financialIntegrityIssues.length > 0) {
+    for (const issue of delivery.financialIntegrityIssues) {
+      if (!issues.includes(issue)) {
+        issues.push(issue);
+      }
+    }
+  }
+
+  // 6. Missing core operational personnel (driver)
+  const dName = (delivery as unknown as { driverName?: string | null }).driverName;
+  if (dName !== undefined && (!dName || dName.trim() === "")) {
+    issues.push("Missing assigned driver");
+  }
+
+  return issues;
+}
+
+/**
+ * Returns true if the delivery is incomplete (i.e. has any missing operational or financial details apart from supporting docs).
+ */
+export function isDeliveryIncomplete(delivery: DeliveryTripRecord): boolean {
+  return getDeliveryIncompleteIssues(delivery).length > 0;
+}
+
+/**
+ * Checks whether a delivery's finances are 100% complete and confirmed.
+ * Once finances are complete, the record's revenue, expenses, and net profit are included in calculations.
+ */
+export function isDeliveryFinanciallyComplete(delivery: DeliveryTripRecord): boolean {
+  if (delivery.deliveryRate == null || delivery.deliveryRate <= 0) return false;
+  if (delivery.totalExpenses == null || !Number.isFinite(delivery.totalExpenses)) return false;
+  if (delivery.netIncome == null || !Number.isFinite(delivery.netIncome)) return false;
+
+  const states = Object.values(delivery.expenseStates ?? {});
+  if (states.length > 0 && states.some((s) => s === "unknown")) return false;
+
+  if ((delivery.dropoffs ?? []).some((d) => d.entryFeeStatus === "unknown")) return false;
+
+  if ((delivery.financialIntegrityIssues?.length ?? 0) > 0) return false;
+
+  return delivery.financialState === "finalized";
+}
+
 export function derivePodVerificationStatus(
   dropoffs: readonly DeliveryStoreDropoff[],
 ): PodVerificationStatus {

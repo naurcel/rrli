@@ -1,5 +1,7 @@
 import {
   calculateProfitMargin,
+  isDeliveryFinanciallyComplete,
+  isDeliveryIncomplete,
   summarizeTruckProfitability,
 } from "@/features/deliveries/delivery-domain";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
@@ -18,6 +20,7 @@ export type BrowserDeliveryFilters = {
   truckId?: string;
   truckIds?: string[];
   status?: string;
+  financialState?: "finalized" | "incomplete" | "all" | null;
   podStatus?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -119,13 +122,28 @@ export function selectBrowserPreviewDeliveries(
           item.plateNumber.toUpperCase() === filters.truckId.toUpperCase() ||
           plateClean === filters.truckId.replace(/\s+/g, "").toLowerCase();
 
+    const matchesStatus =
+      !filters.status ||
+      filters.status === "all" ||
+      (filters.status.toLowerCase() === "completed" && !isDeliveryIncomplete(item)) ||
+      (filters.status.toLowerCase() === "incomplete" && isDeliveryIncomplete(item)) ||
+      item.deliveryStatus.toLowerCase() === filters.status.toLowerCase();
+
+    const matchesFinancial =
+      !filters.financialState ||
+      filters.financialState === "all" ||
+      (filters.financialState === "finalized" && isDeliveryFinanciallyComplete(item)) ||
+      (filters.financialState === "incomplete" && !isDeliveryFinanciallyComplete(item)) ||
+      item.financialState === filters.financialState;
+
     return (
       (!search ||
         searchable.includes(search) ||
         (searchClean.length > 0 && plateClean.includes(searchClean))) &&
       matchesClient &&
       matchesTruck &&
-      (!filters.status || item.deliveryStatus === filters.status) &&
+      matchesStatus &&
+      matchesFinancial &&
       (!filters.podStatus || item.podStatus === filters.podStatus) &&
       (!filters.dateFrom || item.deliveryDate >= filters.dateFrom) &&
       (!filters.dateTo || item.deliveryDate <= filters.dateTo)
@@ -143,7 +161,7 @@ export function mergeBrowserPreviewSummary(
   const local = selectBrowserPreviewDeliveries({
     dateFrom: dateFrom ?? undefined,
     dateTo: dateTo ?? undefined,
-  }).filter((item) => item.financialState === "finalized" && !includedIds.has(item.id));
+  }).filter((item) => isDeliveryFinanciallyComplete(item) && !includedIds.has(item.id));
   if (local.length === 0) return summary;
 
   const localRevenue = local.reduce((total, item) => total + (item.deliveryRate ?? 0), 0);

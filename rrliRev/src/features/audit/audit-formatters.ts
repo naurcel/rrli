@@ -45,6 +45,11 @@ const FIELD_LABEL_MAP: Record<string, string> = {
   roles: "System Roles",
   version: "Record Version",
   dropoffid: "Store Drop-off Reference",
+  amount: "Expense Amount",
+  expensedate: "Expense Date",
+  category: "Expense Category",
+  notes: "Expense Notes",
+  deletionreason: "Deletion Reason",
 };
 
 export function formatAuditFieldLabel(field: string): string {
@@ -240,6 +245,9 @@ export function getActionVisuals(action: string): {
   }
   if (norm.includes("finalized")) {
     return { className: "info", badgeLabel: action.replaceAll(".", " "), category: "finalize" };
+  }
+  if (norm.includes("deleted")) {
+    return { className: "warning", badgeLabel: action.replaceAll(".", " "), category: "delete" };
   }
   if (norm.includes("corrected") || norm.includes("updated") || norm.includes("status_changed")) {
     return { className: "attention", badgeLabel: action.replaceAll(".", " "), category: "update" };

@@ -348,7 +348,7 @@ export default function SettingsPage() {
           <div>
             <h1>Account Settings</h1>
             <p className="subtitle">
-              Manage your profile photo, login credentials, and account security.
+              Profile photo, credentials, and account security.
             </p>
           </div>
           <span className={`access-pill ${actor.accessLevel}`}>
@@ -411,7 +411,7 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <p className="settings-photo-hint">
-                  JPG, PNG, or WebP (max 5MB). Resized to square avatar.
+                  JPG, PNG, or WebP (max 5MB).
                 </p>
               )}
             </div>
@@ -471,7 +471,7 @@ export default function SettingsPage() {
               <div className="records-heading">
                 <div>
                   <h2>Change Username</h2>
-                  <p>Update your unique RouteX login username. Preserves your user ID, role, and history.</p>
+                  <p>Update your RouteX username.</p>
                 </div>
               </div>
 
@@ -525,6 +525,7 @@ export default function SettingsPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={usernameSubmitting}
+                  title="Save your new username"
                   style={{ minHeight: "42px", justifySelf: "start", padding: "0 20px" }}
                 >
                   {usernameSubmitting ? "Updating…" : "Save Username"}
@@ -537,7 +538,7 @@ export default function SettingsPage() {
               <div className="records-heading">
                 <div>
                   <h2>Change Password</h2>
-                  <p>Update your account password. Secured using Argon2id with strict criteria.</p>
+                  <p>Update your account password.</p>
                 </div>
               </div>
 
@@ -592,6 +593,7 @@ export default function SettingsPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={passwordSubmitting}
+                  title="Update your account password"
                   style={{ minHeight: "42px", justifySelf: "start", padding: "0 20px" }}
                 >
                   {passwordSubmitting ? "Updating…" : "Update Password"}
@@ -603,8 +605,8 @@ export default function SettingsPage() {
             <section className="records-card settings-panel-card" aria-label="Security Question">
               <div className="records-heading">
                 <div>
-                  <h2>Security Question & Recovery</h2>
-                  <p>Configure the security question and secret answer used for self-service password recovery.</p>
+                  <h2>Security Question &amp; Recovery</h2>
+                  <p>Configure security question for password recovery.</p>
                 </div>
               </div>
 
@@ -702,6 +704,7 @@ export default function SettingsPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={securitySubmitting}
+                  title="Save your password recovery security question and answer"
                   style={{ minHeight: "42px", justifySelf: "start", padding: "0 20px" }}
                 >
                   {securitySubmitting ? "Saving…" : "Save Security Question"}
@@ -719,7 +722,7 @@ export default function SettingsPage() {
           <div className="records-heading">
             <div>
               <h2>Role & Access Level Reference</h2>
-              <p>Reference matrix for all six company operational roles.</p>
+              <p>Permissions across all six operational roles.</p>
             </div>
           </div>
 

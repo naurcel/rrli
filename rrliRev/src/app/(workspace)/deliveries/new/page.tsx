@@ -17,6 +17,7 @@ import {
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
 import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
+import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
 import type { ExpenseResolutionStatus } from "@/features/deliveries/delivery-domain";
 import { getDeliveryDateWindow } from "@/features/deliveries/delivery-recording-policy";
 import { formatPeso } from "@/lib/format";
@@ -33,6 +34,7 @@ type ReferenceData = {
   clients: DeliveryFilterOption[];
   trucks: DeliveryFilterOption[];
   drivers: DeliveryFilterOption[];
+  helpers: DeliveryFilterOption[];
 };
 
 type ExpenseFormKey =
@@ -70,7 +72,7 @@ export default function NewCompletedDeliveryPage() {
   const actor = useAuthenticatedActor();
   const isAdmin = actor.role === "admin";
   const deliveryDateWindow = useMemo(() => getDeliveryDateWindow(), []);
-  const [references, setReferences] = useState<ReferenceData>({ clients: [], trucks: [], drivers: [] });
+  const [references, setReferences] = useState<ReferenceData>({ clients: [], trucks: [], drivers: [], helpers: [] });
   const [referencesLoading, setReferencesLoading] = useState(true);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -88,7 +90,6 @@ export default function NewCompletedDeliveryPage() {
   // Delivery crew state with support for up to 2 helpers
   const [hasSecondHelper, setHasSecondHelper] = useState(false);
   const [driverName, setDriverName] = useState("");
-  const [recordingDelayed, setRecordingDelayed] = useState<boolean | null>(false);
   const [helper1Name, setHelper1Name] = useState("");
   const [helper2Name, setHelper2Name] = useState("");
 
@@ -135,7 +136,7 @@ export default function NewCompletedDeliveryPage() {
         if (!response.ok || !payload.ok) {
           throw new Error(payload.message ?? "Unable to load active clients and trucks.");
         }
-        const nextReferences = payload.filters ?? { clients: [], trucks: [], drivers: [] };
+        const nextReferences = payload.filters ?? { clients: [], trucks: [], drivers: [], helpers: [] };
 
         // Merge custom clients from locally recorded deliveries
         const localDeliveries = readBrowserPreviewDeliveries();
@@ -174,10 +175,35 @@ export default function NewCompletedDeliveryPage() {
             return true;
           })
           .map((name) => ({ id: `driver-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, label: name }));
+
+        const baseHelpersList: DeliveryFilterOption[] = [
+          ...(nextReferences.helpers ?? []),
+          ...BASE_HELPERS.map((h) => ({ id: h.id, label: h.fullName })),
+          ...getFleetCrew().filter((c) => c.assignmentType === "Helper").map((h) => ({ id: h.id, label: h.fullName })),
+        ];
+        const helperNames = new Set(baseHelpersList.map((h) => h.label.toLowerCase()));
+        const browserHelpers = localDeliveries
+          .filter((delivery) => Boolean(delivery.helperName))
+          .flatMap((delivery) => delivery.helperName!.split(/[,/&]/).map((h) => h.trim()))
+          .filter(Boolean);
+        const extraHelpers = browserHelpers
+          .filter((name) => {
+            const key = name.toLowerCase();
+            if (helperNames.has(key)) return false;
+            helperNames.add(key);
+            return true;
+          })
+          .map((name) => ({ id: `helper-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, label: name }));
+        const mergedHelpers = [...baseHelpersList, ...extraHelpers].filter(
+          (helper, index, all) =>
+            all.findIndex((candidate) => candidate.label.toLowerCase() === helper.label.toLowerCase()) === index,
+        );
+
         const mergedReferences = {
           clients: mergedClients,
           trucks: mergedTrucks,
           drivers: [...(nextReferences.drivers ?? []), ...extraDrivers],
+          helpers: mergedHelpers,
         };
         setReferences(mergedReferences);
         setClientName(mergedReferences.clients[0]?.label ?? "");
@@ -259,7 +285,7 @@ export default function NewCompletedDeliveryPage() {
       clientName,
       plateNumber,
       truckTemperature: `${truckTemperature}°C`,
-      recordingDelayed: values.deliveryDate < deliveryDateWindow.max ? recordingDelayed : false,
+      recordingDelayed: values.deliveryDate < deliveryDateWindow.max,
       distanceKm: numberValue(values.distanceKm),
       fuelRate: numberValue(values.fuelRate),
       deliveryRate: numberValue(values.deliveryRate),
@@ -306,15 +332,15 @@ export default function NewCompletedDeliveryPage() {
       return;
     }
     if (helper1Name.trim().length < 2) {
-      setSubmitError("Enter the helper name.");
+      setSubmitError("Select a saved helper or enter a new helper name.");
+      return;
+    }
+    if (values.deliveryDate < "2024-01-01") {
+      setSubmitError("Delivery date cannot be earlier than company foundation year (2024).");
       return;
     }
     if (!isAdmin && (values.deliveryDate < deliveryDateWindow.min || values.deliveryDate > deliveryDateWindow.max)) {
       setSubmitError(`Delivery date must be between ${deliveryDateWindow.min} and ${deliveryDateWindow.max}.`);
-      return;
-    }
-    if (values.deliveryDate < deliveryDateWindow.max && recordingDelayed == null) {
-      setSubmitError("Confirm whether this delivery was recorded late.");
       return;
     }
     buildPayload();
@@ -361,9 +387,6 @@ export default function NewCompletedDeliveryPage() {
       rows: [
         { label: "Waybill", value: values.waybillNumber || "Not entered" },
         { label: "Delivery date", value: values.deliveryDate },
-        ...(values.deliveryDate < deliveryDateWindow.max
-          ? [{ label: "Late recording", value: recordingDelayed ? "Yes" : "No" }]
-          : []),
         { label: "Client", value: clientName || "Not selected" },
         { label: "Origin", value: values.origin || "Not entered" },
       ],
@@ -434,7 +457,7 @@ export default function NewCompletedDeliveryPage() {
       eyebrow: "FINANCIAL REVIEW",
       title: "Revenue and expenses",
       rows: [
-        { label: "Delivery Revenue", value: formatPeso(financialReview.revenue) },
+        { label: "Revenue", value: formatPeso(financialReview.revenue) },
         { label: "Store entry fees", value: formatPeso(financialReview.entryFees) },
         { label: "Trip expenses", value: formatPeso(financialReview.totalExpenses) },
         {
@@ -468,7 +491,6 @@ export default function NewCompletedDeliveryPage() {
     truckTemperature,
     values,
     deliveryDateWindow.max,
-    recordingDelayed,
   ]);
 
   const noReferences =
@@ -483,7 +505,7 @@ export default function NewCompletedDeliveryPage() {
           <Link className="back-link" href="/deliveries">← Back to deliveries</Link>
           <h1>Record delivery</h1>
           <p className="subtitle">
-            Record completed trip and store drop-offs.
+            Trip details and store drop-offs.
           </p>
         </div>
       </header>
@@ -497,39 +519,20 @@ export default function NewCompletedDeliveryPage() {
           <div className="delivery-field-grid delivery-trip-grid">
             <label>Waybill<input required value={values.waybillNumber} onChange={(event) => updateValue("waybillNumber", event.target.value)} placeholder="WB-2026-0001" /></label>
             <label>Delivery date
-              {isAdmin ? (
-                <span className="admin-date-override-pill" style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 500, color: "var(--color-accent, #d97706)" }}>
-                  (Admin: No date restriction)
-                </span>
-              ) : null}
               <span className="delivery-date-input">
                 <input
                   required
                   type="date"
-                  min={isAdmin ? undefined : deliveryDateWindow.min}
+                  min={isAdmin ? "2024-01-01" : deliveryDateWindow.min}
                   max={isAdmin ? undefined : deliveryDateWindow.max}
                   value={values.deliveryDate}
                   onChange={(event) => {
                     updateValue("deliveryDate", event.target.value);
-                    setRecordingDelayed(event.target.value < deliveryDateWindow.max ? null : false);
                   }}
                 />
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 3v3m10-3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
               </span>
             </label>
-            {values.deliveryDate < deliveryDateWindow.max ? (
-              <fieldset className="delivery-delay-confirmation">
-                <legend>Delayed recording?</legend>
-                <label>
-                  <input type="radio" name="recording-delayed" checked={recordingDelayed === true} onChange={() => setRecordingDelayed(true)} />
-                  Yes
-                </label>
-                <label>
-                  <input type="radio" name="recording-delayed" checked={recordingDelayed === false} onChange={() => setRecordingDelayed(false)} />
-                  No
-                </label>
-              </fieldset>
-            ) : null}
             <div className="client-field-group">
               <div className="client-field-header">
                 <label htmlFor={isNewClientMode ? "new-client-name-input" : undefined}>
@@ -653,6 +656,7 @@ export default function NewCompletedDeliveryPage() {
                       className="dropoff-remove"
                       onClick={() => setDropoffs((current) => current.filter((item) => item.id !== dropoff.id))}
                       aria-label={`Remove Store Drop-off #${index + 1}`}
+                      title={`Remove Store Drop-off #${index + 1}`}
                     >
                       × Remove
                     </button>
@@ -707,14 +711,14 @@ export default function NewCompletedDeliveryPage() {
           <FormHeading number="03" title="Revenue & expenses" />
           <div className="delivery-field-grid delivery-finance-grid">
 
-            {/* Delivery Revenue */}
+            {/* Revenue */}
             <div className="delivery-rate-banner wide">
               <div className="delivery-rate-banner-header">
-                <h3 className="delivery-finance-group-title">Delivery Revenue</h3>
+                <h3 className="delivery-finance-group-title">Revenue</h3>
               </div>
               <div className="delivery-rate-input-row">
                 <MoneyField
-                  label="Delivery revenue"
+                  label="Agreed revenue"
                   value={values.deliveryRate}
                   required
                   onChange={(value) => updateValue("deliveryRate", value)}
@@ -745,6 +749,7 @@ export default function NewCompletedDeliveryPage() {
                   <button
                     type="button"
                     className="secondary-button add-second-helper-btn"
+                    title="Add a second helper to this delivery crew"
                     onClick={() => {
                       setHasSecondHelper(true);
                       setExpenseStatuses((cur) => ({
@@ -814,15 +819,20 @@ export default function NewCompletedDeliveryPage() {
                     <span className="crew-role-pill helper">
                       {hasSecondHelper ? "Helper 1" : "Helper"}
                     </span>
-                    <input
-                      type="text"
-                      className="crew-name-input"
-                      placeholder="Helper name"
+                    <RoundedSelect
                       value={helper1Name}
-                      onChange={(e) => setHelper1Name(e.target.value)}
-                      required
-                      minLength={2}
-                      aria-label="Helper name"
+                      options={references.helpers.map((helper) => ({
+                        value: helper.label,
+                        label: helper.label,
+                      }))}
+                      onChange={setHelper1Name}
+                      ariaLabel="Helper name"
+                      className="crew-name-select"
+                      placeholder="Select or add helper"
+                      emptyMessage="No saved helpers"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Search or enter a new helper"
                     />
                   </div>
                   <div className="crew-expense-fields-row">
@@ -854,12 +864,20 @@ export default function NewCompletedDeliveryPage() {
                   <section className="crew-expense-group helper-2-card">
                     <div className="crew-card-title-row">
                       <span className="crew-role-pill helper-2">Helper 2</span>
-                      <input
-                        type="text"
-                        className="crew-name-input"
-                        placeholder="Helper 2 name (optional)"
+                      <RoundedSelect
                         value={helper2Name}
-                        onChange={(e) => setHelper2Name(e.target.value)}
+                        options={references.helpers.map((helper) => ({
+                          value: helper.label,
+                          label: helper.label,
+                        }))}
+                        onChange={setHelper2Name}
+                        ariaLabel="Helper 2 name"
+                        className="crew-name-select"
+                        placeholder="Select or add helper"
+                        emptyMessage="No saved helpers"
+                        searchable
+                        allowCustomValue
+                        searchPlaceholder="Search or enter a new helper"
                       />
                       <button
                         type="button"
@@ -904,9 +922,9 @@ export default function NewCompletedDeliveryPage() {
           </div>
 
           <div className="delivery-financial-review" aria-label="Financial review">
-            <div><span>Delivery Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
+            <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
             <div><span>Store Entry Fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
-            <div><span>Trip Expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
+            <div><span>Expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
             <div className={financialReview.netIncome != null && financialReview.netIncome < 0 ? "negative" : "positive"}><span>Net Profit</span><strong>{formatPeso(financialReview.netIncome)}</strong></div>
           </div>
         </section>
@@ -956,6 +974,7 @@ export default function NewCompletedDeliveryPage() {
               onClick={() => setPreviewing(false)}
               aria-label="Back to edit"
               data-tooltip="Back to edit"
+              title="Back to edit"
             >
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="m14.7 6.3 3 3M5 19l3.7-.8 9-9a2.1 2.1 0 0 0-3-3l-9 9L5 19Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -968,6 +987,7 @@ export default function NewCompletedDeliveryPage() {
               onClick={recordDelivery}
               aria-label={submitting ? "Recording delivery" : "Confirm and record delivery"}
               data-tooltip={submitting ? "Recording delivery" : "Confirm and record"}
+              title={submitting ? "Recording delivery" : "Confirm and record delivery"}
             >
               {submitting ? (
                 <span className="record-preview-spinner" aria-hidden="true" />
@@ -1038,6 +1058,7 @@ function DeliveryFilePreview({
             rel="noreferrer"
             aria-label={`View ${file.name}`}
             data-tooltip="View file"
+            title="View file"
           >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M3.5 12s3.1-5 8.5-5 8.5 5 8.5 5-3.1 5-8.5 5-8.5-5-8.5-5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />

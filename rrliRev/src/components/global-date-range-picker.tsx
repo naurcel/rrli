@@ -54,6 +54,7 @@ const monthNames = MONTH_NAMES;
 const weekDays = WEEK_DAYS;
 const formatShort = formatShortDate;
 const isBetween = isBetweenDates;
+const COMPANY_FOUNDATION_YEAR = 2024;
 
 const DATE_RANGE_STORAGE_KEY = "routex.global-date-range.v1";
 const DATE_RANGE_CHANGED_EVENT = "routex:date-range-changed";
@@ -273,6 +274,7 @@ export function GlobalDateRangePicker() {
   }, [month]);
 
   const chooseDate = (date: Date) => {
+    if (date.getFullYear() < COMPANY_FOUNDATION_YEAR) return;
     const normalized = startOfDay(date);
 
     if (!draftStart || (draftStart && draftEnd)) {
@@ -323,6 +325,7 @@ export function GlobalDateRangePicker() {
         className="global-date-filter"
         type="button"
         aria-label={`Date range: ${label}`}
+        title={`Filter workspace by date: ${label}`}
         aria-haspopup="dialog"
         aria-controls={dialogId}
         aria-expanded={open}
@@ -366,9 +369,13 @@ export function GlobalDateRangePicker() {
                 <button
                   type="button"
                   aria-label="Previous year"
-                  onClick={() =>
-                    setMonth(new Date(month.getFullYear() - 1, month.getMonth(), 1))
-                  }
+                  title="Previous year"
+                  disabled={month.getFullYear() <= COMPANY_FOUNDATION_YEAR}
+                  onClick={() => {
+                    if (month.getFullYear() > COMPANY_FOUNDATION_YEAR) {
+                      setMonth(new Date(month.getFullYear() - 1, month.getMonth(), 1));
+                    }
+                  }}
                 >
                   ‹
                 </button>
@@ -376,6 +383,7 @@ export function GlobalDateRangePicker() {
                 <button
                   type="button"
                   aria-label="Next year"
+                  title="Next year"
                   onClick={() =>
                     setMonth(new Date(month.getFullYear() + 1, month.getMonth(), 1))
                   }
@@ -406,9 +414,14 @@ export function GlobalDateRangePicker() {
                 <button
                   type="button"
                   aria-label="Previous month"
-                  onClick={() =>
-                    setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
-                  }
+                  title="Previous month"
+                  disabled={month.getFullYear() <= COMPANY_FOUNDATION_YEAR && month.getMonth() <= 0}
+                  onClick={() => {
+                    const prev = new Date(month.getFullYear(), month.getMonth() - 1, 1);
+                    if (prev.getFullYear() >= COMPANY_FOUNDATION_YEAR) {
+                      setMonth(prev);
+                    }
+                  }}
                 >
                   ‹
                 </button>
@@ -423,6 +436,7 @@ export function GlobalDateRangePicker() {
                 <button
                   type="button"
                   aria-label="Next month"
+                  title="Next month"
                   onClick={() =>
                     setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
                   }
@@ -434,6 +448,7 @@ export function GlobalDateRangePicker() {
                 className="date-picker-month-mode-toggle"
                 type="button"
                 aria-label="Choose month and year"
+                title="Choose month and year"
                 onClick={() => setViewMode("months")}
               />
               <div className="date-picker-weekdays" aria-hidden="true">
@@ -448,6 +463,7 @@ export function GlobalDateRangePicker() {
               >
                 {days.map((date) => {
                   const current = date.getMonth() === month.getMonth();
+                  const isBeforeFoundation = date.getFullYear() < COMPANY_FOUNDATION_YEAR;
                   const selected = Boolean(
                     (draftStart && dayKey(date) === dayKey(draftStart)) ||
                       (draftEnd && dayKey(date) === dayKey(draftEnd)),
@@ -465,7 +481,8 @@ export function GlobalDateRangePicker() {
                       }${inRange ? "in-range" : ""}`}
                       aria-label={date.toDateString()}
                       aria-pressed={selected}
-                      onClick={() => chooseDate(date)}
+                      disabled={isBeforeFoundation}
+                      onClick={() => !isBeforeFoundation && chooseDate(date)}
                     >
                       {date.getDate()}
                     </button>

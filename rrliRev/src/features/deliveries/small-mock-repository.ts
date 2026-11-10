@@ -4,7 +4,10 @@ import path from "node:path";
 import {
   calculateProfitMargin,
   calculateTripExpenseTotal,
+  type DeliveryTripRecord,
   derivePodVerificationStatus,
+  isDeliveryFinanciallyComplete,
+  isDeliveryIncomplete,
   summarizeTruckProfitability,
 } from "./delivery-domain.ts";
 import type { DeliveryListQuery } from "./delivery-query.ts";
@@ -14,7 +17,7 @@ import {
   type SmallMockDelivery,
 } from "./small-mock-database.ts";
 import { getFleetTrucks } from "./truck-registry.ts";
-import { getFleetDrivers, registerFleetDriver } from "./driver-registry.ts";
+import { getFleetCrew, getFleetDrivers, registerFleetDriver } from "./driver-registry.ts";
 import type {
   DeliveryLedgerItem,
   DeliveryListResult,
@@ -154,10 +157,10 @@ function compareValues(
   return direction === "asc" ? comparison : -comparison;
 }
 
-export function listSmallMockDeliveryRecords(input: DeliveryListQuery): DeliveryListResult {
-  const search = input.search.toLocaleLowerCase().trim();
+export function listSmallMockDeliveryRecords(input: Partial<DeliveryListQuery> = {}): DeliveryListResult {
+  const search = (input.search ?? "").toLocaleLowerCase().trim();
   const searchClean = search.replace(/\s+/g, "");
-  const matching = ledgerItems().filter((item) => {
+  const matchingBase = ledgerItems().filter((item) => {
     const plateClean = item.plateNumber.toLocaleLowerCase().replace(/\s+/g, "");
     const searchable = [
       item.waybillNumber,
@@ -192,30 +195,57 @@ export function listSmallMockDeliveryRecords(input: DeliveryListQuery): Delivery
         (searchClean.length > 0 && plateClean.includes(searchClean))) &&
       matchesClient &&
       matchesTruck &&
-      (!input.status || item.deliveryStatus === input.status) &&
       (!input.podStatus || item.podStatus === input.podStatus) &&
       (!input.dateFrom || item.deliveryDate >= input.dateFrom) &&
       (!input.dateTo || item.deliveryDate <= input.dateTo)
     );
   });
 
+  const statusCounts = {
+    all: matchingBase.length,
+    completed: matchingBase.filter((item) => !isDeliveryIncomplete(item)).length,
+    incomplete: matchingBase.filter((item) => isDeliveryIncomplete(item)).length,
+  };
+
+  const matchesStatus = (item: DeliveryTripRecord) => {
+    if (!input.status || input.status === "all") return true;
+    if (input.status.toLowerCase() === "completed") return !isDeliveryIncomplete(item);
+    if (input.status.toLowerCase() === "incomplete") return isDeliveryIncomplete(item);
+    const customStatus = (item as unknown as { deliveryStatus?: string }).deliveryStatus;
+    return Boolean(customStatus && customStatus.toLowerCase() === input.status.toLowerCase());
+  };
+
+  const matchesFinancial = (item: DeliveryTripRecord) => {
+    if (!input.financialState || input.financialState === "all") return true;
+    if (input.financialState === "finalized") return isDeliveryFinanciallyComplete(item);
+    if (input.financialState === "incomplete") return !isDeliveryFinanciallyComplete(item);
+    return item.financialState === input.financialState;
+  };
+
+  const matching = matchingBase.filter((item) => matchesStatus(item) && matchesFinancial(item));
+
+  const sort = input.sort ?? "delivery_date";
+  const direction = input.direction ?? "desc";
   matching.sort((left, right) => {
     const compared = compareValues(
-      sortableValue(left, input.sort),
-      sortableValue(right, input.sort),
-      input.direction,
+      sortableValue(left, sort),
+      sortableValue(right, sort),
+      direction,
     );
     return compared || left.id.localeCompare(right.id);
   });
 
-  const start = (input.page - 1) * input.pageSize;
+  const page = input.page ?? 1;
+  const pageSize = input.pageSize ?? 10;
+  const start = (page - 1) * pageSize;
   const total = matching.length;
   return {
-    items: matching.slice(start, start + input.pageSize),
+    items: matching.slice(start, start + pageSize),
     total,
-    page: input.page,
-    pageSize: input.pageSize,
-    pageCount: Math.max(1, Math.ceil(total / input.pageSize)),
+    statusCounts,
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
     filters: {
       clients: getMockClients().map((client) => ({
         id: client.id,
@@ -240,6 +270,20 @@ export function listSmallMockDeliveryRecords(input: DeliveryListQuery): Delivery
       ].filter((driver, index, all) =>
         all.findIndex((candidate) => candidate.label.toLowerCase() === driver.label.toLowerCase()) === index
       ),
+      helpers: [
+        ...SMALL_MOCK_DATABASE.helpers.map((helper) => ({ id: helper.id, label: helper.fullName })),
+        ...getFleetCrew().filter((c) => c.assignmentType === "Helper").map((h) => ({ id: h.id, label: h.fullName })),
+        ...dynamicMockDeliveries
+          .filter((delivery) => Boolean(delivery.helperName))
+          .flatMap((delivery) => delivery.helperName!.split(/[,/&]/).map((h) => h.trim()))
+          .filter(Boolean)
+          .map((name) => ({
+            id: `helper-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+            label: name,
+          })),
+      ].filter((helper, index, all) =>
+        all.findIndex((candidate) => candidate.label.toLowerCase() === helper.label.toLowerCase()) === index
+      ),
     },
   };
 }
@@ -251,7 +295,7 @@ export function getSmallMockProfitabilitySummary(input: {
   const eligible = getAllMockDeliveries()
     .map((delivery) => delivery.record)
     .filter((delivery) =>
-      delivery.financialState === "finalized" &&
+      isDeliveryFinanciallyComplete(delivery) &&
       (!input.dateFrom || delivery.deliveryDate >= input.dateFrom) &&
       (!input.dateTo || delivery.deliveryDate <= input.dateTo)
     );
@@ -444,6 +488,11 @@ export function correctSmallMockDelivery(input: {
   }
   if (input.changes.expenses && typeof input.changes.expenses === "object") {
     Object.assign(rec.expenses, input.changes.expenses);
+    for (const [k, v] of Object.entries(input.changes.expenses as Record<string, unknown>)) {
+      if (typeof v === "number" && rec.expenseStates[k as keyof typeof rec.expenseStates] === "unknown") {
+        rec.expenseStates[k as keyof typeof rec.expenseStates] = "confirmed";
+      }
+    }
   }
   if (input.changes.expenseStates && typeof input.changes.expenseStates === "object") {
     Object.assign(rec.expenseStates, input.changes.expenseStates);
@@ -497,9 +546,10 @@ export function correctSmallMockDelivery(input: {
         ? "finalized"
         : "incomplete";
   } else {
-    // A correction without explicit financialState reopens the financial record.
-    // Finalization remains a separate, explicit and audited operation.
-    rec.financialState = "incomplete";
+    // When editing a delivery: once all expenses are resolved/completed,
+    // the delivery is automatically finalized and included in computations.
+    rec.financialState =
+      rec.financialIntegrityIssues.length === 0 ? "finalized" : "incomplete";
   }
   rec.version += 1;
 

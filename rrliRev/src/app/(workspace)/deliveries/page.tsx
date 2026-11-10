@@ -34,6 +34,9 @@ import {
   calculateProfitMargin,
   calculateTripExpenseTotal,
   derivePodVerificationStatus,
+  getDeliveryIncompleteIssues,
+  isDeliveryFinanciallyComplete,
+  isDeliveryIncomplete,
 } from "@/features/deliveries/delivery-domain";
 import type {
   DeliveryFilterOption,
@@ -51,6 +54,7 @@ import {
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
 import { deleteDeliveryRecord } from "@/features/deliveries/delivery-deletion-client";
+import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
 
 function toDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -171,12 +175,14 @@ export default function DeliveriesPage() {
   const [clients, setClients] = useState<DeliveryFilterOption[]>([]);
   const [trucks, setTrucks] = useState<DeliveryFilterOption[]>([]);
   const [drivers, setDrivers] = useState<DeliveryFilterOption[]>([]);
+  const [helpers, setHelpers] = useState<DeliveryFilterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedTrucks, setSelectedTrucks] = useState<string[]>([]);
   const [sort, setSort] = useState("delivery_date:desc");
+  const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "incomplete">("all");
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [total, setTotal] = useState(0);
@@ -185,7 +191,6 @@ export default function DeliveriesPage() {
   const [isDeletingDelivery, setIsDeletingDelivery] = useState(false);
   const [deleteDeliveryError, setDeleteDeliveryError] = useState<string | null>(null);
   const [activeKpi, setActiveKpi] = useState<"earnings" | "expenses" | "profit" | null>(null);
-  const [financialActionPending, setFinancialActionPending] = useState(false);
   const [financialActionMessage, setFinancialActionMessage] = useState<string | null>(null);
 
   const [correctingTrip, setCorrectingTrip] = useState<DeliveryLedgerItem | null>(null);
@@ -564,8 +569,8 @@ export default function DeliveriesPage() {
 
       setFinancialActionMessage(
         nextFinancialState === "finalized"
-          ? `Financial details saved and delivery finalized (Version ${newVersion}). Reason: "${correctionReason.trim()}".`
-          : `Financial correction recorded (Version ${newVersion}). Reason: "${correctionReason.trim()}".`,
+          ? `Delivery updated and financials resolved (Version ${newVersion}). Reason: "${correctionReason.trim()}".`
+          : `Delivery updated with pending unresolved expenses (Version ${newVersion}). Reason: "${correctionReason.trim()}".`,
       );
       setSelectedTrip(updated);
       upsertBrowserPreviewDelivery(updated);
@@ -608,6 +613,7 @@ export default function DeliveriesPage() {
       if (selectedTrucks.length > 0) params.set("truckIds", selectedTrucks.join(","));
       if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
       if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+      if (statusFilter !== "all") params.set("status", statusFilter);
       const [sortField, direction] = sort.split(":");
       params.set("sort", sortField);
       params.set("direction", direction);
@@ -626,6 +632,7 @@ export default function DeliveriesPage() {
               clients?: DeliveryFilterOption[];
               trucks?: DeliveryFilterOption[];
               drivers?: DeliveryFilterOption[];
+              helpers?: DeliveryFilterOption[];
             };
             source?: string;
           };
@@ -637,6 +644,7 @@ export default function DeliveriesPage() {
                 search: searchQuery,
                 clientIds: selectedClients.length > 0 ? selectedClients : undefined,
                 truckIds: selectedTrucks.length > 0 ? selectedTrucks : undefined,
+                status: statusFilter !== "all" ? statusFilter : undefined,
                 dateFrom: range.startDate ? toDateKey(range.startDate) : undefined,
                 dateTo: range.endDate ? toDateKey(range.endDate) : undefined,
               })
@@ -673,6 +681,33 @@ export default function DeliveriesPage() {
             }
           }
           setDrivers([...remoteDrivers, ...extraPreviewDrivers]);
+
+          const remoteHelpers = data.filters?.helpers ?? [];
+          const baseHelpersList: DeliveryFilterOption[] = [
+            ...remoteHelpers,
+            ...BASE_HELPERS.map((h) => ({ id: h.id, label: h.fullName })),
+            ...getFleetCrew().filter((c) => c.assignmentType === "Helper").map((h) => ({ id: h.id, label: h.fullName })),
+          ];
+          const existingHelperNames = new Set(baseHelpersList.map((h) => h.label.toLowerCase()));
+          const extraPreviewHelpers: DeliveryFilterOption[] = [];
+          for (const item of local) {
+            if (item.helperName) {
+              for (const name of item.helperName.split(/[,/&]/).map((h) => h.trim()).filter(Boolean)) {
+                if (!existingHelperNames.has(name.toLowerCase())) {
+                  existingHelperNames.add(name.toLowerCase());
+                  extraPreviewHelpers.push({
+                    id: `helper-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+                    label: name,
+                  });
+                }
+              }
+            }
+          }
+          const mergedHelpers = [...baseHelpersList, ...extraPreviewHelpers].filter(
+            (helper, index, all) =>
+              all.findIndex((candidate) => candidate.label.toLowerCase() === helper.label.toLowerCase()) === index,
+          );
+          setHelpers(mergedHelpers);
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
@@ -686,46 +721,77 @@ export default function DeliveriesPage() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [page, range, searchQuery, selectedClients, selectedTrucks, sort]);
+  }, [page, range, searchQuery, selectedClients, selectedTrucks, sort, statusFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [range, searchQuery, selectedClients, selectedTrucks, sort]);
+  }, [range, searchQuery, selectedClients, selectedTrucks, sort, statusFilter]);
 
   useEffect(() => {
-    const requestedId = new URLSearchParams(window.location.search).get("edit");
-    if (!requestedId || handledEditLink.current === requestedId) return;
-    const requestedTrip =
-      deliveries.find((trip) => trip.id === requestedId) ??
-      readBrowserPreviewDeliveries().find((trip) => trip.id === requestedId);
-    if (!requestedTrip) return;
-    handledEditLink.current = requestedId;
-    openCorrectionModal(requestedTrip);
+    const params = new URLSearchParams(window.location.search);
+    const requestedId = params.get("edit");
+    const createdId = params.get("created");
+    if (requestedId && handledEditLink.current !== requestedId) {
+      const requestedTrip =
+        deliveries.find((trip) => trip.id === requestedId) ??
+        readBrowserPreviewDeliveries().find((trip) => trip.id === requestedId);
+      if (requestedTrip) {
+        handledEditLink.current = requestedId;
+        openCorrectionModal(requestedTrip);
+      }
+    } else if (createdId && handledEditLink.current !== createdId) {
+      const createdTrip =
+        deliveries.find((trip) => trip.id === createdId) ??
+        readBrowserPreviewDeliveries().find((trip) => trip.id === createdId);
+      if (createdTrip) {
+        handledEditLink.current = createdId;
+        setSelectedTrip(createdTrip);
+      }
+    }
   }, [deliveries]);
 
-  const filteredDeliveries = useMemo(() => {
+  const sortedDeliveriesBase = useMemo(() => {
     const [sortField, direction] = sort.split(":") as [string, TableSortDirection];
     return sortDeliveryLedgerItems(deliveries, sortField, direction || "desc");
   }, [deliveries, sort]);
 
+  const statusCounts = useMemo(() => {
+    const all = sortedDeliveriesBase.length;
+    const completed = sortedDeliveriesBase.filter((d) => !isDeliveryIncomplete(d)).length;
+    const incomplete = sortedDeliveriesBase.filter(isDeliveryIncomplete).length;
+    return { all, completed, incomplete };
+  }, [sortedDeliveriesBase]);
+
+  const filteredDeliveries = useMemo(() => {
+    if (statusFilter === "completed") {
+      return sortedDeliveriesBase.filter((d) => !isDeliveryIncomplete(d));
+    }
+    if (statusFilter === "incomplete") {
+      return sortedDeliveriesBase.filter(isDeliveryIncomplete);
+    }
+    return sortedDeliveriesBase;
+  }, [sortedDeliveriesBase, statusFilter]);
+
   const summary = useMemo(() => {
-    const finalized = filteredDeliveries.filter((item) => item.financialState === "finalized");
-    const rateTotal = finalized.reduce((sum, item) => sum + (item.deliveryRate ?? 0), 0);
-    const expenseTotal = finalized.reduce((sum, item) => sum + (item.totalExpenses ?? 0), 0);
+    const financiallyComplete = sortedDeliveriesBase.filter(isDeliveryFinanciallyComplete);
+    const rateTotal = financiallyComplete.reduce((sum, item) => sum + (item.deliveryRate ?? 0), 0);
+    const expenseTotal = financiallyComplete.reduce((sum, item) => sum + (item.totalExpenses ?? 0), 0);
     const netTotal = rateTotal - expenseTotal;
-    const stopCount = filteredDeliveries.reduce(
+    const stopCount = sortedDeliveriesBase.reduce(
       (sum, item) => sum + item.dropoffs.length,
       0,
     );
     return { rateTotal, expenseTotal, netTotal, stopCount };
-  }, [filteredDeliveries]);
+  }, [sortedDeliveriesBase]);
 
   const kpiBreakdown = useMemo(() => {
-    const finalized = filteredDeliveries.filter((d) => d.financialState === "finalized");
-    const incomplete = filteredDeliveries.filter((d) => d.financialState === "incomplete");
-    const totalTrips = filteredDeliveries.length;
-    const finalizedCount = finalized.length;
-    const incompleteCount = incomplete.length;
+    const financiallyComplete = sortedDeliveriesBase.filter(isDeliveryFinanciallyComplete);
+    const financiallyIncomplete = sortedDeliveriesBase.filter((d) => !isDeliveryFinanciallyComplete(d));
+    const totalTrips = sortedDeliveriesBase.length;
+    const financiallyCompleteCount = financiallyComplete.length;
+    const financiallyIncompleteCount = financiallyIncomplete.length;
+    const completedCount = statusCounts.completed;
+    const incompleteCount = statusCounts.incomplete;
     const totalStops = summary.stopCount;
 
     let diesel = 0;
@@ -745,7 +811,7 @@ export default function DeliveriesPage() {
     let profitableTrips = 0;
     let lossOrEvenTrips = 0;
 
-    for (const trip of finalized) {
+    for (const trip of financiallyComplete) {
       const rate = trip.deliveryRate ?? 0;
       diesel += trip.expenses.dieselExpenses ?? 0;
       toll += trip.expenses.tollGateExpenses ?? 0;
@@ -781,16 +847,19 @@ export default function DeliveriesPage() {
     const computedExpenseTotal = diesel + toll + entryFees + crewTotal + otherExpenses;
     const marginPercent = summary.rateTotal > 0 ? (summary.netTotal / summary.rateTotal) * 100 : null;
 
-    const avgRevenuePerTrip = finalizedCount > 0 ? summary.rateTotal / finalizedCount : 0;
+    const avgRevenuePerTrip = financiallyCompleteCount > 0 ? summary.rateTotal / financiallyCompleteCount : 0;
     const avgRevenuePerStop = totalStops > 0 ? summary.rateTotal / totalStops : 0;
-    const avgExpensePerTrip = finalizedCount > 0 ? summary.expenseTotal / finalizedCount : 0;
+    const avgExpensePerTrip = financiallyCompleteCount > 0 ? summary.expenseTotal / financiallyCompleteCount : 0;
     const avgExpensePerStop = totalStops > 0 ? summary.expenseTotal / totalStops : 0;
-    const avgProfitPerTrip = finalizedCount > 0 ? summary.netTotal / finalizedCount : 0;
+    const avgProfitPerTrip = financiallyCompleteCount > 0 ? summary.netTotal / financiallyCompleteCount : 0;
 
     return {
       totalTrips,
-      finalizedCount,
+      finalizedCount: financiallyCompleteCount,
       incompleteCount,
+      financiallyCompleteCount,
+      financiallyIncompleteCount,
+      completedCount,
       totalStops,
       diesel,
       toll,
@@ -815,7 +884,7 @@ export default function DeliveriesPage() {
       avgExpensePerStop,
       avgProfitPerTrip,
     };
-  }, [filteredDeliveries, summary]);
+  }, [sortedDeliveriesBase, statusCounts, summary]);
 
   const kpiDrawerSections = useMemo<DetailSection[]>(() => {
     if (!activeKpi) return [];
@@ -834,10 +903,10 @@ export default function DeliveriesPage() {
       return [
         {
           eyebrow: "CALCULATION FORMULA",
-          title: "Delivery Revenue",
+          title: "Revenue",
           rows: [
-            { label: "Formula", value: "∑ (Delivery Revenue for all Finalized Deliveries)" },
-            { label: "Delivery Revenue", value: formatPeso(summary.rateTotal), tone: "success" },
+            { label: "Formula", value: "∑ (Revenue for all Finalized Deliveries)" },
+            { label: "Revenue", value: formatPeso(summary.rateTotal), tone: "success" },
             { label: "Finalized Trips", value: `${kpiBreakdown.finalizedCount} of ${kpiBreakdown.totalTrips} records` },
             {
               label: "Incomplete Financials",
@@ -947,9 +1016,9 @@ export default function DeliveriesPage() {
           eyebrow: "CALCULATION FORMULA",
           title: "Net Profit Calculation",
           rows: [
-            { label: "Profit Equation", value: "Delivery Revenue − Trip Expenses" },
-            { label: "Delivery Revenue (+)", value: formatPeso(summary.rateTotal), tone: "success" },
-            { label: "Trip Expenses (−)", value: formatPeso(summary.expenseTotal), tone: "warning" },
+            { label: "Profit Equation", value: "Revenue − Expenses" },
+            { label: "Revenue (+)", value: formatPeso(summary.rateTotal), tone: "success" },
+            { label: "Expenses (−)", value: formatPeso(summary.expenseTotal), tone: "warning" },
             {
               label: "Net Profit (=)",
               value: formatPeso(summary.netTotal),
@@ -1003,14 +1072,14 @@ export default function DeliveriesPage() {
       case "earnings":
         return {
           eyebrow: "METRIC BREAKDOWN & CALCULATION",
-          title: "Delivery Revenue",
+          title: "Revenue",
           statusLabel: formatPeso(summary.rateTotal),
           statusTone: "success" as const,
         };
       case "expenses":
         return {
           eyebrow: "METRIC BREAKDOWN & CALCULATION",
-          title: "Trip Expenses",
+          title: "Expenses",
           statusLabel: formatPeso(summary.expenseTotal),
           statusTone: "warning" as const,
         };
@@ -1032,61 +1101,6 @@ export default function DeliveriesPage() {
   const updateTableSort = (key: string, direction: TableSortDirection) => setSort(`${key}:${direction}`);
   const resetTableSort = () => setSort("delivery_date:desc");
 
-  async function finalizeFinancials() {
-    if (!selectedTrip || financialActionPending) return;
-    setFinancialActionPending(true);
-    setFinancialActionMessage(null);
-    try {
-      const response = await fetch("/api/deliveries", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: "finalize_financials",
-          deliveryId: selectedTrip.id,
-          expectedVersion: selectedTrip.version,
-          idempotencyKey: crypto.randomUUID(),
-          fallbackRecord: selectedTrip,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        message?: string;
-        code?: string;
-        result?: { version?: number };
-      };
-      let newVersion = selectedTrip.version + 1;
-      if (!response.ok || !payload.ok) {
-        const hasBrowserRecord = readBrowserPreviewDeliveries().some(
-          (item) => item.id === selectedTrip.id,
-        );
-        const isNotFound =
-          response.status === 404 ||
-          payload.code === "NOT_FOUND" ||
-          String(payload.message).includes("NOT_FOUND") ||
-          String(payload.message).toLowerCase().includes("delivery_not_found");
-
-        if (!isNotFound || !hasBrowserRecord) {
-          throw new Error(payload.message ?? "Unable to finalize financials.");
-        }
-      } else {
-        newVersion = payload.result?.version ?? selectedTrip.version + 1;
-      }
-      const updated = {
-        ...selectedTrip,
-        financialState: "finalized" as const,
-        version: newVersion,
-      };
-      setSelectedTrip(updated);
-      upsertBrowserPreviewDelivery(updated);
-      setDeliveries((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
-      setFinancialActionMessage("Financials finalized and recorded in the audit history.");
-    } catch (reason) {
-      setFinancialActionMessage(reason instanceof Error ? reason.message : "Unable to finalize financials.");
-    } finally {
-      setFinancialActionPending(false);
-    }
-  }
-
   const drawerSections: DetailSection[] = useMemo(() => {
     if (!selectedTrip) {
       return [];
@@ -1100,14 +1114,27 @@ export default function DeliveriesPage() {
         title: "Delivery Overview",
         eyebrow: "Trip details",
         rows: [
-          { label: "Waybill Number", value: selectedTrip.waybillNumber },
-          { label: "Delivery Date", value: selectedTrip.deliveryDate },
-          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const }] : []),
-          { label: "Client Account", value: selectedTrip.clientName },
-          { label: "Origin Hub", value: selectedTrip.origin },
-          { label: "Distance", value: `${selectedTrip.distanceKm} km` },
-          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L` },
-          { label: "Delivery Status", value: selectedTrip.deliveryStatus || "Completed" },
+          { label: "Waybill Number", value: selectedTrip.waybillNumber, tooltip: `Waybill tracking code #${selectedTrip.waybillNumber}` },
+          { label: "Delivery Date", value: selectedTrip.deliveryDate, tooltip: "Operational dispatch and store completion date" },
+          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const, tooltip: "Delivery was submitted past the standard operational recording window" }] : []),
+          { label: "Client Account", value: selectedTrip.clientName, tooltip: `Freight client account: ${selectedTrip.clientName}` },
+          { label: "Origin Hub", value: selectedTrip.origin, tooltip: `Origin facility: ${selectedTrip.origin}` },
+          { label: "Distance", value: `${selectedTrip.distanceKm} km`, tooltip: `Transit distance: ${selectedTrip.distanceKm} km` },
+          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L`, tooltip: `Diesel purchase benchmark: ${formatPeso(selectedTrip.fuelRate)}/liter` },
+          {
+            label: "Delivery Status",
+            value: !isDeliveryIncomplete(selectedTrip)
+              ? "Completed"
+              : !isDeliveryFinanciallyComplete(selectedTrip)
+                ? "Incomplete (Unconfirmed Expenses)"
+                : "Incomplete (Missing POD)",
+            tone: isDeliveryIncomplete(selectedTrip) ? "warning" : undefined,
+            tooltip: !isDeliveryIncomplete(selectedTrip)
+              ? "Delivery completed with all trip expenses confirmed and POD attached"
+              : !isDeliveryFinanciallyComplete(selectedTrip)
+                ? `Incomplete delivery: Unconfirmed expenses (${selectedTrip.financialIntegrityIssues.join(", ") || "requires confirmation"}). Click 'Edit delivery' to complete.`
+                : "Incomplete delivery: Missing Proof of Delivery (POD) documents for store drop-offs.",
+          },
         ],
       },
       {
@@ -1152,7 +1179,6 @@ export default function DeliveriesPage() {
         title: "POD & Supporting Documents",
         eyebrow: "Stop-level files",
         fullWidth: true,
-        description: "Attach or view POD documents for each drop-off. Click 'Pending upload' to attach files inline.",
         customContent: (
           <DeliveryPodDocuments
             trip={selectedTrip}
@@ -1179,7 +1205,7 @@ export default function DeliveriesPage() {
           <div>
             <h1>Deliveries</h1>
             <p className="subtitle">
-              Review completed trips, costs, drop-offs, and POD status.
+              Completed trips, drop-offs, costs, and PODs.
             </p>
           </div>
           <div className="fleet-intro-actions">
@@ -1189,6 +1215,7 @@ export default function DeliveriesPage() {
                 href="/deliveries/import"
                 aria-label="Import an Excel trip report"
                 data-tooltip="Import an Excel trip report"
+                title="Import an Excel trip report"
               >
                 Import
               </Link>
@@ -1199,6 +1226,7 @@ export default function DeliveriesPage() {
                 href="/deliveries/new"
                 aria-label="Record a completed delivery and its trip details"
                 data-tooltip="Record a completed delivery and its trip details"
+                title="Record a completed delivery and its trip details"
               >
                 Record delivery
               </Link>
@@ -1256,15 +1284,15 @@ export default function DeliveriesPage() {
               setActiveKpi((curr) => (curr === "earnings" ? null : "earnings"));
             }}
             aria-expanded={activeKpi === "earnings"}
-            aria-label="Delivery revenue breakdown and calculation"
+            aria-label="Revenue breakdown and calculation"
           >
             <div className="stat-card-header">
-              <span className="stat-label">DELIVERY REVENUE</span>
+              <span className="stat-label">REVENUE</span>
               <span className="kpi-click-pill">Breakdown ›</span>
             </div>
             <strong>{formatPeso(summary.rateTotal)}</strong>
             <span className="stat-meta positive">
-              {filteredDeliveries.length} trips · {summary.stopCount} store drop-offs
+              {kpiBreakdown.financiallyCompleteCount} finalized {kpiBreakdown.financiallyCompleteCount === 1 ? "trip" : "trips"} · {summary.stopCount} drop-offs
             </span>
           </button>
           <button
@@ -1278,7 +1306,7 @@ export default function DeliveriesPage() {
             aria-label="Trip expenses breakdown and calculation"
           >
             <div className="stat-card-header">
-              <span className="stat-label">TRIP EXPENSES</span>
+              <span className="stat-label">EXPENSES</span>
               <span className="kpi-click-pill">Breakdown ›</span>
             </div>
             <strong>{formatPeso(summary.expenseTotal)}</strong>
@@ -1302,25 +1330,50 @@ export default function DeliveriesPage() {
             </div>
             <strong>{formatPeso(summary.netTotal)}</strong>
             <span className={`stat-meta ${summary.netTotal >= 0 ? "positive" : "warning"}`}>
-              {kpiBreakdown.marginPercent !== null ? `${formatPercent(kpiBreakdown.marginPercent)} profit margin · ` : ""}Profit for shown records
+              {kpiBreakdown.marginPercent !== null ? `${formatPercent(kpiBreakdown.marginPercent)} profit margin · ` : ""}For {kpiBreakdown.financiallyCompleteCount} finalized records
             </span>
           </button>
         </section>
-        <p className="delivery-summary-scope">
-          Totals reflect only the delivery records shown below.
-        </p>
 
         <section className={`records-card${loading ? " is-loading" : ""}`} aria-label="Completed deliveries table">
           <div className="records-heading">
             <div className="records-heading-copy">
-              <h2>Completed Delivery Ledger</h2>
-              <p>Filter, sort, and inspect completed multi-store trips.</p>
+              <h2>Delivery Ledger</h2>
+              <p>Operational delivery trips.</p>
             </div>
-            <div className="records-heading-meta">
-              <span className="ledger-total-badge">
-                {total} total trips · {summary.stopCount} store drop-offs
-              </span>
-            </div>
+          </div>
+
+          <div className="delivery-status-tabs" role="tablist" aria-label="Filter deliveries by completion status">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={statusFilter === "all"}
+              className={`delivery-status-tab${statusFilter === "all" ? " active" : ""}`}
+              onClick={() => setStatusFilter("all")}
+            >
+              All
+              <span className="tab-count-badge">{statusCounts.all}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={statusFilter === "completed"}
+              className={`delivery-status-tab${statusFilter === "completed" ? " active" : ""}`}
+              onClick={() => setStatusFilter("completed")}
+            >
+              Completed
+              <span className="tab-count-badge">{statusCounts.completed}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={statusFilter === "incomplete"}
+              className={`delivery-status-tab is-incomplete-tab${statusFilter === "incomplete" ? " active" : ""}`}
+              onClick={() => setStatusFilter("incomplete")}
+            >
+              Incomplete
+              <span className="tab-count-badge">{statusCounts.incomplete}</span>
+            </button>
           </div>
 
           <div className="filters">
@@ -1394,6 +1447,7 @@ export default function DeliveriesPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label={`Remove filter for ${label}`}
+                      title={`Remove filter for ${label}`}
                       onClick={() => setSelectedClients((prev) => prev.filter((item) => item !== id))}
                     >
                       ×
@@ -1417,6 +1471,7 @@ export default function DeliveriesPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label={`Remove filter for ${label}`}
+                      title={`Remove filter for ${label}`}
                       onClick={() => setSelectedTrucks((prev) => prev.filter((item) => item !== id))}
                     >
                       ×
@@ -1427,6 +1482,7 @@ export default function DeliveriesPage() {
               <button
                 type="button"
                 className="filter-chip-clear-all"
+                title="Clear all active client and truck filters"
                 onClick={() => {
                   setSelectedClients([]);
                   setSelectedTrucks([]);
@@ -1448,7 +1504,7 @@ export default function DeliveriesPage() {
               <span>Applying the active client, date, truck, and document filters.</span>
             </div>
           ) : filteredDeliveries.length === 0 ? (
-            <div className="empty-state">
+            <div className="empty-state" title="No delivery records match the current filter criteria or date range">
               <strong>No deliveries match the active filters</strong>
               <span>
                 Try clearing the waybill search or selecting All Clients / All Trucks.
@@ -1465,16 +1521,17 @@ export default function DeliveriesPage() {
                     <SortableTableHeader label="Truck" sortKey="truck" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Temp" sortKey="temperature" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Origin" sortKey="origin" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
-                    <SortableTableHeader label="Store Drop-offs" sortKey="dropoffs" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
-                    <SortableTableHeader label="Delivery Revenue" sortKey="delivery_rate" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
-                    <SortableTableHeader label="Trip Expenses" sortKey="total_expenses" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Revenue" sortKey="delivery_rate" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <SortableTableHeader label="Expenses" sortKey="total_expenses" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Net Profit" sortKey="net_income" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                   </tr>
                 </thead>
                 <tbody>
                   {filteredDeliveries.map((trip) => {
-                    const isIncomplete = trip.financialState === "incomplete";
+                    const isIncomplete = isDeliveryIncomplete(trip);
+                    const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                     return (
                       <tr
                         key={trip.id}
@@ -1542,17 +1599,42 @@ export default function DeliveriesPage() {
                       </td>
                       <td className="cell-distance">{trip.distanceKm} km</td>
                       <td className="money cell-delivery-rate">{formatPeso(trip.deliveryRate)}</td>
-                      <td className="cell-expenses">{formatPeso(trip.totalExpenses)}</td>
+                      <td className="cell-expenses">
+                        {isFinanciallyIncomplete || trip.totalExpenses == null ? (
+                          <span
+                            className="profit-amount warning"
+                            title={`Trip expenses incomplete: ${trip.financialIntegrityIssues.join(", ") || "Pending expense confirmation"}`}
+                          >
+                            Incomplete
+                          </span>
+                        ) : (
+                          formatPeso(trip.totalExpenses)
+                        )}
+                      </td>
                       <td className="money cell-net-income">
                         <div className="profit-stack">
-                          <span className={`profit-amount ${trip.netIncome != null && trip.netIncome >= 0 ? "positive" : "warning"}`}>
-                            {formatPeso(trip.netIncome)}
-                          </span>
-                          {trip.marginPercent !== null ? (
-                            <span className={`margin-pill ${trip.marginPercent >= 20 ? "good" : trip.marginPercent >= 0 ? "mod" : "low"}`}>
-                              {formatPercent(trip.marginPercent)}
+                          {isFinanciallyIncomplete || trip.netIncome == null ? (
+                            <span
+                              className="profit-amount warning"
+                              title="Net profit computation deferred: Requires all trip expenses to be confirmed"
+                            >
+                              Incomplete
                             </span>
-                          ) : null}
+                          ) : (
+                            <>
+                              <span className={`profit-amount ${trip.netIncome != null && trip.netIncome >= 0 ? "positive" : "warning"}`}>
+                                {formatPeso(trip.netIncome)}
+                              </span>
+                              {trip.marginPercent !== null ? (
+                                <span
+                                  className={`margin-pill ${trip.marginPercent >= 20 ? "good" : trip.marginPercent >= 0 ? "mod" : "low"}`}
+                                  title={`Profit margin: ${formatPercent(trip.marginPercent)}`}
+                                >
+                                  {formatPercent(trip.marginPercent)}
+                                </span>
+                              ) : null}
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1570,7 +1652,7 @@ export default function DeliveriesPage() {
             pageSize={10}
             onPageChange={setPage}
             loading={loading}
-            itemLabel="completed deliveries"
+            itemLabel="deliveries"
             itemCountInPage={filteredDeliveries.length}
           />
         </section>
@@ -1590,8 +1672,16 @@ export default function DeliveriesPage() {
         open={Boolean(selectedTrip)}
         eyebrow={selectedTrip ? `WAYBILL ${selectedTrip.waybillNumber}` : ""}
         title={selectedTrip ? selectedTrip.clientName : ""}
-        statusLabel={selectedTrip?.deliveryStatus || "Completed"}
-        statusTone="success"
+        statusLabel={
+          selectedTrip
+            ? !isDeliveryIncomplete(selectedTrip)
+              ? "Completed"
+              : !isDeliveryFinanciallyComplete(selectedTrip)
+                ? "Incomplete (Unconfirmed Expenses)"
+                : "Incomplete (Missing POD)"
+            : undefined
+        }
+        statusTone={selectedTrip && isDeliveryIncomplete(selectedTrip) ? "warning" : "success"}
         sections={drawerSections}
         footer={selectedTrip && canWrite ? (
           <div style={{ display: "flex", gap: "10px", width: "100%", justifyContent: "flex-end" }}>
@@ -1607,21 +1697,6 @@ export default function DeliveriesPage() {
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M4 7h16M9 7V4.5h6V7m3 0-1 13H7L6 7m4 4v5m4-5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </button>
-            ) : null}
-            {selectedTrip.financialState === "incomplete" ? (
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={financialActionPending || selectedTrip.financialIntegrityIssues.length > 0}
-                title={
-                  selectedTrip.financialIntegrityIssues.length > 0
-                    ? "Resolve unknown expenses via 'Edit delivery' before finalization"
-                    : "Finalize this delivery record"
-                }
-                onClick={finalizeFinancials}
-              >
-                {financialActionPending ? "Finalizing…" : "Finalize financials"}
               </button>
             ) : null}
             <button type="button" className="primary-action-button" onClick={() => openCorrectionModal(selectedTrip)}>
@@ -1646,6 +1721,7 @@ export default function DeliveriesPage() {
                 className="routex-dialog-close"
                 onClick={closeCorrectionModal}
                 aria-label="Close correction modal"
+                title="Close dialog (Esc)"
               >
                 ×
               </button>
@@ -1662,14 +1738,14 @@ export default function DeliveriesPage() {
                   </div>
                 ) : null}
 
-                {/* Delivery Revenue */}
+                {/* Revenue */}
                 <div className="delivery-rate-banner">
                   <div className="delivery-rate-banner-header">
-                    <h3 className="delivery-finance-group-title">Delivery Revenue</h3>
+                    <h3 className="delivery-finance-group-title">Revenue</h3>
                   </div>
                   <div className="delivery-rate-input-row">
                     <label htmlFor="corr-rate" className="field-label-text">
-                      Delivery Revenue (₱)
+                      Revenue (₱)
                     </label>
                     <div className="peso-input-wrap">
                       <span className="peso-prefix" aria-hidden="true">₱</span>
@@ -1696,7 +1772,7 @@ export default function DeliveriesPage() {
                     <div>
                       <h3 className="delivery-finance-group-title" style={{ margin: 0 }}>Route &amp; Store Drop-offs</h3>
                       <p style={{ margin: "2px 0 0", fontSize: "11.5px", color: "var(--color-text-muted)" }}>
-                        Sequence, store names, destination areas, and store entry fees / gate tolls
+                        Drop-offs and store entry fees.
                       </p>
                     </div>
                     <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-accent-deep)" }}>
@@ -1766,6 +1842,7 @@ export default function DeliveriesPage() {
                     <button
                       type="button"
                       className="button-tertiary add-dropoff"
+                      title="Add a new store drop-off point to this route"
                       onClick={addCorrectionDropoff}
                     >
                       + Add Store Drop-off
@@ -1859,12 +1936,20 @@ export default function DeliveriesPage() {
                     <section className="crew-expense-group">
                       <div className="crew-card-title-row">
                         <span className="crew-role-pill helper">Helper</span>
-                        <input
-                          aria-label="Helper name"
-                          className="crew-name-input"
-                          placeholder="Helper name"
+                        <RoundedSelect
                           value={correctionHelperName}
-                          onChange={(e) => setCorrectionHelperName(e.target.value)}
+                          options={helpers.map((helper) => ({
+                            value: helper.label,
+                            label: helper.label,
+                          }))}
+                          onChange={setCorrectionHelperName}
+                          ariaLabel="Helper name"
+                          className="crew-name-select"
+                          placeholder="Select or add helper"
+                          emptyMessage="No saved helpers"
+                          searchable
+                          allowCustomValue
+                          searchPlaceholder="Search or enter a new helper"
                         />
                       </div>
                       <div className="routex-dialog-grid-2">

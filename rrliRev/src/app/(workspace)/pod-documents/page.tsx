@@ -255,7 +255,7 @@ export default function PodDocumentsPage() {
           <div>
             <h1>POD & Supporting Documents</h1>
             <p className="subtitle">
-              View and manage proof of delivery documents by store drop-off.
+              Proof of delivery documents by store drop-off.
             </p>
           </div>
           {canManage ? (
@@ -283,6 +283,7 @@ export default function PodDocumentsPage() {
             <button
               type="button"
               aria-label="Dismiss message"
+              title="Dismiss message"
               onClick={() => setFeedback(null)}
             >
               ×
@@ -292,7 +293,7 @@ export default function PodDocumentsPage() {
 
         <section className="stat-grid" aria-label="POD document totals">
           <article className="stat-card">
-            <span className="stat-label">TOTAL STORE DROP-OFFS</span>
+            <span className="stat-label">STORE DROP-OFFS</span>
             <strong>{counts.total}</strong>
             <span className="stat-meta">Across {deliveries.length} completed deliveries</span>
           </article>
@@ -316,7 +317,7 @@ export default function PodDocumentsPage() {
           <div className="records-heading">
             <div>
               <h2>Store-Level Document Repository</h2>
-              <p>Select any store drop-off to view, download, or upload documents.</p>
+              <p>Document records by store drop-off.</p>
             </div>
             <RoundedSelect
               value={filterStatus}
@@ -337,7 +338,7 @@ export default function PodDocumentsPage() {
               <span>Retrieving completed deliveries and store-level document attachments.</span>
             </div>
           ) : filteredStops.length === 0 ? (
-            <div className="empty-state">
+            <div className="empty-state" title="No store drop-offs match the selected document filter or date range">
               <strong>No drop-offs match this view</strong>
               <span>Change the document filter or selected date range.</span>
             </div>
@@ -388,12 +389,19 @@ export default function PodDocumentsPage() {
                           className={`pod-status ${
                             item.hasPod ? "attached" : "missing"
                           }`}
+                          title={
+                            item.hasPod
+                              ? "POD Attached: Proof of delivery document attached for this store drop-off"
+                              : "Missing POD: Proof of delivery document has not been uploaded yet"
+                          }
                         >
                           <i aria-hidden="true" />
                           {item.hasPod ? "Attached" : "Missing"}
                         </span>
                       </td>
-                      <td>{item.stop.documentRef || "Pending upload"}</td>
+                      <td title={item.stop.documentRef ? `Document file reference: ${item.stop.documentRef}` : "Document pending upload"}>
+                        {item.stop.documentRef || "Pending upload"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -430,6 +438,7 @@ export default function PodDocumentsPage() {
                 className="routex-dialog-close"
                 onClick={() => !docSubmitting && setInspectingStop(null)}
                 aria-label="Close document dialog"
+                title="Close dialog (Esc)"
               >
                 ×
               </button>
@@ -463,7 +472,11 @@ export default function PodDocumentsPage() {
               ) : null}
 
               {!docLoading && !inspectingStop.hasPod ? (
-                <div className="pod-empty-display" role="status">
+                <div
+                  className="pod-empty-display"
+                  role="status"
+                  title="Awaiting signed proof of delivery receipt upload for this store drop-off"
+                >
                   <div className="pod-empty-icon" aria-hidden="true">
                     <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -473,11 +486,11 @@ export default function PodDocumentsPage() {
                   </div>
                   <div className="pod-empty-content">
                     <h4>No Proof of Delivery Attached</h4>
-                    <p>No document has been uploaded for Store Drop-off #{inspectingStop.stop.sequence} ({inspectingStop.stop.storeName}).</p>
+                    <p>No document uploaded for Store Drop-off #{inspectingStop.stop.sequence} ({inspectingStop.stop.storeName}).</p>
                     {canManage ? (
-                      <span className="pod-empty-hint">Upload a scanned receipt or signed document below.</span>
+                      <span className="pod-empty-hint">Upload receipt or signed document below.</span>
                     ) : (
-                      <span className="pod-empty-hint">Awaiting document upload by Operations or Admin staff.</span>
+                      <span className="pod-empty-hint">Awaiting upload by Operations or Admin.</span>
                     )}
                   </div>
                 </div>
@@ -511,6 +524,7 @@ export default function PodDocumentsPage() {
                       <button
                         type="button"
                         className="secondary-button"
+                        title="Open proof of delivery document in a new browser tab"
                         style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
                         onClick={() => void openDocumentInNewTab(docDetail.downloadUrl!, docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf")}
                       >
@@ -534,6 +548,7 @@ export default function PodDocumentsPage() {
                       <button
                         type="button"
                         className="secondary-button"
+                        title="Download proof of delivery document to local disk"
                         style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                         onClick={() => void triggerDocumentDownload(docDetail.downloadUrl!, docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf")}
                       >
@@ -580,7 +595,7 @@ export default function PodDocumentsPage() {
                 </div>
               ) : (
                 <p style={{ fontSize: "12px", color: "var(--color-text-muted)", margin: 0 }}>
-                  You are viewing this record in view-only mode ({actor.roleLabel}). Document uploads require Operations or Admin privileges.
+                  View-only mode ({actor.roleLabel}). Document uploads require Operations or Admin.
                 </p>
               )}
             </div>
@@ -589,6 +604,7 @@ export default function PodDocumentsPage() {
               <button
                 type="button"
                 className="secondary-button"
+                title="Close document viewer dialog"
                 disabled={docSubmitting}
                 onClick={() => setInspectingStop(null)}
               >

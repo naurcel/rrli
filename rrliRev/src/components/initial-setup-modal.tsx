@@ -134,8 +134,7 @@ export function InitialSetupModal({ username }: { username: string }) {
             Complete Account Setup
           </h2>
           <p style={{ margin: 0, color: "var(--color-text-secondary)", fontSize: "12px", lineHeight: 1.5 }}>
-            Welcome, <strong>@{username}</strong>. You logged in with a temporary password.
-            Please set your permanent password and configure your security question to access RouteX.
+            Set a permanent password and security question for <strong>@{username}</strong>.
           </p>
         </div>
 

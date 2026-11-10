@@ -8,6 +8,7 @@
 
 import {
   type DeliveryTripRecord,
+  isDeliveryFinanciallyComplete,
   summarizeTruckProfitability,
 } from "../deliveries/delivery-domain.ts";
 import { formatPercent, formatPeso } from "../../lib/format.ts";
@@ -41,6 +42,8 @@ export type ReportSummaryTotals = {
   totalTollExpenses: number;
   totalCrewCosts: number;
   totalTrips: number;
+  totalCompanyExpenses?: number;
+  companyNetProfit?: number;
 };
 
 export type ProcessedReportResult = {
@@ -89,9 +92,10 @@ export function resolveTemplateColumns(
 export function processReport(
   deliveries: readonly DeliveryTripRecord[],
   template: ReportTemplate,
+  companyExpenses?: number,
 ): ProcessedReportResult {
   const columns = resolveTemplateColumns(template.baseType, template.columns);
-  const { rows, totals } = generateReportRows(deliveries, template);
+  const { rows, totals } = generateReportRows(deliveries, template, companyExpenses);
   return {
     template,
     columns,
@@ -111,12 +115,7 @@ export function filterDeliveriesForTemplate(
   return deliveries.filter((item) => {
     // 1. Financial state filter
     if (template.filters.financialState === "finalized_only") {
-      if (
-        item.financialState !== "finalized" ||
-        item.deliveryRate == null ||
-        item.totalExpenses == null ||
-        item.netIncome == null
-      ) {
+      if (!isDeliveryFinanciallyComplete(item)) {
         return false;
       }
     }
@@ -138,6 +137,7 @@ export function filterDeliveriesForTemplate(
 export function generateReportRows(
   deliveries: readonly DeliveryTripRecord[],
   template: ReportTemplate,
+  companyExpenses?: number,
 ): { rows: ReportRowData[]; totals: ReportSummaryTotals } {
   const filtered = filterDeliveriesForTemplate(deliveries, template);
 
@@ -175,6 +175,9 @@ export function generateReportRows(
 
   const netProfit = grossEarnings - totalExpenses;
   const marginPercent = grossEarnings > 0 ? (netProfit / grossEarnings) * 100 : null;
+  // Truck summary reports are strictly isolated from company-wide operating expenses
+  const companyExp = template.baseType === "truck_summary" ? 0 : (companyExpenses ?? 0);
+  const companyNetProfit = grossEarnings - totalExpenses - companyExp;
 
   const totals: ReportSummaryTotals = {
     grossEarnings,
@@ -187,6 +190,8 @@ export function generateReportRows(
     totalTollExpenses,
     totalCrewCosts,
     totalTrips: filtered.length,
+    totalCompanyExpenses: companyExp,
+    companyNetProfit,
   };
 
   // Generate rows by baseType
@@ -400,6 +405,12 @@ export function generateReportCsv(
   if (processed.template.breakdown.showStoreDropoffs) {
     summaryHeaders.push("Store Drop-offs");
     summaryValues.push(String(processed.totals.totalStoreDropoffs));
+  }
+  if ((processed.totals.totalCompanyExpenses ?? 0) > 0) {
+    summaryHeaders.push("Company Expenses (PHP)");
+    summaryValues.push((processed.totals.totalCompanyExpenses ?? 0).toFixed(2));
+    summaryHeaders.push("Company Net Profit (PHP)");
+    summaryValues.push((processed.totals.companyNetProfit ?? 0).toFixed(2));
   }
 
   if (summaryHeaders.length > 0) {

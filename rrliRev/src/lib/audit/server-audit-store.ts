@@ -1,4 +1,6 @@
-import "server-only";
+if (typeof window !== "undefined") {
+  throw new Error("This module cannot be imported from a Client Component module.");
+}
 
 export type AuditEntry = {
   id: string;

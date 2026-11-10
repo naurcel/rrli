@@ -32,7 +32,10 @@ import {
   saveBrowserCrewStatus,
 } from "@/features/deliveries/browser-preview-crew";
 import { parsePersonnelNames } from "@/components/delivery-crew-section";
-import { summarizeTruckProfitability } from "@/features/deliveries/delivery-domain";
+import {
+  isDeliveryFinanciallyComplete,
+  summarizeTruckProfitability,
+} from "@/features/deliveries/delivery-domain";
 import {
   getFleetCrew,
   getFleetDrivers,
@@ -324,7 +327,7 @@ export default function TruckProfitabilityPage() {
           t.plateNumber.replace(/\s+/g, "").toUpperCase() === truck.plateNumber.replace(/\s+/g, "").toUpperCase(),
       );
       const dropoffsCount = truckTrips.reduce((sum, t) => sum + (t.dropoffs?.length ?? 0), 0);
-      const pendingTrips = truckTrips.filter((t) => t.financialState !== "finalized");
+      const pendingTrips = truckTrips.filter((t) => !isDeliveryFinanciallyComplete(t));
       const pendingEarnings = pendingTrips.reduce((sum, t) => sum + (t.deliveryRate ?? 0), 0);
 
       if (existing) {
@@ -336,7 +339,7 @@ export default function TruckProfitabilityPage() {
           pendingEarnings,
         };
       }
-      const finalizedTrips = truckTrips.filter((t) => t.financialState === "finalized");
+      const finalizedTrips = truckTrips.filter(isDeliveryFinanciallyComplete);
       const finalizedEarnings = finalizedTrips.reduce((sum, t) => sum + (t.deliveryRate ?? 0), 0);
       const finalizedExpenses = finalizedTrips.reduce((sum, t) => sum + (t.totalExpenses ?? 0), 0);
       const netProfit = finalizedEarnings - finalizedExpenses;
@@ -365,7 +368,7 @@ export default function TruckProfitabilityPage() {
             t.plateNumber.trim().replace(/\s+/g, " ").toUpperCase() === summary.plateNumber.trim().replace(/\s+/g, " ").toUpperCase() ||
             t.plateNumber.replace(/\s+/g, "").toUpperCase() === summary.plateNumber.replace(/\s+/g, "").toUpperCase(),
         );
-        const pendingTrips = truckTrips.filter((t) => t.financialState !== "finalized");
+        const pendingTrips = truckTrips.filter((t) => !isDeliveryFinanciallyComplete(t));
         const pendingEarnings = pendingTrips.reduce((sum, t) => sum + (t.deliveryRate ?? 0), 0);
         merged.push({
           ...summary,
@@ -713,7 +716,7 @@ export default function TruckProfitabilityPage() {
           <div>
             <h1>Trucks</h1>
             <p className="subtitle">
-              Manage owned and subcontracted fleet vehicles, cold storage capabilities, and profitability.
+              Fleet vehicles, storage capabilities, and profitability.
             </p>
           </div>
           {canAdd && (
@@ -721,6 +724,8 @@ export default function TruckProfitabilityPage() {
               <button
                 type="button"
                 className="secondary-button page-intro-action"
+                data-tooltip="Add new driver or helper to the fleet roster"
+                title="Add new driver or helper to the fleet roster"
                 onClick={() => {
                   setCrewFormError(null);
                   setCrewFullName("");
@@ -734,6 +739,8 @@ export default function TruckProfitabilityPage() {
               <button
                 type="button"
                 className="primary-action-button page-intro-action"
+                data-tooltip="Register an owned or subcontracted vehicle"
+                title="Register an owned or subcontracted vehicle"
                 onClick={() => {
                   setFormError(null);
                   setIsAddTruckOpen(true);
@@ -759,6 +766,7 @@ export default function TruckProfitabilityPage() {
             <button
               type="button"
               aria-label="Dismiss notice"
+              title="Dismiss notice"
               onClick={() => setFeedback(null)}
             >
               ×
@@ -787,7 +795,7 @@ export default function TruckProfitabilityPage() {
             <div className="records-heading">
               <div className="records-heading-copy">
                 <h2>Owned Trucks</h2>
-                <p>Performance, financial breakdown, and cargo storage capabilities.</p>
+                <p>Performance and storage capabilities.</p>
               </div>
               <div className="records-heading-meta">
                 <span className="ledger-total-badge">
@@ -818,6 +826,7 @@ export default function TruckProfitabilityPage() {
                   type="search"
                   placeholder="Search by plate number…"
                   aria-label="Filter trucks by plate number"
+                  title="Filter trucks by plate number"
                   value={plateSearch}
                   onChange={(e) => setPlateSearch(e.target.value)}
                 />
@@ -859,6 +868,7 @@ export default function TruckProfitabilityPage() {
                   className="filter-clear-action-btn"
                   onClick={handleResetFilters}
                   aria-label="Clear all truck filters"
+                  title="Clear all active truck filters"
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <line x1="18" y1="6" x2="6" y2="18" />
@@ -880,6 +890,7 @@ export default function TruckProfitabilityPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label="Remove plate search"
+                      title="Remove plate search filter"
                       onClick={() => setPlateSearch("")}
                     >
                       ×
@@ -894,6 +905,7 @@ export default function TruckProfitabilityPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label="Remove classification filter"
+                      title="Remove classification filter"
                       onClick={() => setClassificationFilter("all")}
                     >
                       ×
@@ -908,6 +920,7 @@ export default function TruckProfitabilityPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label="Remove performance tier filter"
+                      title="Remove performance tier filter"
                       onClick={() => setPerformanceFilter("all")}
                     >
                       ×
@@ -922,6 +935,7 @@ export default function TruckProfitabilityPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label="Reset sort to default"
+                      title="Reset truck sort order to default"
                       onClick={() => setOwnedTruckSort("netProfit")}
                     >
                       ×
@@ -933,7 +947,7 @@ export default function TruckProfitabilityPage() {
           </div>
 
           {loading || error ? null : filteredOwnedTrucks.length === 0 ? (
-            <div className="empty-state">
+            <div className="empty-state" title="No owned trucks match the current filter criteria">
               <strong>No owned trucks match the selected filters</strong>
               <span>Try clearing filters or adjusting your search criteria.</span>
             </div>
@@ -952,6 +966,7 @@ export default function TruckProfitabilityPage() {
                     <Link
                       className="fleet-card-link"
                       href={`/truck-profitability/${truck.plateNumber}`}
+                      title={`View financial and trip details for truck ${truck.plateNumber}`}
                     >
                       <div className="truck-card-photo-wrap">
                         <TruckPhoto plateNumber={truck.plateNumber} />
@@ -978,11 +993,12 @@ export default function TruckProfitabilityPage() {
                         </div>
                         <dl>
                           <div className={`truck-card-revenue truck-card-metric ${ownedTruckSort === "revenue" ? "highlight-active-sort" : ""}`}>
-                            <dt>Delivery Revenue</dt>
+                            <dt>Revenue</dt>
                             <dd>{formatPeso(truck.totalEarnings)}</dd>
                             {truck.pendingEarnings > 0 ? (
                               <span
                                 className="truck-card-pending-revenue"
+                                title={`₱${truck.pendingEarnings.toLocaleString()} pending from incomplete delivery runs not yet included in finalized totals`}
                                 style={{
                                   display: "block",
                                   fontSize: "11px",
@@ -996,7 +1012,7 @@ export default function TruckProfitabilityPage() {
                             ) : null}
                           </div>
                           <div className={`truck-card-metric ${ownedTruckSort === "expenses" ? "highlight-active-sort" : ""}`}>
-                            <dt>Trip Expenses</dt>
+                            <dt>Expenses</dt>
                             <dd>{formatPeso(truck.totalExpenses)}</dd>
                           </div>
                           <div className={`truck-card-metric ${ownedTruckSort === "netProfit" ? "highlight-active-sort" : ""}`}>
@@ -1022,7 +1038,7 @@ export default function TruckProfitabilityPage() {
           <div className="records-heading">
             <div>
               <h2>Subcontracted Trucks</h2>
-              <p>Reference list of external trucks, cargo capabilities, and haulers.</p>
+              <p>External trucks and haulers.</p>
             </div>
             <span className="truck-history-count">
               {filteredSubcontractedTrucks.length} truck
@@ -1043,7 +1059,18 @@ export default function TruckProfitabilityPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedSubcontractedTrucks.map((truck) => {
+                {paginatedSubcontractedTrucks.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={actor.role === "admin" ? 6 : 5}
+                      style={{ textAlign: "center", padding: "24px", color: "var(--color-text-muted)" }}
+                      title="No subcontracted trucks registered in the fleet"
+                    >
+                      No subcontracted trucks registered yet.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedSubcontractedTrucks.map((truck) => {
                   const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
                   const isRefrigerated = capability === "Refrigerated";
 
@@ -1076,7 +1103,8 @@ export default function TruckProfitabilityPage() {
                       )}
                     </tr>
                   );
-                })}
+                })
+              )}
               </tbody>
             </table>
           </div>
@@ -1097,7 +1125,7 @@ export default function TruckProfitabilityPage() {
           <div className="records-heading">
             <div>
               <h2>Fleet Crew (Drivers &amp; Helpers)</h2>
-              <p>Reference list of drivers and helpers registered into the RouteX fleet.</p>
+              <p>Registered drivers and helpers.</p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <div className="crew-role-filter-pills" role="tablist" aria-label="Filter crew by role">
@@ -1106,6 +1134,7 @@ export default function TruckProfitabilityPage() {
                   role="tab"
                   aria-selected={crewRoleFilter === "All"}
                   className={`crew-role-tab ${crewRoleFilter === "All" ? "active" : ""}`}
+                  title="Show all fleet crew members"
                   onClick={() => setCrewRoleFilter("All")}
                 >
                   All ({crew.length})
@@ -1115,6 +1144,7 @@ export default function TruckProfitabilityPage() {
                   role="tab"
                   aria-selected={crewRoleFilter === "Driver"}
                   className={`crew-role-tab ${crewRoleFilter === "Driver" ? "active" : ""}`}
+                  title="Show only drivers"
                   onClick={() => setCrewRoleFilter("Driver")}
                 >
                   <span className="crew-role-dot driver" aria-hidden="true" />
@@ -1125,6 +1155,7 @@ export default function TruckProfitabilityPage() {
                   role="tab"
                   aria-selected={crewRoleFilter === "Helper"}
                   className={`crew-role-tab ${crewRoleFilter === "Helper" ? "active" : ""}`}
+                  title="Show only helpers"
                   onClick={() => setCrewRoleFilter("Helper")}
                 >
                   <span className="crew-role-dot helper" aria-hidden="true" />
@@ -1135,8 +1166,10 @@ export default function TruckProfitabilityPage() {
               {canAdd && (
                 <button
                   type="button"
-                  className="secondary-button"
+                  className="secondary-button ui-tooltip"
                   style={{ padding: "6px 12px", fontSize: "12px" }}
+                  data-tooltip="Add new driver or helper to the fleet roster"
+                  title="Add new driver or helper to the fleet roster"
                   onClick={() => {
                     setCrewFormError(null);
                     setCrewFullName("");
@@ -1185,7 +1218,9 @@ export default function TruckProfitabilityPage() {
                       <td style={{ fontFamily: "var(--font-mono, monospace)", fontSize: "11px", color: "var(--color-text-secondary)" }}>
                         {member.employeeCode}
                       </td>
-                      <td>{member.contactNumber || "—"}</td>
+                      <td title={member.contactNumber ? undefined : "No contact number recorded"}>
+                        {member.contactNumber || "—"}
+                      </td>
                       <td>
                         <span className={`detail-status ${member.isActive ? "success" : "neutral"}`} style={{ fontSize: "10px" }}>
                           {member.isActive ? "Active" : "Inactive"}
@@ -1197,6 +1232,7 @@ export default function TruckProfitabilityPage() {
                             type="button"
                             className="row-action-more-btn"
                             aria-label={`More actions for ${member.fullName}`}
+                            title={`More actions for ${member.fullName}`}
                             aria-haspopup="menu"
                             aria-expanded={openCrewActionId === member.id}
                             disabled={crewStatusPendingId === member.id}
@@ -1250,12 +1286,13 @@ export default function TruckProfitabilityPage() {
             <header className="routex-dialog-header">
               <div>
                 <h2 id="add-truck-dialog-title">Add Fleet Truck</h2>
-                <p>Register a new owned or subcontracted vehicle into the RouteX fleet.</p>
+                <p>Register vehicle into fleet.</p>
               </div>
               <button
                 type="button"
                 className="routex-dialog-close"
                 aria-label="Close dialog"
+                title="Close dialog (Esc)"
                 disabled={submitting}
                 onClick={() => setIsAddTruckOpen(false)}
               >
@@ -1426,6 +1463,7 @@ export default function TruckProfitabilityPage() {
                   type="button"
                   className="secondary-button"
                   disabled={submitting}
+                  title="Cancel adding truck and close dialog"
                   onClick={() => setIsAddTruckOpen(false)}
                 >
                   Cancel
@@ -1434,6 +1472,7 @@ export default function TruckProfitabilityPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={submitting}
+                  title="Save and register this truck in the fleet"
                 >
                   {submitting ? "Adding Truck..." : "Add Truck"}
                 </button>
@@ -1460,13 +1499,14 @@ export default function TruckProfitabilityPage() {
                       Confirm Truck Deletion
                     </h2>
                     <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
-                      This deletion decision requires explicit confirmation and will be logged.
+                      Action is audited and logged.
                     </p>
                   </div>
                   <button
                     type="button"
                     className="routex-dialog-close"
                     aria-label="Close confirmation dialog"
+                    title="Close confirmation dialog (Esc)"
                     disabled={isDeletingTruck}
                     onClick={() => setTruckToDelete(null)}
                   >
@@ -1522,6 +1562,7 @@ export default function TruckProfitabilityPage() {
                     className="secondary-button"
                     disabled={isDeletingTruck}
                     onClick={() => setTruckToDelete(null)}
+                    title="Cancel vehicle deletion and close dialog"
                     style={{ minHeight: "38px", padding: "0 16px", fontSize: "13px" }}
                   >
                     Cancel
@@ -1531,6 +1572,7 @@ export default function TruckProfitabilityPage() {
                     className="primary-action-button"
                     disabled={isDeletingTruck}
                     onClick={handleConfirmDeleteTruck}
+                    title="Permanently remove this vehicle from the fleet"
                     style={{
                       minHeight: "38px",
                       padding: "0 16px",
@@ -1564,12 +1606,13 @@ export default function TruckProfitabilityPage() {
             <header className="routex-dialog-header">
               <div>
                 <h2 id="add-crew-dialog-title">Add Fleet Crew Member</h2>
-                <p>Register a new delivery driver or helper into the RouteX fleet.</p>
+                <p>Register driver or helper.</p>
               </div>
               <button
                 type="button"
                 className="routex-dialog-close"
                 aria-label="Close dialog"
+                title="Close dialog (Esc)"
                 disabled={crewSubmitting}
                 onClick={() => setIsAddCrewOpen(false)}
               >
@@ -1660,6 +1703,7 @@ export default function TruckProfitabilityPage() {
                   type="button"
                   className="secondary-button"
                   disabled={crewSubmitting}
+                  title="Cancel adding crew member and close dialog"
                   onClick={() => setIsAddCrewOpen(false)}
                 >
                   Cancel
@@ -1668,6 +1712,7 @@ export default function TruckProfitabilityPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={crewSubmitting || crewFullName.trim().length < 2}
+                  title={`Register this ${crewRole.toLowerCase()} in the fleet`}
                 >
                   {crewSubmitting ? `Adding ${crewRole}...` : `+ Add ${crewRole}`}
                 </button>

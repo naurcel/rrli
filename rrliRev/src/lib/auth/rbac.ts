@@ -37,6 +37,8 @@ export const PERMISSIONS = [
   "reports:view",
   "reports:export",
   "reports:manage_templates",
+  "finance:view",
+  "finance:manage",
   "users:view",
   "users:manage",
   "settings:view",
@@ -59,6 +61,7 @@ const VIEW_ONLY_PERMISSIONS: readonly Permission[] = [
   "deliveries:view",
   "pod:view",
   "profitability:view",
+  "finance:view",
   "reports:view",
   "settings:view",
 ] as const;
@@ -72,6 +75,7 @@ const OPERATIONS_PERMISSIONS: readonly Permission[] = [
   "imports:upload",
   "imports:review_confirm",
   "profitability:manage",
+  "finance:manage",
   "reports:export",
 ] as const;
 
@@ -204,6 +208,10 @@ export function canManageReportTemplates(role: UserRole): boolean {
   return hasPermission(role, "reports:manage_templates");
 }
 
+export function canManageCompanyExpenses(role: UserRole): boolean {
+  return hasPermission(role, "finance:manage");
+}
+
 export type NavigationSection = "primary" | "management";
 
 export type NavigationItem = {
@@ -235,6 +243,13 @@ export const WORKSPACE_NAVIGATION_ITEMS: readonly NavigationItem[] = [
     symbol: "\u25b1",
     section: "primary",
     requiredPermission: "profitability:view",
+  },
+  {
+    label: "Finance",
+    href: "/finance",
+    symbol: "\u25c8",
+    section: "primary",
+    requiredPermission: "finance:view",
   },
   {
     label: "Reports",

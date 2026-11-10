@@ -259,7 +259,7 @@ export function ReportCustomizerModal({
               </h2>
             </div>
             <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-text-muted)" }}>
-              Configure column ordering, custom headings, visibility, and financial breakdowns for Redeemed Route Logistics.
+              Configure columns, visibility, and financial breakdowns.
             </p>
           </div>
 
@@ -362,7 +362,7 @@ export function ReportCustomizerModal({
                     Column Selection, Ordering &amp; Custom Headings
                   </h3>
                   <p style={{ margin: 0, fontSize: "11px", color: "var(--color-text-muted)" }}>
-                    Check or uncheck columns, rename headings to match company terminology, and use ↑ / ↓ to adjust ordering.
+                    Toggle visibility, rename headings, and reorder columns.
                   </p>
                 </div>
 
@@ -644,7 +644,7 @@ export function ReportCustomizerModal({
                   Summary Metric Cards (Top KPIs)
                 </h3>
                 <p style={{ margin: "0 0 14px", fontSize: "11px", color: "var(--color-text-muted)" }}>
-                  Select which summary cards appear above the data table in the exported document.
+                  Summary cards displayed above the data table.
                 </p>
 
                 <div
@@ -655,12 +655,12 @@ export function ReportCustomizerModal({
                   }}
                 >
                   {[
-                    { key: "showGrossEarnings", label: "Delivery Revenue" },
-                    { key: "showTotalExpenses", label: "Trip Expenses" },
+                    { key: "showGrossEarnings", label: "Revenue" },
+                    { key: "showTotalExpenses", label: "Expenses" },
                     { key: "showNetProfit", label: "Net Profit" },
                     { key: "showProfitMargin", label: "Profit Margin" },
                     { key: "showActiveTrucks", label: "Active Trucks" },
-                    { key: "showStoreDropoffs", label: "Store Drop-offs" },
+                    { key: "showStoreDropoffs", label: "Drop-offs" },
                     { key: "showDieselExpenses", label: "Diesel Fuel" },
                     { key: "showTollExpenses", label: "Highway Tolls" },
                     { key: "showCrewCosts", label: "Crew Compensation" },
@@ -700,7 +700,7 @@ export function ReportCustomizerModal({
                   Data Integrity &amp; Financial Filtering
                 </h3>
                 <p style={{ margin: "0 0 14px", fontSize: "11px", color: "var(--color-text-muted)" }}>
-                  Control whether unfinalized trips with unknown expenses or subcontractor vehicles are included.
+                  Filters for financial completion and truck ownership.
                 </p>
 
                 <div

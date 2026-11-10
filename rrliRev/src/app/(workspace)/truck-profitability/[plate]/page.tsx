@@ -24,6 +24,9 @@ import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { TruckPhoto } from "@/components/truck-photo";
 import {
+  getDeliveryIncompleteIssues,
+  isDeliveryFinanciallyComplete,
+  isDeliveryIncomplete,
   summarizeTruckProfitability,
   type ExpenseResolutionStatus,
 } from "@/features/deliveries/delivery-domain";
@@ -84,14 +87,27 @@ export default function TruckProfilePage({
         title: "Delivery Overview",
         eyebrow: "Trip details",
         rows: [
-          { label: "Waybill Number", value: selectedTrip.waybillNumber },
-          { label: "Delivery Date", value: selectedTrip.deliveryDate },
-          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const }] : []),
-          { label: "Client Account", value: selectedTrip.clientName },
-          { label: "Origin Hub", value: selectedTrip.origin },
-          { label: "Distance", value: `${selectedTrip.distanceKm} km` },
-          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L` },
-          { label: "Delivery Status", value: selectedTrip.deliveryStatus || "Completed" },
+          { label: "Waybill Number", value: selectedTrip.waybillNumber, tooltip: `Waybill tracking code #${selectedTrip.waybillNumber}` },
+          { label: "Delivery Date", value: selectedTrip.deliveryDate, tooltip: "Operational dispatch and completion date" },
+          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const, tooltip: "Delivery recorded past standard 3-day operational window" }] : []),
+          { label: "Client Account", value: selectedTrip.clientName, tooltip: `Freight client account: ${selectedTrip.clientName}` },
+          { label: "Origin Hub", value: selectedTrip.origin, tooltip: `Origin facility: ${selectedTrip.origin}` },
+          { label: "Distance", value: `${selectedTrip.distanceKm} km`, tooltip: `Round-trip transit distance: ${selectedTrip.distanceKm} km` },
+          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L`, tooltip: `Diesel purchase benchmark: ${formatPeso(selectedTrip.fuelRate)} per liter` },
+          {
+            label: "Delivery Status",
+            value: !isDeliveryIncomplete(selectedTrip)
+              ? "Completed"
+              : !isDeliveryFinanciallyComplete(selectedTrip)
+                ? "Incomplete (Unconfirmed Expenses)"
+                : "Incomplete (Missing POD)",
+            tone: isDeliveryIncomplete(selectedTrip) ? "warning" : undefined,
+            tooltip: !isDeliveryIncomplete(selectedTrip)
+              ? "Delivery completed with all trip expenses confirmed and POD attached"
+              : !isDeliveryFinanciallyComplete(selectedTrip)
+                ? `Incomplete delivery: Unconfirmed expenses (${selectedTrip.financialIntegrityIssues.join(", ") || "requires confirmation"}). Click 'Edit delivery' to complete.`
+                : "Incomplete delivery: Missing Proof of Delivery (POD) documents for store drop-offs.",
+          },
         ],
       },
       {
@@ -169,14 +185,14 @@ export default function TruckProfilePage({
   );
 
   const finalizedTripsCount = useMemo(
-    () => truckTrips.filter((t) => t.financialState === "finalized").length,
+    () => truckTrips.filter(isDeliveryFinanciallyComplete).length,
     [truckTrips],
   );
 
   const pendingRevenue = useMemo(
     () =>
       truckTrips
-        .filter((t) => t.financialState !== "finalized")
+        .filter((t) => !isDeliveryFinanciallyComplete(t))
         .reduce((sum, trip) => sum + (trip.deliveryRate ?? 0), 0),
     [truckTrips],
   );
@@ -205,7 +221,7 @@ export default function TruckProfilePage({
       };
     }
     if (truckTrips.length > 0) {
-      const finalized = truckTrips.filter((t) => t.financialState === "finalized");
+      const finalized = truckTrips.filter(isDeliveryFinanciallyComplete);
       const totalEarnings = finalized.reduce((sum, trip) => sum + (trip.deliveryRate ?? 0), 0);
       const totalExpenses = finalized.reduce((sum, trip) => sum + (trip.totalExpenses ?? 0), 0);
       const netProfit = totalEarnings - totalExpenses;
@@ -309,7 +325,7 @@ export default function TruckProfilePage({
       <OperationalTopbar contextLabel={`Truck ${normalizedPlate}`} />
 
       <div className="content-wrap fleet-detail-page truck-profile-page">
-        <Link className="back-link" href="/truck-profitability">
+        <Link className="back-link" href="/truck-profitability" title="Back to Trucks fleet overview">
           ← Back to Trucks
         </Link>
 
@@ -358,6 +374,7 @@ export default function TruckProfilePage({
                 <button
                   type="button"
                   className="secondary-button"
+                  title="Permanently remove this truck from the fleet"
                   style={{
                     borderColor: "rgba(220, 38, 38, 0.3)",
                     color: "#dc2626",
@@ -388,7 +405,7 @@ export default function TruckProfilePage({
                 <div className="records-heading">
                   <div>
                     <h2>Operational Summary</h2>
-                    <p>Performance for the selected period.</p>
+                    <p>Selected period performance.</p>
                   </div>
                 </div>
                 <div className="truck-performance-kpis" aria-label="Truck performance metrics">
@@ -401,6 +418,7 @@ export default function TruckProfilePage({
                     title="Click to view delivery history below"
                   >
                     <span className="stat-label">TOTAL DELIVERIES</span>
+                    <span className="stat-label">DELIVERIES</span>
                     <strong>{activeTruck.completedTrips}</strong>
                     {finalizedTripsCount < truckTrips.length ? (
                       <span className="stat-meta" style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>
@@ -409,16 +427,21 @@ export default function TruckProfilePage({
                     ) : null}
                   </article>
                   <article className="stat-card"><span className="stat-label">STORE DROP-OFFS</span><strong>{activeTruck.totalStoresServed}</strong></article>
+                  <article className="stat-card"><span className="stat-label">DROP-OFFS</span><strong>{activeTruck.totalStoresServed}</strong></article>
                   <article className="stat-card">
-                    <span className="stat-label">DELIVERY REVENUE</span>
+                    <span className="stat-label">REVENUE</span>
                     <strong>{formatPeso(activeTruck.totalEarnings)}</strong>
                     {pendingRevenue > 0 ? (
-                      <span className="stat-meta" style={{ display: "block", fontSize: "11px", color: "var(--color-accent, #d97706)", marginTop: "2px", fontWeight: 500 }}>
+                      <span
+                        className="stat-meta"
+                        title={`₱${pendingRevenue.toLocaleString()} pending from incomplete delivery runs with unresolved expenses`}
+                        style={{ display: "block", fontSize: "11px", color: "var(--color-accent, #d97706)", marginTop: "2px", fontWeight: 500 }}
+                      >
                         + {formatPeso(pendingRevenue)} pending
                       </span>
                     ) : null}
                   </article>
-                  <article className="stat-card"><span className="stat-label">TRIP EXPENSES</span><strong>{formatPeso(activeTruck.totalExpenses)}</strong></article>
+                  <article className="stat-card"><span className="stat-label">EXPENSES</span><strong>{formatPeso(activeTruck.totalExpenses)}</strong></article>
                   <article className="stat-card"><span className="stat-label">NET PROFIT</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPeso(activeTruck.netProfit)}</strong></article>
                   <article className="stat-card"><span className="stat-label">PROFIT MARGIN</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPercent(activeTruck.marginPercent)}</strong></article>
                 </div>
@@ -433,7 +456,11 @@ export default function TruckProfilePage({
                 </div>
               </div>
               {sortedTruckTrips.length === 0 ? (
-                <div className="empty-state" style={{ padding: "36px 20px" }}>
+                <div
+                  className="empty-state"
+                  style={{ padding: "36px 20px" }}
+                  title="No completed deliveries recorded for this truck in the selected date range"
+                >
                   <strong>No completed deliveries in this range</strong>
                   <span>No finalized trips have been recorded for {activeTruck.plateNumber} within the selected date range.</span>
                 </div>
@@ -444,16 +471,17 @@ export default function TruckProfilePage({
                       <tr>
                         <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Client" sortKey="client" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Store Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Delivery Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Trip Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedTruckTrips.map((trip) => {
-                        const isIncomplete = trip.financialState === "incomplete";
+                        const isIncomplete = isDeliveryIncomplete(trip);
+                        const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                         return (
                           <tr
                             key={trip.id}
@@ -469,16 +497,39 @@ export default function TruckProfilePage({
                             title={`Click to view delivery details for waybill ${trip.waybillNumber}`}
                           >
                             <td>
-                              <strong className="record-link">#{trip.waybillNumber}</strong>
-                              <br />
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <strong className="record-link">#{trip.waybillNumber}</strong>
+                              </div>
                               <small>{trip.deliveryDate}</small>
                             </td>
                             <td>{trip.clientName}</td>
                             <td>{trip.dropoffs.length} drop-offs</td>
                             <td>{trip.distanceKm} km</td>
                             <td className="money">{formatPeso(trip.deliveryRate)}</td>
-                            <td>{formatPeso(trip.totalExpenses)}</td>
-                            <td className="money">{formatPeso(trip.netIncome)}</td>
+                            <td>
+                              {isFinanciallyIncomplete || trip.totalExpenses == null ? (
+                                <span
+                                  className="profit-amount warning"
+                                  title={`Trip expenses incomplete: ${trip.financialIntegrityIssues.join(", ") || "Pending expense confirmation"}`}
+                                >
+                                  Incomplete
+                                </span>
+                              ) : (
+                                formatPeso(trip.totalExpenses)
+                              )}
+                            </td>
+                            <td className="money">
+                              {isFinanciallyIncomplete || trip.netIncome == null ? (
+                                <span
+                                  className="profit-amount warning"
+                                  title="Net profit computation deferred: Requires all trip expenses to be confirmed"
+                                >
+                                  Incomplete
+                                </span>
+                              ) : (
+                                formatPeso(trip.netIncome)
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
@@ -506,8 +557,16 @@ export default function TruckProfilePage({
         open={Boolean(selectedTrip)}
         eyebrow={selectedTrip ? `WAYBILL #${selectedTrip.waybillNumber}` : ""}
         title={selectedTrip ? selectedTrip.clientName : ""}
-        statusLabel={selectedTrip?.deliveryStatus || "Completed"}
-        statusTone="success"
+        statusLabel={
+          selectedTrip
+            ? !isDeliveryIncomplete(selectedTrip)
+              ? "Completed"
+              : !isDeliveryFinanciallyComplete(selectedTrip)
+                ? "Incomplete (Unconfirmed Expenses)"
+                : "Incomplete (Missing POD)"
+            : undefined
+        }
+        statusTone={selectedTrip && isDeliveryIncomplete(selectedTrip) ? "warning" : "success"}
         sections={drawerSections}
         footer={
           selectedTrip ? (
@@ -548,13 +607,14 @@ export default function TruckProfilePage({
                       Confirm Truck Deletion
                     </h2>
                     <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
-                      This deletion decision requires explicit confirmation and will be logged.
+                      Action is audited and logged.
                     </p>
                   </div>
                   <button
                     type="button"
                     className="routex-dialog-close"
                     aria-label="Close confirmation dialog"
+                    title="Close confirmation dialog (Esc)"
                     disabled={isDeleting}
                     onClick={() => setIsDeleteModalOpen(false)}
                   >

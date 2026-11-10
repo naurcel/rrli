@@ -31,6 +31,7 @@ test("parses multi-select client and truck filters", () => {
     new URLSearchParams({
       clientIds: "client-1,client-2",
       truckIds: "truck-a,truck-b",
+      financialState: "incomplete",
     }),
   );
 
@@ -40,6 +41,7 @@ test("parses multi-select client and truck filters", () => {
   assert.deepEqual(parsed.value.truckIds, ["truck-a", "truck-b"]);
   assert.equal(parsed.value.clientId, "client-1");
   assert.equal(parsed.value.truckId, "truck-a");
+  assert.equal(parsed.value.financialState, "incomplete");
 });
 
 test("rejects reversed date ranges and unsupported page sizes", () => {

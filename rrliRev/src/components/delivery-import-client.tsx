@@ -155,12 +155,15 @@ export function DeliveryExcelImportClient({
       const destinationArea = areaIdx >= 0 && cols[areaIdx] ? cols[areaIdx] : "Metro Manila";
       const entryFee = feeIdx >= 0 && cols[feeIdx] ? Number(cols[feeIdx]) || null : 0;
 
-      const isValid = Boolean(waybillNumber && deliveryDate && clientName && plateNumber && deliveryRate > 0);
+      const isDateValid = Boolean(deliveryDate && deliveryDate >= "2024-01-01");
+      const isValid = Boolean(waybillNumber && isDateValid && clientName && plateNumber && deliveryRate > 0);
       const validationIssue = !waybillNumber
         ? "Waybill number required"
-        : deliveryRate <= 0
-          ? "Delivery revenue must be positive"
-          : undefined;
+        : !isDateValid
+          ? "Date prior to company start (2024)"
+          : deliveryRate <= 0
+            ? "Delivery revenue must be positive"
+            : undefined;
 
       parsed.push({
         id: `row-${i}-${Date.now().toString(36)}`,
@@ -240,13 +243,21 @@ export function DeliveryExcelImportClient({
       current.map((row) => {
         if (row.id !== id) return row;
         const updated = { ...row, [field]: value };
+        const isDateValid = Boolean(updated.deliveryDate && updated.deliveryDate >= "2024-01-01");
         updated.isValid = Boolean(
           updated.waybillNumber &&
-          updated.deliveryDate &&
+          isDateValid &&
           updated.clientName &&
           updated.plateNumber &&
           updated.deliveryRate > 0
         );
+        updated.validationIssue = !updated.waybillNumber
+          ? "Waybill number required"
+          : !isDateValid
+            ? "Date prior to company start (2024)"
+            : updated.deliveryRate <= 0
+              ? "Delivery revenue must be positive"
+              : undefined;
         return updated;
       })
     );
@@ -349,7 +360,7 @@ export function DeliveryExcelImportClient({
             <strong>Import Error:</strong>
             <span>{errorMessage}</span>
           </div>
-          <button type="button" aria-label="Dismiss message" onClick={() => setErrorMessage(null)}>
+          <button type="button" aria-label="Dismiss message" title="Dismiss message" onClick={() => setErrorMessage(null)}>
             ×
           </button>
         </section>
@@ -378,8 +389,8 @@ export function DeliveryExcelImportClient({
       <section className="records-card" style={{ marginTop: "22px" }} aria-label="File Upload & Staging">
         <div className="records-heading">
           <div>
-            <h2>1. Upload Daily Trip Report Spreadsheet</h2>
-            <p>Upload a CSV or XLSX file for review.</p>
+            <h2>1. Upload Spreadsheet</h2>
+            <p>Upload a CSV or XLSX file.</p>
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
             <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
@@ -407,7 +418,7 @@ export function DeliveryExcelImportClient({
           >
             <ImportIcon name="spreadsheet" className="import-upload-icon" />
             <strong style={{ fontSize: "14px", color: "var(--ink)" }}>Choose CSV or Daily Trip Report Spreadsheet</strong>
-            <small style={{ color: "var(--muted)", marginTop: "4px" }}>Accepts .csv, .tsv, and structured spreadsheet exports</small>
+            <small style={{ color: "var(--muted)", marginTop: "4px" }}>CSV, TSV, or spreadsheet exports</small>
             <input
               type="file"
               accept=".csv,.txt,.tsv"
@@ -422,8 +433,8 @@ export function DeliveryExcelImportClient({
         <section className="records-card" style={{ marginTop: "24px" }} aria-label="Staged Rows Review">
           <div className="records-heading">
             <div>
-              <h2>2. Staged Review Table ({rows.length} trips parsed)</h2>
-              <p>Review rows before import.</p>
+              <h2>2. Staged Review ({rows.length} trips parsed)</h2>
+              <p>Review parsed rows before committing.</p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <span className="stat-meta positive import-status-label">
@@ -459,14 +470,14 @@ export function DeliveryExcelImportClient({
                 <tr>
                   <th>Status</th>
                   <th>Date</th>
-                  <th>Waybill Number</th>
-                  <th>Client Name</th>
-                  <th>Plate Number</th>
-                  <th>Temperature</th>
-                  <th>Delivery Revenue</th>
+                  <th>Waybill</th>
+                  <th>Client</th>
+                  <th>Plate</th>
+                  <th>Temp</th>
+                  <th>Revenue</th>
                   <th>Diesel</th>
                   <th>Highway Tolls</th>
-                  <th>Store Drop-offs</th>
+                  <th>Drop-offs</th>
                 </tr>
               </thead>
               <tbody>
@@ -481,6 +492,7 @@ export function DeliveryExcelImportClient({
                     <td>
                       <input
                         type="date"
+                        min="2024-01-01"
                         value={row.deliveryDate}
                         onChange={(e) => updateRowField(row.id, "deliveryDate", e.target.value)}
                         style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px" }}

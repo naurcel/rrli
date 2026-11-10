@@ -25,6 +25,9 @@ function shiftDateKey(value: string, days: number): string {
   return parsed.toISOString().slice(0, 10);
 }
 
+export const COMPANY_FOUNDATION_YEAR = 2024;
+export const COMPANY_FOUNDATION_DATE = "2024-01-01";
+
 export function getDeliveryDateWindow(reference = new Date()): {
   min: string;
   max: string;
@@ -43,8 +46,14 @@ export function validateDeliveryDateWindow(
   }
   const window = getDeliveryDateWindow(reference);
 
-  // Admin role is permitted to record deliveries with no date range restrictions
+  // Admin role is permitted to record past/future deliveries, but company was founded in 2024
   if (userRole === "admin") {
+    if (deliveryDate < COMPANY_FOUNDATION_DATE) {
+      return {
+        ok: false,
+        message: "Delivery date cannot be earlier than company foundation year (2024).",
+      };
+    }
     return { ok: true, isLate: deliveryDate < window.max };
   }
 

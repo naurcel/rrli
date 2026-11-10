@@ -52,7 +52,7 @@ test("audited financial correction updates delivery financials and increments ve
   assert.equal(delivery.record.deliveryRate, initialRate + 2000);
   assert.equal(delivery.record.expenses.dieselExpenses, 3500);
   assert.equal(delivery.record.version, initialVersion + 1);
-  assert.equal(delivery.record.financialState, "incomplete", "Corrections must require explicit re-finalization.");
+  assert.equal(delivery.record.financialState, "finalized", "Once all expenses are resolved/completed, record is automatically finalized.");
   assert.ok(delivery.record.netIncome !== null);
   assert.ok(delivery.record.marginPercent !== null);
 });
