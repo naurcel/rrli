@@ -76,6 +76,14 @@ There is no separate "Finalize Financials" button. Dispatchers simply click "Edi
 - Trips submitted past this boundary are flagged as `recording_delayed = true`.
 - **System Admin** users are exempt from the 3-day restriction and can record or edit trips back to the `2024-01-01` foundation boundary.
 
+### C. Tripartite RBAC Governance Model
+RouteX operates under three core role-based access control tenets:
+1. **Admin Superuser Authority (EVERYTHING):** The System Administrator has unrestricted write access across all operational modules (deliveries, drop-offs, trucks, drivers, helpers, PODs, Excel staged batch import, company expenses) and holds exclusive authority over Additional Admin Features (User Account Provisioning, Role Assignments, Audited Record Deletion, System Audit Logs, Custom Report Template Management, and Unlimited Historical Delivery Recording).
+2. **Finance Dedicated Scope (Finance Page ONLY):** Finance Officers have write authority exclusively on `/finance` (`finance:manage` to record, edit, and delete company operating expenses). In all other modules (Deliveries, Fleet Trucks, Drivers & Helpers, PODs, User Management, Templates), Finance is strictly read-only.
+3. **The Rest Are View-Only (With Dispatch Exception):**
+   - **Operations:** Write access for daily logistics dispatch and execution (record and edit completed deliveries within the 3-day window, manage drop-offs, upload POD files, manage fleet specifications, execute Excel imports). Strictly view-only on the Finance page and excluded from all Additional Admin Features.
+   - **View-Only Staff (HR, Secretary, Customer Representative):** 100% read-only across the entire platform. Zero mutation authority anywhere. Cannot record or edit deliveries, expenses, trucks, or users.
+
 ---
 
 ## 5. Profitability Calculation Formulas

@@ -33,9 +33,9 @@ npm run dev          # Start local development server on port 3000
 ## Test Credentials (Preview Mode)
 
 Password for all: `password123`
-- `admin` (System Administrator - Full Access)
-- `operations` (Delivery Operations - 3-day window)
-- `finance` (Finance Officer - View-only)
+- `admin` (System Administrator - Full Access across all modules & admin features)
+- `operations` (Delivery Operations - 3-day window; view-only on Finance)
+- `finance` (Finance Officer - Finance page write access; view-only elsewhere)
 - `hr` (HR Specialist - View-only)
 - `secretary` (Corporate Secretary - View-only)
 - `customerrep` (Customer Support - View-only)

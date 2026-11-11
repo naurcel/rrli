@@ -127,7 +127,7 @@ Fleet performance and individual vehicle financial evaluation:
 Company-wide operating expense accounting and consolidated net profit:
 
 - **Top KPI Cards:** Total Company Expenses, Company Net Profit, Delivery Revenue, Delivery Expenses.
-- **Streamlined Single Expense Entry:** Dispatchers or Finance enter the **single total company expense amount**, date, and optional reference note. No itemized tags, categories, or distributions.
+- **Streamlined Single Expense Entry:** Finance Officers and Administrators enter the **single total company expense amount**, date, and optional reference note. Operations and all other roles have view-only access to `/finance`. No itemized tags, categories, or distributions.
 - **Company Net Profit Formula:**
   $$\text{Company Net Profit} = \text{Total Delivery Revenue} - \text{Total Delivery Expenses} - \text{Total Company Expenses}$$
 - **Audited Expense Ledger:** Paginated ledger (10/page) with date and amount sorting, search, inline editing, and deletion with mandatory audit reasons.

@@ -90,9 +90,9 @@ npm run dev
 ## 4. Test Accounts
 
 Sign in at `/login` with username / password:
-- `admin` / `password123` (Admin — Full system management)
-- `operations` / `password123` (Operations — Dispatch & delivery execution)
-- `finance` / `password123` (Finance — View-only financials & reports)
+- `admin` / `password123` (Admin — Full superuser management across all modules & admin features)
+- `operations` / `password123` (Operations — Dispatch & delivery execution; view-only on Finance)
+- `finance` / `password123` (Finance — Finance page write access; view-only elsewhere)
 - `hr` / `password123` (HR — View-only crew management)
 - `secretary` / `password123` (Secretary — View-only deliveries & PODs)
 - `customerrep` / `password123` (Customer Representative — View-only tracking)

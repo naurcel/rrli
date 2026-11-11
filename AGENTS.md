@@ -94,11 +94,12 @@ Always uphold these domain invariants:
 - Under Truck Profitability, unfinalized delivery revenue may be displayed as a distinct `+ ₱X pending` indicator, but must remain separate from finalized revenue.
 - **Automatic Financial Resolution (No Manual Finalize Button):** There is no separate "Finalize Financials" button. Dispatchers simply click "Edit delivery" to resolve unknown expenses. Once all expenses are completed/resolved, the delivery is automatically marked complete and included in computations. As long as any expenses remain unresolved, the delivery is clearly marked and displayed as "Incomplete" across tables, overview, and drawer headers.
 
-### C. Delivery Recording Window & RBAC
+### C. Delivery Recording Window & RBAC Boundaries
 - **Company Foundation Boundary (2024)**: No operational deliveries, calendar selections, reports, or spreadsheet imports may precede `2024-01-01` (RRLI founding year).
-- **Admin**: Can record or edit deliveries from **2024 onward** without the 3-day window limitation.
-- **Operations**: Subject to a **3-day submission window** from the delivery date.
-- **View-Only Roles** (Finance, HR, Secretary, Customer Representative): Can browse and view records, export reports, but cannot mutate deliveries, trucks, or users.
+- **Admin**: Can do EVERYTHING. Full superuser mutation authority across all operational modules (deliveries, drop-offs, trucks, drivers, helpers, PODs, Excel staged batch import, company expenses) and exclusive authority over Additional Admin Features (user management, audited record deletion, audit logs, custom templates, unlimited 2024+ recording).
+- **Finance**: Can ONLY edit whatever is on the Finance page (`/finance` — record, edit, and delete company operating expenses). View-only across all other modules (deliveries, trucks, drivers, PODs, user management).
+- **Operations**: Dispatch & execution write authority (record/edit deliveries within the 3-day window, drop-offs, POD files, truck specs, Excel batch import). Strictly view-only on Finance and excluded from additional admin features.
+- **View-Only Roles** (HR, Secretary, Customer Representative): 100% read-only across the platform. Zero mutation authority anywhere.
 
 ### D. Table Pagination & Limit Standards
 - Use the shared `<TablePagination />` component ([`src/components/table-pagination.tsx`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/table-pagination.tsx)).
@@ -152,8 +153,8 @@ When testing in local preview mode, sign in at `/login` using any of these seede
 | Role | Username | Access Level | Primary Capabilities |
 | :--- | :--- | :--- | :--- |
 | **Admin** | `admin` | Full System Management | Full access, user management, audit logs, unlimited delivery date recording, record deletion |
-| **Operations** | `operations` | Dispatch & Execution | Record deliveries (3-day window), fleet management, POD documents, Excel import |
-| **Finance** | `finance` | View-Only | View all records, financial breakdowns, reports, CSV export |
+| **Operations** | `operations` | Dispatch & Execution | Record deliveries (3-day window), fleet management, POD documents, Excel import; view-only on Finance |
+| **Finance** | `finance` | Finance Write Access | Manage company expenses on `/finance`; view-only across deliveries, trucks, and users |
 | **HR** | `hr` | View-Only | View fleet crew (drivers/helpers), reports |
 | **Secretary** | `secretary` | View-Only | View deliveries, drop-offs, POD documents |
 | **Customer Rep** | `customerrep` | View-Only | View delivery status and client drop-offs |

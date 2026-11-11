@@ -71,9 +71,10 @@ Always uphold these domain invariants:
 
 ### D. Recording Windows & RBAC Boundaries
 - **Company Foundation Boundary (2024):** No operational deliveries, expenses, reports, or spreadsheet imports may precede `2024-01-01`.
-- **Admin:** Can record or edit deliveries from 2024 onward without window restrictions.
-- **Operations:** Subject to a **3-day submission window** from the delivery date.
-- **View-Only Roles** (`finance`, `hr`, `secretary`, `customerrep`): Can browse and view records, export reports, but cannot mutate deliveries, trucks, or users. Server-side route guards enforce this.
+- **Admin:** Can do EVERYTHING: full mutation authority across deliveries, trucks, crew, PODs, Excel import, company expenses, and exclusive additional admin features (user management, audited deletion, audit logs, custom templates, and unlimited 2024+ recording).
+- **Finance:** Can ONLY edit whatever is on the Finance page (`/finance` — record, edit, and delete company operating expenses). View-only across all other modules (deliveries, trucks, drivers, PODs, user management).
+- **Operations:** Dispatch and execution authority (record/edit deliveries within the 3-day window, drop-offs, POD files, truck specs, Excel import), but view-only on Finance and excluded from additional admin features.
+- **View-Only Roles** (`hr`, `secretary`, `customerrep`): Can browse and view records, export reports, but cannot mutate deliveries, expenses, trucks, or users. Server-side route guards enforce this.
 
 ### E. Pagination & Limit Standards
 - Use `<TablePagination />` ([`src/components/table-pagination.tsx`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/components/table-pagination.tsx)).
@@ -140,9 +141,9 @@ For complete deep-dive documentation, consult the Central Knowledge Base:
 ## 7. Test Credentials (Preview Mode)
 
 Sign in at `/login` with password `password123`:
-- **Admin:** `admin` (Full access)
-- **Operations:** `operations` (Dispatch execution, 3-day window)
-- **Finance:** `finance` (View-only financials, company expenses)
+- **Admin:** `admin` (Full superuser access across all modules & admin features)
+- **Operations:** `operations` (Dispatch execution, 3-day window; view-only on Finance)
+- **Finance:** `finance` (Company expense management on `/finance` only; view-only elsewhere)
 - **HR:** `hr` (View-only fleet crew)
 - **Secretary:** `secretary` (View-only deliveries & PODs)
 - **Customer Rep:** `customerrep` (View-only delivery status)
