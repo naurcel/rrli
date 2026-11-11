@@ -6,15 +6,6 @@ import { use, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
-import { DeliveryCrewSection, parsePersonnelNames } from "@/components/delivery-crew-section";
-import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline";
-import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
-import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
-import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
-import {
-  RecordDetailDrawer,
-  type DetailSection,
-} from "@/components/record-detail-drawer";
 import {
   formatDateRange,
   useGlobalDateRange,
@@ -44,15 +35,6 @@ import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deli
 import { canManageDocuments } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
-function formatExpenseResolution(
-  value: number | null | undefined,
-  status: ExpenseResolutionStatus | null | undefined,
-): string {
-  if (status === "not_applicable") return "N/A";
-  if (status === "unknown" || value == null || !Number.isFinite(value)) return "Unknown (Pending)";
-  return `${formatPeso(value)} · Confirmed`;
-}
-
 export default function TruckProfilePage({
   params,
 }: {
@@ -74,100 +56,6 @@ export default function TruckProfilePage({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [selectedTrip, setSelectedTrip] = useState<DeliveryLedgerItem | null>(null);
-
-  const drawerSections: DetailSection[] = useMemo(() => {
-    if (!selectedTrip) return [];
-
-    const driverCount = parsePersonnelNames(selectedTrip.driverName).length;
-    const helperCount = parsePersonnelNames(selectedTrip.helperName).length;
-
-    return [
-      {
-        title: "Delivery Overview",
-        eyebrow: "Trip details",
-        rows: [
-          { label: "Waybill Number", value: selectedTrip.waybillNumber, tooltip: `Waybill tracking code #${selectedTrip.waybillNumber}` },
-          { label: "Delivery Date", value: selectedTrip.deliveryDate, tooltip: "Operational dispatch and completion date" },
-          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const, tooltip: "Delivery recorded past standard 3-day operational window" }] : []),
-          { label: "Client Account", value: selectedTrip.clientName, tooltip: `Freight client account: ${selectedTrip.clientName}` },
-          { label: "Origin Hub", value: selectedTrip.origin, tooltip: `Origin facility: ${selectedTrip.origin}` },
-          { label: "Distance", value: `${selectedTrip.distanceKm} km`, tooltip: `Round-trip transit distance: ${selectedTrip.distanceKm} km` },
-          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L`, tooltip: `Diesel purchase benchmark: ${formatPeso(selectedTrip.fuelRate)} per liter` },
-          {
-            label: "Delivery Status",
-            value: !isDeliveryIncomplete(selectedTrip)
-              ? "Completed"
-              : !isDeliveryFinanciallyComplete(selectedTrip)
-                ? "Incomplete (Unconfirmed Expenses)"
-                : "Incomplete (Missing POD)",
-            tone: isDeliveryIncomplete(selectedTrip) ? "warning" : undefined,
-            tooltip: !isDeliveryIncomplete(selectedTrip)
-              ? "Delivery completed with all trip expenses confirmed and POD attached"
-              : !isDeliveryFinanciallyComplete(selectedTrip)
-                ? `Incomplete delivery: Unconfirmed expenses (${selectedTrip.financialIntegrityIssues.join(", ") || "requires confirmation"}). Click 'Edit delivery' to complete.`
-                : "Incomplete delivery: Missing Proof of Delivery (POD) documents for store drop-offs.",
-          },
-        ],
-      },
-      {
-        title: "Assigned Vehicle",
-        eyebrow: "Fleet Asset",
-        customContent: (
-          <DeliveryTruckInfoSection
-            plateNumber={selectedTrip.plateNumber}
-            truckType={selectedTrip.truckType}
-            truckTemperature={selectedTrip.truckTemperature}
-            truckOwnership={selectedTrip.truckOwnership}
-            rateBasis={selectedTrip.rateBasis}
-          />
-        ),
-      },
-      {
-        title: `Crew Assignment (${driverCount} Driver${driverCount === 1 ? "" : "s"} · ${helperCount} Helper${helperCount === 1 ? "" : "s"})`,
-        eyebrow: "Dispatch Personnel",
-        fullWidth: true,
-        customContent: (
-          <DeliveryCrewSection
-            driverName={selectedTrip.driverName}
-            helperName={selectedTrip.helperName}
-            driverRateText={`${formatExpenseResolution(selectedTrip.expenses.driverDailyRate, selectedTrip.expenseStates?.driverDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.driverAllowance, selectedTrip.expenseStates?.driverAllowance)}`}
-            helperRateText={`${formatExpenseResolution(selectedTrip.expenses.helperDailyRate, selectedTrip.expenseStates?.helperDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.helperAllowance, selectedTrip.expenseStates?.helperAllowance)}`}
-          />
-        ),
-      },
-      {
-        title: `Route & Store Drop-offs (${selectedTrip.dropoffs.length} ${selectedTrip.dropoffs.length === 1 ? "drop-off" : "drop-offs"})`,
-        eyebrow: "Store drop-off sequence & documents",
-        fullWidth: true,
-        customContent: <DeliveryDropoffTimeline dropoffs={selectedTrip.dropoffs} />,
-      },
-      {
-        title: "Financial Breakdown",
-        eyebrow: "Revenue, expenses, and profitability",
-        fullWidth: true,
-        customContent: <DeliveryFinancialBreakdown trip={selectedTrip} />,
-      },
-      {
-        title: "POD & Supporting Documents",
-        eyebrow: "Stop-level files",
-        fullWidth: true,
-        description: "Attach or view POD documents for each drop-off. Click 'Pending upload' to attach files inline.",
-        customContent: (
-          <DeliveryPodDocuments
-            trip={selectedTrip}
-            canVerify={canManageDocuments(actor.role)}
-            roleLabel={actor.roleLabel}
-            onTripChange={(nextTrip) => {
-              const updated = { ...selectedTrip, ...nextTrip };
-              upsertBrowserPreviewDelivery(updated);
-              setSelectedTrip(updated);
-            }}
-          />
-        ),
-      },
-    ];
-  }, [actor.role, actor.roleLabel, selectedTrip]);
 
   const truckTrips = useMemo(
     () =>
@@ -405,7 +293,6 @@ export default function TruckProfilePage({
                 <div className="records-heading">
                   <div>
                     <h2>Operational Summary</h2>
-                    <p>Selected period performance.</p>
                   </div>
                 </div>
                 <div className="truck-performance-kpis" aria-label="Truck performance metrics">
@@ -452,7 +339,6 @@ export default function TruckProfilePage({
               <div className="records-heading">
                 <div>
                   <h2>Delivery History</h2>
-                  <p>{truckTrips.length} deliver{truckTrips.length === 1 ? "y" : "ies"} in this period.</p>
                 </div>
               </div>
               {sortedTruckTrips.length === 0 ? (
@@ -487,11 +373,11 @@ export default function TruckProfilePage({
                             key={trip.id}
                             className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
                             tabIndex={0}
-                            onClick={() => setSelectedTrip(trip)}
+                            onClick={() => router.push(`/deliveries/${encodeURIComponent(trip.id)}`)}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
-                                setSelectedTrip(trip);
+                                router.push(`/deliveries/${encodeURIComponent(trip.id)}`);
                               }
                             }}
                             title={`Click to view delivery details for waybill ${trip.waybillNumber}`}
@@ -552,43 +438,6 @@ export default function TruckProfilePage({
           </>
         )}
       </div>
-
-      <RecordDetailDrawer
-        open={Boolean(selectedTrip)}
-        eyebrow={selectedTrip ? `WAYBILL #${selectedTrip.waybillNumber}` : ""}
-        title={selectedTrip ? selectedTrip.clientName : ""}
-        statusLabel={
-          selectedTrip
-            ? !isDeliveryIncomplete(selectedTrip)
-              ? "Completed"
-              : !isDeliveryFinanciallyComplete(selectedTrip)
-                ? "Incomplete (Unconfirmed Expenses)"
-                : "Incomplete (Missing POD)"
-            : undefined
-        }
-        statusTone={selectedTrip && isDeliveryIncomplete(selectedTrip) ? "warning" : "success"}
-        sections={drawerSections}
-        footer={
-          selectedTrip ? (
-            <div style={{ display: "flex", gap: "10px", width: "100%", justifyContent: "flex-end" }}>
-              <Link
-                href={`/deliveries?q=${encodeURIComponent(selectedTrip.waybillNumber || "")}`}
-                className="secondary-button"
-                style={{
-                  textDecoration: "none",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  minHeight: "36px",
-                  fontSize: "12px",
-                }}
-              >
-                Open in Deliveries Ledger →
-              </Link>
-            </div>
-          ) : null
-        }
-        onClose={() => setSelectedTrip(null)}
-      />
 
       {isDeleteModalOpen && activeTruck && typeof document !== "undefined"
         ? createPortal(

@@ -40,7 +40,7 @@ export function getRequiredPermissionForPath(pathname: string): Permission | nul
     return "deliveries:view";
   }
 
-  if (pathname === "/truck-profitability" || pathname.startsWith("/truck-profitability/")) {
+  if (pathname === "/truck-profitability" || pathname.startsWith("/truck-profitability/") || pathname === "/drivers" || pathname.startsWith("/drivers/")) {
     return "profitability:view";
   }
 

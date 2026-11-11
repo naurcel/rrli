@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -29,6 +30,8 @@ import { readBrowserPreviewDeliveries } from "@/features/deliveries/browser-prev
 import {
   applyBrowserCrewStatuses,
   BROWSER_CREW_STATUS_CHANGED,
+  saveBrowserCrewDeletion,
+  saveBrowserCrewEdit,
   saveBrowserCrewStatus,
 } from "@/features/deliveries/browser-preview-crew";
 import { parsePersonnelNames } from "@/components/delivery-crew-section";
@@ -63,6 +66,7 @@ type SubcontractedTruckSortKey = Extract<
 >;
 
 export default function TruckProfitabilityPage() {
+  const router = useRouter();
   const actor = useAuthenticatedActor();
   const canAdd = canManageTrucks(actor.role);
 
@@ -97,6 +101,7 @@ export default function TruckProfitabilityPage() {
   // Fleet Crew (Drivers & Helpers) state
   const [crew, setCrew] = useState<FleetCrewMember[]>(() => [...getFleetCrew()]);
   const [crewRoleFilter, setCrewRoleFilter] = useState<"All" | "Driver" | "Helper">("All");
+  const [crewSearch, setCrewSearch] = useState("");
   const [isAddCrewOpen, setIsAddCrewOpen] = useState(false);
   const [crewFullName, setCrewFullName] = useState("");
   const [crewRole, setCrewRole] = useState<"Driver" | "Helper">("Driver");
@@ -106,10 +111,42 @@ export default function TruckProfitabilityPage() {
   const [openCrewActionId, setOpenCrewActionId] = useState<string | null>(null);
   const [crewStatusPendingId, setCrewStatusPendingId] = useState<string | null>(null);
 
+  // Editing Crew state
+  const [editingCrewMember, setEditingCrewMember] = useState<FleetCrewMember | null>(null);
+  const [editCrewFullName, setEditCrewFullName] = useState("");
+  const [editCrewRole, setEditCrewRole] = useState<"Driver" | "Helper">("Driver");
+  const [editCrewContact, setEditCrewContact] = useState("");
+  const [editCrewSubmitting, setEditCrewSubmitting] = useState(false);
+  const [editCrewError, setEditCrewError] = useState<string | null>(null);
+
+  // Deleting Crew state
+  const [crewToDelete, setCrewToDelete] = useState<FleetCrewMember | null>(null);
+  const [isDeletingCrew, setIsDeletingCrew] = useState(false);
+
+  useEffect(() => {
+    if (!openCrewActionId) return;
+    function handleClickOutside() {
+      setOpenCrewActionId(null);
+    }
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [openCrewActionId]);
+
   const filteredCrew = useMemo(() => {
-    if (crewRoleFilter === "All") return crew;
-    return crew.filter((c) => c.assignmentType === crewRoleFilter);
-  }, [crew, crewRoleFilter]);
+    let list = crew;
+    if (crewRoleFilter !== "All") {
+      list = list.filter((c) => c.assignmentType === crewRoleFilter);
+    }
+    if (crewSearch.trim()) {
+      const q = crewSearch.trim().toLowerCase();
+      list = list.filter(
+        (c) =>
+          c.fullName.toLowerCase().includes(q) ||
+          (c.contactNumber && c.contactNumber.toLowerCase().includes(q)),
+      );
+    }
+    return list;
+  }, [crew, crewRoleFilter, crewSearch]);
 
   const [crewPage, setCrewPage] = useState(1);
   const CREW_PAGE_SIZE = 10;
@@ -117,7 +154,7 @@ export default function TruckProfitabilityPage() {
 
   useEffect(() => {
     setCrewPage(1);
-  }, [crewRoleFilter]);
+  }, [crewRoleFilter, crewSearch]);
 
   const paginatedCrew = useMemo(() => {
     const start = (crewPage - 1) * CREW_PAGE_SIZE;
@@ -132,6 +169,133 @@ export default function TruckProfitabilityPage() {
     () => crew.filter((c) => c.assignmentType === "Helper").length,
     [crew],
   );
+
+  function openEditCrewModal(member: FleetCrewMember) {
+    setOpenCrewActionId(null);
+    setEditCrewError(null);
+    setEditingCrewMember(member);
+    setEditCrewFullName(member.fullName);
+    setEditCrewRole(member.assignmentType);
+    setEditCrewContact(member.contactNumber || "");
+  }
+
+  async function handleUpdateCrew(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingCrewMember) return;
+    setEditCrewError(null);
+    const normalizedName = editCrewFullName.trim();
+    if (normalizedName.length < 2) {
+      setEditCrewError(`${editCrewRole} name must be at least 2 characters.`);
+      return;
+    }
+
+    setEditCrewSubmitting(true);
+    const browserLocal = /^(driver|helper)-/.test(editingCrewMember.id);
+    try {
+      const response = await fetch("/api/drivers", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          crewMemberId: editingCrewMember.id,
+          fullName: normalizedName,
+          assignmentType: editCrewRole,
+          contactNumber: editCrewContact.trim() || null,
+          browserLocal,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+        crewMember?: FleetCrewMember;
+      } | null;
+
+      if (!response.ok || !data?.ok) {
+        setEditCrewError(data?.message ?? "Unable to update crew member.");
+        return;
+      }
+
+      saveBrowserCrewEdit(editingCrewMember.id, {
+        fullName: normalizedName,
+        assignmentType: editCrewRole,
+        contactNumber: editCrewContact.trim() || null,
+      });
+
+      setCrew((current) =>
+        current.map((item) =>
+          item.id === editingCrewMember.id
+            ? {
+                ...item,
+                fullName: normalizedName,
+                assignmentType: editCrewRole,
+                contactNumber: editCrewContact.trim() || null,
+              }
+            : item,
+        ),
+      );
+
+      setFeedback({
+        tone: "success",
+        text: `${editCrewRole} "${normalizedName}" details updated successfully.`,
+      });
+      setEditingCrewMember(null);
+    } catch (err) {
+      setEditCrewError(err instanceof Error ? err.message : "Failed to update crew member.");
+    } finally {
+      setEditCrewSubmitting(false);
+    }
+  }
+
+  async function handleConfirmDeleteCrew() {
+    if (!crewToDelete) return;
+    setIsDeletingCrew(true);
+    const browserLocal = /^(driver|helper)-/.test(crewToDelete.id);
+    try {
+      const response = await fetch(
+        `/api/drivers?id=${encodeURIComponent(crewToDelete.id)}&browserLocal=${browserLocal ? "true" : "false"}`,
+        { method: "DELETE" },
+      );
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.message ?? "Failed to delete crew member.");
+      }
+
+      saveBrowserCrewDeletion(crewToDelete.id);
+      setCrew((current) => current.filter((item) => item.id !== crewToDelete.id));
+      setFeedback({
+        tone: "success",
+        text: `${crewToDelete.assignmentType} "${crewToDelete.fullName}" was deleted from fleet roster.`,
+      });
+      setCrewToDelete(null);
+    } catch (err) {
+      setFeedback({
+        tone: "error",
+        text: err instanceof Error ? err.message : "Failed to delete crew member.",
+      });
+    } finally {
+      setIsDeletingCrew(false);
+    }
+  }
+
+  function handleCopyContact(member: FleetCrewMember) {
+    setOpenCrewActionId(null);
+    if (!member.contactNumber) return;
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard
+        .writeText(member.contactNumber)
+        .then(() => {
+          setFeedback({
+            tone: "success",
+            text: `Contact number (${member.contactNumber}) for ${member.fullName} copied to clipboard.`,
+          });
+        })
+        .catch(() => {
+          setFeedback({
+            tone: "error",
+            text: "Unable to copy to clipboard.",
+          });
+        });
+    }
+  }
 
   async function handleToggleCrewActive(member: FleetCrewMember) {
     if (crewStatusPendingId) return;
@@ -716,7 +880,7 @@ export default function TruckProfitabilityPage() {
           <div>
             <h1>Trucks</h1>
             <p className="subtitle">
-              Fleet vehicles, storage capabilities, and profitability.
+              Fleet performance and crew registry.
             </p>
           </div>
           {canAdd && (
@@ -734,7 +898,7 @@ export default function TruckProfitabilityPage() {
                   setIsAddCrewOpen(true);
                 }}
               >
-                + Add Driver / Helper
+                + Add Crew
               </button>
               <button
                 type="button"
@@ -795,7 +959,6 @@ export default function TruckProfitabilityPage() {
             <div className="records-heading">
               <div className="records-heading-copy">
                 <h2>Owned Trucks</h2>
-                <p>Performance and storage capabilities.</p>
               </div>
               <div className="records-heading-meta">
                 <span className="ledger-total-badge">
@@ -1038,7 +1201,6 @@ export default function TruckProfitabilityPage() {
           <div className="records-heading">
             <div>
               <h2>Subcontracted Trucks</h2>
-              <p>External trucks and haulers.</p>
             </div>
             <span className="truck-history-count">
               {filteredSubcontractedTrucks.length} truck
@@ -1124,10 +1286,18 @@ export default function TruckProfitabilityPage() {
         <section className="records-card fleet-drivers-section" aria-label="Fleet crew" style={{ marginTop: "24px" }}>
           <div className="records-heading">
             <div>
-              <h2>Fleet Crew (Drivers &amp; Helpers)</h2>
-              <p>Registered drivers and helpers.</p>
+              <h2>Drivers &amp; Helpers</h2>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <input
+                type="search"
+                className="crew-search-input"
+                placeholder="Search crew members..."
+                value={crewSearch}
+                onChange={(e) => setCrewSearch(e.target.value)}
+                aria-label="Search drivers and helpers"
+              />
+
               <div className="crew-role-filter-pills" role="tablist" aria-label="Filter crew by role">
                 <button
                   type="button"
@@ -1147,7 +1317,6 @@ export default function TruckProfitabilityPage() {
                   title="Show only drivers"
                   onClick={() => setCrewRoleFilter("Driver")}
                 >
-                  <span className="crew-role-dot driver" aria-hidden="true" />
                   Drivers ({driverCount})
                 </button>
                 <button
@@ -1158,7 +1327,6 @@ export default function TruckProfitabilityPage() {
                   title="Show only helpers"
                   onClick={() => setCrewRoleFilter("Helper")}
                 >
-                  <span className="crew-role-dot helper" aria-hidden="true" />
                   Helpers ({helperCount})
                 </button>
               </div>
@@ -1190,17 +1358,20 @@ export default function TruckProfitabilityPage() {
                 <tr>
                   <th>Crew Member</th>
                   <th>Role</th>
-                  <th>Employee Code</th>
                   <th>Contact Number</th>
                   <th>Status</th>
-                  <th><span className="sr-only">More actions</span></th>
+                  <th style={{ width: "48px", textAlign: "right" }}>
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCrew.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: "24px", color: "var(--color-text-muted)" }}>
-                      No {crewRoleFilter === "All" ? "crew members" : crewRoleFilter.toLowerCase() + "s"} registered yet.
+                    <td colSpan={5} style={{ textAlign: "center", padding: "24px", color: "var(--color-text-muted)" }}>
+                      {crewSearch.trim()
+                        ? `No crew members matching "${crewSearch.trim()}".`
+                        : `No ${crewRoleFilter === "All" ? "crew members" : crewRoleFilter.toLowerCase() + "s"} registered yet.`}
                     </td>
                   </tr>
                 ) : (
@@ -1208,21 +1379,15 @@ export default function TruckProfitabilityPage() {
                     <tr key={member.id || `${member.assignmentType}-${member.fullName}`}>
                       <td><strong className="truck-code">{member.fullName}</strong></td>
                       <td>
-                        <span
-                          className={`crew-role-badge ${member.assignmentType.toLowerCase()}`}
-                          style={{ display: "inline-block", fontSize: "11px", padding: "2px 8px" }}
-                        >
+                        <span className="crew-role-text">
                           {member.assignmentType}
                         </span>
-                      </td>
-                      <td style={{ fontFamily: "var(--font-mono, monospace)", fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                        {member.employeeCode}
                       </td>
                       <td title={member.contactNumber ? undefined : "No contact number recorded"}>
                         {member.contactNumber || "—"}
                       </td>
                       <td>
-                        <span className={`detail-status ${member.isActive ? "success" : "neutral"}`} style={{ fontSize: "10px" }}>
+                        <span className={`crew-status-text ${member.isActive ? "active" : "inactive"}`}>
                           {member.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
@@ -1230,13 +1395,16 @@ export default function TruckProfitabilityPage() {
                         <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
                           <button
                             type="button"
-                            className="row-action-more-btn"
+                            className="crew-action-icon-btn"
                             aria-label={`More actions for ${member.fullName}`}
                             title={`More actions for ${member.fullName}`}
                             aria-haspopup="menu"
                             aria-expanded={openCrewActionId === member.id}
                             disabled={crewStatusPendingId === member.id}
-                            onClick={() => setOpenCrewActionId((current) => current === member.id ? null : member.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenCrewActionId((current) => current === member.id ? null : member.id);
+                            }}
                           >
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                               <circle cx="8" cy="3" r="1.5" /><circle cx="8" cy="8" r="1.5" /><circle cx="8" cy="13" r="1.5" />
@@ -1244,9 +1412,59 @@ export default function TruckProfitabilityPage() {
                           </button>
                           {openCrewActionId === member.id ? (
                             <div className="row-action-menu" role="menu" aria-label={`Actions for ${member.fullName}`}>
-                              <button type="button" role="menuitem" onClick={() => handleToggleCrewActive(member)}>
-                                {member.isActive ? `Deactivate ${member.assignmentType}` : `Reactivate ${member.assignmentType}`}
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setOpenCrewActionId(null);
+                                  router.push(`/deliveries?search=${encodeURIComponent(member.fullName)}`);
+                                }}
+                              >
+                                View Deliveries
                               </button>
+                              {canAdd && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => openEditCrewModal(member)}
+                                >
+                                  Edit Details
+                                </button>
+                              )}
+                              {member.contactNumber && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => handleCopyContact(member)}
+                                >
+                                  Copy Contact Number
+                                </button>
+                              )}
+                              {canAdd && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => handleToggleCrewActive(member)}
+                                >
+                                  {member.isActive ? `Deactivate ${member.assignmentType}` : `Reactivate ${member.assignmentType}`}
+                                </button>
+                              )}
+                              {canAdd && (
+                                <>
+                                  <div className="row-action-menu-divider" role="separator" />
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-action-menu-danger"
+                                    onClick={() => {
+                                      setOpenCrewActionId(null);
+                                      setCrewToDelete(member);
+                                    }}
+                                  >
+                                    Delete {member.assignmentType}
+                                  </button>
+                                </>
+                              )}
                             </div>
                           ) : null}
                         </div>
@@ -1285,8 +1503,7 @@ export default function TruckProfitabilityPage() {
           <div className="routex-dialog add-truck-dialog">
             <header className="routex-dialog-header">
               <div>
-                <h2 id="add-truck-dialog-title">Add Fleet Truck</h2>
-                <p>Register vehicle into fleet.</p>
+                <h2 id="add-truck-dialog-title">Add Truck</h2>
               </div>
               <button
                 type="button"
@@ -1496,7 +1713,7 @@ export default function TruckProfitabilityPage() {
                 <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
                   <div>
                     <h2 id="delete-truck-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
-                      Confirm Truck Deletion
+                      Delete Truck
                     </h2>
                     <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
                       Action is audited and logged.
@@ -1605,8 +1822,7 @@ export default function TruckProfitabilityPage() {
           <div className="routex-dialog" style={{ width: "min(100%, 480px)" }}>
             <header className="routex-dialog-header">
               <div>
-                <h2 id="add-crew-dialog-title">Add Fleet Crew Member</h2>
-                <p>Register driver or helper.</p>
+                <h2 id="add-crew-dialog-title">Add Crew Member</h2>
               </div>
               <button
                 type="button"
@@ -1639,18 +1855,16 @@ export default function TruckProfitabilityPage() {
                   <div className="crew-role-toggle-group" role="group" aria-label="Select crew role">
                     <button
                       type="button"
-                      className={`crew-role-toggle-btn ${crewRole === "Driver" ? "active driver" : ""}`}
+                      className={`crew-role-toggle-btn ${crewRole === "Driver" ? "active" : ""}`}
                       onClick={() => setCrewRole("Driver")}
                     >
-                      <span className="crew-role-dot driver" aria-hidden="true" />
                       Driver
                     </button>
                     <button
                       type="button"
-                      className={`crew-role-toggle-btn ${crewRole === "Helper" ? "active helper" : ""}`}
+                      className={`crew-role-toggle-btn ${crewRole === "Helper" ? "active" : ""}`}
                       onClick={() => setCrewRole("Helper")}
                     >
-                      <span className="crew-role-dot helper" aria-hidden="true" />
                       Helper
                     </button>
                   </div>
@@ -1721,6 +1935,246 @@ export default function TruckProfitabilityPage() {
           </div>
         </div>
       )}
+
+      {editingCrewMember && (
+        <div
+          className="routex-dialog-layer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-crew-dialog-title"
+        >
+          <div
+            className="routex-dialog-backdrop"
+            onClick={() => !editCrewSubmitting && setEditingCrewMember(null)}
+          />
+          <div className="routex-dialog" style={{ width: "min(100%, 480px)" }}>
+            <header className="routex-dialog-header">
+              <div>
+                <h2 id="edit-crew-dialog-title">Edit Crew Member</h2>
+              </div>
+              <button
+                type="button"
+                className="routex-dialog-close"
+                aria-label="Close dialog"
+                title="Close dialog (Esc)"
+                disabled={editCrewSubmitting}
+                onClick={() => setEditingCrewMember(null)}
+              >
+                ×
+              </button>
+            </header>
+
+            <form onSubmit={handleUpdateCrew}>
+              <div className="routex-dialog-body" style={{ display: "grid", gap: "16px", padding: "20px 24px" }}>
+                {editCrewError && (
+                  <div className="notice" role="alert" style={{ marginBottom: "0" }}>
+                    <span className="notice-icon" aria-hidden="true">!</span>
+                    <div>
+                      <strong>Validation Error:</strong>
+                      <span>{editCrewError}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="routex-dialog-field">
+                  <label style={{ fontWeight: 600, fontSize: "12px", marginBottom: "6px", display: "block" }}>
+                    Crew Role *
+                  </label>
+                  <div className="crew-role-toggle-group" role="group" aria-label="Select crew role">
+                    <button
+                      type="button"
+                      className={`crew-role-toggle-btn ${editCrewRole === "Driver" ? "active" : ""}`}
+                      onClick={() => setEditCrewRole("Driver")}
+                    >
+                      Driver
+                    </button>
+                    <button
+                      type="button"
+                      className={`crew-role-toggle-btn ${editCrewRole === "Helper" ? "active" : ""}`}
+                      onClick={() => setEditCrewRole("Helper")}
+                    >
+                      Helper
+                    </button>
+                  </div>
+                </div>
+
+                <div className="routex-dialog-field">
+                  <label htmlFor="edit-fleet-crew-name" style={{ fontWeight: 600, fontSize: "12px" }}>
+                    {editCrewRole} Full Name *
+                  </label>
+                  <input
+                    id="edit-fleet-crew-name"
+                    type="text"
+                    required
+                    value={editCrewFullName}
+                    onChange={(e) => setEditCrewFullName(e.target.value)}
+                    style={{
+                      minHeight: "42px",
+                      padding: "0 12px",
+                      borderRadius: "10px",
+                      border: "1px solid var(--color-border)",
+                      background: "var(--glass-surface-strong)",
+                    }}
+                  />
+                </div>
+
+                <div className="routex-dialog-field">
+                  <label htmlFor="edit-fleet-crew-contact" style={{ fontWeight: 600, fontSize: "12px" }}>
+                    Contact Number (Optional)
+                  </label>
+                  <input
+                    id="edit-fleet-crew-contact"
+                    type="tel"
+                    placeholder="e.g. 0917-123-4567"
+                    value={editCrewContact}
+                    onChange={(e) => setEditCrewContact(e.target.value)}
+                    style={{
+                      minHeight: "42px",
+                      padding: "0 12px",
+                      borderRadius: "10px",
+                      border: "1px solid var(--color-border)",
+                      background: "var(--glass-surface-strong)",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <footer className="routex-dialog-footer">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={editCrewSubmitting}
+                  title="Cancel editing crew member and close dialog"
+                  onClick={() => setEditingCrewMember(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={editCrewSubmitting || editCrewFullName.trim().length < 2}
+                  title="Save crew member changes"
+                >
+                  {editCrewSubmitting ? "Saving Changes..." : "Save Changes"}
+                </button>
+              </footer>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {crewToDelete && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-crew-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div className="routex-dialog-backdrop" onClick={() => !isDeletingCrew && setCrewToDelete(null)} />
+              <div className="routex-dialog" style={{ maxWidth: "460px" }}>
+                <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
+                  <div>
+                    <h2 id="delete-crew-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
+                      Delete Crew Member
+                    </h2>
+                    <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
+                      Action is audited and logged.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="routex-dialog-close"
+                    aria-label="Close confirmation dialog"
+                    title="Close confirmation dialog (Esc)"
+                    disabled={isDeletingCrew}
+                    onClick={() => setCrewToDelete(null)}
+                  >
+                    ×
+                  </button>
+                </header>
+
+                <div className="routex-dialog-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)" }}>
+                    Are you sure you want to delete {crewToDelete.assignmentType.toLowerCase()} <strong>{crewToDelete.fullName}</strong> from the fleet roster?
+                  </p>
+
+                  <div
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      background: "var(--color-surface-subtle)",
+                      border: "1px solid var(--color-border)",
+                      fontSize: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>Role: </span>
+                      <strong>{crewToDelete.assignmentType}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>Name: </span>
+                      <span>{crewToDelete.fullName}</span>
+                    </div>
+                    {crewToDelete.contactNumber ? (
+                      <div>
+                        <span style={{ color: "var(--color-text-muted)" }}>Contact: </span>
+                        <span>{crewToDelete.contactNumber}</span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "6px",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      color: "#dc2626",
+                      fontSize: "11px",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <strong>Warning:</strong> Removing this crew member will delete them from active fleet selection and registers an audit entry.
+                  </div>
+                </div>
+
+                <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={isDeletingCrew}
+                    onClick={() => setCrewToDelete(null)}
+                    style={{ minHeight: "38px", padding: "0 16px", fontSize: "13px" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-action-button"
+                    disabled={isDeletingCrew}
+                    onClick={handleConfirmDeleteCrew}
+                    style={{
+                      minHeight: "38px",
+                      padding: "0 16px",
+                      fontSize: "13px",
+                      background: "#dc2626",
+                      borderColor: "#dc2626",
+                      color: "#ffffff",
+                    }}
+                  >
+                    {isDeletingCrew ? "Deleting..." : `Delete ${crewToDelete.assignmentType}`}
+                  </button>
+                </footer>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }

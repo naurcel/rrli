@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
+import { RouteXFooter } from "@/components/routex-footer";
 import { evaluatePasswordCriteria } from "@/lib/auth/password-policy";
 import { isSupabaseConfigured } from "@/lib/config/env";
 
@@ -772,6 +773,7 @@ export default function LoginPage() {
               )}
             </div>
           )}
+          <RouteXFooter />
         </div>
       </section>
     </main>

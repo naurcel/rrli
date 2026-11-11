@@ -11,6 +11,8 @@ import {
   registerFleetCrewMember,
   setFleetCrewActive,
   registerFleetDriver,
+  updateFleetCrewMember,
+  deleteFleetCrewMember,
   resetDynamicFleetCrew,
   resetDynamicFleetDrivers,
   type FleetCrewMember,
@@ -165,5 +167,65 @@ test("crew members can be deactivated and excluded from active delivery choices"
   const reactivated = setFleetCrewActive(helper.id, true);
   assert.equal(reactivated.ok, true);
   assert.equal(getFleetDrivers().some((member) => member.id === helper.id), true);
+  resetDynamicFleetCrew();
+});
+
+test("updateFleetCrewMember modifies crew member details and validates input", () => {
+  resetDynamicFleetCrew();
+  const initialCrew = getFleetCrew();
+  const target = initialCrew.find((c) => c.fullName === "Mateo Dela Vega");
+  assert.ok(target);
+
+  // Successful update of name and contact number
+  const updated = updateFleetCrewMember(target.id, {
+    fullName: "Mateo Dela Vega Jr.",
+    contactNumber: "0917-111-2222",
+  });
+  assert.equal(updated.ok, true);
+  if (updated.ok) {
+    assert.equal(updated.crewMember.fullName, "Mateo Dela Vega Jr.");
+    assert.equal(updated.crewMember.contactNumber, "0917-111-2222");
+    assert.equal(updated.crewMember.assignmentType, "Driver");
+  }
+
+  // Duplicate name rejection
+  const dupResult = updateFleetCrewMember(target.id, {
+    fullName: "Nico Serrano",
+  });
+  assert.equal(dupResult.ok, false);
+  if (!dupResult.ok) {
+    assert.match(dupResult.error, /already exists/i);
+  }
+
+  // Name too short rejection
+  const shortResult = updateFleetCrewMember(target.id, {
+    fullName: "M",
+  });
+  assert.equal(shortResult.ok, false);
+  if (!shortResult.ok) {
+    assert.match(shortResult.error, /at least 2 characters/i);
+  }
+
+  resetDynamicFleetCrew();
+});
+
+test("deleteFleetCrewMember removes crew member from active registry", () => {
+  resetDynamicFleetCrew();
+  const initialCrew = getFleetCrew();
+  const helper = initialCrew.find((c) => c.assignmentType === "Helper");
+  assert.ok(helper);
+
+  const initialCount = getFleetCrew().length;
+  const deleted = deleteFleetCrewMember(helper.id);
+  assert.equal(deleted.ok, true);
+
+  const remaining = getFleetCrew();
+  assert.equal(remaining.length, initialCount - 1);
+  assert.equal(remaining.some((c) => c.id === helper.id), false);
+
+  // Deleting non-existent crew returns error
+  const invalidDelete = deleteFleetCrewMember("non-existent-id");
+  assert.equal(invalidDelete.ok, false);
+
   resetDynamicFleetCrew();
 });

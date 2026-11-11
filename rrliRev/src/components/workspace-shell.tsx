@@ -4,6 +4,7 @@ import { AuthActorProvider } from "@/components/auth-context";
 import { GlobalDateRangeProvider } from "@/components/global-date-range-picker";
 import { InitialSetupModal } from "@/components/initial-setup-modal";
 import { OperationalSidebar } from "@/components/operational-sidebar";
+import { RouteXFooter } from "@/components/routex-footer";
 import { SidebarStateProvider } from "@/components/sidebar-state";
 import { requireAuthenticatedActor } from "@/lib/auth/server-session";
 
@@ -22,6 +23,7 @@ export async function WorkspaceShellLayout({
             <OperationalSidebar />
             <div className="main-content">
               {children}
+              <RouteXFooter />
               {actor.mustChangePassword || !actor.hasSecurityQuestion ? (
                 <InitialSetupModal username={actor.username} />
               ) : null}

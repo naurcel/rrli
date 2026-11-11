@@ -19,6 +19,7 @@ export function RoundedSelect({
   searchable = false,
   allowCustomValue = false,
   searchPlaceholder = "Type to search...",
+  customValueLabel,
 }: {
   value: string;
   options: readonly (string | SelectOption)[];
@@ -30,6 +31,7 @@ export function RoundedSelect({
   searchable?: boolean;
   allowCustomValue?: boolean;
   searchPlaceholder?: string;
+  customValueLabel?: (query: string) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -205,8 +207,14 @@ export function RoundedSelect({
                     setOpen(false);
                   }}
                 >
-                  <span>Add new</span>
-                  <strong>{trimmedQuery}</strong>
+                  {customValueLabel ? (
+                    customValueLabel(trimmedQuery)
+                  ) : (
+                    <>
+                      <span>Add </span>
+                      <strong>{trimmedQuery}</strong>
+                    </>
+                  )}
                 </button>
               ) : null}
             </>

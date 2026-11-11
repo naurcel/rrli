@@ -27,7 +27,7 @@ export function ConfirmDeliveryDeletionDialog({
         <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
           <div>
             <h2 id="delete-delivery-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
-              Confirm Delivery Deletion
+              Delete Delivery
             </h2>
             <p style={{ margin: "2px 0 0", fontSize: "11px" }}>Action is audited and logged.</p>
           </div>

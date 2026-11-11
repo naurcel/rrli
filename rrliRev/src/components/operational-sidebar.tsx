@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { AccountControl } from "@/components/account-control";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { Icon } from "@/components/route-x-ui";
 import { useSidebarState } from "@/components/sidebar-state";
@@ -77,13 +76,11 @@ export function OperationalSidebar() {
         {navigation.primary.map(renderNavigationItem)}
       </nav>
 
-      <nav className="management-navigation" aria-label="Management navigation">
-        {navigation.management.map(renderNavigationItem)}
-      </nav>
-
-      <div className="sidebar-footer">
-        <AccountControl />
-      </div>
+      {navigation.management.length > 0 ? (
+        <nav className="management-navigation" aria-label="Management navigation">
+          {navigation.management.map(renderNavigationItem)}
+        </nav>
+      ) : null}
     </aside>
   );
 }

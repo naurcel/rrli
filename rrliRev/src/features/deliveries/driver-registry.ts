@@ -50,12 +50,23 @@ export const BASE_HELPERS: readonly FleetCrewMember[] = [
 export const dynamicFleetCrew: FleetCrewMember[] = [];
 export const dynamicFleetDrivers = dynamicFleetCrew;
 const inactiveFleetCrewIds = new Set<string>();
+const deletedFleetCrewIds = new Set<string>();
+const overriddenFleetCrew = new Map<string, Partial<FleetCrewMember>>();
 
 export function getFleetCrew(): readonly FleetCrewMember[] {
-  return [...BASE_DRIVERS, ...BASE_HELPERS, ...dynamicFleetCrew].map((member) => ({
-    ...member,
-    isActive: !inactiveFleetCrewIds.has(member.id) && member.isActive,
-  }));
+  return [...BASE_DRIVERS, ...BASE_HELPERS, ...dynamicFleetCrew]
+    .filter((member) => !deletedFleetCrewIds.has(member.id))
+    .map((member) => {
+      const overrides = overriddenFleetCrew.get(member.id);
+      return {
+        ...member,
+        ...overrides,
+        isActive:
+          overrides?.isActive !== undefined
+            ? overrides.isActive
+            : !inactiveFleetCrewIds.has(member.id) && member.isActive,
+      };
+    });
 }
 
 export function getFleetDrivers(): readonly FleetCrewMember[] {
@@ -77,7 +88,83 @@ export function setFleetCrewActive(
   if (isActive) inactiveFleetCrewIds.delete(member.id);
   else inactiveFleetCrewIds.add(member.id);
 
+  const existingOverrides = overriddenFleetCrew.get(member.id) ?? {};
+  overriddenFleetCrew.set(member.id, { ...existingOverrides, isActive });
+
   return { ok: true, crewMember: { ...member, isActive } };
+}
+
+export function updateFleetCrewMember(
+  id: string,
+  updates: {
+    fullName?: string;
+    assignmentType?: "Driver" | "Helper";
+    contactNumber?: string | null;
+    isActive?: boolean;
+  },
+): { ok: true; crewMember: FleetCrewMember } | { ok: false; error: string } {
+  const normalized = id.trim().toLowerCase();
+  const all = getFleetCrew();
+  const existing = all.find((candidate) => candidate.id.toLowerCase() === normalized);
+  if (!existing) {
+    return { ok: false, error: "CREW_MEMBER_NOT_FOUND" };
+  }
+
+  if (updates.fullName !== undefined) {
+    const trimmed = updates.fullName.trim();
+    if (trimmed.length < 2) {
+      return { ok: false, error: "Name must be at least 2 characters." };
+    }
+    const duplicate = all.some(
+      (c) =>
+        c.id.toLowerCase() !== normalized &&
+        c.fullName.toLowerCase() === trimmed.toLowerCase() &&
+        (updates.assignmentType ? c.assignmentType === updates.assignmentType : c.assignmentType === existing.assignmentType),
+    );
+    if (duplicate) {
+      return { ok: false, error: `Crew member "${trimmed}" already exists.` };
+    }
+  }
+
+  const existingOverrides = overriddenFleetCrew.get(existing.id) ?? {};
+  const newOverrides: Partial<FleetCrewMember> = {
+    ...existingOverrides,
+    ...(updates.fullName !== undefined ? { fullName: updates.fullName.trim() } : {}),
+    ...(updates.assignmentType !== undefined ? { assignmentType: updates.assignmentType } : {}),
+    ...(updates.contactNumber !== undefined
+      ? { contactNumber: updates.contactNumber ? updates.contactNumber.trim() : null }
+      : {}),
+    ...(updates.isActive !== undefined ? { isActive: updates.isActive } : {}),
+  };
+  overriddenFleetCrew.set(existing.id, newOverrides);
+
+  const dynamicIndex = dynamicFleetCrew.findIndex((c) => c.id.toLowerCase() === normalized);
+  if (dynamicIndex >= 0) {
+    dynamicFleetCrew[dynamicIndex] = {
+      ...dynamicFleetCrew[dynamicIndex],
+      ...newOverrides,
+    };
+  }
+
+  const updatedMember = getFleetCrew().find((c) => c.id.toLowerCase() === normalized)!;
+  return { ok: true, crewMember: updatedMember };
+}
+
+export function deleteFleetCrewMember(id: string): { ok: true } | { ok: false; error: string } {
+  const normalized = id.trim().toLowerCase();
+  const all = getFleetCrew();
+  const existing = all.find((candidate) => candidate.id.toLowerCase() === normalized);
+  if (!existing) {
+    return { ok: false, error: "CREW_MEMBER_NOT_FOUND" };
+  }
+
+  deletedFleetCrewIds.add(existing.id);
+  const dynamicIndex = dynamicFleetCrew.findIndex((c) => c.id.toLowerCase() === normalized);
+  if (dynamicIndex >= 0) {
+    dynamicFleetCrew.splice(dynamicIndex, 1);
+  }
+
+  return { ok: true };
 }
 
 export function registerFleetCrewMember(input: {
@@ -126,5 +213,7 @@ export const registerFleetDriver = registerFleetCrewMember;
 export function resetDynamicFleetDrivers(): void {
   dynamicFleetCrew.length = 0;
   inactiveFleetCrewIds.clear();
+  deletedFleetCrewIds.clear();
+  overriddenFleetCrew.clear();
 }
 export const resetDynamicFleetCrew = resetDynamicFleetDrivers;

@@ -1,16 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
-import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-deletion-dialog";
-import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
-import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
-import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
-import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline";
 import {
   formatDateRange,
+  GlobalDateRangePicker,
   toDateKey,
   useGlobalDateRange,
   type DateRange,
@@ -18,16 +15,16 @@ import {
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import {
-  RecordDetailDrawer,
-  type DetailSection,
-} from "@/components/record-detail-drawer";
-import {
   type DeliveryTripRecord,
   getDeliveryIncompleteIssues,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
 } from "@/features/deliveries/delivery-domain";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
+import {
+  calculateNiceYAxis,
+  calculateTopClient,
+} from "@/features/dashboard/dashboard-kpi";
 import {
   useDeliveryProfitabilitySummary,
   type PersistedTruckSummary,
@@ -133,8 +130,8 @@ function getDeliveryMissingDetails(delivery: DeliveryTripRecord): MissingDetailI
 
   if (delivery.deliveryRate == null || delivery.deliveryRate <= 0) {
     issues.push({
-      label: "Missing delivery revenue",
-      tooltip: "Agreed delivery revenue has not been specified",
+      label: "Missing revenue",
+      tooltip: "Agreed revenue has not been specified",
     });
   }
 
@@ -261,16 +258,15 @@ function RevenueChart({
   const chartBoundsRef = useRef<DOMRect | null>(null);
   const width = 720;
   const height = 232;
-  const padding = { top: 22, right: 22, bottom: 40, left: 54 };
+  const padding = { top: 22, right: 22, bottom: 40, left: 68 };
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
-  const peak = Math.max(...series.map((point) => point.revenue), 1);
-  const ceiling = Math.ceil(peak / 10_000) * 10_000;
-  const gridValues = [0, 0.5, 1].map((step) => ceiling * step);
+  const peak = Math.max(...series.map((point) => point.revenue), 0);
+  const { ceiling, ticks: gridValues } = calculateNiceYAxis(peak);
   const coordinates = series.map((point, index) => ({
     ...point,
     x: padding.left + (series.length <= 1 ? innerWidth / 2 : (index / (series.length - 1)) * innerWidth),
-    y: padding.top + innerHeight - (point.revenue / ceiling) * innerHeight,
+    y: padding.top + innerHeight - (ceiling > 0 ? (point.revenue / ceiling) * innerHeight : 0),
   }));
   const line = buildSmoothPath(coordinates, {
     minY: padding.top,
@@ -304,14 +300,17 @@ function RevenueChart({
 
   return (
     <section className="records-card revenue-chart-card" aria-labelledby="revenue-over-time-heading">
-      <div className="records-heading">
+      <div className="records-heading revenue-chart-heading">
         <div>
           <h2 id="revenue-over-time-heading">Revenue over time</h2>
           <p>{periodLabel} · completed revenue</p>
         </div>
-        <div className="chart-legend" aria-label="Chart legend">
-          <span><i /> Revenue</span>
-          <strong>{formatPeso(series.reduce((total, point) => total + point.revenue, 0))}</strong>
+        <div className="revenue-chart-controls">
+          <GlobalDateRangePicker />
+          <div className="chart-legend" aria-label="Chart legend">
+            <span><i /> Revenue</span>
+            <strong>{formatPeso(series.reduce((total, point) => total + point.revenue, 0))}</strong>
+          </div>
         </div>
       </div>
       {series.length ? (
@@ -441,7 +440,7 @@ function RevenueChart({
       ) : (
         <div
           className="empty-state chart-empty-state"
-          title="No delivery revenue recorded within the selected date range"
+          title="No revenue recorded within the selected date range"
         >
           <strong>No revenue in this range</strong>
           <span>Choose a wider date range to view the trend.</span>
@@ -452,19 +451,27 @@ function RevenueChart({
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const actor = useAuthenticatedActor();
   const { range } = useGlobalDateRange();
   const { deliveries, loading, error } = usePersistedDeliveries(range);
   const { summary: persistedSummary } = useDeliveryProfitabilitySummary(range);
-  const [selectedTrip, setSelectedTrip] = useState<DeliveryLedgerItem | null>(null);
-  const [deliveryToDelete, setDeliveryToDelete] = useState<DeliveryLedgerItem | null>(null);
-  const [isDeletingDelivery, setIsDeletingDelivery] = useState(false);
-  const [deleteDeliveryError, setDeleteDeliveryError] = useState<string | null>(null);
   const [accessNoticeDismissed, setAccessNoticeDismissed] = useState(false);
   const [truckRankingMetric, setTruckRankingMetric] =
     useState<TruckRankingMetric>("netIncome");
   const [deliverySort, setDeliverySort] = useState<{ key: string; direction: TableSortDirection }>({ key: "date", direction: "desc" });
   const [companyExpenses, setCompanyExpenses] = useState<CompanyExpense[]>([]);
+  const [expandedAttentionIds, setExpandedAttentionIds] = useState<Set<string>>(new Set());
+
+  const toggleAttentionItem = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedAttentionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     async function fetchExpenses() {
@@ -494,21 +501,6 @@ export default function DashboardPage() {
     };
   }, []);
 
-  async function handleConfirmDeleteDelivery() {
-    if (!deliveryToDelete || isDeletingDelivery) return;
-    setIsDeletingDelivery(true);
-    setDeleteDeliveryError(null);
-    try {
-      await deleteDeliveryRecord(deliveryToDelete.id);
-      setDeliveryToDelete(null);
-      setSelectedTrip(null);
-    } catch (error) {
-      setDeleteDeliveryError(error instanceof Error ? error.message : "Unable to delete delivery.");
-    } finally {
-      setIsDeletingDelivery(false);
-    }
-  }
-
   const filteredDeliveries = deliveries;
   const deliveriesWithMissingDetails = useMemo(() => {
     return filteredDeliveries
@@ -521,6 +513,12 @@ export default function DashboardPage() {
       })
       .filter((item) => item.issues.length > 0);
   }, [filteredDeliveries]);
+
+  const topClientData = useMemo(
+    () => calculateTopClient(filteredDeliveries),
+    [filteredDeliveries],
+  );
+
   const sortedDeliveries = useMemo(() => {
     const multiplier = deliverySort.direction === "asc" ? 1 : -1;
     return [...filteredDeliveries].sort((left, right) => {
@@ -528,6 +526,8 @@ export default function DashboardPage() {
         date: [left.deliveryDate, right.deliveryDate],
         client: [left.clientName, right.clientName],
         truck: [left.plateNumber, right.plateNumber],
+        dropoffs: [left.dropoffs.length, right.dropoffs.length],
+        revenue: [left.deliveryRate ?? 0, right.deliveryRate ?? 0],
         netIncome: [left.netIncome ?? Number.NEGATIVE_INFINITY, right.netIncome ?? Number.NEGATIVE_INFINITY],
       };
       const [leftValue, rightValue] = values[deliverySort.key] ?? values.date;
@@ -604,92 +604,16 @@ export default function DashboardPage() {
 
   const canWrite = canMutateDeliveryRecords(actor.role);
 
-  const drawerSections: DetailSection[] = useMemo(() => {
-    if (!selectedTrip) {
-      return [];
-    }
-
-    return [
-      {
-        title: "Delivery Overview",
-        eyebrow: "Trip details",
-        rows: [
-          { label: "Waybill Number", value: selectedTrip.waybillNumber, tooltip: `Waybill tracking code #${selectedTrip.waybillNumber}` },
-          { label: "Delivery Date", value: selectedTrip.deliveryDate, tooltip: "Operational dispatch and completion date" },
-          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const, tooltip: "Delivery recorded past standard 3-day operational window" }] : []),
-          { label: "Client Account", value: selectedTrip.clientName, tooltip: `Freight client account: ${selectedTrip.clientName}` },
-          { label: "Origin Hub", value: selectedTrip.origin, tooltip: `Origin facility: ${selectedTrip.origin}` },
-          { label: "Distance", value: `${selectedTrip.distanceKm} km`, tooltip: `Round-trip transit distance: ${selectedTrip.distanceKm} km` },
-          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L`, tooltip: `Diesel purchase benchmark: ${formatPeso(selectedTrip.fuelRate)} per liter` },
-          {
-            label: "Delivery Status",
-            value: !isDeliveryIncomplete(selectedTrip)
-              ? "Completed"
-              : !isDeliveryFinanciallyComplete(selectedTrip)
-                ? "Incomplete (Unconfirmed Expenses)"
-                : "Incomplete (Missing POD)",
-            tone: isDeliveryIncomplete(selectedTrip) ? "warning" : undefined,
-            tooltip: !isDeliveryIncomplete(selectedTrip)
-              ? "Delivery completed with all trip expenses confirmed and POD attached"
-              : !isDeliveryFinanciallyComplete(selectedTrip)
-                ? `Incomplete delivery: Unconfirmed expenses (${selectedTrip.financialIntegrityIssues.join(", ") || "requires confirmation"}). Click 'Edit delivery' to complete.`
-                : "Incomplete delivery: Missing Proof of Delivery (POD) documents for store drop-offs.",
-          },
-        ],
-      },
-      {
-        title: "Assigned Vehicle",
-        eyebrow: "Fleet Asset",
-        customContent: (
-          <DeliveryTruckInfoSection
-            plateNumber={selectedTrip.plateNumber}
-            truckType={selectedTrip.truckType}
-            truckTemperature={selectedTrip.truckTemperature}
-            truckOwnership={selectedTrip.truckOwnership}
-            rateBasis={selectedTrip.rateBasis}
-          />
-        ),
-      },
-      {
-        title: `Store Drop-offs (${selectedTrip.dropoffs.length} ${selectedTrip.dropoffs.length === 1 ? "stop" : "stops"})`,
-        fullWidth: true,
-        customContent: <DeliveryDropoffTimeline dropoffs={selectedTrip.dropoffs} />,
-      },
-      {
-        title: "POD & Supporting Documents",
-        fullWidth: true,
-        customContent: (
-          <DeliveryPodDocuments
-            trip={selectedTrip}
-            canVerify={canManageDocuments(actor.role)}
-            roleLabel={actor.roleLabel}
-            onTripChange={(trip) => {
-              const updated = { ...selectedTrip, ...trip };
-              upsertBrowserPreviewDelivery(updated);
-              setSelectedTrip(updated);
-            }}
-          />
-        ),
-      },
-      {
-        title: "Financial Breakdown",
-        eyebrow: "Revenue, expenses, and profitability",
-        fullWidth: true,
-        customContent: <DeliveryFinancialBreakdown trip={selectedTrip} />,
-      },
-    ];
-  }, [actor.role, actor.roleLabel, selectedTrip]);
-
   return (
     <>
-      <OperationalTopbar contextLabel="Delivery Operations & Trucks" />
+      <OperationalTopbar contextLabel="Delivery Operations & Trucks" showDateFilter={false} />
 
       <div key={rangeKey} className="content-wrap dashboard-range-refresh">
         <header className="page-intro dashboard-welcome">
           <div>
             <h1>Welcome back, {actor.fullName.split(" ")[0]}</h1>
             <p className="subtitle">
-              Deliveries, PODs, expenses, and truck profitability.
+              Overview of delivery operations and profitability.
             </p>
           </div>
           {canWrite ? (
@@ -764,15 +688,16 @@ export default function DashboardPage() {
 
           <section
             className="dashboard-kpi-grid"
-            aria-label="Company profitability summary"
+            aria-label="Company performance and profitability summary"
           >
+            {/* 1. Revenue */}
             <Link
               className="stat-card stat-card-link ui-tooltip"
               href="/deliveries"
-              data-tooltip="View delivery revenue and records"
-              title="View delivery revenue and records"
+              data-tooltip="View revenue and delivery records"
+              title="View revenue and delivery records"
             >
-              <span className="stat-label">DELIVERY REVENUE</span>
+              <span className="stat-label">REVENUE</span>
               <strong>{formatPeso(totals.earnings)}</strong>
               <span
                 className={`stat-meta ${totals.finalizedCount > 0 ? "positive" : ""}`}
@@ -783,41 +708,32 @@ export default function DashboardPage() {
               </span>
             </Link>
 
-            <Link
-              className="stat-card stat-card-link ui-tooltip"
-              href="/deliveries"
-              data-tooltip="View itemized delivery expenses"
-              title="View itemized delivery expenses"
-            >
-              <span className="stat-label">DELIVERY EXPENSES</span>
-              <strong>{formatPeso(totals.deliveryExpenses)}</strong>
-              <span className="stat-meta">
-                Fuel, highway tolls, entry fees &amp; crew compensation
-              </span>
-            </Link>
-
+            {/* 2. Expenses */}
             <Link
               className="stat-card stat-card-link ui-tooltip"
               href="/finance"
-              data-tooltip="View company expense ledger"
-              title="View company expense ledger"
+              data-tooltip="View itemized delivery and company expenses"
+              title="View itemized delivery and company expenses"
             >
-              <span className="stat-label">COMPANY EXPENSES</span>
-              <strong style={{ color: "var(--color-accent-deep, #92400e)" }}>
-                {formatPeso(totals.companyExpenses)}
-              </strong>
+              <span className="stat-label">EXPENSES</span>
+              <strong>{formatPeso(totals.deliveryExpenses + totals.companyExpenses)}</strong>
               <span className="stat-meta">
-                {filteredCompanyExpenses.length} operating {filteredCompanyExpenses.length === 1 ? "expense" : "expenses"} outside deliveries
+                {totals.companyExpenses > 0
+                  ? `${formatPeso(totals.deliveryExpenses)} delivery · ${formatPeso(totals.companyExpenses)} company`
+                  : totals.deliveryExpenses > 0
+                    ? `${formatPeso(totals.deliveryExpenses)} delivery expenses`
+                    : "No expenses in this range"}
               </span>
             </Link>
 
+            {/* 3. Profit */}
             <Link
               className="stat-card stat-card-link ui-tooltip"
               href="/finance"
-              data-tooltip="View overall company net profit and finance ledger"
-              title="View overall company net profit and finance ledger"
+              data-tooltip="View profit and financial breakdowns"
+              title="View profit and financial breakdowns"
             >
-              <span className="stat-label">COMPANY NET PROFIT</span>
+              <span className="stat-label">PROFIT</span>
               <strong className={totals.companyNetProfit >= 0 ? undefined : "warning"}>
                 {formatPeso(totals.companyNetProfit)}
               </strong>
@@ -827,10 +743,45 @@ export default function DashboardPage() {
                 }`}
               >
                 {totals.earnings > 0 && totals.companyProfitMargin !== null
-                  ? `${formatPercent(totals.companyProfitMargin)} overall profit margin`
+                  ? `${formatPercent(totals.companyProfitMargin)} profit margin`
                   : totals.companyNetProfit < 0 && totals.companyProfitMargin !== null
-                    ? `${formatPercent(totals.companyProfitMargin)} overall loss margin`
-                    : "Overall profit after all expenses"}
+                    ? `${formatPercent(totals.companyProfitMargin)} loss margin`
+                    : "Net income after all expenses"}
+              </span>
+            </Link>
+
+            {/* 4. Top Client */}
+            <Link
+              className="stat-card stat-card-link stat-card-top-client ui-tooltip"
+              href="/reports"
+              data-tooltip={
+                topClientData.isTied
+                  ? `Tied top clients: ${topClientData.allNames}`
+                  : topClientData.name !== "None"
+                    ? `Top client: ${topClientData.name} (${formatPeso(topClientData.revenue)})`
+                    : "No client revenue recorded in selected range"
+              }
+              title={
+                topClientData.isTied
+                  ? `Tied top clients: ${topClientData.allNames}`
+                  : topClientData.name !== "None"
+                    ? `Top client: ${topClientData.name} (${formatPeso(topClientData.revenue)})`
+                    : "No client revenue recorded in selected range"
+              }
+            >
+              <span className="stat-label">TOP CLIENT</span>
+              <strong
+                className="stat-client-name"
+                title={topClientData.isTied ? topClientData.allNames : topClientData.name}
+              >
+                {topClientData.name}
+              </strong>
+              <span className={`stat-meta ${topClientData.revenue > 0 ? "positive" : ""}`}>
+                {topClientData.revenue > 0
+                  ? topClientData.isTied
+                    ? `Tied at ${formatPeso(topClientData.revenue)} each`
+                    : `${formatPeso(topClientData.revenue)} revenue · ${topClientData.tripCount} ${topClientData.tripCount === 1 ? "trip" : "trips"}`
+                  : "No revenue in selected range"}
               </span>
             </Link>
           </section>
@@ -840,11 +791,11 @@ export default function DashboardPage() {
           <section className="records-card" aria-label="Recent completed deliveries">
             <div className="records-heading">
               <div>
-                <h2>Recent Completed Deliveries</h2>
-                <p>5 most recent delivery trips.</p>
+                <h2>Recent Deliveries</h2>
+                <p>Latest delivery trips.</p>
               </div>
               <Link className="secondary-button" href="/deliveries">
-                View all deliveries
+                View all
               </Link>
             </div>
 
@@ -855,6 +806,8 @@ export default function DashboardPage() {
                     <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={deliverySort.key} direction={deliverySort.direction} defaultDirection="desc" onSort={(key, direction) => setDeliverySort({ key, direction })} />
                     <SortableTableHeader label="Client" sortKey="client" activeSortKey={deliverySort.key} direction={deliverySort.direction} onSort={(key, direction) => setDeliverySort({ key, direction })} />
                     <SortableTableHeader label="Truck" sortKey="truck" activeSortKey={deliverySort.key} direction={deliverySort.direction} onSort={(key, direction) => setDeliverySort({ key, direction })} />
+                    <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={deliverySort.key} direction={deliverySort.direction} defaultDirection="desc" onSort={(key, direction) => setDeliverySort({ key, direction })} />
+                    <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={deliverySort.key} direction={deliverySort.direction} defaultDirection="desc" onSort={(key, direction) => setDeliverySort({ key, direction })} />
                     <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={deliverySort.key} direction={deliverySort.direction} defaultDirection="desc" onSort={(key, direction) => setDeliverySort({ key, direction })} />
                   </tr>
                 </thead>
@@ -867,11 +820,11 @@ export default function DashboardPage() {
                         key={trip.id}
                         className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
                         tabIndex={0}
-                        onClick={() => setSelectedTrip(trip)}
+                        onClick={() => router.push(`/deliveries/${encodeURIComponent(trip.id)}`)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
-                            setSelectedTrip(trip);
+                            router.push(`/deliveries/${encodeURIComponent(trip.id)}`);
                           }
                         }}
                       >
@@ -879,13 +832,29 @@ export default function DashboardPage() {
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <strong>{trip.waybillNumber}</strong>
                           </div>
-                          <small>{trip.deliveryDate}</small>
+                          <small>{formatDashboardDate(trip.deliveryDate)}</small>
                         </td>
-                        <td>{trip.clientName}</td>
+                        <td>
+                          <span className="recent-client-name" title={trip.clientName}>
+                            {trip.clientName}
+                          </span>
+                        </td>
                         <td className="truck-code">
                           <strong>{trip.plateNumber}</strong>
                           <br />
                           <small>{trip.truckType}</small>
+                        </td>
+                        <td>
+                          <span className="recent-dropoff-pill">
+                            {trip.dropoffs.length} {trip.dropoffs.length === 1 ? "drop-off" : "drop-offs"}
+                          </span>
+                        </td>
+                        <td className="money">
+                          {trip.deliveryRate != null && trip.deliveryRate > 0 ? (
+                            formatPeso(trip.deliveryRate)
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
                         </td>
                         <td className="money">
                           {isFinanciallyIncomplete || trip.netIncome == null ? (
@@ -968,55 +937,101 @@ export default function DashboardPage() {
                   <h2>Attention Needed</h2>
                   <p>
                     {deliveriesWithMissingDetails.length > 0
-                      ? `${deliveriesWithMissingDetails.length} ${deliveriesWithMissingDetails.length === 1 ? "delivery has" : "deliveries have"} missing details.`
-                      : "Follow-up items for this period."}
+                      ? `${deliveriesWithMissingDetails.length} ${deliveriesWithMissingDetails.length === 1 ? "delivery needs" : "deliveries need"} attention.`
+                      : "No pending items."}
                   </p>
                 </div>
+                {deliveriesWithMissingDetails.length > 0 && (
+                  <button
+                    type="button"
+                    className="expand-all-text-button"
+                    onClick={() => {
+                      if (expandedAttentionIds.size === deliveriesWithMissingDetails.length) {
+                        setExpandedAttentionIds(new Set());
+                      } else {
+                        setExpandedAttentionIds(new Set(deliveriesWithMissingDetails.map((d) => d.delivery.id)));
+                      }
+                    }}
+                    title="Toggle expand all missing details"
+                  >
+                    {expandedAttentionIds.size === deliveriesWithMissingDetails.length ? "Collapse all" : "Expand all"}
+                  </button>
+                )}
               </div>
               {deliveriesWithMissingDetails.length > 0 ? (
-                <div className="dashboard-attention-list">
-                  {deliveriesWithMissingDetails.map(({ delivery, issues }) => (
-                    <div
-                      key={delivery.id}
-                      className="dashboard-attention-item"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedTrip(delivery)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setSelectedTrip(delivery);
-                        }
-                      }}
-                      aria-label={`View delivery ${delivery.waybillNumber} for ${delivery.clientName}`}
-                    >
-                      <span className="dashboard-attention-indicator" aria-hidden="true" />
-                      <div className="dashboard-attention-body">
-                        <div className="dashboard-attention-header">
-                          <span
-                            className="dashboard-attention-waybill"
-                            title={`${delivery.waybillNumber} · ${delivery.clientName}`}
-                          >
-                            {delivery.waybillNumber} · {delivery.clientName}
-                          </span>
-                          <span className="dashboard-attention-meta">
-                            {delivery.plateNumber}
-                          </span>
-                        </div>
-                        <div className="dashboard-attention-tags">
-                          {issues.map((issue, idx) => (
-                            <span
-                              key={idx}
-                              className="dashboard-attention-tag"
-                              title={issue.tooltip ?? issue.label}
+                <div className="dashboard-attention-list" role="region" aria-label="Deliveries requiring attention">
+                  {deliveriesWithMissingDetails.map(({ delivery, issues }) => {
+                    const isExpanded = expandedAttentionIds.has(delivery.id);
+                    return (
+                      <div
+                        key={delivery.id}
+                        className={`dashboard-attention-item${isExpanded ? " is-expanded" : ""}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => router.push(`/deliveries/${encodeURIComponent(delivery.id)}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            router.push(`/deliveries/${encodeURIComponent(delivery.id)}`);
+                          }
+                        }}
+                        aria-label={`View delivery ${delivery.waybillNumber} for ${delivery.clientName}`}
+                      >
+                        <span className="dashboard-attention-indicator" aria-hidden="true" />
+                        <div className="dashboard-attention-body">
+                          <div className="dashboard-attention-header">
+                            <div className="dashboard-attention-title-group">
+                              <span
+                                className="dashboard-attention-waybill"
+                                title={`${delivery.waybillNumber} · ${delivery.clientName}`}
+                              >
+                                {delivery.waybillNumber} · {delivery.clientName}
+                              </span>
+                              <span className="dashboard-attention-meta">
+                                {delivery.plateNumber}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              className="dashboard-attention-toggle"
+                              aria-expanded={isExpanded}
+                              aria-label={`${isExpanded ? "Hide" : "Show"} missing details for ${delivery.waybillNumber}`}
+                              onClick={(e) => toggleAttentionItem(delivery.id, e)}
                             >
-                              {issue.label}
-                            </span>
-                          ))}
+                              <span>{issues.length} {issues.length === 1 ? "missing" : "missing"}</span>
+                              <span className={`attention-chevron${isExpanded ? " open" : ""}`} aria-hidden="true">▾</span>
+                            </button>
+                          </div>
+
+                          {isExpanded && (
+                            <div
+                              className="dashboard-attention-dropdown"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="dashboard-attention-tags">
+                                {issues.map((issue, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="dashboard-attention-tag"
+                                    title={issue.tooltip ?? issue.label}
+                                  >
+                                    {issue.label}
+                                  </span>
+                                ))}
+                              </div>
+                              <button
+                                type="button"
+                                className="dashboard-attention-resolve-btn"
+                                onClick={() => router.push(`/deliveries/${encodeURIComponent(delivery.id)}`)}
+                              >
+                                Review delivery details →
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div
@@ -1026,77 +1041,14 @@ export default function DashboardPage() {
                   <span aria-hidden="true">✓</span>
                   <div>
                     <strong>All caught up</strong>
-                    <small>No delivery records have missing details in this range.</small>
+                    <small>No pending items in this range.</small>
                   </div>
                 </div>
               )}
             </section>
           </div>
         </div>
-
-        <p className="scope-note">
-          <span aria-hidden="true">●</span>
-          Delivery Operations, Multi-Store Drop-offs, POD Documents &amp; Trucks
-        </p>
       </div>
-
-      <RecordDetailDrawer
-        open={Boolean(selectedTrip)}
-        eyebrow={selectedTrip ? `WAYBILL ${selectedTrip.waybillNumber}` : ""}
-        title={selectedTrip ? selectedTrip.clientName : ""}
-        statusLabel={
-          selectedTrip
-            ? !isDeliveryIncomplete(selectedTrip)
-              ? "Completed"
-              : !isDeliveryFinanciallyComplete(selectedTrip)
-                ? "Incomplete (Unconfirmed Expenses)"
-                : "Incomplete (Missing POD)"
-            : undefined
-        }
-        statusTone={selectedTrip && isDeliveryIncomplete(selectedTrip) ? "warning" : "success"}
-        sections={drawerSections}
-        footer={selectedTrip && canWrite ? (
-          <div className="record-detail-footer-actions">
-            {actor.role === "admin" ? (
-              <button
-                type="button"
-                className="icon-only-action danger ui-tooltip"
-                aria-label="Delete delivery"
-                data-tooltip="Delete delivery"
-                title="Delete delivery"
-                onClick={() => {
-                  setDeleteDeliveryError(null);
-                  setDeliveryToDelete(selectedTrip);
-                  setSelectedTrip(null);
-                }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M4 7h16M9 7V4.5h6V7m3 0-1 13H7L6 7m4 4v5m4-5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            ) : null}
-            <Link
-              className="primary-action-button"
-              href={`/deliveries?edit=${encodeURIComponent(selectedTrip.id)}`}
-              onClick={() => setSelectedTrip(null)}
-            >
-              Edit delivery
-            </Link>
-          </div>
-        ) : null}
-        onClose={() => setSelectedTrip(null)}
-      />
-      <ConfirmDeliveryDeletionDialog
-        delivery={deliveryToDelete}
-        pending={isDeletingDelivery}
-        error={deleteDeliveryError}
-        onCancel={() => {
-          if (isDeletingDelivery) return;
-          setDeleteDeliveryError(null);
-          setDeliveryToDelete(null);
-        }}
-        onConfirm={handleConfirmDeleteDelivery}
-      />
     </>
   );
 }

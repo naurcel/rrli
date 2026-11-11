@@ -344,426 +344,485 @@ export default function SettingsPage() {
       <OperationalTopbar contextLabel="Settings" />
 
       <div className="content-wrap settings-page-wrap">
-        <header className="page-intro">
-          <div>
-            <h1>Account Settings</h1>
-            <p className="subtitle">
-              Profile photo, credentials, and account security.
-            </p>
+        {/* Profile Centerpiece (Google Account Mobile Inspired) */}
+        <section className="settings-profile-centerpiece" aria-label="User Profile">
+          {/* Centered Avatar with Floating Edit/Upload Badge */}
+          <div className="settings-hero-avatar-wrap">
+            {activeAvatar ? (
+              <img
+                src={activeAvatar}
+                alt={actor.fullName}
+                width={112}
+                height={112}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  maxWidth: "112px",
+                  maxHeight: "112px",
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                  display: "block",
+                }}
+                className="settings-hero-avatar-img"
+              />
+            ) : (
+              <div className="settings-hero-avatar-fallback">
+                <span>{initials}</span>
+              </div>
+            )}
+            {photoUploading ? (
+              <div className="settings-hero-avatar-loading">
+                <span>Saving…</span>
+              </div>
+            ) : null}
+
+            {/* Quick-action Camera Badge */}
+            <label
+              className="settings-hero-avatar-badge"
+              title={activeAvatar ? "Change profile photo" : "Upload profile photo"}
+              aria-label="Change profile photo"
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                onChange={handlePhotoSelect}
+                disabled={photoUploading}
+              />
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </label>
           </div>
-          <span className={`access-pill ${actor.accessLevel}`}>
-            {actor.roleLabel} · {actor.accessLevelLabel}
-          </span>
-        </header>
 
-        {/* 2-Column Responsive Workspace Grid */}
-        <div className="settings-workspace-layout">
-          {/* Left Column: Profile Photo & Account Identity Card */}
-          <aside className="records-card settings-profile-card" aria-label="Profile Card">
-            <div className="settings-avatar-section">
-              <div className="settings-avatar-wrap">
-                {activeAvatar ? (
-                  <img
-                    src={activeAvatar}
-                    alt={actor.fullName}
-                    className="settings-avatar-img"
-                  />
-                ) : (
-                  <div className="settings-avatar-fallback">
-                    <span>{initials}</span>
-                  </div>
-                )}
-                {photoUploading ? (
-                  <div className="settings-avatar-loading-overlay">
-                    <span>Saving…</span>
-                  </div>
-                ) : null}
+          {/* User Identity Header */}
+          <div className="settings-hero-info">
+            <h1 className="settings-hero-name">{actor.fullName}</h1>
+            <p className="settings-hero-username">@{currentUsername}</p>
+
+            <div className="settings-hero-badges">
+              <span className={`access-pill ${actor.accessLevel}`}>
+                {actor.roleLabel}
+              </span>
+              <span className="settings-hero-dot" aria-hidden="true">·</span>
+              <span className="settings-hero-email">{actor.email}</span>
+            </div>
+          </div>
+
+          {/* Profile Photo Actions */}
+          <div className="settings-hero-actions">
+            <label className="secondary-button settings-photo-btn" title="Upload a JPG, PNG, or WebP photo (max 5MB)">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                onChange={handlePhotoSelect}
+                disabled={photoUploading}
+              />
+              {activeAvatar ? "Change Photo" : "Upload Photo"}
+            </label>
+
+            {activeAvatar ? (
+              <button
+                type="button"
+                className="settings-photo-remove-btn"
+                onClick={handleRemovePhoto}
+                disabled={photoUploading}
+                title="Remove profile picture"
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+
+          {photoFeedback ? (
+            <div className={`settings-photo-feedback ${photoFeedback.tone}`}>
+              {photoFeedback.text}
+            </div>
+          ) : (
+            <p className="settings-photo-hint">
+              JPG, PNG, or WebP (max 5MB).
+            </p>
+          )}
+        </section>
+
+        {/* Vertically Organized Settings Stack Under Profile */}
+        <div className="settings-sections-container">
+          {/* Section 1: Account Details (Change Username) */}
+          <section className="records-card settings-card-section" aria-label="Account Details">
+            <div className="settings-section-header">
+              <div className="settings-section-header-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
               </div>
+              <div>
+                <h2>Account Details</h2>
+                <p>Manage your username and account credentials.</p>
+              </div>
+            </div>
 
-              <div className="settings-photo-actions">
-                <label className="primary-action-button settings-photo-upload-label" title="Upload a JPG, PNG, or WebP photo">
+            <form onSubmit={handleUsernameSubmit} className="settings-form-body">
+              {usernameFeedback ? (
+                <div className={`settings-form-alert ${usernameFeedback.tone}`}>
+                  {usernameFeedback.text}
+                </div>
+              ) : null}
+
+              <div className="settings-field-row-2col">
+                <div className="settings-form-field">
+                  <label>Current Username</label>
                   <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="sr-only"
-                    onChange={handlePhotoSelect}
-                    disabled={photoUploading}
+                    type="text"
+                    disabled
+                    value={`@${currentUsername}`}
+                    className="settings-input"
                   />
-                  {activeAvatar ? "Change Photo" : "Upload Photo"}
-                </label>
+                </div>
 
-                {activeAvatar ? (
-                  <button
-                    type="button"
-                    className="secondary-button settings-photo-remove-btn"
-                    onClick={handleRemovePhoto}
-                    disabled={photoUploading}
-                    title="Remove profile picture"
-                  >
-                    Remove
-                  </button>
+                <div className="settings-form-field">
+                  <label>New Username</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. shinryu"
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value)}
+                    className="settings-input"
+                  />
+                </div>
+              </div>
+
+              <div className="settings-form-field">
+                <label>Confirm Current Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter current password to verify identity"
+                  value={usernamePassword}
+                  onChange={(e) => setUsernamePassword(e.target.value)}
+                  className="settings-input"
+                />
+                <small className="settings-field-hint">
+                  3–30 characters (letters, numbers, underscores, dots, hyphens). Case-insensitive unique.
+                </small>
+              </div>
+
+              <button
+                type="submit"
+                className="primary-action-button"
+                disabled={usernameSubmitting}
+                title="Save your new username"
+                style={{ minHeight: "42px", justifySelf: "start", padding: "0 22px" }}
+              >
+                {usernameSubmitting ? "Updating…" : "Save Username"}
+              </button>
+            </form>
+          </section>
+
+          {/* Section 2: Sign-in & Security (Change Password) */}
+          <section className="records-card settings-card-section" aria-label="Sign-in & Security">
+            <div className="settings-section-header">
+              <div className="settings-section-header-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </div>
+              <div>
+                <h2>Sign-in &amp; Security</h2>
+                <p>Update your password to keep your account secure.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handlePasswordSubmit} className="settings-form-body">
+              {passwordFeedback ? (
+                <div className={`settings-form-alert ${passwordFeedback.tone}`}>
+                  {passwordFeedback.text}
+                </div>
+              ) : null}
+
+              <div className="settings-form-field">
+                <label>Current Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter current password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="settings-input"
+                />
+              </div>
+
+              <div className="settings-field-row-2col">
+                <div className="settings-form-field">
+                  <label>New Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter new password (min. 8 characters)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="settings-input"
+                  />
+                </div>
+
+                <div className="settings-form-field">
+                  <label>Confirm New Password</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Re-enter new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="settings-input"
+                  />
+                </div>
+              </div>
+
+              <PasswordCriteriaList password={newPassword} />
+
+              <button
+                type="submit"
+                className="primary-action-button"
+                disabled={passwordSubmitting}
+                title="Update your account password"
+                style={{ minHeight: "42px", justifySelf: "start", padding: "0 22px" }}
+              >
+                {passwordSubmitting ? "Updating…" : "Update Password"}
+              </button>
+            </form>
+          </section>
+
+          {/* Section 3: Recovery & Verification (Security Question) */}
+          <section className="records-card settings-card-section" aria-label="Recovery & Verification">
+            <div className="settings-section-header">
+              <div className="settings-section-header-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+              </div>
+              <div>
+                <h2>Recovery &amp; Verification</h2>
+                <p>Security question used to verify identity during password recovery.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSecurityQuestionSubmit} className="settings-form-body">
+              {securityFeedback ? (
+                <div className={`settings-form-alert ${securityFeedback.tone}`}>
+                  {securityFeedback.text}
+                </div>
+              ) : null}
+
+              <div className="settings-form-field">
+                <label>Active Security Question</label>
+                <div style={{ fontSize: "13px", fontWeight: 600, padding: "10px 14px", borderRadius: "10px", background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}>
+                  {currentQuestion}
+                </div>
+              </div>
+
+              <div className="settings-form-field">
+                <label>Choose New Question</label>
+                <select
+                  value={isCustomQuestion ? "custom" : selectedQuestion}
+                  onChange={(e) => {
+                    if (e.target.value === "custom") {
+                      setIsCustomQuestion(true);
+                    } else {
+                      setIsCustomQuestion(false);
+                      setSelectedQuestion(e.target.value);
+                    }
+                  }}
+                  className="settings-input"
+                >
+                  {PREDEFINED_SECURITY_QUESTIONS.map((q) => (
+                    <option key={q} value={q}>
+                      {q}
+                    </option>
+                  ))}
+                  <option value="custom">Enter custom question…</option>
+                </select>
+
+                {isCustomQuestion ? (
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter your custom security question"
+                    value={customQuestionText}
+                    onChange={(e) => setCustomQuestionText(e.target.value)}
+                    className="settings-input"
+                    style={{ marginTop: "8px" }}
+                  />
                 ) : null}
               </div>
 
-              {photoFeedback ? (
-                <div className={`settings-photo-feedback ${photoFeedback.tone}`}>
-                  {photoFeedback.text}
+              <div className="settings-field-row-2col">
+                <div className="settings-form-field">
+                  <label>Security Answer (Case-sensitive)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter secret answer"
+                    value={securityAnswer}
+                    onChange={(e) => setSecurityAnswer(e.target.value)}
+                    className="settings-input"
+                  />
                 </div>
-              ) : (
-                <p className="settings-photo-hint">
-                  JPG, PNG, or WebP (max 5MB).
-                </p>
-              )}
-            </div>
 
-            <div className="settings-profile-metadata">
-              <div className="settings-meta-item">
-                <span className="settings-meta-label">Full Name</span>
-                <strong className="settings-meta-value">{actor.fullName}</strong>
-              </div>
-
-              <div className="settings-meta-item">
-                <span className="settings-meta-label">Username</span>
-                <span className="settings-meta-value username-tag">@{currentUsername}</span>
-              </div>
-
-              <div className="settings-meta-item">
-                <span className="settings-meta-label">Email Address</span>
-                <span className="settings-meta-value">{actor.email}</span>
-              </div>
-
-              <div className="settings-meta-item">
-                <span className="settings-meta-label">Assigned Role</span>
-                <div className="settings-role-badge-row">
-                  <span className={`access-pill ${actor.accessLevel}`}>
-                    {actor.roleLabel}
-                  </span>
-                  <span className="settings-role-hint">Assigned by Admin</span>
+                <div className="settings-form-field">
+                  <label>Confirm Security Answer</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Confirm secret answer"
+                    value={confirmSecurityAnswer}
+                    onChange={(e) => setConfirmSecurityAnswer(e.target.value)}
+                    className="settings-input"
+                  />
                 </div>
               </div>
+
+              <div className="settings-form-field">
+                <label>Confirm Current Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter current password to save security question"
+                  value={securityPassword}
+                  onChange={(e) => setSecurityPassword(e.target.value)}
+                  className="settings-input"
+                />
+                <small className="settings-field-hint">
+                  Answers are case-sensitive and hashed using Argon2id. Stored answers are never revealed.
+                </small>
+              </div>
+
+              <button
+                type="submit"
+                className="primary-action-button"
+                disabled={securitySubmitting}
+                title="Save your password recovery security question and answer"
+                style={{ minHeight: "42px", justifySelf: "start", padding: "0 22px" }}
+              >
+                {securitySubmitting ? "Saving…" : "Save Security Question"}
+              </button>
+            </form>
+          </section>
+
+          {/* Section 4: Account Security Status */}
+          <section className="records-card settings-card-section" aria-label="Account Security Status">
+            <div className="settings-section-header">
+              <div className="settings-section-header-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </div>
+              <div>
+                <h2>Account Security Status</h2>
+                <p>System security protections enabled for your account.</p>
+              </div>
             </div>
 
-            <div className="settings-security-card">
-              <h4>Account Security Status</h4>
+            <div className="settings-security-checklist-card">
               <ul className="settings-security-checklist">
-                <li>
-                  <span className="settings-check-pill ok">✓</span>
-                  <span>Argon2id password encryption</span>
+                <li className="settings-security-item">
+                  <span className="settings-check-pill ok" aria-hidden="true">✓</span>
+                  <div>
+                    <strong>Argon2id Password Encryption</strong>
+                    <p className="settings-security-subtext">RFC 9106 cryptographic standard</p>
+                  </div>
                 </li>
-                <li>
-                  <span className={`settings-check-pill ${currentQuestion !== "Not yet configured" ? "ok" : "pending"}`}>
+                <li className="settings-security-item">
+                  <span className={`settings-check-pill ${currentQuestion !== "Not yet configured" ? "ok" : "pending"}`} aria-hidden="true">
                     {currentQuestion !== "Not yet configured" ? "✓" : "!"}
                   </span>
-                  <span>
-                    {currentQuestion !== "Not yet configured"
-                      ? "Security question configured"
-                      : "Security question pending"}
-                  </span>
+                  <div>
+                    <strong>
+                      {currentQuestion !== "Not yet configured"
+                        ? "Security Question Configured"
+                        : "Security Question Pending"}
+                    </strong>
+                    <p className="settings-security-subtext">
+                      {currentQuestion !== "Not yet configured"
+                        ? "Active self-service recovery"
+                        : "Required for self-service recovery"}
+                    </p>
+                  </div>
                 </li>
               </ul>
             </div>
-          </aside>
+          </section>
 
-          {/* Right Column: Main Configuration Forms */}
-          <div className="settings-forms-grid">
-            {/* Panel 1: Change Username */}
-            <section className="records-card settings-panel-card" aria-label="Change Username">
-              <div className="records-heading">
-                <div>
-                  <h2>Change Username</h2>
-                  <p>Update your RouteX username.</p>
-                </div>
+          {/* Section 5: Role Permissions Reference */}
+          <section className="records-card settings-card-section" aria-label="Role Permissions">
+            <div className="settings-section-header">
+              <div className="settings-section-header-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M7 15h0M2 9.5h20" />
+                </svg>
               </div>
-
-              <form onSubmit={handleUsernameSubmit} className="settings-form-body">
-                {usernameFeedback ? (
-                  <div className={`settings-form-alert ${usernameFeedback.tone}`}>
-                    {usernameFeedback.text}
-                  </div>
-                ) : null}
-
-                <div className="settings-field-row-2col">
-                  <div className="settings-form-field">
-                    <label>Current Username</label>
-                    <input
-                      type="text"
-                      disabled
-                      value={`@${currentUsername}`}
-                      className="settings-input"
-                    />
-                  </div>
-
-                  <div className="settings-form-field">
-                    <label>New Username</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. shinryu"
-                      value={newUsername}
-                      onChange={(e) => setNewUsername(e.target.value)}
-                      className="settings-input"
-                    />
-                  </div>
-                </div>
-
-                <div className="settings-form-field">
-                  <label>Confirm Current Password</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Enter current password to verify identity"
-                    value={usernamePassword}
-                    onChange={(e) => setUsernamePassword(e.target.value)}
-                    className="settings-input"
-                  />
-                  <small className="settings-field-hint">
-                    3-30 characters (letters, numbers, underscores, dots, hyphens). Case-insensitive unique.
-                  </small>
-                </div>
-
-                <button
-                  type="submit"
-                  className="primary-action-button"
-                  disabled={usernameSubmitting}
-                  title="Save your new username"
-                  style={{ minHeight: "42px", justifySelf: "start", padding: "0 20px" }}
-                >
-                  {usernameSubmitting ? "Updating…" : "Save Username"}
-                </button>
-              </form>
-            </section>
-
-            {/* Panel 2: Change Password */}
-            <section className="records-card settings-panel-card" aria-label="Change Password">
-              <div className="records-heading">
-                <div>
-                  <h2>Change Password</h2>
-                  <p>Update your account password.</p>
-                </div>
+              <div>
+                <h2>Role Permissions</h2>
+                <p>System privileges and capabilities across RouteX roles.</p>
               </div>
-
-              <form onSubmit={handlePasswordSubmit} className="settings-form-body">
-                {passwordFeedback ? (
-                  <div className={`settings-form-alert ${passwordFeedback.tone}`}>
-                    {passwordFeedback.text}
-                  </div>
-                ) : null}
-
-                <div className="settings-form-field">
-                  <label>Current Password</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Enter current password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="settings-input"
-                  />
-                </div>
-
-                <div className="settings-field-row-2col">
-                  <div className="settings-form-field">
-                    <label>New Password</label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Enter new password (min. 8 characters)"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="settings-input"
-                    />
-                  </div>
-
-                  <div className="settings-form-field">
-                    <label>Confirm New Password</label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Re-enter new password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="settings-input"
-                    />
-                  </div>
-                </div>
-
-                <PasswordCriteriaList password={newPassword} />
-
-                <button
-                  type="submit"
-                  className="primary-action-button"
-                  disabled={passwordSubmitting}
-                  title="Update your account password"
-                  style={{ minHeight: "42px", justifySelf: "start", padding: "0 20px" }}
-                >
-                  {passwordSubmitting ? "Updating…" : "Update Password"}
-                </button>
-              </form>
-            </section>
-
-            {/* Panel 3: Security Question & Password Recovery */}
-            <section className="records-card settings-panel-card" aria-label="Security Question">
-              <div className="records-heading">
-                <div>
-                  <h2>Security Question &amp; Recovery</h2>
-                  <p>Configure security question for password recovery.</p>
-                </div>
-              </div>
-
-              <form onSubmit={handleSecurityQuestionSubmit} className="settings-form-body">
-                {securityFeedback ? (
-                  <div className={`settings-form-alert ${securityFeedback.tone}`}>
-                    {securityFeedback.text}
-                  </div>
-                ) : null}
-
-                <div className="settings-form-field">
-                  <label>Active Security Question</label>
-                  <div style={{ fontSize: "13px", fontWeight: 600, padding: "10px 14px", borderRadius: "10px", background: "var(--color-accent-soft)", color: "var(--color-accent-deep)" }}>
-                    {currentQuestion}
-                  </div>
-                </div>
-
-                <div className="settings-form-field">
-                  <label>Choose New Question</label>
-                  <select
-                    value={isCustomQuestion ? "custom" : selectedQuestion}
-                    onChange={(e) => {
-                      if (e.target.value === "custom") {
-                        setIsCustomQuestion(true);
-                      } else {
-                        setIsCustomQuestion(false);
-                        setSelectedQuestion(e.target.value);
-                      }
-                    }}
-                    className="settings-input"
-                  >
-                    {PREDEFINED_SECURITY_QUESTIONS.map((q) => (
-                      <option key={q} value={q}>
-                        {q}
-                      </option>
-                    ))}
-                    <option value="custom">Enter custom question…</option>
-                  </select>
-
-                  {isCustomQuestion ? (
-                    <input
-                      type="text"
-                      required
-                      placeholder="Enter your custom security question"
-                      value={customQuestionText}
-                      onChange={(e) => setCustomQuestionText(e.target.value)}
-                      className="settings-input"
-                      style={{ marginTop: "8px" }}
-                    />
-                  ) : null}
-                </div>
-
-                <div className="settings-field-row-2col">
-                  <div className="settings-form-field">
-                    <label>Security Answer (Case-sensitive)</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Enter secret answer"
-                      value={securityAnswer}
-                      onChange={(e) => setSecurityAnswer(e.target.value)}
-                      className="settings-input"
-                    />
-                  </div>
-
-                  <div className="settings-form-field">
-                    <label>Confirm Security Answer</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Confirm secret answer"
-                      value={confirmSecurityAnswer}
-                      onChange={(e) => setConfirmSecurityAnswer(e.target.value)}
-                      className="settings-input"
-                    />
-                  </div>
-                </div>
-
-                <div className="settings-form-field">
-                  <label>Confirm Current Password</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Enter current password to save security question"
-                    value={securityPassword}
-                    onChange={(e) => setSecurityPassword(e.target.value)}
-                    className="settings-input"
-                  />
-                  <small className="settings-field-hint">
-                    Answers are case-sensitive and hashed using Argon2id. Stored answers are never revealed.
-                  </small>
-                </div>
-
-                <button
-                  type="submit"
-                  className="primary-action-button"
-                  disabled={securitySubmitting}
-                  title="Save your password recovery security question and answer"
-                  style={{ minHeight: "42px", justifySelf: "start", padding: "0 20px" }}
-                >
-                  {securitySubmitting ? "Saving…" : "Save Security Question"}
-                </button>
-              </form>
-            </section>
-          </div>
-        </div>
-
-        {/* Full-Width Role & Access Level Reference Table */}
-        <section
-          className="records-card settings-matrix-section"
-          aria-label="Role and permission matrix"
-        >
-          <div className="records-heading">
-            <div>
-              <h2>Role & Access Level Reference</h2>
-              <p>Permissions across all six operational roles.</p>
             </div>
-          </div>
 
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Role</th>
-                  <th>Access Level</th>
-                  <th>Deliveries & Drop-offs</th>
-                  <th>Excel Import & Review</th>
-                  <th>POD & Documents</th>
-                  <th>User Management</th>
-                </tr>
-              </thead>
-              <tbody>
-                {USER_ROLES.map((roleKey) => {
-                  const meta = ROLE_METADATA[roleKey];
-                  const canWrite = meta.accessLevel !== "view_only";
-                  const isAdmin = meta.accessLevel === "admin";
-                  return (
-                    <tr key={roleKey}>
-                      <td>
-                        <strong>{meta.label}</strong>
-                      </td>
-                      <td>
-                        <span className={`access-pill ${meta.accessLevel}`}>
-                          {meta.accessLevelLabel}
-                        </span>
-                      </td>
-                      <td>{canWrite ? "Create, Edit & View" : "View-Only"}</td>
-                      <td>{canWrite ? "Upload, Review & Confirm" : "No Access"}</td>
-                      <td>{canWrite ? "Upload & Manage" : "View-Only"}</td>
-                      <td>{isAdmin ? "Full Admin Control" : "Restricted"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Access Level</th>
+                    <th>Deliveries &amp; Drop-offs</th>
+                    <th>Excel Import &amp; Review</th>
+                    <th>POD &amp; Documents</th>
+                    <th>User Management</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {USER_ROLES.map((roleKey) => {
+                    const meta = ROLE_METADATA[roleKey];
+                    const canWrite = meta.accessLevel !== "view_only";
+                    const isAdmin = meta.accessLevel === "admin";
+                    const isCurrentRole = actor.role === roleKey;
+                    return (
+                      <tr key={roleKey} className={isCurrentRole ? "settings-current-role-row" : undefined}>
+                        <td>
+                          <strong>{meta.label}</strong>
+                          {isCurrentRole ? <span className="settings-current-role-tag">Your Role</span> : null}
+                        </td>
+                        <td>
+                          <span className={`access-pill ${meta.accessLevel}`}>
+                            {meta.accessLevelLabel}
+                          </span>
+                        </td>
+                        <td>{canWrite ? "Create, Edit & View" : "View-Only"}</td>
+                        <td>{canWrite ? "Upload, Review & Confirm" : "No Access"}</td>
+                        <td>{canWrite ? "Upload & Manage" : "View-Only"}</td>
+                        <td>{isAdmin ? "Full Admin Control" : "Restricted"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </div>
     </>
   );

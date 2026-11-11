@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-deletion-dialog";
-import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
-import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
-import { DeliveryCrewSection, parsePersonnelNames } from "@/components/delivery-crew-section";
-import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline";
 import {
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
@@ -169,6 +166,7 @@ function sortDeliveryLedgerItems(
 }
 
 export default function DeliveriesPage() {
+  const router = useRouter();
   const actor = useAuthenticatedActor();
   const { range } = useGlobalDateRange();
   const [deliveries, setDeliveries] = useState<readonly DeliveryLedgerItem[]>([]);
@@ -186,12 +184,23 @@ export default function DeliveriesPage() {
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [total, setTotal] = useState(0);
-  const [selectedTrip, setSelectedTrip] = useState<DeliveryLedgerItem | null>(null);
   const [deliveryToDelete, setDeliveryToDelete] = useState<DeliveryLedgerItem | null>(null);
   const [isDeletingDelivery, setIsDeletingDelivery] = useState(false);
   const [deleteDeliveryError, setDeleteDeliveryError] = useState<string | null>(null);
   const [activeKpi, setActiveKpi] = useState<"earnings" | "expenses" | "profit" | null>(null);
   const [financialActionMessage, setFinancialActionMessage] = useState<string | null>(null);
+
+  function navigateToDelivery(trip: DeliveryLedgerItem) {
+    const query = new URLSearchParams();
+    if (searchQuery.trim()) query.set("search", searchQuery.trim());
+    if (statusFilter !== "all") query.set("status", statusFilter);
+    if (sort !== "delivery_date:desc") query.set("sort", sort);
+    if (page > 1) query.set("page", String(page));
+    if (selectedClients.length > 0) query.set("clients", selectedClients.join(","));
+    if (selectedTrucks.length > 0) query.set("trucks", selectedTrucks.join(","));
+    const qs = query.toString();
+    router.push(`/deliveries/${encodeURIComponent(trip.id)}${qs ? `?${qs}` : ""}`);
+  }
 
   const [correctingTrip, setCorrectingTrip] = useState<DeliveryLedgerItem | null>(null);
   const [correctionReason, setCorrectionReason] = useState("");
@@ -314,7 +323,6 @@ export default function DeliveriesPage() {
     setCorrectionDropoffs(dropoffsDraft);
     setCorrectionSubmitting(false);
     setCorrectionError(null);
-    setSelectedTrip(null);
   }
 
   function closeCorrectionModal() {
@@ -352,12 +360,10 @@ export default function DeliveriesPage() {
       Object.entries(correctionStatuses).some(([key, value]) => value !== correctingTrip?.expenseStates[key as keyof DeliveryLedgerItem["expenseStates"]])
     );
     if (dirty && !window.confirm("Discard the unsaved delivery correction?")) return;
-    setSelectedTrip(correctingTrip);
     setCorrectingTrip(null);
   }
 
   function openDeleteDeliveryModal(trip: DeliveryLedgerItem) {
-    setSelectedTrip(null);
     setDeleteDeliveryError(null);
     setDeliveryToDelete(trip);
   }
@@ -572,7 +578,6 @@ export default function DeliveriesPage() {
           ? `Delivery updated and financials resolved (Version ${newVersion}). Reason: "${correctionReason.trim()}".`
           : `Delivery updated with pending unresolved expenses (Version ${newVersion}). Reason: "${correctionReason.trim()}".`,
       );
-      setSelectedTrip(updated);
       upsertBrowserPreviewDelivery(updated);
       setDeliveries((prev) =>
         prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
@@ -596,7 +601,6 @@ export default function DeliveriesPage() {
       setTotal((current) => Math.max(0, current - 1));
       setFinancialActionMessage(`Delivery record "${deliveryToDelete.waybillNumber}" was successfully deleted.`);
       setDeliveryToDelete(null);
-      setSelectedTrip(null);
     } catch (error) {
       setDeleteDeliveryError(error instanceof Error ? error.message : "Network error while deleting delivery record.");
     } finally {
@@ -723,14 +727,47 @@ export default function DeliveriesPage() {
     };
   }, [page, range, searchQuery, selectedClients, selectedTrucks, sort, statusFilter]);
 
+  const isInitialParamsParsed = useRef(false);
+
   useEffect(() => {
-    setPage(1);
+    if (isInitialParamsParsed.current) {
+      setPage(1);
+    }
   }, [range, searchQuery, selectedClients, selectedTrucks, sort, statusFilter]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedId = params.get("edit");
     const createdId = params.get("created");
+    const searchParam = params.get("search") || params.get("q");
+
+    if (!isInitialParamsParsed.current) {
+      isInitialParamsParsed.current = true;
+      if (searchParam) {
+        setSearchQuery(searchParam);
+      }
+      const statusParam = params.get("status");
+      if (statusParam === "completed" || statusParam === "incomplete" || statusParam === "all") {
+        setStatusFilter(statusParam);
+      }
+      const sortParam = params.get("sort");
+      if (sortParam) {
+        setSort(sortParam);
+      }
+      const pageParam = params.get("page");
+      if (pageParam && Number(pageParam) > 1) {
+        setPage(Number(pageParam));
+      }
+      const clientsParam = params.get("clients");
+      if (clientsParam) {
+        setSelectedClients(clientsParam.split(",").filter(Boolean));
+      }
+      const trucksParam = params.get("trucks");
+      if (trucksParam) {
+        setSelectedTrucks(trucksParam.split(",").filter(Boolean));
+      }
+    }
+
     if (requestedId && handledEditLink.current !== requestedId) {
       const requestedTrip =
         deliveries.find((trip) => trip.id === requestedId) ??
@@ -740,15 +777,10 @@ export default function DeliveriesPage() {
         openCorrectionModal(requestedTrip);
       }
     } else if (createdId && handledEditLink.current !== createdId) {
-      const createdTrip =
-        deliveries.find((trip) => trip.id === createdId) ??
-        readBrowserPreviewDeliveries().find((trip) => trip.id === createdId);
-      if (createdTrip) {
-        handledEditLink.current = createdId;
-        setSelectedTrip(createdTrip);
-      }
+      handledEditLink.current = createdId;
+      router.push(`/deliveries/${encodeURIComponent(createdId)}`);
     }
-  }, [deliveries]);
+  }, [deliveries, router]);
 
   const sortedDeliveriesBase = useMemo(() => {
     const [sortField, direction] = sort.split(":") as [string, TableSortDirection];
@@ -962,7 +994,7 @@ export default function DeliveriesPage() {
       const expTotal = summary.expenseTotal;
       return [
         {
-          eyebrow: "EXPENSE DISTRIBUTION VISUALIZATION",
+          eyebrow: "EXPENSE BREAKDOWN",
           title: "Trip Expenses Distribution",
           fullWidth: true,
           customContent: (
@@ -973,7 +1005,7 @@ export default function DeliveriesPage() {
           ),
         },
         {
-          eyebrow: "CALCULATION FORMULA",
+          eyebrow: "FORMULA",
           title: "Trip Expenses",
           rows: [
             { label: "Formula", value: "Diesel Fuel + Highway Tolls + Store Entry Fees + Crew Compensation + Other Expenses" },
@@ -984,7 +1016,7 @@ export default function DeliveriesPage() {
           ],
         },
         {
-          eyebrow: "ITEMIZED EXPENSE BREAKDOWN",
+          eyebrow: "COST CATEGORIES",
           title: "Cost Categories",
           rows: [
             { label: "Diesel Fuel", value: `${formatPeso(kpiBreakdown.diesel)} (${sharePercent(kpiBreakdown.diesel, expTotal)})` },
@@ -995,7 +1027,7 @@ export default function DeliveriesPage() {
           ],
         },
         {
-          eyebrow: "CREW COMPENSATION BREAKDOWN",
+          eyebrow: "CREW COMPENSATION",
           title: "Crew Compensation",
           rows: [
             { label: "Driver Daily Rates", value: formatPeso(kpiBreakdown.driverDailyRate) },
@@ -1101,101 +1133,6 @@ export default function DeliveriesPage() {
   const updateTableSort = (key: string, direction: TableSortDirection) => setSort(`${key}:${direction}`);
   const resetTableSort = () => setSort("delivery_date:desc");
 
-  const drawerSections: DetailSection[] = useMemo(() => {
-    if (!selectedTrip) {
-      return [];
-    }
-
-    const driverCount = parsePersonnelNames(selectedTrip.driverName).length;
-    const helperCount = parsePersonnelNames(selectedTrip.helperName).length;
-
-    return [
-      {
-        title: "Delivery Overview",
-        eyebrow: "Trip details",
-        rows: [
-          { label: "Waybill Number", value: selectedTrip.waybillNumber, tooltip: `Waybill tracking code #${selectedTrip.waybillNumber}` },
-          { label: "Delivery Date", value: selectedTrip.deliveryDate, tooltip: "Operational dispatch and store completion date" },
-          ...(selectedTrip.recordingDelayed ? [{ label: "Late Recording", value: "Yes", tone: "warning" as const, tooltip: "Delivery was submitted past the standard operational recording window" }] : []),
-          { label: "Client Account", value: selectedTrip.clientName, tooltip: `Freight client account: ${selectedTrip.clientName}` },
-          { label: "Origin Hub", value: selectedTrip.origin, tooltip: `Origin facility: ${selectedTrip.origin}` },
-          { label: "Distance", value: `${selectedTrip.distanceKm} km`, tooltip: `Transit distance: ${selectedTrip.distanceKm} km` },
-          { label: "Fuel Rate", value: `${formatPeso(selectedTrip.fuelRate)} / L`, tooltip: `Diesel purchase benchmark: ${formatPeso(selectedTrip.fuelRate)}/liter` },
-          {
-            label: "Delivery Status",
-            value: !isDeliveryIncomplete(selectedTrip)
-              ? "Completed"
-              : !isDeliveryFinanciallyComplete(selectedTrip)
-                ? "Incomplete (Unconfirmed Expenses)"
-                : "Incomplete (Missing POD)",
-            tone: isDeliveryIncomplete(selectedTrip) ? "warning" : undefined,
-            tooltip: !isDeliveryIncomplete(selectedTrip)
-              ? "Delivery completed with all trip expenses confirmed and POD attached"
-              : !isDeliveryFinanciallyComplete(selectedTrip)
-                ? `Incomplete delivery: Unconfirmed expenses (${selectedTrip.financialIntegrityIssues.join(", ") || "requires confirmation"}). Click 'Edit delivery' to complete.`
-                : "Incomplete delivery: Missing Proof of Delivery (POD) documents for store drop-offs.",
-          },
-        ],
-      },
-      {
-        title: "Assigned Vehicle",
-        eyebrow: "Fleet Asset",
-        customContent: (
-          <DeliveryTruckInfoSection
-            plateNumber={selectedTrip.plateNumber}
-            truckType={selectedTrip.truckType}
-            truckTemperature={selectedTrip.truckTemperature}
-            truckOwnership={selectedTrip.truckOwnership}
-            rateBasis={selectedTrip.rateBasis}
-          />
-        ),
-      },
-      {
-        title: `Crew Assignment (${driverCount} Driver${driverCount === 1 ? "" : "s"} · ${helperCount} Helper${helperCount === 1 ? "" : "s"})`,
-        eyebrow: "Dispatch Personnel",
-        fullWidth: true,
-        customContent: (
-          <DeliveryCrewSection
-            driverName={selectedTrip.driverName}
-            helperName={selectedTrip.helperName}
-            driverRateText={`${formatExpenseResolution(selectedTrip.expenses.driverDailyRate, selectedTrip.expenseStates.driverDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.driverAllowance, selectedTrip.expenseStates.driverAllowance)}`}
-            helperRateText={`${formatExpenseResolution(selectedTrip.expenses.helperDailyRate, selectedTrip.expenseStates.helperDailyRate)} + ${formatExpenseResolution(selectedTrip.expenses.helperAllowance, selectedTrip.expenseStates.helperAllowance)}`}
-          />
-        ),
-      },
-      {
-        title: `Route & Store Drop-offs (${selectedTrip.dropoffs.length} ${selectedTrip.dropoffs.length === 1 ? "drop-off" : "drop-offs"})`,
-        eyebrow: "Store drop-off sequence & documents",
-        fullWidth: true,
-        customContent: <DeliveryDropoffTimeline dropoffs={selectedTrip.dropoffs} />,
-      },
-      {
-        title: "Financial Breakdown",
-        eyebrow: "Revenue, expenses, and profitability",
-        fullWidth: true,
-        customContent: <DeliveryFinancialBreakdown trip={selectedTrip} />,
-      },
-      {
-        title: "POD & Supporting Documents",
-        eyebrow: "Stop-level files",
-        fullWidth: true,
-        customContent: (
-          <DeliveryPodDocuments
-            trip={selectedTrip}
-            canVerify={canManageDocuments(actor.role)}
-            roleLabel={actor.roleLabel}
-            onTripChange={(nextTrip) => {
-              const updated = { ...selectedTrip, ...nextTrip };
-              upsertBrowserPreviewDelivery(updated);
-              setSelectedTrip(updated);
-              setDeliveries((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
-            }}
-          />
-        ),
-      },
-    ];
-  }, [actor.role, actor.roleLabel, canWrite, selectedTrip]);
-
   return (
     <>
       <OperationalTopbar contextLabel="Completed Deliveries & Multi-Store Trips" />
@@ -1205,7 +1142,7 @@ export default function DeliveriesPage() {
           <div>
             <h1>Deliveries</h1>
             <p className="subtitle">
-              Completed trips, drop-offs, costs, and PODs.
+              Trip records, store drop-offs, and expense tracking.
             </p>
           </div>
           <div className="fleet-intro-actions">
@@ -1280,7 +1217,6 @@ export default function DeliveriesPage() {
             type="button"
             className={`stat-card is-interactive${activeKpi === "earnings" ? " is-active" : ""}`}
             onClick={() => {
-              setSelectedTrip(null);
               setActiveKpi((curr) => (curr === "earnings" ? null : "earnings"));
             }}
             aria-expanded={activeKpi === "earnings"}
@@ -1299,7 +1235,6 @@ export default function DeliveriesPage() {
             type="button"
             className={`stat-card is-interactive${activeKpi === "expenses" ? " is-active" : ""}`}
             onClick={() => {
-              setSelectedTrip(null);
               setActiveKpi((curr) => (curr === "expenses" ? null : "expenses"));
             }}
             aria-expanded={activeKpi === "expenses"}
@@ -1318,7 +1253,6 @@ export default function DeliveriesPage() {
             type="button"
             className={`stat-card is-interactive${activeKpi === "profit" ? " is-active" : ""}`}
             onClick={() => {
-              setSelectedTrip(null);
               setActiveKpi((curr) => (curr === "profit" ? null : "profit"));
             }}
             aria-expanded={activeKpi === "profit"}
@@ -1338,8 +1272,7 @@ export default function DeliveriesPage() {
         <section className={`records-card${loading ? " is-loading" : ""}`} aria-label="Completed deliveries table">
           <div className="records-heading">
             <div className="records-heading-copy">
-              <h2>Delivery Ledger</h2>
-              <p>Operational delivery trips.</p>
+              <h2>Deliveries</h2>
             </div>
           </div>
 
@@ -1539,13 +1472,13 @@ export default function DeliveriesPage() {
                         tabIndex={0}
                         onClick={() => {
                           setActiveKpi(null);
-                          setSelectedTrip(trip);
+                          navigateToDelivery(trip);
                         }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
                             setActiveKpi(null);
-                            setSelectedTrip(trip);
+                            navigateToDelivery(trip);
                           }
                         }}
                       >
@@ -1666,45 +1599,6 @@ export default function DeliveriesPage() {
         statusTone={activeKpiMeta?.statusTone}
         sections={kpiDrawerSections}
         onClose={() => setActiveKpi(null)}
-      />
-
-      <RecordDetailDrawer
-        open={Boolean(selectedTrip)}
-        eyebrow={selectedTrip ? `WAYBILL ${selectedTrip.waybillNumber}` : ""}
-        title={selectedTrip ? selectedTrip.clientName : ""}
-        statusLabel={
-          selectedTrip
-            ? !isDeliveryIncomplete(selectedTrip)
-              ? "Completed"
-              : !isDeliveryFinanciallyComplete(selectedTrip)
-                ? "Incomplete (Unconfirmed Expenses)"
-                : "Incomplete (Missing POD)"
-            : undefined
-        }
-        statusTone={selectedTrip && isDeliveryIncomplete(selectedTrip) ? "warning" : "success"}
-        sections={drawerSections}
-        footer={selectedTrip && canWrite ? (
-          <div style={{ display: "flex", gap: "10px", width: "100%", justifyContent: "flex-end" }}>
-            {actor.role === "admin" ? (
-              <button
-                type="button"
-                className="icon-only-action danger ui-tooltip"
-                aria-label="Delete delivery"
-                data-tooltip="Delete delivery"
-                title="Delete delivery"
-                onClick={() => openDeleteDeliveryModal(selectedTrip)}
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M4 7h16M9 7V4.5h6V7m3 0-1 13H7L6 7m4 4v5m4-5v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            ) : null}
-            <button type="button" className="primary-action-button" onClick={() => openCorrectionModal(selectedTrip)}>
-              Edit delivery
-            </button>
-          </div>
-        ) : null}
-        onClose={() => setSelectedTrip(null)}
       />
 
       {correctingTrip ? (

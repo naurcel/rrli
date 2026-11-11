@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
 import { useAuthenticatedActor } from "@/components/auth-context";
-import { RoundedSelect } from "@/components/rounded-select";
+import { RoundedSelect, type SelectOption } from "@/components/rounded-select";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RecordDetailDrawer, type DetailSection } from "@/components/record-detail-drawer";
 import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery-repository";
@@ -48,6 +48,23 @@ type ExpenseFormKey =
   | "helper2DailyRate"
   | "otherExpenses";
 
+const STOP_ORDINALS = [
+  "First Stop",
+  "Second Stop",
+  "Third Stop",
+  "Fourth Stop",
+  "Fifth Stop",
+  "Sixth Stop",
+  "Seventh Stop",
+  "Eighth Stop",
+  "Ninth Stop",
+  "Tenth Stop",
+];
+
+function getStopLabel(index: number): string {
+  return STOP_ORDINALS[index] ?? `Stop #${index + 1}`;
+}
+
 const initialDropoff: DropoffDraft = {
   id: "dropoff-1",
   storeName: "",
@@ -80,7 +97,6 @@ export default function NewCompletedDeliveryPage() {
   const [previewing, setPreviewing] = useState(false);
   const idempotencyKeyRef = useRef("");
   const [clientName, setClientName] = useState("");
-  const [isNewClientMode, setIsNewClientMode] = useState(false);
   const [plateNumber, setPlateNumber] = useState("");
   const [podFiles, setPodFiles] = useState<File[]>([]);
   const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
@@ -109,9 +125,10 @@ export default function NewCompletedDeliveryPage() {
     waybillNumber: "",
     deliveryDate: todayKey(),
     origin: "",
-    distanceKm: "0",
+    distanceKm: "",
     fuelRate: "85.00",
-    deliveryRate: "0",
+    deliveryRate: "",
+    additionalCharges: "",
     dieselExpenses: "",
     tollGateExpenses: "",
     tollGateBreakdown: "",
@@ -138,10 +155,23 @@ export default function NewCompletedDeliveryPage() {
         }
         const nextReferences = payload.filters ?? { clients: [], trucks: [], drivers: [], helpers: [] };
 
-        // Merge custom clients from locally recorded deliveries
+        // Merge custom clients from localStorage
+        let storedCustomClients: DeliveryFilterOption[] = [];
+        try {
+          const raw = localStorage.getItem("routex_custom_clients");
+          if (raw) storedCustomClients = JSON.parse(raw);
+        } catch {}
+
+        // Merge custom clients from locally recorded deliveries and localStorage
         const localDeliveries = readBrowserPreviewDeliveries();
         const existingClientNames = new Set(nextReferences.clients.map((c) => c.label.toLowerCase()));
         const extraClients: DeliveryFilterOption[] = [];
+        for (const c of storedCustomClients) {
+          if (c.label && !existingClientNames.has(c.label.toLowerCase())) {
+            existingClientNames.add(c.label.toLowerCase());
+            extraClients.push(c);
+          }
+        }
         for (const delivery of localDeliveries) {
           if (delivery.clientName && !existingClientNames.has(delivery.clientName.toLowerCase())) {
             existingClientNames.add(delivery.clientName.toLowerCase());
@@ -217,6 +247,58 @@ export default function NewCompletedDeliveryPage() {
     return () => controller.abort();
   }, []);
 
+  function handleClientChange(val: string) {
+    const trimmed = val.trim();
+    if (!trimmed) {
+      setClientName("");
+      return;
+    }
+    setClientName(trimmed);
+    const exists = references.clients.some(
+      (c) => c.label.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (!exists) {
+      const newOption: DeliveryFilterOption = {
+        id: `client-${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        label: trimmed,
+      };
+      setReferences((prev) => ({
+        ...prev,
+        clients: [...prev.clients, newOption],
+      }));
+      try {
+        const stored = JSON.parse(localStorage.getItem("routex_custom_clients") || "[]");
+        if (!stored.some((c: { label: string }) => c.label.toLowerCase() === trimmed.toLowerCase())) {
+          localStorage.setItem("routex_custom_clients", JSON.stringify([...stored, newOption]));
+        }
+      } catch {}
+    }
+  }
+
+  const groupedTruckOptions = useMemo<SelectOption[]>(() => {
+    const owned: SelectOption[] = [];
+    const subcontracted: SelectOption[] = [];
+
+    for (const truck of references.trucks) {
+      const isSub =
+        truck.ownershipType === "Subcontracted" ||
+        truck.label.startsWith("SUB-") ||
+        truck.label.includes("SUBCON");
+      const option: SelectOption = {
+        value: truck.label,
+        label: truck.label,
+        group: isSub ? "Subcontracted Trucks" : "Owned Trucks",
+      };
+      if (isSub) {
+        subcontracted.push(option);
+      } else {
+        owned.push(option);
+      }
+    }
+
+    return [...owned, ...subcontracted];
+  }, [references.trucks]);
+
   const financialReview = useMemo(() => {
     const entryFeesComplete = dropoffs.every((stop) => stop.entryFeeStatus !== "unknown");
     const entryFees = entryFeesComplete
@@ -256,6 +338,7 @@ export default function NewCompletedDeliveryPage() {
       totalExpenses,
       netIncome: revenue == null || totalExpenses == null ? null : revenue - totalExpenses,
       revenue,
+      additionalCharges: numberValue(values.additionalCharges),
     };
   }, [dropoffs, expenseStatuses, hasSecondHelper, values]);
 
@@ -289,6 +372,7 @@ export default function NewCompletedDeliveryPage() {
       distanceKm: numberValue(values.distanceKm),
       fuelRate: numberValue(values.fuelRate),
       deliveryRate: numberValue(values.deliveryRate),
+      additionalCharges: numberValue(values.additionalCharges),
       dieselExpenses: numberValue(values.dieselExpenses),
       tollGateExpenses: numberValue(values.tollGateExpenses),
       driverAllowance: numberValue(values.driverAllowance),
@@ -302,15 +386,15 @@ export default function NewCompletedDeliveryPage() {
       helper2DailyRate: hasSecondHelper ? numberValue(values.helper2DailyRate) : null,
       helper2Name: hasSecondHelper ? (helper2Name.trim() || null) : null,
       otherExpenses: numberValue(values.otherExpenses),
-      dieselExpensesStatus: expenseStatuses.dieselExpenses,
-      tollGateExpensesStatus: expenseStatuses.tollGateExpenses,
+      dieselExpensesStatus: "confirmed" as ExpenseResolutionStatus,
+      tollGateExpensesStatus: "confirmed" as ExpenseResolutionStatus,
       driverAllowanceStatus: expenseStatuses.driverAllowance,
-      driverDailyRateStatus: expenseStatuses.driverDailyRate,
+      driverDailyRateStatus: "confirmed" as ExpenseResolutionStatus,
       helperAllowanceStatus: expenseStatuses.helperAllowance,
-      helperDailyRateStatus: expenseStatuses.helperDailyRate,
+      helperDailyRateStatus: "confirmed" as ExpenseResolutionStatus,
       helper2AllowanceStatus: hasSecondHelper ? expenseStatuses.helper2Allowance : "not_applicable",
-      helper2DailyRateStatus: hasSecondHelper ? expenseStatuses.helper2DailyRate : "not_applicable",
-      otherExpensesStatus: expenseStatuses.otherExpenses,
+      helper2DailyRateStatus: hasSecondHelper ? ("confirmed" as ExpenseResolutionStatus) : "not_applicable",
+      otherExpensesStatus: "confirmed" as ExpenseResolutionStatus,
       supportingDocuments: supportingFiles.map((file) => file.name),
       dropoffs: dropoffs.map((dropoff, index) => ({
         storeName: dropoff.storeName,
@@ -327,12 +411,54 @@ export default function NewCompletedDeliveryPage() {
   function submitDelivery(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError(null);
+    if (!clientName.trim()) {
+      setSubmitError("Select or enter a client name.");
+      return;
+    }
+    if (!plateNumber.trim()) {
+      setSubmitError("Select a registered truck.");
+      return;
+    }
     if (driverName.trim().length < 2) {
       setSubmitError("Select a saved driver or enter a new driver name.");
       return;
     }
+    if (!values.driverDailyRate || Number(values.driverDailyRate) <= 0) {
+      setSubmitError("Driver daily rate must have a valid value.");
+      return;
+    }
     if (helper1Name.trim().length < 2) {
       setSubmitError("Select a saved helper or enter a new helper name.");
+      return;
+    }
+    if (!values.helperDailyRate || Number(values.helperDailyRate) <= 0) {
+      setSubmitError("Helper daily rate must have a valid value.");
+      return;
+    }
+    if (hasSecondHelper) {
+      if (helper2Name.trim().length < 2) {
+        setSubmitError("Select or enter a name for Helper 2.");
+        return;
+      }
+      if (!values.helper2DailyRate || Number(values.helper2DailyRate) <= 0) {
+        setSubmitError("Daily rate for Helper 2 must have a valid value.");
+        return;
+      }
+    }
+    if (!values.deliveryRate || Number(values.deliveryRate) <= 0) {
+      setSubmitError("Rate must have a valid value.");
+      return;
+    }
+    if (!values.dieselExpenses || Number(values.dieselExpenses) < 0) {
+      setSubmitError("Diesel fuel expense must have a valid value.");
+      return;
+    }
+    if (!values.tollGateExpenses || Number(values.tollGateExpenses) < 0) {
+      setSubmitError("Highway tolls expense must have a valid value.");
+      return;
+    }
+    if (!values.otherExpenses || Number(values.otherExpenses) < 0) {
+      setSubmitError("Other expenses must have a valid value.");
       return;
     }
     if (values.deliveryDate < "2024-01-01") {
@@ -515,7 +641,7 @@ export default function NewCompletedDeliveryPage() {
         {submitError ? <div className="delivery-form-alert" role="alert">{submitError}</div> : null}
 
         <section className="delivery-form-section">
-          <FormHeading number="01" title="Trip information" />
+          <FormHeading number="01" title="Trip details" />
           <div className="delivery-field-grid delivery-trip-grid">
             <label>Waybill<input required value={values.waybillNumber} onChange={(event) => updateValue("waybillNumber", event.target.value)} placeholder="WB-2026-0001" /></label>
             <label>Delivery date
@@ -534,68 +660,38 @@ export default function NewCompletedDeliveryPage() {
               </span>
             </label>
             <div className="client-field-group">
-              <div className="client-field-header">
-                <label htmlFor={isNewClientMode ? "new-client-name-input" : undefined}>
-                  Client
-                </label>
-                <button
-                  type="button"
-                  className="client-mode-toggle"
-                  onClick={() => {
-                    const nextMode = !isNewClientMode;
-                    setIsNewClientMode(nextMode);
-                    if (nextMode) {
-                      setClientName("");
-                    } else if (references.clients.length > 0) {
-                      setClientName(references.clients[0]?.label ?? "");
-                    }
-                  }}
-                >
-                  {isNewClientMode ? "← Select existing" : "+ New client"}
-                </button>
-              </div>
-
-              {isNewClientMode ? (
-                <div className="new-client-input-wrap">
-                  <input
-                    id="new-client-name-input"
-                    required
-                    type="text"
-                    value={clientName}
-                    onChange={(event) => setClientName(event.target.value)}
-                    placeholder="Client name"
-                    autoFocus
-                  />
-                  <span className="new-client-badge">New</span>
-                </div>
-              ) : (
-                <RoundedSelect
-                  value={clientName}
-                  options={references.clients.map((option) => ({ value: option.label, label: option.label }))}
-                  onChange={(val) => setClientName(val)}
-                  ariaLabel="Select active client"
-                  placeholder={referencesLoading ? "Loading clients…" : "Select client"}
-                  emptyMessage={referenceError ? "Clients could not be loaded" : "No active clients available"}
-                  searchable
-                />
-              )}
+              <label>Client</label>
+              <RoundedSelect
+                value={clientName}
+                options={references.clients.map((option) => ({ value: option.label, label: option.label }))}
+                onChange={handleClientChange}
+                ariaLabel="Client name"
+                placeholder={referencesLoading ? "Loading clients…" : "Select or add client"}
+                emptyMessage={referenceError ? "Clients could not be loaded" : "No active clients available"}
+                searchable
+                allowCustomValue
+                searchPlaceholder="Search or enter a new client"
+                customValueLabel={(query) => (
+                  <>
+                    <span>Add </span>
+                    <strong>{query}</strong>
+                  </>
+                )}
+              />
             </div>
 
-            {/* Truck Selection strictly from registered fleet trucks */}
+            {/* Truck Selection grouped into Owned Trucks and Subcontracted Trucks */}
             <div className="client-field-group">
               <label>Truck plate</label>
               <RoundedSelect
                 value={plateNumber}
-                options={references.trucks.map((option) => ({
-                  value: option.label,
-                  label: option.label,
-                  group: option.ownershipType === "Subcontracted" ? "Subcontracted Trucks" : "Owned Trucks",
-                }))}
+                options={groupedTruckOptions}
                 onChange={(val) => setPlateNumber(val)}
                 ariaLabel="Select registered truck"
                 placeholder={referencesLoading ? "Loading trucks…" : "Select registered truck"}
                 emptyMessage={referenceError ? "Trucks could not be loaded" : "No active trucks registered in Fleet"}
                 searchable
+                searchPlaceholder="Search by truck plate..."
               />
             </div>
 
@@ -644,19 +740,19 @@ export default function NewCompletedDeliveryPage() {
         </section>
 
         <section className="delivery-form-section">
-          <FormHeading number="02" title="Store Drop-offs" />
+          <FormHeading number="02" title="Drop-offs" />
           <div className="dropoff-editor">
             {dropoffs.map((dropoff, index) => (
               <div key={dropoff.id} className="dropoff-row">
                 <div className="dropoff-row-header">
-                  <span className="dropoff-row-title">Store Drop-off #{index + 1}</span>
+                  <span className="dropoff-row-title">{getStopLabel(index)}</span>
                   {dropoffs.length > 1 ? (
                     <button
                       type="button"
                       className="dropoff-remove"
                       onClick={() => setDropoffs((current) => current.filter((item) => item.id !== dropoff.id))}
-                      aria-label={`Remove Store Drop-off #${index + 1}`}
-                      title={`Remove Store Drop-off #${index + 1}`}
+                      aria-label={`Remove ${getStopLabel(index)}`}
+                      title={`Remove ${getStopLabel(index)}`}
                     >
                       × Remove
                     </button>
@@ -664,7 +760,7 @@ export default function NewCompletedDeliveryPage() {
                 </div>
                 <div className="dropoff-fields">
                   <label className="dropoff-field">
-                    <span className="field-label-text">Store name</span>
+                    <span className="field-label-text">Name</span>
                     <input
                       required
                       value={dropoff.storeName}
@@ -673,7 +769,7 @@ export default function NewCompletedDeliveryPage() {
                     />
                   </label>
                   <label className="dropoff-field">
-                    <span className="field-label-text">Destination</span>
+                    <span className="field-label-text">Location</span>
                     <input
                       required
                       value={dropoff.destinationArea}
@@ -682,8 +778,7 @@ export default function NewCompletedDeliveryPage() {
                     />
                   </label>
                   <div className="dropoff-field dropoff-entry-fee-wrap">
-                    <ExpenseField
-                      label="Entry fee (₱)"
+                    <EntryFeeField
                       value={dropoff.entryFee}
                       status={dropoff.entryFeeStatus}
                       onValueChange={(value) => updateDropoff(dropoff.id, "entryFee", value)}
@@ -708,38 +803,116 @@ export default function NewCompletedDeliveryPage() {
         </section>
 
         <section className="delivery-form-section">
-          <FormHeading number="03" title="Revenue & expenses" />
+          <FormHeading number="03" title="Rate & expenses" />
           <div className="delivery-field-grid delivery-finance-grid">
 
-            {/* Revenue */}
+            {/* Rate & Additional Charges */}
             <div className="delivery-rate-banner wide">
               <div className="delivery-rate-banner-header">
-                <h3 className="delivery-finance-group-title">Revenue</h3>
+                <h3 className="delivery-finance-group-title">Rate</h3>
               </div>
-              <div className="delivery-rate-input-row">
-                <MoneyField
-                  label="Agreed revenue"
-                  value={values.deliveryRate}
-                  required
-                  onChange={(value) => updateValue("deliveryRate", value)}
-                />
+              <div className="delivery-rate-input-row rate-and-charges-grid">
+                <div className="hero-rate-field">
+                  <label>
+                    <span className="field-label-text">Rate</span>
+                    <span className="peso-input-wrap emphasized-rate-wrap">
+                      <span className="peso-prefix" aria-hidden="true">₱</span>
+                      <input
+                        required
+                        min="0.01"
+                        step="0.01"
+                        type="number"
+                        inputMode="decimal"
+                        className="no-spin-stepper peso-input emphasized-rate-input"
+                        style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                        value={values.deliveryRate}
+                        onChange={(event) => updateValue("deliveryRate", event.target.value)}
+                      />
+                    </span>
+                  </label>
+                </div>
+
+                <div className="additional-charges-field">
+                  <label>
+                    <span className="field-label-text">Additional Charges</span>
+                    <span className="peso-input-wrap">
+                      <span className="peso-prefix" aria-hidden="true">₱</span>
+                      <input
+                        min="0"
+                        step="0.01"
+                        type="number"
+                        inputMode="decimal"
+                        className="no-spin-stepper peso-input"
+                        style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                        value={values.additionalCharges}
+                        onChange={(event) => updateValue("additionalCharges", event.target.value)}
+                      />
+                    </span>
+                  </label>
+                </div>
               </div>
             </div>
 
             <h3 className="delivery-finance-group-title wide">Trip Expenses</h3>
-            {(["dieselExpenses", "tollGateExpenses", "otherExpenses"] as const).map((key) => (
-              <ExpenseField
-                key={key}
-                label={expenseLabel(key)}
-                value={values[key]}
-                status={expenseStatuses[key]}
-                onValueChange={(value) => updateValue(key, value)}
-                onStatusChange={(status) => {
-                  setExpenseStatuses((current) => ({ ...current, [key]: status }));
-                  if (status !== "confirmed") updateValue(key, "");
-                }}
-              />
-            ))}
+            <div className="direct-expense-field">
+              <label>
+                <span className="field-label-text">Diesel fuel</span>
+                <span className="peso-input-wrap">
+                  <span className="peso-prefix" aria-hidden="true">₱</span>
+                  <input
+                    required
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    inputMode="decimal"
+                    className="no-spin-stepper peso-input"
+                    style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                    value={values.dieselExpenses}
+                    onChange={(event) => updateValue("dieselExpenses", event.target.value)}
+                  />
+                </span>
+              </label>
+            </div>
+
+            <div className="direct-expense-field">
+              <label>
+                <span className="field-label-text">Highway tolls</span>
+                <span className="peso-input-wrap">
+                  <span className="peso-prefix" aria-hidden="true">₱</span>
+                  <input
+                    required
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    inputMode="decimal"
+                    className="no-spin-stepper peso-input"
+                    style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                    value={values.tollGateExpenses}
+                    onChange={(event) => updateValue("tollGateExpenses", event.target.value)}
+                  />
+                </span>
+              </label>
+            </div>
+
+            <div className="direct-expense-field">
+              <label>
+                <span className="field-label-text">Other expenses</span>
+                <span className="peso-input-wrap">
+                  <span className="peso-prefix" aria-hidden="true">₱</span>
+                  <input
+                    required
+                    min="0"
+                    step="0.01"
+                    type="number"
+                    inputMode="decimal"
+                    className="no-spin-stepper peso-input"
+                    style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                    value={values.otherExpenses}
+                    onChange={(event) => updateValue("otherExpenses", event.target.value)}
+                  />
+                </span>
+              </label>
+            </div>
 
             {/* Crew Expenses with Support for 2 Helpers */}
             <div className="crew-expense-groups wide">
@@ -790,17 +963,23 @@ export default function NewCompletedDeliveryPage() {
                     />
                   </div>
                   <div className="crew-expense-fields-row">
-                    <ExpenseField
-                      label="Daily rate"
-                      value={values.driverDailyRate}
-                      status={expenseStatuses.driverDailyRate}
-                      onValueChange={(value) => updateValue("driverDailyRate", value)}
-                      onStatusChange={(status) => {
-                        setExpenseStatuses((current) => ({ ...current, driverDailyRate: status }));
-                        if (status !== "confirmed") updateValue("driverDailyRate", "");
-                      }}
-                    />
-                    <ExpenseField
+                    <div className="daily-rate-field">
+                      <label>
+                        <span className="field-label-text">Daily rate</span>
+                        <input
+                          required
+                          min="0.01"
+                          step="0.01"
+                          type="number"
+                          inputMode="decimal"
+                          className="no-spin-stepper daily-rate-input"
+                          style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                          value={values.driverDailyRate}
+                          onChange={(event) => updateValue("driverDailyRate", event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <AllowanceExpenseField
                       label="Allowance"
                       value={values.driverAllowance}
                       status={expenseStatuses.driverAllowance}
@@ -836,17 +1015,23 @@ export default function NewCompletedDeliveryPage() {
                     />
                   </div>
                   <div className="crew-expense-fields-row">
-                    <ExpenseField
-                      label="Daily rate"
-                      value={values.helperDailyRate}
-                      status={expenseStatuses.helperDailyRate}
-                      onValueChange={(value) => updateValue("helperDailyRate", value)}
-                      onStatusChange={(status) => {
-                        setExpenseStatuses((current) => ({ ...current, helperDailyRate: status }));
-                        if (status !== "confirmed") updateValue("helperDailyRate", "");
-                      }}
-                    />
-                    <ExpenseField
+                    <div className="daily-rate-field">
+                      <label>
+                        <span className="field-label-text">Daily rate</span>
+                        <input
+                          required
+                          min="0.01"
+                          step="0.01"
+                          type="number"
+                          inputMode="decimal"
+                          className="no-spin-stepper daily-rate-input"
+                          style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                          value={values.helperDailyRate}
+                          onChange={(event) => updateValue("helperDailyRate", event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <AllowanceExpenseField
                       label="Allowance"
                       value={values.helperAllowance}
                       status={expenseStatuses.helperAllowance}
@@ -894,17 +1079,23 @@ export default function NewCompletedDeliveryPage() {
                       </button>
                     </div>
                     <div className="crew-expense-fields-row">
-                      <ExpenseField
-                        label="Daily rate"
-                        value={values.helper2DailyRate}
-                        status={expenseStatuses.helper2DailyRate}
-                        onValueChange={(value) => updateValue("helper2DailyRate", value)}
-                        onStatusChange={(status) => {
-                          setExpenseStatuses((current) => ({ ...current, helper2DailyRate: status }));
-                          if (status !== "confirmed") updateValue("helper2DailyRate", "");
-                        }}
-                      />
-                      <ExpenseField
+                      <div className="daily-rate-field">
+                        <label>
+                          <span className="field-label-text">Daily rate</span>
+                          <input
+                            required
+                            min="0.01"
+                            step="0.01"
+                            type="number"
+                            inputMode="decimal"
+                            className="no-spin-stepper daily-rate-input"
+                            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                            value={values.helper2DailyRate}
+                            onChange={(event) => updateValue("helper2DailyRate", event.target.value)}
+                          />
+                        </label>
+                      </div>
+                      <AllowanceExpenseField
                         label="Allowance"
                         value={values.helper2Allowance}
                         status={expenseStatuses.helper2Allowance}
@@ -930,7 +1121,7 @@ export default function NewCompletedDeliveryPage() {
         </section>
 
         <section className="delivery-form-section delivery-document-note">
-          <FormHeading number="04" title="POD & supporting documents" />
+          <FormHeading number="04" title="Documents" />
           <div className="delivery-upload-grid">
             <FileUploadField
               id="delivery-pod-files"
@@ -1080,11 +1271,20 @@ function FormHeading({ number, title, description }: { number: string; title: st
   );
 }
 
-function MoneyField({ label, value, required = false, onChange }: { label: string; value: string; required?: boolean; onChange: (value: string) => void }) {
-  const displayLabel = label.includes("₱") ? label : `${label} (₱)`;
+function MoneyField({
+  label,
+  value,
+  required = false,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  required?: boolean;
+  onChange: (value: string) => void;
+}) {
   return (
     <label>
-      <span className="field-label-text">{displayLabel}</span>
+      <span className="field-label-text">{label}</span>
       <span className="peso-input-wrap">
         <span className="peso-prefix" aria-hidden="true">₱</span>
         <input
@@ -1093,7 +1293,6 @@ function MoneyField({ label, value, required = false, onChange }: { label: strin
           step="0.01"
           type="number"
           inputMode="decimal"
-          placeholder="0.00"
           className="no-spin-stepper peso-input"
           style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
           value={value}
@@ -1142,7 +1341,61 @@ function FileUploadField({ id, label, helper, files, onChange }: {
   );
 }
 
-function ExpenseField({
+function EntryFeeField({
+  value,
+  status,
+  onValueChange,
+  onStatusChange,
+}: {
+  value: string;
+  status: ExpenseResolutionStatus;
+  onValueChange: (value: string) => void;
+  onStatusChange: (status: ExpenseResolutionStatus) => void;
+}) {
+  return (
+    <div className="expense-resolution-field entry-fee-resolution-field">
+      <span className="field-label-text">Entry fee</span>
+      <div className="expense-resolution-controls">
+        <span className={`peso-input-wrap ${status !== "confirmed" ? "is-disabled" : ""}`}>
+          {status === "confirmed" ? (
+            <span className="peso-prefix" aria-hidden="true">₱</span>
+          ) : null}
+          <input
+            aria-label="Entry fee amount"
+            disabled={status !== "confirmed"}
+            min="0"
+            step="0.01"
+            type="number"
+            inputMode="decimal"
+            className={`no-spin-stepper ${status === "confirmed" ? "peso-input" : ""}`}
+            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+            value={status === "confirmed" ? value : ""}
+            placeholder={status === "confirmed" ? "" : "N/A"}
+            onChange={(event) => onValueChange(event.target.value)}
+          />
+        </span>
+        <div className="expense-resolution-options two-options" role="group" aria-label="Entry fee resolution">
+          {([
+            ["confirmed", "Amount"],
+            ["not_applicable", "N/A"],
+          ] as const).map(([val, text]) => (
+            <button
+              type="button"
+              key={val}
+              className={status === val ? "active" : ""}
+              aria-pressed={status === val}
+              onClick={() => onStatusChange(val)}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AllowanceExpenseField({
   label,
   value,
   status,
@@ -1155,17 +1408,16 @@ function ExpenseField({
   onValueChange: (value: string) => void;
   onStatusChange: (status: ExpenseResolutionStatus) => void;
 }) {
-  const displayLabel = label.includes("₱") ? label : `${label} (₱)`;
   return (
     <div className="expense-resolution-field">
-      <span className="field-label-text">{displayLabel}</span>
+      <span className="field-label-text">{label}</span>
       <div className="expense-resolution-controls">
         <span className={`peso-input-wrap ${status !== "confirmed" ? "is-disabled" : ""}`}>
           {status === "confirmed" ? (
             <span className="peso-prefix" aria-hidden="true">₱</span>
           ) : null}
           <input
-            aria-label={`${displayLabel} amount`}
+            aria-label={`${label} amount`}
             disabled={status !== "confirmed"}
             min="0"
             step="0.01"
@@ -1174,11 +1426,11 @@ function ExpenseField({
             className={`no-spin-stepper ${status === "confirmed" ? "peso-input" : ""}`}
             style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
             value={status === "confirmed" ? value : ""}
-            placeholder={status === "confirmed" ? "0.00" : status === "unknown" ? "Amount unknown" : "N/A"}
+            placeholder={status === "confirmed" ? "" : status === "unknown" ? "Unknown" : "N/A"}
             onChange={(event) => onValueChange(event.target.value)}
           />
         </span>
-        <div className="expense-resolution-options" role="group" aria-label={`${displayLabel} resolution`}>
+        <div className="expense-resolution-options" role="group" aria-label={`${label} resolution`}>
           {([
             ["confirmed", "Amount"],
             ["not_applicable", "N/A"],
@@ -1198,18 +1450,4 @@ function ExpenseField({
       </div>
     </div>
   );
-}
-
-function expenseLabel(key: string): string {
-  return ({
-    dieselExpenses: "Diesel fuel (₱)",
-    tollGateExpenses: "Highway tolls (₱)",
-    driverAllowance: "Allowance (₱)",
-    driverDailyRate: "Daily rate (₱)",
-    helperAllowance: "Allowance (₱)",
-    helperDailyRate: "Daily rate (₱)",
-    helper2Allowance: "Allowance (₱)",
-    helper2DailyRate: "Daily rate (₱)",
-    otherExpenses: "Other expenses (₱)",
-  } as Record<string, string>)[key] ?? key;
 }

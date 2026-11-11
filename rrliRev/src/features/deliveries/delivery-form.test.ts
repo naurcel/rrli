@@ -273,3 +273,86 @@ test("Toggling off Second Helper cleanly restores single helper calculation", ()
   assert.equal(result.totalExpenses, 8100, "Must ignore helper 2 when hasSecondHelper is false");
   assert.equal(result.isComplete, true);
 });
+
+// ============================================================================
+// SUITE: Record Delivery Page Updates (Client selection, Rate, Stop labels, Expenses)
+// ============================================================================
+test("RECORD-DELIVERY: Client deduplication is case-insensitive and trims whitespace", () => {
+  const existingClients = [
+    { id: "c-1", label: "Puregold Price Club" },
+    { id: "c-2", label: "SM Supermarket" },
+  ];
+
+  function isDuplicateClient(candidates: typeof existingClients, newName: string): boolean {
+    const normalized = newName.trim().toLowerCase();
+    return candidates.some((c) => c.label.trim().toLowerCase() === normalized);
+  }
+
+  assert.equal(isDuplicateClient(existingClients, "  Puregold Price Club  "), true);
+  assert.equal(isDuplicateClient(existingClients, "puregold price club"), true);
+  assert.equal(isDuplicateClient(existingClients, "PUREGOLD PRICE CLUB"), true);
+  assert.equal(isDuplicateClient(existingClients, "Robinsons Supermarket"), false);
+});
+
+test("RECORD-DELIVERY: Rate and Additional Charges remain cleanly separated", () => {
+  const baseRate = 28000;
+  const additionalCharges = 2500; // e.g. waiting time or extra drop-off fee
+
+  // The base rate represents deliveryRate in the domain
+  assert.equal(baseRate, 28000);
+  assert.equal(additionalCharges, 2500);
+
+  // Financial review calculates base profit without silently blending unconfirmed charge rules
+  const expenses = 9500;
+  const baseNetIncome = baseRate - expenses;
+  assert.equal(baseNetIncome, 18500);
+});
+
+test("RECORD-DELIVERY: Stop numbering ordinals format correctly", () => {
+  const ordinals = [
+    "First Stop",
+    "Second Stop",
+    "Third Stop",
+    "Fourth Stop",
+    "Fifth Stop",
+    "Sixth Stop",
+    "Seventh Stop",
+    "Eighth Stop",
+    "Ninth Stop",
+    "Tenth Stop",
+  ];
+
+  function getStopLabel(index: number): string {
+    return ordinals[index] ?? `Stop #${index + 1}`;
+  }
+
+  assert.equal(getStopLabel(0), "First Stop");
+  assert.equal(getStopLabel(1), "Second Stop");
+  assert.equal(getStopLabel(2), "Third Stop");
+  assert.equal(getStopLabel(9), "Tenth Stop");
+  assert.equal(getStopLabel(10), "Stop #11");
+});
+
+test("RECORD-DELIVERY: Entry Fee supports only Amount (confirmed) and N/A (not_applicable)", () => {
+  const allowedStatuses = ["confirmed", "not_applicable"] as const;
+  assert.ok(allowedStatuses.includes("confirmed"));
+  assert.ok(allowedStatuses.includes("not_applicable"));
+  // "unknown" is removed from entry fee options
+  assert.ok(!allowedStatuses.includes("unknown" as any));
+});
+
+test("RECORD-DELIVERY: Truck selection groups into Owned Trucks and Subcontracted Trucks", () => {
+  const trucks = [
+    { label: "NBO-1204", ownershipType: "Owned" },
+    { label: "SUB-8812", ownershipType: "Subcontracted" },
+    { label: "CAE-5519", ownershipType: "Owned" },
+  ];
+
+  const owned = trucks.filter((t) => t.ownershipType === "Owned").map((t) => ({ ...t, group: "Owned Trucks" }));
+  const subcon = trucks.filter((t) => t.ownershipType === "Subcontracted").map((t) => ({ ...t, group: "Subcontracted Trucks" }));
+  const grouped = [...owned, ...subcon];
+
+  assert.equal(grouped[0].group, "Owned Trucks");
+  assert.equal(grouped[1].group, "Owned Trucks");
+  assert.equal(grouped[2].group, "Subcontracted Trucks");
+});

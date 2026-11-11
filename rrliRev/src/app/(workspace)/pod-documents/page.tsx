@@ -253,9 +253,9 @@ export default function PodDocumentsPage() {
       <div className="content-wrap">
         <header className="page-intro">
           <div>
-            <h1>POD & Supporting Documents</h1>
+            <h1>POD Documents</h1>
             <p className="subtitle">
-              Proof of delivery documents by store drop-off.
+              Proof of delivery files by store drop-off.
             </p>
           </div>
           {canManage ? (
@@ -316,8 +316,7 @@ export default function PodDocumentsPage() {
         <section className={`records-card${loading ? " is-loading" : ""}`} aria-label="Store POD document repository">
           <div className="records-heading">
             <div>
-              <h2>Store-Level Document Repository</h2>
-              <p>Document records by store drop-off.</p>
+              <h2>Drop-off Documents</h2>
             </div>
             <RoundedSelect
               value={filterStatus}

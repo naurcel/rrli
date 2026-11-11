@@ -265,13 +265,6 @@ export const WORKSPACE_NAVIGATION_ITEMS: readonly NavigationItem[] = [
     section: "management",
     requiredPermission: "users:view",
   },
-  {
-    label: "Settings",
-    href: "/settings",
-    symbol: "\u2699",
-    section: "management",
-    requiredPermission: "settings:view",
-  },
 ] as const;
 
 export function getAuthorizedNavigationForRole(role: UserRole): {

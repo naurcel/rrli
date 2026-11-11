@@ -512,9 +512,6 @@ export function GlobalDateRangePicker() {
                 "week",
                 "month",
                 "year",
-                "last7",
-                "last15",
-                "last30",
               ] as DatePreset[]
             ).map((preset) => (
               <button
@@ -529,10 +526,7 @@ export function GlobalDateRangePicker() {
                     week: "This Week",
                     month: "This Month",
                     year: "This Year",
-                    last7: "Last 7 Days",
-                    last15: "Last 15 Days",
-                    last30: "Last 30 Days",
-                  }[preset]
+                  }[preset as "all" | "today" | "week" | "month" | "year"]
                 }
               </button>
             ))}

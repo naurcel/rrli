@@ -348,7 +348,7 @@ export default function FinancePage() {
           <div>
             <h1>Finance</h1>
             <p className="subtitle">
-              Total company expenses and overall profitability tracking.
+              Company expense ledger and profitability.
             </p>
           </div>
         </header>
@@ -417,11 +417,8 @@ export default function FinancePage() {
           >
             <div style={{ textAlign: "center", marginBottom: "18px" }}>
               <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 750, color: "var(--color-text-primary)" }}>
-                Total Company Expenses
+                Company Expenses
               </h2>
-              <p style={{ margin: "4px 0 0", fontSize: "11.5px", color: "var(--color-text-muted)" }}>
-                Input the final total company operating expenses.
-              </p>
             </div>
 
             {formError ? (
@@ -563,8 +560,7 @@ export default function FinancePage() {
         <section className={`records-card${loading ? " is-loading" : ""}`} aria-label="Company expenses ledger">
           <div className="records-heading">
             <div className="records-heading-copy">
-              <h2>Recorded Company Expenses</h2>
-              <p>History of recorded company operating expense amounts.</p>
+              <h2>Expense Ledger</h2>
             </div>
           </div>
 

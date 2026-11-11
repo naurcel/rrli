@@ -7,6 +7,8 @@ import {
   getFleetCrew,
   registerFleetCrewMember,
   setFleetCrewActive,
+  updateFleetCrewMember,
+  deleteFleetCrewMember,
   type FleetCrewMember,
   type FleetDriver,
 } from "@/features/deliveries/driver-registry";
@@ -260,9 +262,12 @@ export async function POST(request: Request) {
   }
 }
 
-const crewStatusSchema = z.object({
+const crewUpdateSchema = z.object({
   crewMemberId: z.string().trim().min(1),
-  isActive: z.boolean(),
+  isActive: z.boolean().optional(),
+  fullName: z.string().trim().min(2, "Name must be at least 2 characters.").max(80).optional(),
+  assignmentType: z.enum(["Driver", "Helper"]).optional(),
+  contactNumber: z.string().trim().max(30).optional().nullable(),
   browserLocal: z.boolean().optional().default(false),
 });
 
@@ -272,52 +277,158 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: false, code: auth.code, message: auth.message }, { status: auth.status });
   }
 
-  const parsed = crewStatusSchema.safeParse(await request.json().catch(() => null));
+  const parsed = crewUpdateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ ok: false, code: "VALIDATION_ERROR", message: "Valid crew member and status are required." }, { status: 400 });
+    return NextResponse.json({ ok: false, code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Valid crew member update required." }, { status: 400 });
   }
 
-  const { crewMemberId, isActive, browserLocal } = parsed.data;
+  const { crewMemberId, isActive, fullName, assignmentType, contactNumber, browserLocal } = parsed.data;
+
   if (!isSupabaseConfigured()) {
-    const result = setFleetCrewActive(crewMemberId, isActive);
-    if (!result.ok && !browserLocal) {
-      return NextResponse.json({ ok: false, code: result.error, message: "Crew member not found." }, { status: 404 });
+    let updatedCrewMember: FleetCrewMember | null = null;
+
+    if (fullName !== undefined || assignmentType !== undefined || contactNumber !== undefined) {
+      const updateResult = updateFleetCrewMember(crewMemberId, {
+        fullName,
+        assignmentType,
+        contactNumber,
+        isActive,
+      });
+      if (!updateResult.ok && !browserLocal) {
+        return NextResponse.json({ ok: false, code: updateResult.error, message: updateResult.error }, { status: 400 });
+      }
+      if (updateResult.ok) {
+        updatedCrewMember = updateResult.crewMember;
+      }
     }
+
+    if (isActive !== undefined) {
+      const statusResult = setFleetCrewActive(crewMemberId, isActive);
+      if (!statusResult.ok && !browserLocal && !updatedCrewMember) {
+        return NextResponse.json({ ok: false, code: statusResult.error, message: "Crew member not found." }, { status: 404 });
+      }
+      if (statusResult.ok) {
+        updatedCrewMember = statusResult.crewMember;
+      }
+    }
+
     recordAuditEntry({
       actorId: auth.actor.id,
       actorEmail: auth.actor.email,
-      action: isActive ? "crew.reactivated" : "crew.deactivated",
+      action: isActive !== undefined && fullName === undefined ? (isActive ? "crew.reactivated" : "crew.deactivated") : "crew.updated",
       entityType: "crew_member",
       entityId: crewMemberId,
-      summary: `${isActive ? "Reactivated" : "Deactivated"} crew member ${crewMemberId}.`,
-      changes: { isActive, storage: !result.ok ? "browser-local" : "bundled-mock" },
+      summary: `Updated crew member ${fullName ?? crewMemberId}.`,
+      changes: {
+        ...(isActive !== undefined ? { isActive } : {}),
+        ...(fullName !== undefined ? { fullName } : {}),
+        ...(assignmentType !== undefined ? { assignmentType } : {}),
+        ...(contactNumber !== undefined ? { contactNumber } : {}),
+      },
     });
-    return NextResponse.json({ ok: true, crewMember: result.ok ? result.crewMember : null });
+
+    return NextResponse.json({ ok: true, crewMember: updatedCrewMember });
   }
 
   try {
     const supabase = await createServerSupabaseClient();
+    const updatePayload: Record<string, unknown> = {};
+    if (isActive !== undefined) updatePayload.is_active = isActive;
+    if (fullName !== undefined) updatePayload.full_name = fullName;
+    if (assignmentType !== undefined) updatePayload.assignment_type = assignmentType;
+    if (contactNumber !== undefined) updatePayload.contact_number = contactNumber;
+
     const { data, error } = await supabase
       .from("employees")
-      .update({ is_active: isActive })
+      .update(updatePayload)
       .eq("id", crewMemberId)
-      .select("id")
+      .select("id, employee_code, full_name, assignment_type, contact_number, is_active")
       .maybeSingle();
+
     if (error) throw error;
     if (!data && !browserLocal) {
       return NextResponse.json({ ok: false, code: "CREW_MEMBER_NOT_FOUND", message: "Crew member not found." }, { status: 404 });
     }
+
     recordAuditEntry({
       actorId: auth.actor.id,
       actorEmail: auth.actor.email,
-      action: isActive ? "crew.reactivated" : "crew.deactivated",
+      action: isActive !== undefined && fullName === undefined ? (isActive ? "crew.reactivated" : "crew.deactivated") : "crew.updated",
       entityType: "crew_member",
       entityId: crewMemberId,
-      summary: `${isActive ? "Reactivated" : "Deactivated"} crew member ${crewMemberId}.`,
-      changes: { isActive },
+      summary: `Updated crew member ${fullName ?? crewMemberId}.`,
+      changes: updatePayload,
     });
+
+    const updatedCrewMember: FleetCrewMember | null = data
+      ? {
+          id: data.id,
+          employeeCode: data.employee_code ?? "",
+          fullName: data.full_name,
+          assignmentType: data.assignment_type,
+          contactNumber: data.contact_number,
+          isActive: data.is_active ?? true,
+        }
+      : null;
+
+    return NextResponse.json({ ok: true, crewMember: updatedCrewMember });
+  } catch (error) {
+    return NextResponse.json({ ok: false, code: "CREW_STATUS_UPDATE_FAILED", message: error instanceof Error ? error.message : "Unable to update crew member." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const auth = await verifyServerPermission("profitability:manage");
+  if (!auth.ok) {
+    return NextResponse.json({ ok: false, code: auth.code, message: auth.message }, { status: auth.status });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  const browserLocal = searchParams.get("browserLocal") === "true";
+  if (!id) {
+    return NextResponse.json({ ok: false, code: "MISSING_ID", message: "Crew member ID is required." }, { status: 400 });
+  }
+
+  if (!isSupabaseConfigured()) {
+    const result = deleteFleetCrewMember(id);
+    if (!result.ok && !browserLocal) {
+      return NextResponse.json({ ok: false, code: result.error, message: "Crew member not found." }, { status: 404 });
+    }
+
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "crew.deleted",
+      entityType: "crew_member",
+      entityId: id,
+      summary: `Deleted crew member ${id}.`,
+      changes: { deleted: true },
+    });
+
+    return NextResponse.json({ ok: true });
+  }
+
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase.from("employees").delete().eq("id", id);
+    if (error) throw error;
+
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "crew.deleted",
+      entityType: "crew_member",
+      entityId: id,
+      summary: `Deleted crew member ${id}.`,
+      changes: { deleted: true },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json({ ok: false, code: "CREW_STATUS_UPDATE_FAILED", message: error instanceof Error ? error.message : "Unable to update crew status." }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, code: "CREW_DELETE_FAILED", message: error instanceof Error ? error.message : "Unable to delete crew member." },
+      { status: 500 },
+    );
   }
 }

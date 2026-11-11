@@ -25,9 +25,9 @@ export default async function DeliveryExcelImportPage() {
 
         <header className="page-intro">
           <div>
-            <h1>Excel Import & Review Staging</h1>
+            <h1>Import Deliveries</h1>
             <p className="subtitle">
-              Review and validate Daily Trip Report rows before import.
+              Import trips from Excel spreadsheet.
             </p>
           </div>
           <span className="access-pill operations">

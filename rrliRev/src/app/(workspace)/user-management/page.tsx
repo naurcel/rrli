@@ -591,7 +591,7 @@ export default function UserManagementPage() {
           <div>
             <h1>User Management</h1>
             <p className="subtitle">
-              Staff accounts, credentials, and access permissions.
+              Manage staff accounts and permissions.
             </p>
           </div>
           <span className="access-pill admin">Admin Only ({actor.fullName})</span>
@@ -652,10 +652,8 @@ export default function UserManagementPage() {
             >
               <div className="records-heading">
                 <div>
-                  <h2>Provision Staff Account</h2>
-                  <p>
-                    Provision staff account with temporary password. First-login setup required.
-                  </p>
+                  <h2>Add User</h2>
+                  <p>Create staff account with a temporary password.</p>
                 </div>
               </div>
 
@@ -828,10 +826,7 @@ export default function UserManagementPage() {
             <section className="records-card" aria-label="Registered RouteX users">
               <div className="records-heading">
                 <div>
-                  <h2>Authorized Personnel &amp; Role Assignments</h2>
-                  <p>
-                    Staff usernames, access levels, setup status, and recovery.
-                  </p>
+                  <h2>Staff Accounts</h2>
                 </div>
               </div>
 
@@ -1159,10 +1154,7 @@ export default function UserManagementPage() {
             >
               <div className="records-heading" style={{ flexWrap: "wrap", gap: "12px" }}>
                 <div>
-                  <h2>Operational &amp; System Event Trail</h2>
-                  <p>
-                    Administrative actions, delivery changes, and system activity.
-                  </p>
+                  <h2>Audit Trail</h2>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                   <input
@@ -1562,7 +1554,7 @@ export default function UserManagementPage() {
             <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
               <div>
                 <h2 id="delete-user-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
-                  Confirm User Deletion
+                  Delete User
                 </h2>
                 <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
                   Action is audited and logged.

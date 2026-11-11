@@ -602,7 +602,7 @@ export default function ReportsPage() {
                 <span>Prepared for {actor.fullName}</span>
                 {isDailyTripReport ? (
                   <p style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-muted)" }}>
-                    Daily delivery log, route drop-offs, and driver trip records for {formatShortDate(parseDateValue(dailyDate))}.
+                    Daily trip log for {formatShortDate(parseDateValue(dailyDate))}.
                   </p>
                 ) : activeTemplate.layout.subtitle ? (
                   <p style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-muted)" }}>
