@@ -11,6 +11,7 @@ import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-brea
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { RoundedSelect, type SelectOption } from "@/components/rounded-select";
+import { SingleDatePicker } from "@/components/single-date-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery-repository";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
@@ -635,6 +636,7 @@ export default function NewCompletedDeliveryPage() {
     <>
       <OperationalTopbar
         contextLabel={previewing ? `Preview / Waybill #${values.waybillNumber || "DRAFT"}` : "Record Completed Delivery"}
+        showDateFilter={false}
       />
       {previewing ? (
         <div className="content-wrap delivery-detail-page">
@@ -813,19 +815,15 @@ export default function NewCompletedDeliveryPage() {
           <div className="delivery-field-grid delivery-trip-grid">
             <label>Waybill<input required value={values.waybillNumber} onChange={(event) => updateValue("waybillNumber", event.target.value)} placeholder="WB-2026-0001" /></label>
             <label>Delivery date
-              <span className="delivery-date-input">
-                <input
-                  required
-                  type="date"
-                  min={isAdmin ? "2024-01-01" : deliveryDateWindow.min}
-                  max={isAdmin ? undefined : deliveryDateWindow.max}
-                  value={values.deliveryDate}
-                  onChange={(event) => {
-                    updateValue("deliveryDate", event.target.value);
-                  }}
-                />
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 3v3m10-3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
-              </span>
+              <SingleDatePicker
+                required
+                min={isAdmin ? "2024-01-01" : deliveryDateWindow.min}
+                max={isAdmin ? undefined : deliveryDateWindow.max}
+                value={values.deliveryDate}
+                onChange={(nextDate) => {
+                  updateValue("deliveryDate", nextDate);
+                }}
+              />
             </label>
             <div className="client-field-group">
               <label>Client</label>
@@ -1134,17 +1132,21 @@ export default function NewCompletedDeliveryPage() {
                     <div className="daily-rate-field">
                       <label>
                         <span className="field-label-text">Daily rate</span>
-                        <input
-                          required
-                          min="0.01"
-                          step="0.01"
-                          type="number"
-                          inputMode="decimal"
-                          className="no-spin-stepper daily-rate-input"
-                          style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                          value={values.driverDailyRate}
-                          onChange={(event) => updateValue("driverDailyRate", event.target.value)}
-                        />
+                        <span className="peso-input-wrap">
+                          <span className="peso-prefix" aria-hidden="true">₱</span>
+                          <input
+                            aria-label="Driver daily rate"
+                            required
+                            min="0.01"
+                            step="0.01"
+                            type="number"
+                            inputMode="decimal"
+                            className="no-spin-stepper peso-input"
+                            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                            value={values.driverDailyRate}
+                            onChange={(event) => updateValue("driverDailyRate", event.target.value)}
+                          />
+                        </span>
                       </label>
                     </div>
                     <div className="daily-rate-field allowance-field">
@@ -1199,17 +1201,21 @@ export default function NewCompletedDeliveryPage() {
                     <div className="daily-rate-field">
                       <label>
                         <span className="field-label-text">Daily rate</span>
-                        <input
-                          required
-                          min="0.01"
-                          step="0.01"
-                          type="number"
-                          inputMode="decimal"
-                          className="no-spin-stepper daily-rate-input"
-                          style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                          value={values.helperDailyRate}
-                          onChange={(event) => updateValue("helperDailyRate", event.target.value)}
-                        />
+                        <span className="peso-input-wrap">
+                          <span className="peso-prefix" aria-hidden="true">₱</span>
+                          <input
+                            aria-label="Helper daily rate"
+                            required
+                            min="0.01"
+                            step="0.01"
+                            type="number"
+                            inputMode="decimal"
+                            className="no-spin-stepper peso-input"
+                            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                            value={values.helperDailyRate}
+                            onChange={(event) => updateValue("helperDailyRate", event.target.value)}
+                          />
+                        </span>
                       </label>
                     </div>
                     <div className="daily-rate-field allowance-field">
@@ -1276,17 +1282,21 @@ export default function NewCompletedDeliveryPage() {
                       <div className="daily-rate-field">
                         <label>
                           <span className="field-label-text">Daily rate</span>
-                          <input
-                            required
-                            min="0.01"
-                            step="0.01"
-                            type="number"
-                            inputMode="decimal"
-                            className="no-spin-stepper daily-rate-input"
-                            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-                            value={values.helper2DailyRate}
-                            onChange={(event) => updateValue("helper2DailyRate", event.target.value)}
-                          />
+                          <span className="peso-input-wrap">
+                            <span className="peso-prefix" aria-hidden="true">₱</span>
+                            <input
+                              aria-label="Helper 2 daily rate"
+                              required
+                              min="0.01"
+                              step="0.01"
+                              type="number"
+                              inputMode="decimal"
+                              className="no-spin-stepper peso-input"
+                              style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                              value={values.helper2DailyRate}
+                              onChange={(event) => updateValue("helper2DailyRate", event.target.value)}
+                            />
+                          </span>
                         </label>
                       </div>
                       <div className="daily-rate-field allowance-field">
@@ -1323,11 +1333,11 @@ export default function NewCompletedDeliveryPage() {
             <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
             <div><span>Store Entry Fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
             <div><span>Expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
-            <div className={financialReview.netIncome != null && financialReview.netIncome < 0 ? "negative" : "positive"}><span>Net Profit</span><strong>{formatPeso(financialReview.netIncome)}</strong></div>
+            <div className={financialReview.netIncome == null ? "" : financialReview.netIncome < 0 ? "negative" : "positive"}><span>Net Profit</span><strong>{formatPeso(financialReview.netIncome)}</strong></div>
           </div>
         </section>
 
-        <section className="delivery-form-section delivery-document-note">
+        <section className="delivery-form-section">
           <FormHeading number="04" title="Documents" />
           <div className="delivery-upload-grid">
             <FileUploadField
