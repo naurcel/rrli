@@ -30,11 +30,11 @@ select {
 
 ### Font Loading & Weight Availability
 
-In [`src/app/layout.tsx`](../../../src/app/layout.tsx), Google Fonts loads Readex Pro with weights `400`, `500`, and `600`:
+In [`src/app/layout.tsx`](../../src/app/layout.tsx), Google Fonts loads Readex Pro with weights `300;400;500;600;700;800`:
 
 ```html
 <link
-  href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600&display=swap"
+  href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700;800&display=swap"
   rel="stylesheet"
 />
 ```
@@ -51,7 +51,7 @@ In [`src/app/layout.tsx`](../../../src/app/layout.tsx), Google Fonts loads Reade
 | `800` | No (Synthesized) | Browser faux-bold synthesis | `.login-logo`, `.chart-tooltip-value`, `.top-truck-list strong`, `.truck-rank`, `.sidebar-collapse-toggle .icon`, `.delivery-stepper span`, `.hr-workflow-list span`, `.more-filters-popover > span` |
 | `900` | No (Synthesized) | Browser faux-bold synthesis | `.sidebar .nav-item.active .nav-label` |
 
-> **Recommendation:** Update the Google Fonts stylesheet URL in [`src/app/layout.tsx`](../../../src/app/layout.tsx) to `wght@400;500;600;700;800` so that headings, primary buttons, KPI figures, and ranked numerals render using Readex Pro's true bold and extra-bold outlines rather than browser-synthesized bolding. Normalize `font-weight: 750` and `900` declarations to `700` or `800`.
+> **Note:** The Google Fonts stylesheet URL in [`src/app/layout.tsx`](../../src/app/layout.tsx) loads weights `wght@300;400;500;600;700;800` so that headings, primary buttons, KPI figures, and ranked numerals render using Readex Pro's true bold and extra-bold outlines.
 
 ---
 
@@ -165,7 +165,7 @@ Because RouteX is a financial and logistics tracking system, numeric legibility 
 
 ### Currency Formatting (`formatPeso` & `.money`)
 
-- All Philippine Peso amounts are formatted via [`src/lib/preview/format.ts`](../../../src/lib/preview/format.ts) (`formatPeso`), rendering a leading `₱` sign and comma-grouped integers (`₱197,700`).
+- All Philippine Peso amounts are formatted via [`src/lib/format.ts`](../../src/lib/format.ts) (`formatPeso`), rendering a leading `₱` sign and comma-grouped integers (`₱197,700`).
 - In data tables, currency cells use `<td className="money">`, which applies:
   ```css
   .money {

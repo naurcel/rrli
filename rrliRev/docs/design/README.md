@@ -1,6 +1,6 @@
 # RouteX Frontend & Design System Documentation
 
-This directory contains the authoritative frontend, UI, UX, and visual design documentation for **RouteX**. Every specification is grounded in the verified implementation across [`src/app/globals.css`](../../../src/app/globals.css) and [`src/`](../../../src/).
+This directory contains the authoritative frontend, UI, UX, and visual design documentation for **RouteX**. Every specification is grounded in the verified implementation across [`src/app/globals.css`](../../src/app/globals.css) and [`src/`](../../src/).
 
 ---
 

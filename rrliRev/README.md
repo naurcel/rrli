@@ -6,22 +6,22 @@ RouteX is the internal **Delivery Operations & Truck Profitability** system for 
 
 ## Developer & AI Coding Agent Quick Start
 
-> **AI Coding Assistant Notice:**  
-> Before generating code or modifying existing files, review [`../AGENTS.md`](../AGENTS.md) and [`../CLAUDE.md`](../CLAUDE.md) for domain terminology, business rules, pagination standards, and invariants.
+> **Primary Working Project Notice:**  
+> `rrliRev` is the primary, self-contained working project for RouteX. Review [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md) for strict developer instructions, and consult the [Central Knowledge Base (`docs/knowledge-base/`)](./docs/knowledge-base/) for authoritative domain architecture and business rules.
 
 ### 1. Daily Development Workflow
 
 ```powershell
-# Run the complete test suite (171 tests across 12 suites)
+# Run the complete test suite (222+ tests across 16 suites)
 npm test
 
-# Run strict TypeScript verification (must exit 0)
+# Run strict TypeScript verification (must exit code 0)
 npm run typecheck
 
-# Build the Next.js production bundle with Turbopack
+# Build the Next.js production bundle with Turbopack (all 33 routes)
 npm run build
 
-# Start local development server
+# Start local development server on http://localhost:3000
 npm run dev
 ```
 
@@ -52,6 +52,13 @@ When `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are configur
 - Connects to Supabase PostgreSQL using SQL migrations in [`supabase/migrations/`](./supabase/migrations/).
 - Leverages Row-Level Security (RLS) policies for multi-tenant and role isolation.
 - Uploads binary documents to Supabase Storage with 5-minute pre-signed URLs.
+
+---
+
+## Central Documentation Center (`docs/`)
+
+- [**Master Documentation Index (`docs/README.md`)**](./docs/README.md)
+- [**Central Knowledge Base (`docs/knowledge-base/`)**](./docs/knowledge-base/) — 14 authoritative specification documents covering project overview, architecture, tech stack, database, business rules, RBAC, security, API logic, file management, and QA.
 
 ---
 

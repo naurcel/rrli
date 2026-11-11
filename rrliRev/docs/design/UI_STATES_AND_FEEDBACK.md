@@ -79,7 +79,7 @@ RouteX uses concise inline text alerts positioned immediately above or below the
 
 ### B. Destructive Control Variant
 
-For destructive user actions (such as removing a custom uploaded truck photo in [`src/components/truck-photo-manager.tsx`](../../../src/components/truck-photo-manager.tsx)):
+For destructive user actions (such as removing a custom uploaded truck photo in [`src/components/truck-photo-storage.ts`](../../src/components/truck-photo-storage.ts)):
 
 - Uses `.truck-photo-button-danger` paired with `.truck-photo-button`.
 - Retains the translucent glass pill surface (`rgba(255, 255, 255, .86)`) while shifting the label color to crimson (`#a83a2f` in light mode, `#f19180` in dark mode).

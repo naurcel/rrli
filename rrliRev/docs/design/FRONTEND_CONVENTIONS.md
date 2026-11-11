@@ -85,7 +85,7 @@ rrliRev/src/
 
 ### Why RouteX Uses a Single Global Stylesheet (`src/app/globals.css`)
 
-- RouteX imports Tailwind v4 (`@import "tailwindcss";`) at the top of [`src/app/globals.css`](../../../src/app/globals.css) for CSS reset normalization, but **all visual design tokens, layout grids, glassmorphism surfaces, dark mode overrides, and component rules are authored in semantic CSS classes inside `src/app/globals.css`**.
+- RouteX imports Tailwind v4 (`@import "tailwindcss";`) at the top of [`src/app/globals.css`](../../src/app/globals.css) for CSS reset normalization, but **all visual design tokens, layout grids, glassmorphism surfaces, dark mode overrides, and component rules are authored in semantic CSS classes inside `src/app/globals.css`**.
 - **Do not use CSS Modules (`*.module.css`)** in this repository: under the project's Next.js 16 Turbopack configuration, CSS Module imports previously returned empty class mappings (`{}`), causing unstyled markup.
 - **Do not scatter inline Tailwind utility chains across JSX** or use inline `style={{ ... }}` objects for static styling. Keep JSX `className` attributes clean, semantic, and aligned with the established class vocabulary (`.records-card`, `.records-heading`, `.stat-card`, `.primary-button`, `.secondary-button`, `.filter-button`, `.rounded-select`, etc.).
 
@@ -103,7 +103,7 @@ RouteX uses descriptive, hyphen-delimited class names organized around component
 
 #### Existing Implementation Structure (Cascade History)
 
-Because [`src/app/globals.css`](../../../src/app/globals.css) evolved across multiple visual refinement passes, styles are currently layered in chronological blocks across its 686 lines:
+Because [`src/app/globals.css`](../../src/app/globals.css) evolved across multiple visual refinement passes, styles are currently layered in chronological blocks across its lines:
 
 | Line Range | Block Purpose | Important Cascade Behavior to Know |
 | :--- | :--- | :--- |
@@ -151,7 +151,7 @@ Whenever creating or extending a floating UI element (popover, dropdown menu, sl
 
 ### C. SVG Iconography (`src/components/route-x-ui.tsx`)
 
-All UI icons are rendered via the shared `<Icon name="..." />` component in [`src/components/route-x-ui.tsx`](../../../src/components/route-x-ui.tsx):
+All UI icons are rendered via the shared `<Icon name="..." />` component in [`src/components/route-x-ui.tsx`](../../src/components/route-x-ui.tsx):
 
 - Uses `viewBox="0 0 24 24"`, `fill="none"`, `stroke="currentColor"`, `strokeWidth="1.9"`, `strokeLinecap="round"`, `strokeLinejoin="round"`, and `aria-hidden="true"`.
 - When adding a new icon to RouteX, extend the `IconName` union type and `<Icon />` switch in `src/components/route-x-ui.tsx` using the same `24×24` grid and `1.9` stroke weight rather than importing external icon packages or inline multi-color SVGs.
@@ -164,13 +164,13 @@ RouteX persists user preferences and local preview records in `window.localStora
 
 | State Domain | `localStorage` Key | Custom Window Event | Source Module |
 | :--- | :--- | :--- | :--- |
-| **Theme Mode** | `"routex-theme"` (`"light"` \| `"dark"`) | Direct `document.documentElement.dataset.theme` mutation | [`src/app/layout.tsx`](../../../src/app/layout.tsx), [`src/components/theme-toggle.tsx`](../../../src/components/theme-toggle.tsx) |
-| **Sidebar Collapsed** | `"routex.sidebar.collapsed"` (`"1"` \| `"0"`) | React Context (`SidebarStateProvider`) | [`src/components/sidebar-state.tsx`](../../../src/components/sidebar-state.tsx) |
-| **Global Date Range** | `"routex-global-date-range-v1"` | `"routex-date-range-updated"` (`GLOBAL_DATE_RANGE_UPDATED_EVENT`) | [`src/components/global-date-range-picker.tsx`](../../../src/components/global-date-range-picker.tsx) |
-| **Delivery Preview Records** | `"routex-delivery-preview-records-v2"` | `"routex-delivery-preview-updated"` (`DELIVERY_PREVIEW_UPDATED_EVENT`) | [`src/features/deliveries/delivery-local-preview.ts`](../../../src/features/deliveries/delivery-local-preview.ts) |
-| **Transaction Preview Records** | `"routex-transaction-preview-records-v1"` | `"routex-transaction-preview-updated"` (`TRANSACTION_PREVIEW_UPDATED_EVENT`) | [`src/features/transactions/transaction-local-preview.ts`](../../../src/features/transactions/transaction-local-preview.ts) |
-| **Fleet Custom Units** | `"routex-fleet-preview-trucks-v1"` | `"routex-fleet-preview-updated"` | [`src/features/fleet/fleet-local-preview.ts`](../../../src/features/fleet/fleet-local-preview.ts) |
-| **Fleet Profile Overrides & Photos** | `"routex-fleet-profile-custom-v1"` | `"routex-fleet-profile-updated"` (`FLEET_PROFILE_UPDATED_EVENT`) | [`src/features/fleet/fleet-Profile-local.ts`](../../../src/features/fleet/fleet-Profile-local.ts) |
+| **Theme Mode** | `"routex-theme"` (`"light"` \| `"dark"`) | Direct `document.documentElement.dataset.theme` mutation | [`src/app/layout.tsx`](../../src/app/layout.tsx), [`src/components/theme-toggle.tsx`](../../src/components/theme-toggle.tsx) |
+| **Sidebar Collapsed** | `"routex.sidebar.collapsed"` (`"1"` \| `"0"`) | React Context (`SidebarStateProvider`) | [`src/components/sidebar-state.tsx`](../../src/components/sidebar-state.tsx) |
+| **Global Date Range** | `"routex-global-date-range-v1"` | `"routex-date-range-updated"` (`GLOBAL_DATE_RANGE_UPDATED_EVENT`) | [`src/components/global-date-range-picker.tsx`](../../src/components/global-date-range-picker.tsx) |
+| **Delivery Preview Records** | `"routex-delivery-preview-records-v2"` | `"routex-delivery-preview-updated"` (`DELIVERY_PREVIEW_UPDATED_EVENT`) | [`src/features/deliveries/browser-preview-deliveries.ts`](../../src/features/deliveries/browser-preview-deliveries.ts) |
+| **Company Expenses Preview** | `"routex-company-expenses-v1"` | `"routex-company-expenses-updated"` | [`src/features/finance/browser-preview-expenses.ts`](../../src/features/finance/browser-preview-expenses.ts) |
+| **Fleet Custom Units** | `"routex-fleet-preview-trucks-v1"` | `"routex-fleet-preview-updated"` | [`src/features/deliveries/truck-registry.ts`](../../src/features/deliveries/truck-registry.ts) |
+| **Fleet Profile Overrides & Photos** | `"routex-fleet-profile-custom-v1"` | `"routex-fleet-profile-updated"` (`FLEET_PROFILE_UPDATED_EVENT`) | [`src/components/truck-photo-storage.ts`](../../src/components/truck-photo-storage.ts) |
 
 ### Storage Safety Rules
 

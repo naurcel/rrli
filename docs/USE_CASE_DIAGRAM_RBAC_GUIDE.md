@@ -148,7 +148,18 @@ Below is the complete list of system use cases, their descriptions, primary acto
 
 ---
 
-### Subsystem 6: Operational & Financial Reporting
+### Subsystem 6: Company Expense Ledger & Company Profitability (Finance Module)
+
+| UC ID | Use Case Name | Primary Actor | Relationships & Triggers | Brief Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **UC-23B** | **View Company Expense Ledger** | View-Only Staff, Operations, Admin | `<<include>>` UC-01 | View company expense ledger records, total company expenses, search by description, filter by date, and sort by date or amount. |
+| **UC-23C** | **Record Company Expense** | Operations, Admin | `<<include>>` UC-01 | Record an overall company operating expense (office, rent, utilities, general overhead) with description, positive PHP amount, date, and optional notes without allocating to specific trips or trucks. |
+| **UC-23D** | **Edit Company Expense** | Operations, Admin | `<<include>>` UC-23B | Update description, amount, date, or notes of an existing company expense record. |
+| **UC-23E** | **Delete Company Expense** | Admin | `<<include>>` UC-23B, `<<include>>` UC-35 | Permanently delete a company expense record via an audited confirmation modal. |
+
+---
+
+### Subsystem 7: Operational & Financial Reporting
 
 | UC ID | Use Case Name | Primary Actor | Relationships & Triggers | Brief Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -161,7 +172,7 @@ Below is the complete list of system use cases, their descriptions, primary acto
 
 ---
 
-### Subsystem 7: User Administration & System Auditing
+### Subsystem 8: User Administration & System Auditing
 
 | UC ID | Use Case Name | Primary Actor | Relationships & Triggers | Brief Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -174,11 +185,11 @@ Below is the complete list of system use cases, their descriptions, primary acto
 
 ---
 
-### Subsystem 8: Critical Confirmation & Governance
+### Subsystem 9: Critical Confirmation & Governance
 
 | UC ID | Use Case Name | Primary Actor | Relationships & Triggers | Brief Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **UC-35** | **Confirm Critical Deletion Decision** | Admin | `<<included by>>` UC-13B, UC-29, UC-32B | Present an explicit modal confirmation screen displaying entity details and destructive warnings before executing permanent deletion. |
+| **UC-35** | **Confirm Critical Deletion Decision** | Admin | `<<included by>>` UC-13B, UC-23E, UC-29, UC-32B | Present an explicit modal confirmation screen displaying entity details and destructive warnings before executing permanent deletion. |
 
 ---
 
@@ -206,6 +217,10 @@ This matrix maps system permissions directly to the **6 Canonical Roles**:
 | **Fleet & Profitability** | | | | | | | |
 | View Trucks & Profitability | `profitability:view` | ✅ | ✅ | 👁 (Read) | 👁 (Read) | 👁 (Read) | 👁 (Read) |
 | Register / Edit Trucks & Photos | `profitability:manage` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Company Expenses (Finance)** | | | | | | | |
+| View Expense Ledger & Totals | `finance:view` | ✅ | ✅ | 👁 (Read) | 👁 (Read) | 👁 (Read) | 👁 (Read) |
+| Record & Edit Company Expenses | `finance:manage` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Delete Company Expense Record | `finance:manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Reports** | | | | | | | |
 | View Report Document Previews | `reports:view` | ✅ | ✅ | 👁 (Read) | 👁 (Read) | 👁 (Read) | 👁 (Read) |
 | Export Reports to CSV/Excel | `reports:export` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -271,7 +286,14 @@ flowchart LR
             UC23(["UC-23: Register / Edit Truck & Photo"])
         end
 
-        subgraph Reports["4. Operational Reports"]
+        subgraph FinanceSub["4. Company Expense Ledger (Finance)"]
+            UC23B(["UC-23B: View Expense Ledger"])
+            UC23C(["UC-23C: Record Company Expense"])
+            UC23D(["UC-23D: Edit Company Expense"])
+            UC23E(["UC-23E: Delete Company Expense"])
+        end
+
+        subgraph Reports["5. Operational Reports"]
             UC24(["UC-24: View Standard Reports"])
             UC26(["UC-26: Export Report to CSV"])
             UC27(["UC-27: Print / Save Report as PDF"])
@@ -279,7 +301,7 @@ flowchart LR
             UC29(["UC-29: Delete Custom Report Template"])
         end
 
-        subgraph AdminSub["5. Administration & Audit"]
+        subgraph AdminSub["6. Administration & Audit"]
             UC30(["UC-30: View User Directory"])
             UC31(["UC-31: Provision New User Account"])
             UC32(["UC-32: Modify Role & Status"])
@@ -288,7 +310,7 @@ flowchart LR
             UC34(["UC-34: Inspect Audit Logs & Diffs"])
         end
 
-        subgraph Governance["6. Confirmation & Governance"]
+        subgraph Governance["7. Confirmation & Governance"]
             UC35(["UC-35: Confirm Critical Deletion Decision"])
         end
 
@@ -310,6 +332,7 @@ flowchart LR
     ViewOnly --> UC20
     ViewOnly --> UC21
     ViewOnly --> UC22
+    ViewOnly --> UC23B
     ViewOnly --> UC24
     ViewOnly --> UC27
 
@@ -319,9 +342,12 @@ flowchart LR
     Ops --> UC16
     Ops --> UC19
     Ops --> UC23
+    Ops --> UC23C
+    Ops --> UC23D
     Ops --> UC26
 
     Admin --> UC13B
+    Admin --> UC23E
     Admin --> UC28
     Admin --> UC29
     Admin --> UC30
@@ -341,6 +367,7 @@ flowchart LR
     UC13B -.->|«include»| UC35
     UC16 -.->|«include»| UC14
     UC19 -.->|«extend»| UC17
+    UC23E -.->|«include»| UC35
     UC28 -.->|«extend»| UC24
     UC29 -.->|«include»| UC35
     UC32B -.->|«include»| UC35
@@ -353,9 +380,9 @@ flowchart LR
 If your groupmate needs to write descriptions or narrative specifications for each role, use these verified domain summaries:
 
 ### 1. Finance Officer (`finance`)
-* **Why they use RouteX:** To audit delivery profitability without risking operational tampering.
-* **Key Use Cases:** UC-06 (View Deliveries), UC-08 (Delivery Details Drawer), UC-20 (Truck Profitability Grid), UC-24 (Client & Truck Summary Reports).
-* **Specific Data Watched:** Fuel expenses, highway toll receipts, helper daily allowances, client delivery rates, gross revenue, net profit margin percentages, and incomplete expense flags.
+* **Why they use RouteX:** To audit delivery profitability and track overall company operating expenses without risking operational tampering.
+* **Key Use Cases:** UC-06 (View Deliveries), UC-08 (Delivery Details Drawer), UC-20 (Truck Profitability Grid), UC-23B (View Company Expense Ledger), UC-24 (Client & Truck Summary Reports).
+* **Specific Data Watched:** Fuel expenses, highway toll receipts, helper daily allowances, client delivery rates, revenue, total company expenses (office, rent, utilities, overhead), net profit (`Company Net Profit = Total Delivery Revenue - Total Delivery Expenses - Total Company Expenses`), profit margins, and incomplete expense flags. Note: Company expenses contribute to overall company net profit, but do not alter individual delivery margins or truck profitability.
 
 ### 2. HR Officer (`hr`)
 * **Why they use RouteX:** To verify staff assignments and calculate bi-monthly crew compensation.
