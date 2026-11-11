@@ -145,7 +145,7 @@ export function EditCompanyExpenseModal({
                 id="edit-expense-date"
                 type="date"
                 min="2024-01-01"
-                className="delivery-input"
+                className="finance-input"
                 value={expenseDate}
                 onChange={(e) => setExpenseDate(e.target.value)}
                 disabled={pending}
@@ -162,7 +162,7 @@ export function EditCompanyExpenseModal({
               <input
                 id="edit-expense-notes"
                 type="text"
-                className="delivery-input"
+                className="finance-input"
                 placeholder="Optional note or reference..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

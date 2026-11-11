@@ -60,16 +60,20 @@ export function DeliveryTruckInfoSection({
           </div>
           <span
             className={`truck-capability-pill ${storageCapability === "Refrigerated" ? "reefer" : "dry"}`}
-            title={`Cargo storage: ${storageCapability}`}
+            title={`Classification: ${storageCapability === "Refrigerated" ? "Cold" : "Dry"}`}
           >
-            {storageCapability === "Refrigerated" ? "Cold Storage" : "Dry Cargo"}
+            {storageCapability === "Refrigerated" ? "Cold" : "Dry"}
           </span>
         </div>
 
         <div className="delivery-truck-details-grid">
           <div>
             <span>Classification</span>
-            <strong title={classificationLabel}>{truckType}</strong>
+            <strong title={classificationLabel}>{storageCapability === "Refrigerated" ? "Cold" : "Dry"}</strong>
+          </div>
+          <div>
+            <span>Vehicle Size</span>
+            <strong>{truckType}</strong>
           </div>
           <div>
             <span>Cargo Temp</span>

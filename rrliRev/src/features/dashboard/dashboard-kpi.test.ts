@@ -5,12 +5,15 @@ import {
   calculateDashboardProfit,
   calculateMergedExpenses,
   calculateNiceYAxis,
+  calculateNiceYRange,
   calculateTopClient,
+  buildFinancialTimeSeries,
 } from "./dashboard-kpi.ts";
 import {
   buildDeliveryTripRecord,
   type DeliveryTripRecord,
 } from "../deliveries/delivery-domain.ts";
+import type { CompanyExpense } from "../finance/company-expense-domain.ts";
 
 function createMockTrip(overrides: Partial<Parameters<typeof buildDeliveryTripRecord>[0]> = {}): DeliveryTripRecord {
   return buildDeliveryTripRecord({
@@ -179,4 +182,89 @@ test("calculateDashboardProfit computes net profit and margin without anomaly", 
   const zeroRev = calculateDashboardProfit(0, 10_000);
   assert.equal(zeroRev.profit, -10_000);
   assert.equal(zeroRev.profitMargin, null);
+});
+
+// ============================================================================
+// 4. calculateNiceYRange & buildFinancialTimeSeries
+// ============================================================================
+
+test("calculateNiceYRange produces 0-based floor when all values are positive", () => {
+  const result = calculateNiceYRange(0, 50_000);
+  assert.equal(result.floor, 0);
+  assert.ok(result.ceiling >= 50_000);
+  assert.equal(result.ticks[0], 0);
+  assert.equal(result.ticks[result.ticks.length - 1], result.ceiling);
+});
+
+test("calculateNiceYRange handles negative values with clean steps and includes zero", () => {
+  const result = calculateNiceYRange(-15_000, 35_000);
+  assert.ok(result.floor <= -15_000);
+  assert.ok(result.ceiling >= 35_000);
+  assert.ok(result.ticks.includes(0), "Ticks array must include 0 as a clean baseline");
+  for (let i = 1; i < result.ticks.length; i++) {
+    assert.equal(result.ticks[i] - result.ticks[i - 1], result.step);
+  }
+});
+
+test("buildFinancialTimeSeries merges deliveries and company expenses correctly", () => {
+  const trips: DeliveryTripRecord[] = [
+    createMockTrip({
+      id: "trip-a",
+      deliveryDate: "2026-11-05",
+      deliveryRate: 20_000,
+      expenses: {
+        dieselExpenses: 3_000,
+        tollGateExpenses: 1_000,
+        tollGateBreakdown: "Toll",
+        driverAllowance: 1_000,
+        helperAllowance: 500,
+        driverDailyRate: 800,
+        helperDailyRate: 500,
+        otherExpenses: 200,
+      },
+    }),
+    createMockTrip({
+      id: "trip-incomplete",
+      deliveryDate: "2026-11-05",
+      deliveryRate: 50_000,
+      expenseStates: {
+        dieselExpenses: "unknown",
+        tollGateExpenses: "confirmed",
+        entryFees: "confirmed",
+        driverAllowance: "confirmed",
+        helperAllowance: "confirmed",
+        driverDailyRate: "confirmed",
+        helperDailyRate: "confirmed",
+        otherExpenses: "confirmed",
+      },
+    }),
+  ];
+
+  const companyExpenses: CompanyExpense[] = [
+    {
+      id: "exp-1",
+      description: "Warehouse Utilities",
+      amount: 4_000,
+      expenseDate: "2026-11-05",
+      category: "Utilities",
+      createdAt: "2026-11-05T00:00:00.000Z",
+      updatedAt: "2026-11-05T00:00:00.000Z",
+    },
+  ];
+
+  const series = buildFinancialTimeSeries(trips, companyExpenses, {
+    startDate: new Date("2026-11-05T00:00:00"),
+    endDate: new Date("2026-11-05T00:00:00"),
+  });
+
+  assert.equal(series.length, 1);
+  const day = series[0];
+  assert.equal(day.date, "2026-11-05");
+  // Only trip-a is financially complete: rate 20,000, delivery expenses 7,200 (diesel 3000 + toll 1000 + allowance 1500 + rate 1300 + other 200 + stop entryFee 200)
+  assert.equal(day.revenue, 20_000);
+  assert.equal(day.deliveryExpenses, 7_200);
+  assert.equal(day.companyExpenses, 4_000);
+  assert.equal(day.expenses, 11_200);
+  assert.equal(day.profit, 8_800);
+  assert.equal(day.tripCount, 1);
 });

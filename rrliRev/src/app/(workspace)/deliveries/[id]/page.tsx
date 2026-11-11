@@ -377,9 +377,58 @@ function DeliveryDetailsPageContent({
           ) : null}
         </header>
 
-        {/* Spacious 2-Column Delivery Details Grid */}
+        {/* 1. Primary Financial Performance & Analytics Card (Full-Width, High Visibility) */}
+        <section className="records-card delivery-section-card delivery-financial-analytics-card">
+          <div className="section-card-header delivery-analytics-header">
+            <div>
+              <h2 className="section-card-title">Financial Performance &amp; Analytics</h2>
+              <p className="section-card-subtitle">
+                Waybill profitability, revenue realization, and trip expense distribution
+              </p>
+            </div>
+            <div className="delivery-analytics-badges">
+              <span className={`detail-status ${isComplete ? "success" : "warning"}`}>
+                {isComplete ? "CONFIRMED FINANCIALS" : "REQUIRES CONFIRMATION"}
+              </span>
+              {isComplete && delivery.marginPercent != null ? (
+                <span className="routex-badge tone-primary" style={{ fontWeight: 700 }}>
+                  {delivery.marginPercent.toFixed(1)}% MARGIN
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <DeliveryFinancialBreakdown trip={delivery} />
+        </section>
+
+        {/* 2. Operational Fulfillment & Fleet Specifications (Balanced 2-Column Grid) */}
         <div className="delivery-detail-grid">
-          {/* Left Column: Route, Drop-offs, Documents */}
+          {/* Left Column: Store Drop-offs Fulfillment & POD Documents */}
+          <div className="delivery-detail-column">
+            {/* Store Drop-offs Sequence */}
+            <section className="records-card delivery-section-card">
+              <div className="section-card-header">
+                <h2 className="section-card-title">
+                  Store Drop-offs ({delivery.dropoffs.length})
+                </h2>
+              </div>
+              <DeliveryDropoffTimeline dropoffs={delivery.dropoffs} />
+            </section>
+
+            {/* POD & Supporting Documents */}
+            <section className="records-card delivery-section-card">
+              <div className="section-card-header">
+                <h2 className="section-card-title">POD &amp; Supporting Documents</h2>
+              </div>
+              <DeliveryPodDocuments
+                trip={delivery}
+                canVerify={canManageDocs}
+                roleLabel={actor.roleLabel}
+                onTripChange={handleTripUpdated}
+              />
+            </section>
+          </div>
+
+          {/* Right Column: Route, Vehicle & Crew Specifications */}
           <div className="delivery-detail-column">
             {/* Trip Overview Card */}
             <section className="records-card delivery-section-card">
@@ -436,32 +485,6 @@ function DeliveryDetailsPageContent({
               ) : null}
             </section>
 
-            {/* Store Drop-offs Sequence */}
-            <section className="records-card delivery-section-card">
-              <div className="section-card-header">
-                <h2 className="section-card-title">
-                  Store Drop-offs ({delivery.dropoffs.length})
-                </h2>
-              </div>
-              <DeliveryDropoffTimeline dropoffs={delivery.dropoffs} />
-            </section>
-
-            {/* POD & Supporting Documents */}
-            <section className="records-card delivery-section-card">
-              <div className="section-card-header">
-                <h2 className="section-card-title">POD &amp; Supporting Documents</h2>
-              </div>
-              <DeliveryPodDocuments
-                trip={delivery}
-                canVerify={canManageDocs}
-                roleLabel={actor.roleLabel}
-                onTripChange={handleTripUpdated}
-              />
-            </section>
-          </div>
-
-          {/* Right Column: Vehicle, Crew, Financials */}
-          <div className="delivery-detail-column">
             {/* Assigned Vehicle */}
             <section className="records-card delivery-section-card">
               <div className="section-card-header">
@@ -487,14 +510,6 @@ function DeliveryDetailsPageContent({
                 driverRateText={`${formatExpenseResolution(delivery.expenses.driverDailyRate, delivery.expenseStates?.driverDailyRate)} + ${formatExpenseResolution(delivery.expenses.driverAllowance, delivery.expenseStates?.driverAllowance)}`}
                 helperRateText={`${formatExpenseResolution(delivery.expenses.helperDailyRate, delivery.expenseStates?.helperDailyRate)} + ${formatExpenseResolution(delivery.expenses.helperAllowance, delivery.expenseStates?.helperAllowance)}`}
               />
-            </section>
-
-            {/* Financial Breakdown */}
-            <section className="records-card delivery-section-card">
-              <div className="section-card-header">
-                <h2 className="section-card-title">Financial Breakdown</h2>
-              </div>
-              <DeliveryFinancialBreakdown trip={delivery} />
             </section>
           </div>
         </div>

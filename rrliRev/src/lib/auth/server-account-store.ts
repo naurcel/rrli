@@ -60,7 +60,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     username: "admin",
     normalizedUsername: "admin",
     email: "admin@routex.local",
-    fullName: "Shinryu (System Admin)",
+    fullName: "Shinryu",
     role: "admin",
     avatarUrl: "/profiles/shinryu.png",
     isActive: true,

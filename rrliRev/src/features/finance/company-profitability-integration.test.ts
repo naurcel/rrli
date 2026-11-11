@@ -263,14 +263,17 @@ describe("RouteX: Company Profitability & Expense Ledger Integration", () => {
   });
 
   it("enforces RBAC permissions for company expenses", () => {
-    // Admin can view and manage
+    // Admin can view and manage (can do EVERYTHING)
     assert.equal(canManageCompanyExpenses("admin"), true);
 
-    // Operations can view and manage
-    assert.equal(canManageCompanyExpenses("operations"), true);
+    // Finance can manage whatever is on the finance page
+    assert.equal(canManageCompanyExpenses("finance"), true);
 
-    // View-only roles CANNOT manage company expenses
-    const viewOnlyRoles: UserRole[] = ["finance", "hr", "secretary", "customer_representative"];
+    // Operations is view-only for company expenses
+    assert.equal(canManageCompanyExpenses("operations"), false);
+
+    // The rest of the roles CANNOT manage company expenses
+    const viewOnlyRoles: UserRole[] = ["hr", "secretary", "customer_representative"];
     for (const role of viewOnlyRoles) {
       assert.equal(canManageCompanyExpenses(role), false);
     }

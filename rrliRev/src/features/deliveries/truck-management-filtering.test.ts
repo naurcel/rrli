@@ -48,42 +48,40 @@ describe("Truck Management and Filtering Improvements", () => {
     });
 
     it("generates clear human-readable classification labels", () => {
-      assert.equal(getTruckClassificationLabel("6-Wheeler", "Refrigerated"), "6-Wheeler · Cold Storage (Reefer)");
-      assert.equal(getTruckClassificationLabel("10-Wheeler", "Dry"), "10-Wheeler · Dry Cargo (Ambient)");
-      assert.equal(getTruckClassificationLabel("4-Wheeler", "Refrigerated"), "4-Wheeler · Cold Storage (Reefer)");
-      assert.equal(getTruckClassificationLabel("4-Wheeler", "Dry"), "4-Wheeler · Dry Cargo (Ambient)");
+      assert.equal(getTruckClassificationLabel("6-Wheeler", "Refrigerated"), "6-Wheeler · Cold");
+      assert.equal(getTruckClassificationLabel("10-Wheeler", "Dry"), "10-Wheeler · Dry");
+      assert.equal(getTruckClassificationLabel("4-Wheeler", "Refrigerated"), "4-Wheeler · Cold");
+      assert.equal(getTruckClassificationLabel("4-Wheeler", "Dry"), "4-Wheeler · Dry");
     });
   });
 
-  describe("Truck Classification Filters (Removing Incorrect Raw Per-Wheel Options)", () => {
-    it("ensures filter options contain valid combined classifications and capabilities", () => {
+  describe("Truck Classification Filters (Simplified to Only Dry and Cold)", () => {
+    it("ensures filter options contain only all, dry, and cold options", () => {
       const values = TRUCK_CLASSIFICATION_FILTER_OPTIONS.map((opt) => opt.value);
 
-      // Must include capability broad tiers
+      // Must include All, Dry, and Cold
       assert.ok(values.includes("all"));
-      assert.ok(values.includes("refrigerated"));
       assert.ok(values.includes("dry"));
+      assert.ok(values.includes("cold"));
 
-      // Must include specific valid specifications
-      assert.ok(values.includes("reefer-6w"));
-      assert.ok(values.includes("reefer-4w"));
-      assert.ok(values.includes("dry-10w"));
-      assert.ok(values.includes("dry-4w"));
+      // Wheel-specific combinations must NOT be present
+      assert.ok(!values.includes("reefer-6w" as any));
+      assert.ok(!values.includes("reefer-4w" as any));
+      assert.ok(!values.includes("dry-10w" as any));
+      assert.ok(!values.includes("dry-4w" as any));
 
-      // Raw per-wheel options without cold-storage context must NOT be present
-      assert.ok(!values.includes("4-Wheeler" as TruckClassificationFilterKey));
-      assert.ok(!values.includes("6-Wheeler" as TruckClassificationFilterKey));
-      assert.ok(!values.includes("10-Wheeler" as TruckClassificationFilterKey));
+      // Raw per-wheel options without classification context must NOT be present
+      assert.ok(!values.includes("4-Wheeler" as any));
+      assert.ok(!values.includes("6-Wheeler" as any));
+      assert.ok(!values.includes("10-Wheeler" as any));
     });
 
-    it("provides informative labels indicating cold-storage or dry capability", () => {
-      const reeferOption = TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === "refrigerated");
-      assert.ok(reeferOption?.label.includes("Refrigerated"));
-      assert.ok(reeferOption?.label.includes("Cold Storage"));
+    it("provides clean labels for dry and cold classifications", () => {
+      const coldOption = TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === "cold");
+      assert.equal(coldOption?.label, "Cold");
 
       const dryOption = TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === "dry");
-      assert.ok(dryOption?.label.includes("Dry"));
-      assert.ok(dryOption?.label.includes("Ambient"));
+      assert.equal(dryOption?.label, "Dry");
     });
   });
 

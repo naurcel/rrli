@@ -6,10 +6,9 @@ export function PasswordCriteriaList({ password }: { password: string }) {
   const { checks } = evaluatePasswordCriteria(password);
 
   const items = [
-    { label: "At least 8 characters (max 128)", valid: checks.minLength && checks.maxLength },
-    { label: "Contains at least one letter (a-z, A-Z)", valid: checks.hasLetter },
-    { label: "Contains at least one number (0-9)", valid: checks.hasNumber },
-    { label: "Not commonly used or easily guessed", valid: checks.notCommon && checks.notWhitespaceOnly },
+    { label: "At least 8 characters", valid: checks.minLength && checks.maxLength },
+    { label: "At least one letter", valid: checks.hasLetter },
+    { label: "At least one number", valid: checks.hasNumber },
   ];
 
   return (

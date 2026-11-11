@@ -6,7 +6,11 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
-import { useGlobalDateRange } from "@/components/global-date-range-picker";
+import {
+  formatDateRange,
+  GlobalDateRangePicker,
+  useGlobalDateRange,
+} from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
@@ -70,7 +74,7 @@ export default function TruckProfitabilityPage() {
   const actor = useAuthenticatedActor();
   const canAdd = canManageTrucks(actor.role);
 
-  const { range } = useGlobalDateRange();
+  const { range, setRange } = useGlobalDateRange();
   const { deliveries: dateFilteredTrips, loading, error } = usePersistedDeliveries(range);
 
   // Filter & sort states
@@ -109,6 +113,7 @@ export default function TruckProfitabilityPage() {
   const [crewSubmitting, setCrewSubmitting] = useState(false);
   const [crewFormError, setCrewFormError] = useState<string | null>(null);
   const [openCrewActionId, setOpenCrewActionId] = useState<string | null>(null);
+  const [crewActionOpensAbove, setCrewActionOpensAbove] = useState(false);
   const [crewStatusPendingId, setCrewStatusPendingId] = useState<string | null>(null);
 
   // Editing Crew state
@@ -593,24 +598,15 @@ export default function TruckProfitabilityPage() {
         }
       }
 
-      // 2. Classification Filter (valid classifications only, no bare per-wheel options)
+      // 2. Classification Filter (Simplified: only Dry / Cold)
       const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
-      if (classificationFilter === "refrigerated" && capability !== "Refrigerated") {
+      if (
+        (classificationFilter === "cold" || classificationFilter === "refrigerated") &&
+        capability !== "Refrigerated"
+      ) {
         return false;
       }
       if (classificationFilter === "dry" && capability !== "Dry") {
-        return false;
-      }
-      if (classificationFilter === "reefer-6w" && (capability !== "Refrigerated" || truck.truckType !== "6-Wheeler")) {
-        return false;
-      }
-      if (classificationFilter === "reefer-4w" && (capability !== "Refrigerated" || truck.truckType !== "4-Wheeler")) {
-        return false;
-      }
-      if (classificationFilter === "dry-10w" && (capability !== "Dry" || truck.truckType !== "10-Wheeler")) {
-        return false;
-      }
-      if (classificationFilter === "dry-4w" && (capability !== "Dry" || truck.truckType !== "4-Wheeler")) {
         return false;
       }
 
@@ -680,7 +676,9 @@ export default function TruckProfitabilityPage() {
     plateSearch.trim() ||
     classificationFilter !== "all" ||
     performanceFilter !== "all" ||
-    ownedTruckSort !== "netProfit"
+    ownedTruckSort !== "netProfit" ||
+    range.startDate ||
+    range.endDate
   );
 
   function handleResetFilters() {
@@ -688,6 +686,7 @@ export default function TruckProfitabilityPage() {
     setClassificationFilter("all");
     setPerformanceFilter("all");
     setOwnedTruckSort("netProfit");
+    setRange({ startDate: null, endDate: null });
   }
 
   function sortSubcontractedTrucks(key: string, direction: TableSortDirection) {
@@ -755,7 +754,7 @@ export default function TruckProfitabilityPage() {
 
       setFeedback({
         tone: "success",
-        text: `Truck ${payload.truck.plateNumber} (${payload.truck.ownershipType} ${payload.truck.truckType} · ${storageCapability === "Refrigerated" ? "Cold Storage" : "Dry Cargo"}) successfully registered into the fleet.`,
+        text: `Truck ${payload.truck.plateNumber} (${payload.truck.ownershipType} ${payload.truck.truckType} · ${storageCapability === "Refrigerated" ? "Cold" : "Dry"}) successfully registered into the fleet.`,
       });
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to register truck.");
@@ -873,7 +872,7 @@ export default function TruckProfitabilityPage() {
 
   return (
     <>
-      <OperationalTopbar contextLabel="Trucks" />
+      <OperationalTopbar contextLabel="Trucks" showDateFilter={false} />
 
       <div className="content-wrap">
         <header className="page-intro">
@@ -962,7 +961,7 @@ export default function TruckProfitabilityPage() {
               </div>
               <div className="records-heading-meta">
                 <span className="ledger-total-badge">
-                  {filteredOwnedTrucks.length} of {allOwnedTrucks.length} trucks · {refrigeratedCount} Cold Storage · {dryCount} Dry Cargo
+                  {filteredOwnedTrucks.length} of {allOwnedTrucks.length} trucks · {refrigeratedCount} Cold · {dryCount} Dry
                 </span>
               </div>
             </div>
@@ -995,13 +994,15 @@ export default function TruckProfitabilityPage() {
                 />
               </label>
 
+              <GlobalDateRangePicker />
+
               <div className="filter-select-wrapper" style={{ minWidth: "165px" }}>
                 <RoundedSelect
                   value={classificationFilter}
                   options={TRUCK_CLASSIFICATION_FILTER_OPTIONS}
                   onChange={(val) => setClassificationFilter(val as TruckClassificationFilterKey)}
-                  ariaLabel="Filter trucks by vehicle type"
-                  placeholder="All Vehicle Types"
+                  ariaLabel="Filter trucks by classification"
+                  placeholder="All Classifications"
                 />
               </div>
 
@@ -1046,6 +1047,23 @@ export default function TruckProfitabilityPage() {
             {hasActiveFilters && (
               <div className="active-filter-chips" aria-label="Active filters">
                 <span className="active-chips-label">Active filters:</span>
+                {(range.startDate || range.endDate) && (
+                  <span className="filter-chip">
+                    <span className="filter-chip-category">Date:</span>{" "}
+                    {formatDateRange(range)}
+                    <button
+                      type="button"
+                      className="filter-chip-remove"
+                      aria-label="Remove date range filter"
+                      title="Remove date range filter"
+                      onClick={() =>
+                        setRange({ startDate: null, endDate: null })
+                      }
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
                 {plateSearch.trim() && (
                   <span className="filter-chip">
                     <span className="filter-chip-category">Plate:</span> {plateSearch.trim()}
@@ -1062,8 +1080,9 @@ export default function TruckProfitabilityPage() {
                 )}
                 {classificationFilter !== "all" && (
                   <span className="filter-chip">
-                    <span className="filter-chip-category">Type:</span>{" "}
-                    {TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === classificationFilter)?.label ?? classificationFilter}
+                    <span className="filter-chip-category">Classification:</span>{" "}
+                    {TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === classificationFilter)?.label ??
+                      (classificationFilter === "refrigerated" ? "Cold" : classificationFilter)}
                     <button
                       type="button"
                       className="filter-chip-remove"
@@ -1105,6 +1124,14 @@ export default function TruckProfitabilityPage() {
                     </button>
                   </span>
                 )}
+                <button
+                  type="button"
+                  className="filter-chip-clear-all"
+                  title="Clear all active truck filters"
+                  onClick={handleResetFilters}
+                >
+                  Clear all
+                </button>
               </div>
             )}
           </div>
@@ -1134,7 +1161,7 @@ export default function TruckProfitabilityPage() {
                       <div className="truck-card-photo-wrap">
                         <TruckPhoto plateNumber={truck.plateNumber} />
                         <span className={`truck-capability-pill ${isRefrigerated ? "refrigerated" : "ambient"}`}>
-                          {isRefrigerated ? "Cold Storage" : "Dry Cargo"}
+                          {isRefrigerated ? "Cold" : "Dry"}
                         </span>
                         {isPerformanceSort && (
                           <span className="truck-rank-badge">
@@ -1213,8 +1240,8 @@ export default function TruckProfitabilityPage() {
               <thead>
                 <tr>
                   <SortableTableHeader label="Plate Number" sortKey="plateNumber" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
-                  <SortableTableHeader label="Vehicle Type" sortKey="truckType" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
-                  <th>Storage Capability</th>
+                  <SortableTableHeader label="Vehicle Size" sortKey="truckType" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
+                  <th>Classification</th>
                   <SortableTableHeader label="Provider" sortKey="provider" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Contact Person" sortKey="contactPerson" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   {actor.role === "admin" && <th style={{ width: "56px", textAlign: "center" }}>Actions</th>}
@@ -1242,7 +1269,7 @@ export default function TruckProfitabilityPage() {
                       <td><span className="truck-table-spec">{truck.truckType}</span></td>
                       <td>
                         <span className={`truck-capability-pill-small ${isRefrigerated ? "refrigerated" : "ambient"}`}>
-                          {isRefrigerated ? "Cold Storage (Reefer)" : "Dry Cargo (Ambient)"}
+                          {isRefrigerated ? "Cold" : "Dry"}
                         </span>
                       </td>
                       <td>{truck.provider}</td>
@@ -1375,8 +1402,14 @@ export default function TruckProfitabilityPage() {
                     </td>
                   </tr>
                 ) : (
-                  paginatedCrew.map((member) => (
-                    <tr key={member.id || `${member.assignmentType}-${member.fullName}`}>
+                  paginatedCrew.map((member, memberIndex) => (
+                    <tr
+                      key={member.id || `${member.assignmentType}-${member.fullName}`}
+                      style={{
+                        position: "relative",
+                        zIndex: openCrewActionId === member.id ? 150 : undefined,
+                      }}
+                    >
                       <td><strong className="truck-code">{member.fullName}</strong></td>
                       <td>
                         <span className="crew-role-text">
@@ -1403,6 +1436,10 @@ export default function TruckProfitabilityPage() {
                             disabled={crewStatusPendingId === member.id}
                             onClick={(e) => {
                               e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const spaceBelow = window.innerHeight - rect.bottom;
+                              const isNearBottom = spaceBelow < 220 || memberIndex >= paginatedCrew.length - 2;
+                              setCrewActionOpensAbove(isNearBottom);
                               setOpenCrewActionId((current) => current === member.id ? null : member.id);
                             }}
                           >
@@ -1411,7 +1448,7 @@ export default function TruckProfitabilityPage() {
                             </svg>
                           </button>
                           {openCrewActionId === member.id ? (
-                            <div className="row-action-menu" role="menu" aria-label={`Actions for ${member.fullName}`}>
+                            <div className={`row-action-menu${crewActionOpensAbove ? " opens-above" : ""}`} role="menu" aria-label={`Actions for ${member.fullName}`}>
                               <button
                                 type="button"
                                 role="menuitem"
@@ -1600,16 +1637,16 @@ export default function TruckProfitabilityPage() {
 
                   <div className="routex-dialog-field">
                     <label htmlFor="new-truck-capability" style={{ fontWeight: 600, fontSize: "12px" }}>
-                      Storage Capability *
+                      Classification *
                     </label>
                     <RoundedSelect
                       value={storageCapability}
                       options={[
-                        { value: "Refrigerated", label: "Cold Storage (Reefer)" },
-                        { value: "Dry", label: "Dry / Ambient Cargo" },
+                        { value: "Refrigerated", label: "Cold" },
+                        { value: "Dry", label: "Dry" },
                       ]}
                       onChange={(value) => setStorageCapability(value as TruckStorageCapability)}
-                      ariaLabel="Select storage capability"
+                      ariaLabel="Select truck classification"
                     />
                   </div>
                 </div>

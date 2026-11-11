@@ -5,6 +5,7 @@ import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
+import { RoundedSelect, type SelectOption } from "@/components/rounded-select";
 import {
   getDefaultAvatarUrl,
   getProfileStorageKey,
@@ -18,6 +19,17 @@ import {
   validateUsernameFormat,
 } from "@/lib/auth/password-policy";
 import { ROLE_METADATA, USER_ROLES } from "@/lib/auth/rbac";
+
+const SECURITY_QUESTION_OPTIONS: readonly SelectOption[] = [
+  ...PREDEFINED_SECURITY_QUESTIONS.map((q) => ({
+    value: q,
+    label: q,
+  })),
+  {
+    value: "custom",
+    label: "Enter custom question…",
+  },
+];
 
 export default function SettingsPage() {
   const actor = useAuthenticatedActor();
@@ -338,77 +350,48 @@ export default function SettingsPage() {
 
   const activeAvatar = previewUrl || currentAvatar;
   const initials = getUserInitials(actor.fullName, actor.username);
+  const cleanFullName = actor.fullName.replace(/\s*\([^)]*\)/g, "").trim() || actor.fullName;
 
   return (
     <>
-      <OperationalTopbar contextLabel="Settings" />
+      <OperationalTopbar contextLabel="Settings" showDateFilter={false} />
 
       <div className="content-wrap settings-page-wrap">
-        {/* Profile Centerpiece (Google Account Mobile Inspired) */}
+        {/* Profile Centerpiece (Google Account Mobile Inspired - Borderless with Animated Glowing Avatar) */}
         <section className="settings-profile-centerpiece" aria-label="User Profile">
-          {/* Centered Avatar with Floating Edit/Upload Badge */}
-          <div className="settings-hero-avatar-wrap">
-            {activeAvatar ? (
-              <img
-                src={activeAvatar}
-                alt={actor.fullName}
-                width={112}
-                height={112}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  maxWidth: "112px",
-                  maxHeight: "112px",
-                  borderRadius: "50%",
-                  objectFit: "cover",
-                  display: "block",
-                }}
-                className="settings-hero-avatar-img"
-              />
-            ) : (
-              <div className="settings-hero-avatar-fallback">
-                <span>{initials}</span>
-              </div>
-            )}
-            {photoUploading ? (
-              <div className="settings-hero-avatar-loading">
-                <span>Saving…</span>
-              </div>
-            ) : null}
+          {/* Centered Avatar with Animated Gradient Glow */}
+          <div className="settings-hero-avatar-container">
+            {/* Luminous Animated Moving Gradient Glow */}
+            <div className="settings-hero-avatar-glow" aria-hidden="true" />
 
-            {/* Quick-action Camera Badge */}
-            <label
-              className="settings-hero-avatar-badge"
-              title={activeAvatar ? "Change profile photo" : "Upload profile photo"}
-              aria-label="Change profile photo"
-            >
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                onChange={handlePhotoSelect}
-                disabled={photoUploading}
-              />
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
-            </label>
+            {/* Crisp Animated Gradient Ring Border */}
+            <div className="settings-hero-avatar-ring" aria-hidden="true" />
+
+            <div className="settings-hero-avatar-wrap">
+              {activeAvatar ? (
+                <img
+                  src={activeAvatar}
+                  alt={cleanFullName}
+                  width={156}
+                  height={156}
+                  className="settings-hero-avatar-img"
+                />
+              ) : (
+                <div className="settings-hero-avatar-fallback">
+                  <span>{initials}</span>
+                </div>
+              )}
+              {photoUploading ? (
+                <div className="settings-hero-avatar-loading">
+                  <span>Saving…</span>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {/* User Identity Header */}
           <div className="settings-hero-info">
-            <h1 className="settings-hero-name">{actor.fullName}</h1>
+            <h1 className="settings-hero-name">{cleanFullName}</h1>
             <p className="settings-hero-username">@{currentUsername}</p>
 
             <div className="settings-hero-badges">
@@ -462,16 +445,8 @@ export default function SettingsPage() {
           {/* Section 1: Account Details (Change Username) */}
           <section className="records-card settings-card-section" aria-label="Account Details">
             <div className="settings-section-header">
-              <div className="settings-section-header-icon" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </div>
-              <div>
-                <h2>Account Details</h2>
-                <p>Manage your username and account credentials.</p>
-              </div>
+              <h2>Account Details</h2>
+              <p>Manage your username.</p>
             </div>
 
             <form onSubmit={handleUsernameSubmit} className="settings-form-body">
@@ -501,7 +476,12 @@ export default function SettingsPage() {
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
                     className="settings-input"
+                    minLength={3}
+                    maxLength={30}
                   />
+                  <small className="settings-field-hint">
+                    3–30 characters.
+                  </small>
                 </div>
               </div>
 
@@ -510,41 +490,33 @@ export default function SettingsPage() {
                 <input
                   type="password"
                   required
-                  placeholder="Enter current password to verify identity"
+                  placeholder="Enter current password"
                   value={usernamePassword}
                   onChange={(e) => setUsernamePassword(e.target.value)}
                   className="settings-input"
+                  minLength={8}
                 />
-                <small className="settings-field-hint">
-                  3–30 characters (letters, numbers, underscores, dots, hyphens). Case-insensitive unique.
-                </small>
               </div>
 
-              <button
-                type="submit"
-                className="primary-action-button"
-                disabled={usernameSubmitting}
-                title="Save your new username"
-                style={{ minHeight: "42px", justifySelf: "start", padding: "0 22px" }}
-              >
-                {usernameSubmitting ? "Updating…" : "Save Username"}
-              </button>
+              <div className="settings-form-actions">
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={usernameSubmitting}
+                  title="Save your new username"
+                  style={{ minHeight: "42px", padding: "0 22px" }}
+                >
+                  {usernameSubmitting ? "Updating…" : "Save Username"}
+                </button>
+              </div>
             </form>
           </section>
 
           {/* Section 2: Sign-in & Security (Change Password) */}
           <section className="records-card settings-card-section" aria-label="Sign-in & Security">
             <div className="settings-section-header">
-              <div className="settings-section-header-icon" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-              </div>
-              <div>
-                <h2>Sign-in &amp; Security</h2>
-                <p>Update your password to keep your account secure.</p>
-              </div>
+              <h2>Sign-in &amp; Security</h2>
+              <p>Update your password.</p>
             </div>
 
             <form onSubmit={handlePasswordSubmit} className="settings-form-body">
@@ -563,6 +535,7 @@ export default function SettingsPage() {
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   className="settings-input"
+                  minLength={8}
                 />
               </div>
 
@@ -576,6 +549,8 @@ export default function SettingsPage() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="settings-input"
+                    minLength={8}
+                    maxLength={128}
                   />
                 </div>
 
@@ -588,36 +563,33 @@ export default function SettingsPage() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="settings-input"
+                    minLength={8}
+                    maxLength={128}
                   />
                 </div>
               </div>
 
               <PasswordCriteriaList password={newPassword} />
 
-              <button
-                type="submit"
-                className="primary-action-button"
-                disabled={passwordSubmitting}
-                title="Update your account password"
-                style={{ minHeight: "42px", justifySelf: "start", padding: "0 22px" }}
-              >
-                {passwordSubmitting ? "Updating…" : "Update Password"}
-              </button>
+              <div className="settings-form-actions">
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={passwordSubmitting}
+                  title="Update your account password"
+                  style={{ minHeight: "42px", padding: "0 22px" }}
+                >
+                  {passwordSubmitting ? "Updating…" : "Update Password"}
+                </button>
+              </div>
             </form>
           </section>
 
           {/* Section 3: Recovery & Verification (Security Question) */}
           <section className="records-card settings-card-section" aria-label="Recovery & Verification">
             <div className="settings-section-header">
-              <div className="settings-section-header-icon" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
-              </div>
-              <div>
-                <h2>Recovery &amp; Verification</h2>
-                <p>Security question used to verify identity during password recovery.</p>
-              </div>
+              <h2>Recovery &amp; Verification</h2>
+              <p>Used to verify identity during password recovery.</p>
             </div>
 
             <form onSubmit={handleSecurityQuestionSubmit} className="settings-form-body">
@@ -636,25 +608,20 @@ export default function SettingsPage() {
 
               <div className="settings-form-field">
                 <label>Choose New Question</label>
-                <select
+                <RoundedSelect
                   value={isCustomQuestion ? "custom" : selectedQuestion}
-                  onChange={(e) => {
-                    if (e.target.value === "custom") {
+                  options={SECURITY_QUESTION_OPTIONS}
+                  onChange={(val) => {
+                    if (val === "custom") {
                       setIsCustomQuestion(true);
                     } else {
                       setIsCustomQuestion(false);
-                      setSelectedQuestion(e.target.value);
+                      setSelectedQuestion(val);
                     }
                   }}
-                  className="settings-input"
-                >
-                  {PREDEFINED_SECURITY_QUESTIONS.map((q) => (
-                    <option key={q} value={q}>
-                      {q}
-                    </option>
-                  ))}
-                  <option value="custom">Enter custom question…</option>
-                </select>
+                  ariaLabel="Choose New Question"
+                  className="is-form-select"
+                />
 
                 {isCustomQuestion ? (
                   <input
@@ -700,41 +667,33 @@ export default function SettingsPage() {
                 <input
                   type="password"
                   required
-                  placeholder="Enter current password to save security question"
+                  placeholder="Enter current password"
                   value={securityPassword}
                   onChange={(e) => setSecurityPassword(e.target.value)}
                   className="settings-input"
+                  minLength={8}
                 />
-                <small className="settings-field-hint">
-                  Answers are case-sensitive and hashed using Argon2id. Stored answers are never revealed.
-                </small>
               </div>
 
-              <button
-                type="submit"
-                className="primary-action-button"
-                disabled={securitySubmitting}
-                title="Save your password recovery security question and answer"
-                style={{ minHeight: "42px", justifySelf: "start", padding: "0 22px" }}
-              >
-                {securitySubmitting ? "Saving…" : "Save Security Question"}
-              </button>
+              <div className="settings-form-actions">
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={securitySubmitting}
+                  title="Save your password recovery security question and answer"
+                  style={{ minHeight: "42px", padding: "0 22px" }}
+                >
+                  {securitySubmitting ? "Saving…" : "Save Security Question"}
+                </button>
+              </div>
             </form>
           </section>
 
           {/* Section 4: Account Security Status */}
           <section className="records-card settings-card-section" aria-label="Account Security Status">
             <div className="settings-section-header">
-              <div className="settings-section-header-icon" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  <path d="m9 12 2 2 4-4" />
-                </svg>
-              </div>
-              <div>
-                <h2>Account Security Status</h2>
-                <p>System security protections enabled for your account.</p>
-              </div>
+              <h2>Account Security Status</h2>
+              <p>Security protections enabled for your account.</p>
             </div>
 
             <div className="settings-security-checklist-card">
@@ -770,16 +729,8 @@ export default function SettingsPage() {
           {/* Section 5: Role Permissions Reference */}
           <section className="records-card settings-card-section" aria-label="Role Permissions">
             <div className="settings-section-header">
-              <div className="settings-section-header-icon" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="4" width="20" height="16" rx="2" />
-                  <path d="M7 15h0M2 9.5h20" />
-                </svg>
-              </div>
-              <div>
-                <h2>Role Permissions</h2>
-                <p>System privileges and capabilities across RouteX roles.</p>
-              </div>
+              <h2>Role Permissions</h2>
+              <p>System privileges across RouteX roles.</p>
             </div>
 
             <div className="table-wrap">

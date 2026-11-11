@@ -21,9 +21,6 @@ export function RouteXFooter() {
         <p className="routex-footer-brand">
           Developed by RouteX for Redeemed Route Logistics Inc.
         </p>
-        <p className="routex-footer-love">
-          Made with 💟
-        </p>
         <p className="routex-footer-copyright">
           &copy; 2026 Redeemed Route Logistics Inc. All rights reserved.
         </p>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { GlobalTooltip } from "@/components/global-tooltip";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +39,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <GlobalTooltip />
+      </body>
     </html>
   );
 }

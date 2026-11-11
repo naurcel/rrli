@@ -2,8 +2,20 @@
 
 import { useState, type FormEvent } from "react";
 import { PasswordCriteriaList } from "./password-criteria-list";
+import { RoundedSelect, type SelectOption } from "./rounded-select";
 import { PREDEFINED_SECURITY_QUESTIONS } from "@/lib/auth/password-policy";
 import { evaluatePasswordCriteria } from "@/lib/auth/password-policy";
+
+const SECURITY_QUESTION_OPTIONS: readonly SelectOption[] = [
+  ...PREDEFINED_SECURITY_QUESTIONS.map((q) => ({
+    value: q,
+    label: q,
+  })),
+  {
+    value: "custom",
+    label: "Enter a custom question…",
+  },
+];
 
 export function InitialSetupModal({ username }: { username: string }) {
   const [newPassword, setNewPassword] = useState("");
@@ -202,32 +214,20 @@ export function InitialSetupModal({ username }: { username: string }) {
             <label style={{ fontSize: "11px", fontWeight: 700 }}>
               Security Question
             </label>
-            <select
+            <RoundedSelect
               value={isCustomQuestion ? "custom" : question}
-              onChange={(e) => {
-                if (e.target.value === "custom") {
+              options={SECURITY_QUESTION_OPTIONS}
+              onChange={(val) => {
+                if (val === "custom") {
                   setIsCustomQuestion(true);
                 } else {
                   setIsCustomQuestion(false);
-                  setQuestion(e.target.value);
+                  setQuestion(val);
                 }
               }}
-              style={{
-                minHeight: "42px",
-                padding: "0 12px",
-                borderRadius: "10px",
-                border: "1px solid var(--color-border)",
-                background: "var(--color-surface)",
-                fontSize: "12px",
-              }}
-            >
-              {PREDEFINED_SECURITY_QUESTIONS.map((q) => (
-                <option key={q} value={q}>
-                  {q}
-                </option>
-              ))}
-              <option value="custom">Enter a custom question…</option>
-            </select>
+              ariaLabel="Security Question"
+              className="is-form-select"
+            />
 
             {isCustomQuestion ? (
               <input

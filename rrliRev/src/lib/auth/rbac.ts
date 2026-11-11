@@ -66,6 +66,22 @@ const VIEW_ONLY_PERMISSIONS: readonly Permission[] = [
   "settings:view",
 ] as const;
 
+/**
+ * Finance Permissions:
+ * Under the clarified RBAC model, Finance can ONLY edit whatever is on the Finance page (`finance:manage`).
+ * In all other operational and administrative modules, Finance remains strictly view-only.
+ */
+const FINANCE_PERMISSIONS: readonly Permission[] = [
+  ...VIEW_ONLY_PERMISSIONS,
+  "finance:manage",
+  "reports:export",
+] as const;
+
+/**
+ * Operations Permissions:
+ * Daily logistics dispatch & execution (deliveries, drop-offs, Excel imports, POD attachments, trucks).
+ * Operations CANNOT edit the Finance page (`finance:manage` is excluded).
+ */
 const OPERATIONS_PERMISSIONS: readonly Permission[] = [
   ...VIEW_ONLY_PERMISSIONS,
   "deliveries:create",
@@ -75,12 +91,16 @@ const OPERATIONS_PERMISSIONS: readonly Permission[] = [
   "imports:upload",
   "imports:review_confirm",
   "profitability:manage",
-  "finance:manage",
   "reports:export",
 ] as const;
 
+/**
+ * Admin Permissions:
+ * The Admin can do EVERYTHING across all operational, financial, and administrative modules.
+ */
 const ADMIN_PERMISSIONS: readonly Permission[] = [
   ...OPERATIONS_PERMISSIONS,
+  "finance:manage",
   "reports:manage_templates",
   "users:view",
   "users:manage",
@@ -90,7 +110,7 @@ const ADMIN_PERMISSIONS: readonly Permission[] = [
 export const ROLE_PERMISSIONS: Readonly<Record<UserRole, readonly Permission[]>> = {
   admin: ADMIN_PERMISSIONS,
   operations: OPERATIONS_PERMISSIONS,
-  finance: VIEW_ONLY_PERMISSIONS,
+  finance: FINANCE_PERMISSIONS,
   hr: VIEW_ONLY_PERMISSIONS,
   secretary: VIEW_ONLY_PERMISSIONS,
   customer_representative: VIEW_ONLY_PERMISSIONS,
@@ -104,7 +124,7 @@ export const ROLE_METADATA: Readonly<Record<UserRole, RoleMetadata>> = {
     accessLevelLabel: "Full Access",
     badgeTone: "success",
     summary:
-      "Full system access: manage user accounts and roles, import and review Excel trip reports, manage deliveries, multi-store drop-offs, PODs, and truck performance.",
+      "Full system access (can do EVERYTHING): manage user accounts and roles, import and review Excel trip reports, manage deliveries without 3-day limitation, multi-store drop-offs, PODs, truck performance, company expenses, and audited record deletions.",
   },
   operations: {
     role: "operations",
@@ -113,16 +133,16 @@ export const ROLE_METADATA: Readonly<Record<UserRole, RoleMetadata>> = {
     accessLevelLabel: "Operations Write Access",
     badgeTone: "success",
     summary:
-      "Create and manage deliveries, manage multi-store drop-offs, import and review Excel trip reports before saving, manage PODs and supporting documents, and view truck performance.",
+      "Create and manage deliveries (subject to 3-day submission window), manage multi-store drop-offs, import and review Excel trip reports, manage POD files, and register fleet trucks. Finance page and administrative features are view-only / restricted.",
   },
   finance: {
     role: "finance",
     label: "Finance",
     accessLevel: "view_only",
-    accessLevelLabel: "View-Only Access",
+    accessLevelLabel: "Finance (Page Edit Only)",
     badgeTone: "neutral",
     summary:
-      "View-only access to completed deliveries, trip expenses, truck performance, POD verification status, and operational reports.",
+      "Financial management: can ONLY edit whatever is on the Finance page (company expenses). All other modules (deliveries, drop-offs, trucks, drivers, POD documents, user management) are strictly view-only.",
   },
   hr: {
     role: "hr",

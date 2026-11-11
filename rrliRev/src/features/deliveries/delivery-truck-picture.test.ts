@@ -82,14 +82,14 @@ test("RouteX: Display Truck Picture in Delivery Information", async (t) => {
     const ownedCapability = getTruckStorageCapability(ownedPlate);
     assert.equal(ownedCapability, "Refrigerated");
     const ownedLabel = getTruckClassificationLabel("6-Wheeler", ownedCapability);
-    assert.equal(ownedLabel, "6-Wheeler · Cold Storage (Reefer)");
+    assert.equal(ownedLabel, "6-Wheeler · Cold");
 
     // Owned Dry Truck
     const dryPlate = "CBZ 1187";
     const dryCapability = getTruckStorageCapability(dryPlate);
     assert.equal(dryCapability, "Dry");
     const dryLabel = getTruckClassificationLabel("10-Wheeler", dryCapability);
-    assert.equal(dryLabel, "10-Wheeler · Dry Cargo (Ambient)");
+    assert.equal(dryLabel, "10-Wheeler · Dry");
 
     // Subcontracted Truck with Provider
     const subPlate = "PQR 7156";

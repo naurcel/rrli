@@ -634,12 +634,12 @@ export function EditDeliveryModal({
                       id="corr-driver-allowance"
                       label="Trip Allowance"
                       value={expenses.driverAllowance ?? ""}
-                      status={statuses.driverAllowance ?? "confirmed"}
-                      onValueChange={(val) => setExpenses((prev) => ({ ...prev, driverAllowance: val }))}
-                      onStatusChange={(st) => {
-                        setStatuses((prev) => ({ ...prev, driverAllowance: st }));
-                        if (st !== "confirmed") setExpenses((prev) => ({ ...prev, driverAllowance: "" }));
+                      status="confirmed"
+                      onValueChange={(val) => {
+                        setExpenses((prev) => ({ ...prev, driverAllowance: val }));
+                        setStatuses((prev) => ({ ...prev, driverAllowance: "confirmed" }));
                       }}
+                      hideStatusSwitch
                     />
                   </div>
                 </section>
@@ -674,12 +674,12 @@ export function EditDeliveryModal({
                       id="corr-helper-allowance"
                       label="Trip Allowance"
                       value={expenses.helperAllowance ?? ""}
-                      status={statuses.helperAllowance ?? "confirmed"}
-                      onValueChange={(val) => setExpenses((prev) => ({ ...prev, helperAllowance: val }))}
-                      onStatusChange={(st) => {
-                        setStatuses((prev) => ({ ...prev, helperAllowance: st }));
-                        if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helperAllowance: "" }));
+                      status="confirmed"
+                      onValueChange={(val) => {
+                        setExpenses((prev) => ({ ...prev, helperAllowance: val }));
+                        setStatuses((prev) => ({ ...prev, helperAllowance: "confirmed" }));
                       }}
+                      hideStatusSwitch
                     />
                   </div>
                 </section>
@@ -828,19 +828,21 @@ export function DialogExpenseField({
   status,
   onValueChange,
   onStatusChange,
+  hideStatusSwitch,
 }: {
   id?: string;
   label: string;
   value: string;
   status: "confirmed" | "not_applicable" | "unknown";
   onValueChange: (val: string) => void;
-  onStatusChange: (st: "confirmed" | "not_applicable" | "unknown") => void;
+  onStatusChange?: (st: "confirmed" | "not_applicable" | "unknown") => void;
+  hideStatusSwitch?: boolean;
 }) {
   const displayLabel = label.includes("₱") ? label : `${label} (₱)`;
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleWrapperClick = () => {
-    if (status !== "confirmed") {
+    if (status !== "confirmed" && onStatusChange) {
       onStatusChange("confirmed");
       setTimeout(() => {
         inputRef.current?.focus();
@@ -875,26 +877,28 @@ export function DialogExpenseField({
             onChange={(e) => onValueChange(e.target.value)}
           />
         </span>
-        <div className="expense-resolution-options" role="group" aria-label={`${displayLabel} resolution`}>
-          {([
-            ["confirmed", "Amount"],
-            ["not_applicable", "N/A"],
-            ["unknown", "Unknown"],
-          ] as const).map(([val, text]) => (
-            <button
-              type="button"
-              key={val}
-              className={status === val ? "active" : ""}
-              aria-pressed={status === val}
-              onClick={() => {
-                onStatusChange(val);
-                if (val !== "confirmed") onValueChange("");
-              }}
-            >
-              {text}
-            </button>
-          ))}
-        </div>
+        {!hideStatusSwitch && onStatusChange ? (
+          <div className="expense-resolution-options" role="group" aria-label={`${displayLabel} resolution`}>
+            {([
+              ["confirmed", "Amount"],
+              ["not_applicable", "N/A"],
+              ["unknown", "Unknown"],
+            ] as const).map(([val, text]) => (
+              <button
+                type="button"
+                key={val}
+                className={status === val ? "active" : ""}
+                aria-pressed={status === val}
+                onClick={() => {
+                  onStatusChange(val);
+                  if (val !== "confirmed") onValueChange("");
+                }}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -4,21 +4,19 @@ export const dynamic = "force-dynamic";
 
 export default function NotFoundPage() {
   return (
-    <main className="rx-page" style={{ padding: "48px 24px", maxWidth: 560, margin: "0 auto" }}>
-      <section className="rx-surface" style={{ padding: 28 }}>
-        <div className="rx-kicker">RouteX Navigation</div>
-        <h1 className="rx-title" style={{ marginTop: 6 }}>
-          Page Not Found
-        </h1>
-        <p className="rx-subtitle" style={{ marginTop: 8 }}>
-          The requested RouteX route does not exist or has been retired under the Delivery Operations & Trucks scope.
+    <main className="fallback-page">
+      <div className="fallback-ambient-glow" aria-hidden="true" />
+      <div className="fallback-content" role="alert">
+        <h1 className="fallback-title">Page Not Found</h1>
+        <p className="fallback-description">
+          The requested RouteX route does not exist or has been retired.
         </p>
-        <div style={{ marginTop: 18 }}>
-          <Link href="/dashboard" className="rx-btn rx-btn-primary">
-            Return to Dashboard
+        <div className="fallback-actions">
+          <Link href="/dashboard" className="fallback-btn fallback-btn-primary">
+            Return to dashboard
           </Link>
         </div>
-      </section>
+      </div>
     </main>
   );
 }

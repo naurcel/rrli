@@ -7,6 +7,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-deletion-dialog";
 import {
+  formatDateRange,
+  GlobalDateRangePicker,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
@@ -168,7 +170,7 @@ function sortDeliveryLedgerItems(
 export default function DeliveriesPage() {
   const router = useRouter();
   const actor = useAuthenticatedActor();
-  const { range } = useGlobalDateRange();
+  const { range, setRange } = useGlobalDateRange();
   const [deliveries, setDeliveries] = useState<readonly DeliveryLedgerItem[]>([]);
   const [clients, setClients] = useState<DeliveryFilterOption[]>([]);
   const [trucks, setTrucks] = useState<DeliveryFilterOption[]>([]);
@@ -1135,7 +1137,10 @@ export default function DeliveriesPage() {
 
   return (
     <>
-      <OperationalTopbar contextLabel="Completed Deliveries & Multi-Store Trips" />
+      <OperationalTopbar
+        contextLabel="Completed Deliveries & Multi-Store Trips"
+        showDateFilter={false}
+      />
 
       <div className="content-wrap">
         <header className="page-intro">
@@ -1269,7 +1274,7 @@ export default function DeliveriesPage() {
           </button>
         </section>
 
-        <section className={`records-card${loading ? " is-loading" : ""}`} aria-label="Completed deliveries table">
+        <section className={`records-card delivery-ledger-card${loading ? " is-loading" : ""}`} aria-label="Completed deliveries table">
           <div className="records-heading">
             <div className="records-heading-copy">
               <h2>Deliveries</h2>
@@ -1338,6 +1343,8 @@ export default function DeliveriesPage() {
               />
             </label>
 
+            <GlobalDateRangePicker />
+
             <DeliveryFilterDropdown
               clients={clients}
               trucks={trucks}
@@ -1348,10 +1355,15 @@ export default function DeliveriesPage() {
               onClearAll={() => {
                 setSelectedClients([]);
                 setSelectedTrucks([]);
+                setRange({ startDate: null, endDate: null });
               }}
             />
 
-            {searchQuery || selectedClients.length > 0 || selectedTrucks.length > 0 ? (
+            {searchQuery ||
+            selectedClients.length > 0 ||
+            selectedTrucks.length > 0 ||
+            range.startDate ||
+            range.endDate ? (
               <button
                 type="button"
                 className="filter-button filter-clear"
@@ -1359,6 +1371,7 @@ export default function DeliveriesPage() {
                   setSearchQuery("");
                   setSelectedClients([]);
                   setSelectedTrucks([]);
+                  setRange({ startDate: null, endDate: null });
                 }}
               >
                 Clear filters
@@ -1367,9 +1380,29 @@ export default function DeliveriesPage() {
 
           </div>
 
-          {(selectedClients.length > 0 || selectedTrucks.length > 0) && (
+          {(selectedClients.length > 0 ||
+            selectedTrucks.length > 0 ||
+            range.startDate ||
+            range.endDate) && (
             <div className="active-filter-chips" aria-label="Active filters">
               <span className="active-chips-label">Active filters:</span>
+              {(range.startDate || range.endDate) && (
+                <span className="filter-chip">
+                  <span className="filter-chip-category">Date:</span>{" "}
+                  {formatDateRange(range)}
+                  <button
+                    type="button"
+                    className="filter-chip-remove"
+                    aria-label="Remove date range filter"
+                    title="Remove date range filter"
+                    onClick={() =>
+                      setRange({ startDate: null, endDate: null })
+                    }
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
               {selectedClients.map((id) => {
                 const client = clients.find((c) => c.id === id);
                 const label = client?.label ?? id;
@@ -1415,10 +1448,11 @@ export default function DeliveriesPage() {
               <button
                 type="button"
                 className="filter-chip-clear-all"
-                title="Clear all active client and truck filters"
+                title="Clear all active filters"
                 onClick={() => {
                   setSelectedClients([]);
                   setSelectedTrucks([]);
+                  setRange({ startDate: null, endDate: null });
                 }}
               >
                 Clear all
@@ -1503,9 +1537,7 @@ export default function DeliveriesPage() {
                         </div>
                       </td>
                       <td className="cell-temp">
-                        <span className={`temp-badge ${trip.truckTemperature.includes("-") ? "frozen" : "chilled"}`}>
-                          {trip.truckTemperature}
-                        </span>
+                        <span className="temp-value">{trip.truckTemperature}</span>
                       </td>
                       <td className="cell-origin">
                         <span className="origin-name">{trip.origin}</span>

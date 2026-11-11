@@ -3,21 +3,11 @@ export default function WorkspaceLoading() {
     <div
       className="content-wrap page-loading-container"
       role="status"
-      aria-label="Loading page"
+      aria-label="Loading workspace"
     >
-      <div className="page-loading-pill">
-        <span className="page-loading-dot" />
-        <span>Loading RouteX workspace…</span>
-      </div>
-      <div className="page-loading-skeleton" aria-hidden="true">
-        <div className="skeleton-header" />
-        <div className="skeleton-grid">
-          <div className="skeleton-card" />
-          <div className="skeleton-card" />
-          <div className="skeleton-card" />
-          <div className="skeleton-card" />
-        </div>
-        <div className="skeleton-panel" />
+      <div className="neumorph-loading">
+        <div className="neumorph-glow-circle" aria-hidden="true" />
+        <p className="neumorph-loading-text">Loading workspace…</p>
       </div>
     </div>
   );

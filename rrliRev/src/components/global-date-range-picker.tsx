@@ -322,7 +322,7 @@ export function GlobalDateRangePicker() {
     <div className="global-date-picker">
       <button
         ref={triggerRef}
-        className="global-date-filter"
+        className={`global-date-filter${range.startDate || range.endDate ? " has-active" : ""}`}
         type="button"
         aria-label={`Date range: ${label}`}
         title={`Filter workspace by date: ${label}`}

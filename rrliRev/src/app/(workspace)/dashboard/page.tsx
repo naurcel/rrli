@@ -23,7 +23,10 @@ import {
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
   calculateNiceYAxis,
+  calculateNiceYRange,
   calculateTopClient,
+  buildFinancialTimeSeries,
+  type FinancialTimeSeriesPoint,
 } from "@/features/dashboard/dashboard-kpi";
 import {
   useDeliveryProfitabilitySummary,
@@ -90,6 +93,13 @@ function formatDashboardDate(dateValue: string): string {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
   return dateValue;
+}
+
+function getTimeOfDayGreeting(date: Date = new Date()): string {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 18) return "Good afternoon";
+  return "Good evening";
 }
 
 type MissingDetailIssue = {
@@ -176,42 +186,6 @@ function getDeliveryMissingDetails(delivery: DeliveryTripRecord): MissingDetailI
   return issues;
 }
 
-function buildRevenueSeries(
-  deliveries: readonly DeliveryTripRecord[],
-  range: DateRange,
-): Array<{ date: string; revenue: number }> {
-  const amounts = new Map<string, number>();
-  deliveries.forEach((trip) => {
-    if (isDeliveryFinanciallyComplete(trip) && trip.deliveryRate) {
-      amounts.set(trip.deliveryDate, (amounts.get(trip.deliveryDate) ?? 0) + trip.deliveryRate);
-    }
-  });
-
-  if (range.startDate && range.endDate) {
-    const days: Array<{ date: string; revenue: number }> = [];
-    const cursor = new Date(range.startDate);
-    cursor.setHours(0, 0, 0, 0);
-    const end = new Date(range.endDate);
-    end.setHours(0, 0, 0, 0);
-
-    let step = 0;
-    while (cursor <= end && step < 62) {
-      const year = cursor.getFullYear();
-      const month = String(cursor.getMonth() + 1).padStart(2, "0");
-      const day = String(cursor.getDate()).padStart(2, "0");
-      const key = `${year}-${month}-${day}`;
-      days.push({ date: key, revenue: amounts.get(key) ?? 0 });
-      cursor.setDate(cursor.getDate() + 1);
-      step++;
-    }
-    return days;
-  }
-
-  return [...amounts.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, revenue]) => ({ date, revenue }));
-}
-
 function buildSmoothPath(
   points: Array<{ x: number; y: number }>,
   bounds?: { minY: number; maxY: number },
@@ -247,79 +221,358 @@ function buildSmoothPath(
   return path;
 }
 
-function RevenueChart({
+type FinancialChartMetric = "revenue" | "expenses" | "profit" | "comparison";
+type FinancialChartView = "line" | "bar";
+
+const METRIC_CONFIG = {
+  revenue: {
+    label: "Revenue",
+    title: "Revenue over time",
+    subtitleSuffix: "completed delivery revenue",
+    color: "var(--color-accent-highlight, #f59e0b)",
+    dotClass: "legend-dot-revenue",
+    gradientId: "chart-fill-revenue",
+    emptyMsg: "No revenue in this range",
+  },
+  expenses: {
+    label: "Expenses",
+    title: "Expenses over time",
+    subtitleSuffix: "trip & company operating expenses",
+    color: "#f43f5e",
+    dotClass: "legend-dot-expenses",
+    gradientId: "chart-fill-expenses",
+    emptyMsg: "No expenses in this range",
+  },
+  profit: {
+    label: "Profit",
+    title: "Net profit over time",
+    subtitleSuffix: "net profit after all expenses",
+    color: "#10b981",
+    dotClass: "legend-dot-profit",
+    gradientId: "chart-fill-profit",
+    emptyMsg: "No net profit activity in this range",
+  },
+  comparison: {
+    label: "Comparison",
+    title: "Comparison over time",
+    subtitleSuffix: "revenue vs expenses vs profit",
+    color: "var(--color-accent-highlight, #f59e0b)",
+    dotClass: "legend-dot-revenue",
+    gradientId: "chart-fill-revenue",
+    emptyMsg: "No financial activity in this range",
+  },
+} as const;
+
+function DashboardFinancialChart({
   series,
   periodLabel,
+  initialMetric = "revenue",
 }: {
-  series: Array<{ date: string; revenue: number }>;
+  series: FinancialTimeSeriesPoint[];
   periodLabel: string;
+  initialMetric?: FinancialChartMetric;
 }) {
+  const [metric, setMetric] = useState<FinancialChartMetric>(initialMetric);
+  const [viewMode, setViewMode] = useState<FinancialChartView>("line");
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const chartBoundsRef = useRef<DOMRect | null>(null);
+
   const width = 720;
   const height = 232;
   const padding = { top: 22, right: 22, bottom: 40, left: 68 };
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
-  const peak = Math.max(...series.map((point) => point.revenue), 0);
-  const { ceiling, ticks: gridValues } = calculateNiceYAxis(peak);
-  const coordinates = series.map((point, index) => ({
-    ...point,
-    x: padding.left + (series.length <= 1 ? innerWidth / 2 : (index / (series.length - 1)) * innerWidth),
-    y: padding.top + innerHeight - (ceiling > 0 ? (point.revenue / ceiling) * innerHeight : 0),
-  }));
-  const line = buildSmoothPath(coordinates, {
-    minY: padding.top,
-    maxY: padding.top + innerHeight,
-  });
-  const area = coordinates.length
-    ? `${line} L ${coordinates.at(-1)?.x ?? padding.left},${padding.top + innerHeight} L ${coordinates[0]?.x ?? padding.left},${padding.top + innerHeight} Z`
-    : "";
-  const tickIndexes = Array.from(new Set([0, Math.floor((series.length - 1) / 2), series.length - 1])).filter((index) => index >= 0);
-  const selectedPoint = activeIndex === null ? null : coordinates[activeIndex];
-  const tooltipWidth = 146;
-  const tooltipHeight = 42;
-  const tooltipX = selectedPoint
-    ? Math.min(Math.max(selectedPoint.x - tooltipWidth / 2, padding.left), width - padding.right - tooltipWidth)
+
+  const totals = useMemo(() => {
+    let rev = 0;
+    let delivExp = 0;
+    let compExp = 0;
+    let exp = 0;
+    let prof = 0;
+    let trips = 0;
+
+    series.forEach((p) => {
+      rev += p.revenue;
+      delivExp += p.deliveryExpenses;
+      compExp += p.companyExpenses;
+      exp += p.expenses;
+      prof += p.profit;
+      trips += p.tripCount;
+    });
+
+    const count = Math.max(1, series.length);
+    return {
+      revenue: rev,
+      deliveryExpenses: delivExp,
+      companyExpenses: compExp,
+      expenses: exp,
+      profit: prof,
+      trips,
+      avgRevenue: Math.round(rev / count),
+      avgExpenses: Math.round(exp / count),
+      avgProfit: Math.round(prof / count),
+      peakRevenue: series.length ? Math.max(...series.map((p) => p.revenue)) : 0,
+      peakExpenses: series.length ? Math.max(...series.map((p) => p.expenses)) : 0,
+      peakProfit: series.length ? Math.max(...series.map((p) => p.profit)) : 0,
+      profitMargin: rev > 0 ? ((prof / rev) * 100) : null,
+    };
+  }, [series]);
+
+  const metricValues = useMemo(() => {
+    if (metric === "revenue") return series.map((p) => p.revenue);
+    if (metric === "expenses") return series.map((p) => p.expenses);
+    if (metric === "profit") return series.map((p) => p.profit);
+    return series.flatMap((p) => [p.revenue, p.expenses, p.profit]);
+  }, [series, metric]);
+
+  const minVal = metricValues.length ? Math.min(...metricValues, 0) : 0;
+  const maxVal = metricValues.length ? Math.max(...metricValues, 0) : 0;
+  const { floor, ceiling, ticks: gridValues } = calculateNiceYRange(minVal, maxVal);
+
+  const rangeSpan = Math.max(1, ceiling - floor);
+  const yFor = (val: number) =>
+    padding.top + innerHeight - ((val - floor) / rangeSpan) * innerHeight;
+  const zeroY = yFor(0);
+
+  const xFor = (index: number) => {
+    if (series.length <= 1) return padding.left + innerWidth / 2;
+    return padding.left + (index / (series.length - 1)) * innerWidth;
+  };
+  const barSlotWidth = innerWidth / Math.max(1, series.length);
+  const xForBar = (index: number) => {
+    return padding.left + (index + 0.5) * barSlotWidth;
+  };
+
+  const hasData = series.length > 0 && metricValues.some((v) => Math.abs(v) > 0);
+
+  const singleCoordinates = useMemo(() => {
+    return series.map((point, index) => {
+      const val =
+        metric === "revenue"
+          ? point.revenue
+          : metric === "expenses"
+            ? point.expenses
+            : point.profit;
+      return {
+        ...point,
+        value: val,
+        x: xFor(index),
+        y: yFor(val),
+      };
+    });
+  }, [series, metric, ceiling, floor]);
+
+  const singleLine = useMemo(() => {
+    if (metric === "comparison" || singleCoordinates.length === 0) return "";
+    return buildSmoothPath(singleCoordinates, {
+      minY: padding.top,
+      maxY: padding.top + innerHeight,
+    });
+  }, [singleCoordinates, metric]);
+
+  const singleArea = useMemo(() => {
+    if (metric === "comparison" || singleCoordinates.length === 0) return "";
+    return `${singleLine} L ${singleCoordinates.at(-1)?.x ?? padding.left},${zeroY} L ${singleCoordinates[0]?.x ?? padding.left},${zeroY} Z`;
+  }, [singleLine, singleCoordinates, zeroY]);
+
+  const compRevenueCoords = useMemo(() => {
+    if (metric !== "comparison") return [];
+    return series.map((p, i) => ({ x: xFor(i), y: yFor(p.revenue) }));
+  }, [series, metric, ceiling, floor]);
+
+  const compExpensesCoords = useMemo(() => {
+    if (metric !== "comparison") return [];
+    return series.map((p, i) => ({ x: xFor(i), y: yFor(p.expenses) }));
+  }, [series, metric, ceiling, floor]);
+
+  const compProfitCoords = useMemo(() => {
+    if (metric !== "comparison") return [];
+    return series.map((p, i) => ({ x: xFor(i), y: yFor(p.profit) }));
+  }, [series, metric, ceiling, floor]);
+
+  const lineRevenue = useMemo(
+    () => buildSmoothPath(compRevenueCoords, { minY: padding.top, maxY: padding.top + innerHeight }),
+    [compRevenueCoords],
+  );
+  const lineExpenses = useMemo(
+    () => buildSmoothPath(compExpensesCoords, { minY: padding.top, maxY: padding.top + innerHeight }),
+    [compExpensesCoords],
+  );
+  const lineProfit = useMemo(
+    () => buildSmoothPath(compProfitCoords, { minY: padding.top, maxY: padding.top + innerHeight }),
+    [compProfitCoords],
+  );
+
+  const tickIndexes = Array.from(
+    new Set([0, Math.floor((series.length - 1) / 2), series.length - 1]),
+  ).filter((index) => index >= 0 && index < series.length);
+
+  const selectedPoint = activeIndex !== null && activeIndex >= 0 && activeIndex < series.length
+    ? series[activeIndex]
+    : null;
+  const selectedCoord = activeIndex !== null && singleCoordinates[activeIndex]
+    ? singleCoordinates[activeIndex]
+    : null;
+
+  const tooltipWidth = metric === "comparison" ? 172 : 160;
+  const tooltipHeight = metric === "comparison" ? 76 : 56;
+  const activePointX = activeIndex !== null
+    ? viewMode === "bar"
+      ? xForBar(activeIndex)
+      : xFor(activeIndex)
     : 0;
-  const tooltipY = selectedPoint ? Math.max(7, selectedPoint.y - tooltipHeight - 12) : 0;
+  const tooltipX = selectedPoint && activeIndex !== null
+    ? Math.min(
+        Math.max(activePointX - tooltipWidth / 2, padding.left),
+        width - padding.right - tooltipWidth,
+      )
+    : 0;
+  const tooltipY = selectedCoord
+    ? Math.max(8, Math.min(selectedCoord.y - tooltipHeight - 12, height - padding.bottom - tooltipHeight))
+    : 8;
 
   const selectClosestPoint = (clientX: number, chartBounds: DOMRect) => {
     const x = ((clientX - chartBounds.left) / chartBounds.width) * width;
     let closestIndex = 0;
     let closestDistance = Number.POSITIVE_INFINITY;
-    coordinates.forEach((point, index) => {
-      const distance = Math.abs(point.x - x);
+    series.forEach((_, index) => {
+      const targetX = viewMode === "bar" ? xForBar(index) : xFor(index);
+      const distance = Math.abs(targetX - x);
       if (distance < closestDistance) {
         closestDistance = distance;
         closestIndex = index;
       }
     });
-    setActiveIndex((currentIndex) => currentIndex === closestIndex ? currentIndex : closestIndex);
+    setActiveIndex((current) => (current === closestIndex ? current : closestIndex));
   };
+
+  const activeConfig = METRIC_CONFIG[metric];
+
+  const subtitleText = useMemo(() => {
+    if (!hasData) return "No financial activity recorded in this period";
+    if (metric === "revenue") {
+      return `Avg: ${formatPeso(totals.avgRevenue)}/day · Peak: ${formatPeso(totals.peakRevenue)}`;
+    }
+    if (metric === "expenses") {
+      return `Avg: ${formatPeso(totals.avgExpenses)}/day · Peak: ${formatPeso(totals.peakExpenses)}`;
+    }
+    if (metric === "profit") {
+      const marginPart = totals.profitMargin !== null ? ` · ${formatPercent(totals.profitMargin)} margin` : "";
+      return `Avg: ${formatPeso(totals.avgProfit)}/day${marginPart}`;
+    }
+    return "Daily revenue, expenses, and net profit trends";
+  }, [hasData, metric, totals]);
 
   return (
     <section className="records-card revenue-chart-card" aria-labelledby="revenue-over-time-heading">
-      <div className="records-heading revenue-chart-heading">
+      <div className="records-heading revenue-chart-heading" style={{ position: "relative", zIndex: 50 }}>
         <div>
-          <h2 id="revenue-over-time-heading">Revenue over time</h2>
-          <p>{periodLabel} · completed revenue</p>
+          <h2 id="revenue-over-time-heading">{activeConfig.title}</h2>
+          <p>{subtitleText}</p>
         </div>
         <div className="revenue-chart-controls">
           <GlobalDateRangePicker />
-          <div className="chart-legend" aria-label="Chart legend">
-            <span><i /> Revenue</span>
-            <strong>{formatPeso(series.reduce((total, point) => total + point.revenue, 0))}</strong>
+        </div>
+      </div>
+
+      <div className="chart-toolbar">
+        <div className="metric-tabs chart-metric-tabs" role="tablist" aria-label="Financial metric">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={metric === "revenue"}
+            className={metric === "revenue" ? "active" : ""}
+            onClick={() => {
+              setActiveIndex(null);
+              setMetric("revenue");
+            }}
+          >
+            Revenue
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={metric === "expenses"}
+            className={metric === "expenses" ? "active" : ""}
+            onClick={() => {
+              setActiveIndex(null);
+              setMetric("expenses");
+            }}
+          >
+            Expenses
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={metric === "profit"}
+            className={metric === "profit" ? "active" : ""}
+            onClick={() => {
+              setActiveIndex(null);
+              setMetric("profit");
+            }}
+          >
+            Profit
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={metric === "comparison"}
+            className={metric === "comparison" ? "active" : ""}
+            onClick={() => {
+              setActiveIndex(null);
+              setMetric("comparison");
+            }}
+          >
+            Comparison
+          </button>
+        </div>
+
+        <div className="chart-toolbar-actions">
+          {metric === "comparison" && (
+            <div className="chart-comparison-key" aria-label="Chart series legend">
+              <span className="chart-key-item"><i className="legend-dot-revenue" /> Revenue</span>
+              <span className="chart-key-item"><i className="legend-dot-expenses" /> Expenses</span>
+              <span className="chart-key-item"><i className="legend-dot-profit" /> Profit</span>
+            </div>
+          )}
+
+          <div className="chart-view-mode-toggle" role="group" aria-label="Chart view mode">
+            <button
+              type="button"
+              className={`ui-tooltip ${viewMode === "line" ? "active" : ""}`}
+              onClick={() => setViewMode("line")}
+              data-tooltip="Line chart"
+              aria-label="Line chart"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                <polyline points="16 7 22 7 22 13" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={`ui-tooltip ${viewMode === "bar" ? "active" : ""}`}
+              onClick={() => setViewMode("bar")}
+              data-tooltip="Bar chart"
+              aria-label="Bar chart"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
-      {series.length ? (
+
+      {hasData ? (
         <div className="revenue-chart-scroll">
           <svg
             className="revenue-chart"
             viewBox={`0 0 ${width} ${height}`}
             role="img"
-            aria-label={`Revenue over time for ${periodLabel}`}
+            aria-label={`${activeConfig.title} for ${periodLabel}`}
             onPointerEnter={(event) => {
               chartBoundsRef.current = event.currentTarget.getBoundingClientRect();
               selectClosestPoint(event.clientX, chartBoundsRef.current);
@@ -335,30 +588,80 @@ function RevenueChart({
             }}
           >
             <defs>
-              <linearGradient id="revenue-chart-fill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-accent-highlight)" stopOpacity=".32" />
-                <stop offset="100%" stopColor="var(--color-accent-highlight)" stopOpacity="0" />
+              <linearGradient id="chart-fill-revenue" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#f59e0b" stopOpacity=".32" />
+                <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
               </linearGradient>
-              <radialGradient id="revenue-chart-fluid-warm">
+              <linearGradient id="chart-fill-expenses" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#f43f5e" stopOpacity=".30" />
+                <stop offset="100%" stopColor="#f43f5e" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="chart-fill-profit" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity=".32" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+              </linearGradient>
+
+              {/* Bar Gradients */}
+              <linearGradient id="revenue-bar-fill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#fbbf24" />
+                <stop offset="100%" stopColor="#d97706" />
+              </linearGradient>
+              <linearGradient id="expenses-bar-fill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#fb7185" />
+                <stop offset="100%" stopColor="#e11d48" />
+              </linearGradient>
+              <linearGradient id="profit-bar-fill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#34d399" />
+                <stop offset="100%" stopColor="#059669" />
+              </linearGradient>
+
+              {/* Ambient Fluid Glows */}
+              <radialGradient id="chart-fluid-warm-revenue">
                 <stop offset="0%" stopColor="var(--color-focus)" stopOpacity=".72" />
-                <stop offset="44%" stopColor="var(--color-accent-highlight)" stopOpacity=".34" />
-                <stop offset="100%" stopColor="var(--color-accent-highlight)" stopOpacity="0" />
+                <stop offset="44%" stopColor="#f59e0b" stopOpacity=".34" />
+                <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
               </radialGradient>
-              <radialGradient id="revenue-chart-fluid-deep">
-                <stop offset="0%" stopColor="var(--color-accent)" stopOpacity=".58" />
-                <stop offset="52%" stopColor="var(--color-accent-highlight)" stopOpacity=".2" />
-                <stop offset="100%" stopColor="var(--color-accent-highlight)" stopOpacity="0" />
+              <radialGradient id="chart-fluid-deep-revenue">
+                <stop offset="0%" stopColor="#d97706" stopOpacity=".58" />
+                <stop offset="52%" stopColor="#f59e0b" stopOpacity=".2" />
+                <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
               </radialGradient>
-              <clipPath id="revenue-chart-area-clip">
-                <path d={area} />
+
+              <radialGradient id="chart-fluid-warm-expenses">
+                <stop offset="0%" stopColor="#fb7185" stopOpacity=".65" />
+                <stop offset="44%" stopColor="#f43f5e" stopOpacity=".30" />
+                <stop offset="100%" stopColor="#f43f5e" stopOpacity="0" />
+              </radialGradient>
+              <radialGradient id="chart-fluid-deep-expenses">
+                <stop offset="0%" stopColor="#e11d48" stopOpacity=".55" />
+                <stop offset="52%" stopColor="#f43f5e" stopOpacity=".2" />
+                <stop offset="100%" stopColor="#f43f5e" stopOpacity="0" />
+              </radialGradient>
+
+              <radialGradient id="chart-fluid-warm-profit">
+                <stop offset="0%" stopColor="#34d399" stopOpacity=".68" />
+                <stop offset="44%" stopColor="#10b981" stopOpacity=".32" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+              </radialGradient>
+              <radialGradient id="chart-fluid-deep-profit">
+                <stop offset="0%" stopColor="#059669" stopOpacity=".56" />
+                <stop offset="52%" stopColor="#10b981" stopOpacity=".2" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+              </radialGradient>
+
+              <clipPath id="financial-chart-area-clip">
+                <path d={singleArea} />
               </clipPath>
             </defs>
+
+            {/* Grid Lines & Labels */}
             {gridValues.map((value) => {
-              const y = padding.top + innerHeight - (value / ceiling) * innerHeight;
+              const y = yFor(value);
+              const isZero = value === 0 && floor < 0;
               return (
                 <g key={value}>
                   <line
-                    className="chart-grid-line"
+                    className={`chart-grid-line${isZero ? " chart-zero-line" : ""}`}
                     x1={padding.left}
                     y1={y}
                     x2={width - padding.right}
@@ -370,43 +673,204 @@ function RevenueChart({
                 </g>
               );
             })}
-            <path className="chart-area" d={area} />
-            <g clipPath="url(#revenue-chart-area-clip)" aria-hidden="true">
-              <ellipse
-                className="chart-area-fluid chart-area-fluid-warm"
-                cx="130"
-                cy="92"
-                rx="245"
-                ry="122"
-                fill="url(#revenue-chart-fluid-warm)"
-              />
-              <ellipse
-                className="chart-area-fluid chart-area-fluid-deep"
-                cx="570"
-                cy="148"
-                rx="270"
-                ry="138"
-                fill="url(#revenue-chart-fluid-deep)"
-              />
-            </g>
-            <path className="chart-line" d={line} />
-            {coordinates.map((point, index) => {
-              const isActive = activeIndex === index;
-              return (
-                <g
-                  className={`chart-point${isActive ? " active" : ""}`}
-                  key={point.date}
-                  tabIndex={0}
-                  aria-label={`${formatDashboardDate(point.date)}: ${formatPeso(point.revenue)}`}
-                  onFocus={() => setActiveIndex(index)}
-                  onBlur={() => setActiveIndex(null)}
-                >
-                  <circle cx={point.x} cy={point.y} r="4" />
-                  <circle className="chart-point-core" cx={point.x} cy={point.y} r="1.75" />
-                </g>
-              );
-            })}
-            {selectedPoint && (
+
+            {/* View Mode 1: Line / Smooth Area */}
+            {viewMode === "line" ? (
+              <>
+                {metric !== "comparison" ? (
+                  <>
+                    <path
+                      className="chart-area"
+                      d={singleArea}
+                      fill={`url(#${activeConfig.gradientId})`}
+                    />
+                    <g clipPath="url(#financial-chart-area-clip)" aria-hidden="true">
+                      <ellipse
+                        className="chart-area-fluid chart-area-fluid-warm"
+                        cx="130"
+                        cy="92"
+                        rx="245"
+                        ry="122"
+                        fill={`url(#chart-fluid-warm-${metric})`}
+                      />
+                      <ellipse
+                        className="chart-area-fluid chart-area-fluid-deep"
+                        cx="570"
+                        cy="148"
+                        rx="270"
+                        ry="138"
+                        fill={`url(#chart-fluid-deep-${metric})`}
+                      />
+                    </g>
+                    <path
+                      className="chart-line"
+                      d={singleLine}
+                      style={{
+                        stroke: activeConfig.color,
+                        filter: `drop-shadow(0 4px 4px color-mix(in srgb, ${activeConfig.color} 30%, transparent))`,
+                      }}
+                    />
+                    {singleCoordinates.map((point, index) => {
+                      const isActive = activeIndex === index;
+                      return (
+                        <g
+                          className={`chart-point${isActive ? " active" : ""}`}
+                          key={point.date}
+                          tabIndex={0}
+                          aria-label={`${formatDashboardDate(point.date)}: ${formatPeso(point.value)}`}
+                          onFocus={() => setActiveIndex(index)}
+                          onBlur={() => setActiveIndex(null)}
+                        >
+                          <circle
+                            cx={point.x}
+                            cy={point.y}
+                            r="4"
+                            style={{ stroke: activeConfig.color }}
+                          />
+                          <circle
+                            className="chart-point-core"
+                            cx={point.x}
+                            cy={point.y}
+                            r="1.75"
+                            style={{ fill: activeConfig.color }}
+                          />
+                        </g>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <>
+                    {/* Comparison Multi-Line Mode */}
+                    <path className="chart-line-revenue" d={lineRevenue} />
+                    <path className="chart-line-expenses" d={lineExpenses} />
+                    <path className="chart-line-profit" d={lineProfit} />
+                    {series.map((point, index) => {
+                      const isActive = activeIndex === index;
+                      const x = xFor(index);
+                      return (
+                        <g key={point.date} className={`chart-point-group${isActive ? " active" : ""}`}>
+                          <line
+                            x1={x}
+                            y1={padding.top}
+                            x2={x}
+                            y2={padding.top + innerHeight}
+                            stroke={isActive ? "var(--color-accent)" : "transparent"}
+                            strokeWidth="1.5"
+                            strokeDasharray="2 3"
+                            opacity={isActive ? 0.75 : 0}
+                          />
+                          <circle cx={x} cy={yFor(point.revenue)} r={isActive ? 4 : 2.5} fill="#f59e0b" />
+                          <circle cx={x} cy={yFor(point.expenses)} r={isActive ? 4 : 2.5} fill="#f43f5e" />
+                          <circle cx={x} cy={yFor(point.profit)} r={isActive ? 4 : 2.5} fill="#10b981" />
+                        </g>
+                      );
+                    })}
+                  </>
+                )}
+              </>
+            ) : (
+              /* View Mode 2: Daily Bar Chart */
+              <g className="chart-bars-group">
+                {series.map((point, index) => {
+                  const isActive = activeIndex === index;
+                  const x = xForBar(index);
+
+                  if (metric === "comparison") {
+                    const clusterWidth = Math.max(18, Math.min(76, barSlotWidth * 0.76));
+                    const barGap = Math.max(2, Math.min(3, clusterWidth * 0.04));
+                    const barW = Math.max(4, (clusterWidth - barGap * 2) / 3);
+                    const startX = x - clusterWidth / 2;
+
+                    const revY = yFor(point.revenue);
+                    const revH = Math.max(2, Math.abs(revY - zeroY));
+
+                    const expY = yFor(point.expenses);
+                    const expH = Math.max(2, Math.abs(expY - zeroY));
+
+                    const profVal = point.profit;
+                    const profY = yFor(profVal);
+                    const profH = Math.max(2, Math.abs(profY - zeroY));
+                    const profTop = Math.min(profY, zeroY);
+
+                    return (
+                      <g
+                        key={point.date}
+                        className={`chart-bar-cluster${isActive ? " active" : ""}`}
+                        opacity={activeIndex !== null && !isActive ? 0.55 : 1}
+                      >
+                        {/* Revenue Bar */}
+                        <rect
+                          className="chart-bar-rect"
+                          x={startX}
+                          y={Math.min(revY, zeroY)}
+                          width={barW}
+                          height={revH}
+                          rx={Math.min(3.5, barW / 3)}
+                          fill="url(#revenue-bar-fill)"
+                        />
+                        {/* Expenses Bar */}
+                        <rect
+                          className="chart-bar-rect"
+                          x={startX + barW + barGap}
+                          y={Math.min(expY, zeroY)}
+                          width={barW}
+                          height={expH}
+                          rx={Math.min(3.5, barW / 3)}
+                          fill="url(#expenses-bar-fill)"
+                        />
+                        {/* Profit Bar */}
+                        <rect
+                          className="chart-bar-rect"
+                          x={startX + (barW + barGap) * 2}
+                          y={profTop}
+                          width={barW}
+                          height={profH}
+                          rx={Math.min(3.5, barW / 3)}
+                          fill={profVal >= 0 ? "url(#profit-bar-fill)" : "#ef4444"}
+                        />
+                      </g>
+                    );
+                  }
+
+                  const val =
+                    metric === "revenue"
+                      ? point.revenue
+                      : metric === "expenses"
+                        ? point.expenses
+                        : point.profit;
+                  const barW = Math.max(10, Math.min(48, barSlotWidth * 0.68));
+                  const barX = x - barW / 2;
+                  const yVal = yFor(val);
+                  const barY = Math.min(yVal, zeroY);
+                  const barH = Math.max(3, Math.abs(yVal - zeroY));
+                  const fill =
+                    metric === "revenue"
+                      ? "url(#revenue-bar-fill)"
+                      : metric === "expenses"
+                        ? "url(#expenses-bar-fill)"
+                        : val >= 0
+                          ? "url(#profit-bar-fill)"
+                          : "#ef4444";
+
+                  return (
+                    <rect
+                      key={point.date}
+                      className={`chart-bar-rect${isActive ? " active" : ""}`}
+                      x={barX}
+                      y={barY}
+                      width={barW}
+                      height={barH}
+                      rx={Math.min(4.5, barW / 4)}
+                      fill={fill}
+                      opacity={activeIndex !== null && !isActive ? 0.45 : 1}
+                    />
+                  );
+                })}
+              </g>
+            )}
+
+            {/* Interactive Tooltip */}
+            {selectedPoint && activeIndex !== null && (
               <g
                 className="chart-point-tooltip"
                 pointerEvents="none"
@@ -416,18 +880,55 @@ function RevenueChart({
                 <text className="chart-tooltip-label" x="11" y="16">
                   {formatDashboardDate(selectedPoint.date)}
                 </text>
-                <text className="chart-tooltip-value" x="11" y="31">
-                  {formatPeso(selectedPoint.revenue)}
-                </text>
+                {metric === "comparison" ? (
+                  <>
+                    <text className="chart-tooltip-value" x="11" y="32" fill="#f59e0b" fontSize="10">
+                      Rev: {formatPeso(selectedPoint.revenue)}
+                    </text>
+                    <text className="chart-tooltip-value" x="11" y="47" fill="#f43f5e" fontSize="10">
+                      Exp: {formatPeso(selectedPoint.expenses)}
+                    </text>
+                    <text
+                      className="chart-tooltip-value"
+                      x="11"
+                      y="62"
+                      fill={selectedPoint.profit >= 0 ? "#10b981" : "#ef4444"}
+                      fontSize="10"
+                    >
+                      Profit: {formatPeso(selectedPoint.profit)}
+                    </text>
+                  </>
+                ) : (
+                  <>
+                    <text className="chart-tooltip-value" x="11" y="32">
+                      {activeConfig.label}: {formatPeso(singleCoordinates[activeIndex]?.value ?? 0)}
+                    </text>
+                    <text
+                      className="chart-tooltip-label"
+                      x="11"
+                      y="46"
+                      style={{ fontSize: "8.5px", fill: "var(--color-text-muted)" }}
+                    >
+                      {metric === "revenue"
+                        ? `${selectedPoint.tripCount} completed ${selectedPoint.tripCount === 1 ? "trip" : "trips"}`
+                        : metric === "expenses"
+                          ? `${formatPeso(selectedPoint.deliveryExpenses)} delivery · ${formatPeso(selectedPoint.companyExpenses)} company`
+                          : `${selectedPoint.profit >= 0 ? "Net Profit" : "Net Loss"} · ${selectedPoint.revenue > 0 ? formatPercent((selectedPoint.profit / selectedPoint.revenue) * 100) + " margin" : "0 revenue"}`}
+                    </text>
+                  </>
+                )}
               </g>
             )}
+
+            {/* X-Axis Dates */}
             {tickIndexes.map((index) => {
-              const point = coordinates[index];
+              const point = series[index];
+              const tickX = viewMode === "bar" ? xForBar(index) : xFor(index);
               return (
                 <text
                   className="chart-axis-label"
                   key={point.date}
-                  x={point.x}
+                  x={tickX}
                   y={height - 13}
                   textAnchor="middle"
                 >
@@ -440,15 +941,17 @@ function RevenueChart({
       ) : (
         <div
           className="empty-state chart-empty-state"
-          title="No revenue recorded within the selected date range"
+          title={`No ${activeConfig.label.toLowerCase()} recorded within the selected date range`}
         >
-          <strong>No revenue in this range</strong>
+          <strong>{activeConfig.emptyMsg}</strong>
           <span>Choose a wider date range to view the trend.</span>
         </div>
       )}
     </section>
   );
 }
+
+const RevenueChart = DashboardFinancialChart;
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -462,6 +965,11 @@ export default function DashboardPage() {
   const [deliverySort, setDeliverySort] = useState<{ key: string; direction: TableSortDirection }>({ key: "date", direction: "desc" });
   const [companyExpenses, setCompanyExpenses] = useState<CompanyExpense[]>([]);
   const [expandedAttentionIds, setExpandedAttentionIds] = useState<Set<string>>(new Set());
+  const [greeting, setGreeting] = useState<string>(() => getTimeOfDayGreeting());
+
+  useEffect(() => {
+    setGreeting(getTimeOfDayGreeting());
+  }, []);
 
   const toggleAttentionItem = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -581,9 +1089,9 @@ export default function DashboardPage() {
     };
   }, [filteredDeliveries, persistedSummary, filteredCompanyExpenses]);
 
-  const revenueSeries = useMemo(
-    () => buildRevenueSeries(filteredDeliveries, range),
-    [filteredDeliveries, range],
+  const financialSeries = useMemo(
+    () => buildFinancialTimeSeries(filteredDeliveries, filteredCompanyExpenses, range),
+    [filteredDeliveries, filteredCompanyExpenses, range],
   );
 
   const truckRankings = useMemo(
@@ -611,7 +1119,7 @@ export default function DashboardPage() {
       <div key={rangeKey} className="content-wrap dashboard-range-refresh">
         <header className="page-intro dashboard-welcome">
           <div>
-            <h1>Welcome back, {actor.fullName.split(" ")[0]}</h1>
+            <h1 suppressHydrationWarning>{greeting}, {actor.fullName ? actor.fullName.split(" ")[0] : (actor.username ?? "there")}</h1>
             <p className="subtitle">
               Overview of delivery operations and profitability.
             </p>
@@ -681,8 +1189,8 @@ export default function DashboardPage() {
           className={`dashboard-overview-grid${loading ? " is-page-loading" : ""}`}
           aria-label="Performance and profitability overview"
         >
-          <RevenueChart
-            series={revenueSeries}
+          <DashboardFinancialChart
+            series={financialSeries}
             periodLabel={formatDateRange(range)}
           />
 
@@ -695,7 +1203,6 @@ export default function DashboardPage() {
               className="stat-card stat-card-link ui-tooltip"
               href="/deliveries"
               data-tooltip="View revenue and delivery records"
-              title="View revenue and delivery records"
             >
               <span className="stat-label">REVENUE</span>
               <strong>{formatPeso(totals.earnings)}</strong>
@@ -713,7 +1220,6 @@ export default function DashboardPage() {
               className="stat-card stat-card-link ui-tooltip"
               href="/finance"
               data-tooltip="View itemized delivery and company expenses"
-              title="View itemized delivery and company expenses"
             >
               <span className="stat-label">EXPENSES</span>
               <strong>{formatPeso(totals.deliveryExpenses + totals.companyExpenses)}</strong>
@@ -731,7 +1237,6 @@ export default function DashboardPage() {
               className="stat-card stat-card-link ui-tooltip"
               href="/finance"
               data-tooltip="View profit and financial breakdowns"
-              title="View profit and financial breakdowns"
             >
               <span className="stat-label">PROFIT</span>
               <strong className={totals.companyNetProfit >= 0 ? undefined : "warning"}>
@@ -761,19 +1266,9 @@ export default function DashboardPage() {
                     ? `Top client: ${topClientData.name} (${formatPeso(topClientData.revenue)})`
                     : "No client revenue recorded in selected range"
               }
-              title={
-                topClientData.isTied
-                  ? `Tied top clients: ${topClientData.allNames}`
-                  : topClientData.name !== "None"
-                    ? `Top client: ${topClientData.name} (${formatPeso(topClientData.revenue)})`
-                    : "No client revenue recorded in selected range"
-              }
             >
               <span className="stat-label">TOP CLIENT</span>
-              <strong
-                className="stat-client-name"
-                title={topClientData.isTied ? topClientData.allNames : topClientData.name}
-              >
+              <strong className="stat-client-name">
                 {topClientData.name}
               </strong>
               <span className={`stat-meta ${topClientData.revenue > 0 ? "positive" : ""}`}>

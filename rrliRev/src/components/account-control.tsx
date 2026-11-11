@@ -208,7 +208,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
           aria-label="Profile options"
         >
           <div className="profile-dropdown-user-header" role="presentation">
-            <strong>{actor.fullName}</strong>
+            <strong>{actor.fullName.replace(/\s*\([^)]*\)/g, "").trim() || actor.fullName}</strong>
             <small>
               @{actor.username} · {actor.roleLabel}
             </small>

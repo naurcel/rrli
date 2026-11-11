@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmExpenseDeletionDialog } from "@/components/confirm-expense-deletion-dialog";
 import {
+  formatDateRange,
+  GlobalDateRangePicker,
   toDateKey,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
@@ -12,35 +14,26 @@ import { EditCompanyExpenseModal } from "@/components/edit-company-expense-modal
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { TablePagination } from "@/components/table-pagination";
 import {
-  BROWSER_PREVIEW_DELIVERIES_CHANGED,
-  readBrowserPreviewDeliveries,
-} from "@/features/deliveries/browser-preview-deliveries";
-import {
-  calculateProfitMargin,
-  isDeliveryFinanciallyComplete,
-} from "@/features/deliveries/delivery-domain";
-import {
   deleteBrowserPreviewExpense,
   readBrowserPreviewExpenses,
   ROUTEX_COMPANY_EXPENSES_CHANGED,
   upsertBrowserPreviewExpense,
 } from "@/features/finance/browser-preview-expenses";
 import {
-  calculateCompanyProfitability,
   filterExpensesByDateRange,
   type CompanyExpense,
   type ValidatedCompanyExpense,
   validateCompanyExpenseInput,
 } from "@/features/finance/company-expense-domain";
 import { canManageCompanyExpenses } from "@/lib/auth/rbac";
-import { formatPercent, formatPeso } from "@/lib/format";
+import { formatPeso } from "@/lib/format";
 
 const PAGE_SIZE = 10;
 
 export default function FinancePage() {
   const actor = useAuthenticatedActor();
   const canManage = canManageCompanyExpenses(actor.role);
-  const { range } = useGlobalDateRange();
+  const { range, setRange } = useGlobalDateRange();
 
   // Company expenses state
   const [expenses, setExpenses] = useState<CompanyExpense[]>([]);
@@ -68,10 +61,6 @@ export default function FinancePage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Deliveries data for overall company net profit calculation
-  const [deliveryRevenue, setDeliveryRevenue] = useState(0);
-  const [deliveryExpenses, setDeliveryExpenses] = useState(0);
-
   // Fetch or sync company expenses
   const loadExpenses = useCallback(async () => {
     setLoading(true);
@@ -97,47 +86,23 @@ export default function FinancePage() {
     setLoading(false);
   }, []);
 
-  // Compute delivery totals matching the active date range
-  const loadDeliveryTotals = useCallback(() => {
-    const allDeliveries = readBrowserPreviewDeliveries();
-    const dateFiltered = allDeliveries.filter((d) => {
-      if (range.startDate && d.deliveryDate < toDateKey(range.startDate)) return false;
-      if (range.endDate && d.deliveryDate > toDateKey(range.endDate)) return false;
-      return true;
-    });
-
-    const finalized = dateFiltered.filter(isDeliveryFinanciallyComplete);
-    const rev = finalized.reduce((sum, d) => sum + (d.deliveryRate ?? 0), 0);
-    const exp = finalized.reduce((sum, d) => sum + (d.totalExpenses ?? 0), 0);
-
-    setDeliveryRevenue(rev);
-    setDeliveryExpenses(exp);
-  }, [range.startDate, range.endDate]);
-
   useEffect(() => {
     loadExpenses();
-    loadDeliveryTotals();
-  }, [loadExpenses, loadDeliveryTotals]);
+  }, [loadExpenses]);
 
-  // Reactive listeners for cross-tab or cross-component events
+  // Reactive listeners for cross-tab or cross-component expense events
   useEffect(() => {
     const handleExpenseChange = () => {
       const preview = readBrowserPreviewExpenses();
       setExpenses(preview);
     };
 
-    const handleDeliveryChange = () => {
-      loadDeliveryTotals();
-    };
-
     window.addEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, handleExpenseChange);
-    window.addEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, handleDeliveryChange);
 
     return () => {
       window.removeEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, handleExpenseChange);
-      window.removeEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, handleDeliveryChange);
     };
-  }, [loadDeliveryTotals]);
+  }, []);
 
   // Filter expenses by global date range
   const dateFilteredExpenses = useMemo(() => {
@@ -148,15 +113,24 @@ export default function FinancePage() {
     );
   }, [expenses, range.startDate, range.endDate]);
 
-  // Overall Company Profitability calculation
-  const companyProfitability = useMemo(() => {
-    const totalCompanyExpenses = dateFilteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-    return calculateCompanyProfitability({
-      deliveryRevenue,
-      deliveryExpenses,
-      companyExpenses: totalCompanyExpenses,
-    });
-  }, [deliveryRevenue, deliveryExpenses, dateFilteredExpenses]);
+  // Aggregate Company Expenses metrics for selected period
+  const expenseMetrics = useMemo(() => {
+    const total = dateFilteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const count = dateFilteredExpenses.length;
+    const average = count > 0 ? total / count : 0;
+    const highestEntry = dateFilteredExpenses.reduce<CompanyExpense | null>(
+      (max, e) => (max === null || e.amount > max.amount ? e : max),
+      null,
+    );
+
+    return {
+      total,
+      count,
+      average,
+      highest: highestEntry ? highestEntry.amount : 0,
+      highestEntry,
+    };
+  }, [dateFilteredExpenses]);
 
   // Table filtering & sorting
   const filteredAndSortedExpenses = useMemo(() => {
@@ -341,63 +315,61 @@ export default function FinancePage() {
 
   return (
     <>
-      <OperationalTopbar contextLabel="Finance" />
+      <OperationalTopbar contextLabel="Finance" showDateFilter={false} />
 
       <div className="content-wrap finance-page">
         <header className="page-intro">
           <div>
             <h1>Finance</h1>
             <p className="subtitle">
-              Company expense ledger and profitability.
+              Company operating expense ledger and records.
             </p>
           </div>
         </header>
 
-        {/* Top KPI Cards Summary */}
+        {/* Top KPI Cards Summary: Company Expenses Overview */}
         <section
           className="dashboard-kpi-grid"
-          aria-label="Company financial overview"
+          aria-label="Company expenses overview"
           style={{ marginBottom: "20px" }}
         >
-          {/* Card 1: Company Expenses */}
+          {/* Card 1: Total Company Expenses */}
           <article className="stat-card" style={{ borderColor: "rgba(217, 119, 6, 0.25)" }}>
             <span className="stat-label">TOTAL COMPANY EXPENSES</span>
             <strong style={{ color: "var(--color-accent-deep, #92400e)" }}>
-              {formatPeso(companyProfitability.companyExpenses)}
+              {formatPeso(expenseMetrics.total)}
             </strong>
             <span className="stat-meta">
-              {dateFilteredExpenses.length} {dateFilteredExpenses.length === 1 ? "record" : "records"} in selected period
+              {expenseMetrics.count} {expenseMetrics.count === 1 ? "record" : "records"} in selected period
             </span>
           </article>
 
-          {/* Card 2: Company Net Profit */}
-          <article className="stat-card" style={{ borderColor: companyProfitability.companyNetProfit >= 0 ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)" }}>
-            <span className="stat-label">COMPANY NET PROFIT</span>
-            <strong className={companyProfitability.companyNetProfit >= 0 ? undefined : "warning"}>
-              {formatPeso(companyProfitability.companyNetProfit)}
-            </strong>
-            <span className={`stat-meta ${companyProfitability.companyNetProfit >= 0 ? "positive" : "warning"}`}>
-              {companyProfitability.companyProfitMargin !== null
-                ? `${formatPercent(companyProfitability.companyProfitMargin)} overall profit margin`
-                : "After delivery and company expenses"}
-            </span>
-          </article>
-
-          {/* Card 3: Delivery Revenue */}
+          {/* Card 2: Recorded Entries */}
           <article className="stat-card">
-            <span className="stat-label">DELIVERY REVENUE</span>
-            <strong>{formatPeso(companyProfitability.deliveryRevenue)}</strong>
-            <span className="stat-meta positive">
-              From confirmed operational deliveries
-            </span>
-          </article>
-
-          {/* Card 4: Delivery Expenses */}
-          <article className="stat-card">
-            <span className="stat-label">DELIVERY EXPENSES</span>
-            <strong>{formatPeso(companyProfitability.deliveryExpenses)}</strong>
+            <span className="stat-label">EXPENSE ENTRIES</span>
+            <strong>{expenseMetrics.count}</strong>
             <span className="stat-meta">
-              Fuel, highway tolls, entry fees &amp; crew compensation
+              Operating expense entries recorded
+            </span>
+          </article>
+
+          {/* Card 3: Average Expense */}
+          <article className="stat-card">
+            <span className="stat-label">AVERAGE EXPENSE</span>
+            <strong>{formatPeso(expenseMetrics.average)}</strong>
+            <span className="stat-meta">
+              Average per recorded entry
+            </span>
+          </article>
+
+          {/* Card 4: Largest Expense */}
+          <article className="stat-card">
+            <span className="stat-label">LARGEST EXPENSE</span>
+            <strong>{formatPeso(expenseMetrics.highest)}</strong>
+            <span className="stat-meta">
+              {expenseMetrics.highestEntry
+                ? `Recorded on ${expenseMetrics.highestEntry.expenseDate}`
+                : "No recorded expenses"}
             </span>
           </article>
         </section>
@@ -498,7 +470,7 @@ export default function FinancePage() {
                     id="new-expense-date"
                     type="date"
                     min="2024-01-01"
-                    className="delivery-input"
+                    className="finance-input"
                     value={newDate}
                     onChange={(e) => setNewDate(e.target.value)}
                     disabled={submitting}
@@ -514,7 +486,7 @@ export default function FinancePage() {
                   <input
                     id="new-expense-notes"
                     type="text"
-                    className="delivery-input"
+                    className="finance-input"
                     placeholder="e.g. November total expenses"
                     value={newNotes}
                     onChange={(e) => setNewNotes(e.target.value)}
@@ -551,20 +523,25 @@ export default function FinancePage() {
             <span className="notice-icon" aria-hidden="true">i</span>
             <div>
               <strong>View-Only Access:</strong>
-              <span>Company operating expenses are managed by Operations and Admin personnel.</span>
+              <span>Company operating expenses are managed by Finance and Admin personnel.</span>
             </div>
           </div>
         )}
 
         {/* Expense Records Ledger (Clean & Minimal: Date, Amount, Note, Recorded By, Actions) */}
-        <section className={`records-card${loading ? " is-loading" : ""}`} aria-label="Company expenses ledger">
+        <section className={`records-card finance-ledger-card${loading ? " is-loading" : ""}`} aria-label="Company expenses ledger">
           <div className="records-heading">
             <div className="records-heading-copy">
               <h2>Expense Ledger</h2>
             </div>
+            <div className="records-heading-meta">
+              <span className="ledger-total-badge">
+                {filteredAndSortedExpenses.length} record{filteredAndSortedExpenses.length === 1 ? "" : "s"}
+              </span>
+            </div>
           </div>
 
-          {/* Search Toolbar */}
+          {/* Search & Filter Toolbar */}
           <div className="filters">
             <label className="search-box">
               <span className="sr-only">Search notes or dates</span>
@@ -595,19 +572,75 @@ export default function FinancePage() {
               />
             </label>
 
-            {searchQuery ? (
+            <GlobalDateRangePicker />
+
+            {searchQuery || range.startDate || range.endDate ? (
               <button
                 type="button"
                 className="filter-button filter-clear"
                 onClick={() => {
                   setSearchQuery("");
+                  setRange({ startDate: null, endDate: null });
                   setPage(1);
                 }}
               >
-                Clear
+                Clear filters
               </button>
             ) : null}
           </div>
+
+          {(searchQuery.trim() || range.startDate || range.endDate) && (
+            <div className="active-filter-chips" aria-label="Active filters">
+              <span className="active-chips-label">Active filters:</span>
+              {(range.startDate || range.endDate) && (
+                <span className="filter-chip">
+                  <span className="filter-chip-category">Date:</span>{" "}
+                  {formatDateRange(range)}
+                  <button
+                    type="button"
+                    className="filter-chip-remove"
+                    aria-label="Remove date range filter"
+                    title="Remove date range filter"
+                    onClick={() => {
+                      setRange({ startDate: null, endDate: null });
+                      setPage(1);
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
+              {searchQuery.trim() && (
+                <span className="filter-chip">
+                  <span className="filter-chip-category">Search:</span> {searchQuery.trim()}
+                  <button
+                    type="button"
+                    className="filter-chip-remove"
+                    aria-label="Remove search filter"
+                    title="Remove search filter"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setPage(1);
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
+              <button
+                type="button"
+                className="filter-chip-clear-all"
+                title="Clear all active filters"
+                onClick={() => {
+                  setSearchQuery("");
+                  setRange({ startDate: null, endDate: null });
+                  setPage(1);
+                }}
+              >
+                Clear all
+              </button>
+            </div>
+          )}
 
           {/* Table */}
           {error ? (
@@ -670,7 +703,7 @@ export default function FinancePage() {
                       </td>
                       {canManage ? (
                         <td style={{ textAlign: "center" }}>
-                          <div style={{ display: "inline-flex", gap: "6px" }}>
+                          <div style={{ display: "inline-flex", gap: "10px", alignItems: "center" }}>
                             <button
                               type="button"
                               className="icon-only-action compact ui-tooltip"

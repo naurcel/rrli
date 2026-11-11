@@ -96,6 +96,7 @@ export default function UserManagementPage() {
     text: string;
   } | null>(null);
   const [openActionMenuUserId, setOpenActionMenuUserId] = useState<string | null>(null);
+  const [actionMenuOpensAbove, setActionMenuOpensAbove] = useState(false);
 
   useEffect(() => {
     if (!openActionMenuUserId) return;
@@ -584,7 +585,10 @@ export default function UserManagementPage() {
 
   return (
     <>
-      <OperationalTopbar contextLabel="Admin User Account & Role Management" />
+      <OperationalTopbar
+        contextLabel="Admin User Account & Role Management"
+        showDateFilter={false}
+      />
 
       <div className="content-wrap">
         <header className="page-intro">
@@ -594,7 +598,6 @@ export default function UserManagementPage() {
               Manage staff accounts and permissions.
             </p>
           </div>
-          <span className="access-pill admin">Admin Only ({actor.fullName})</span>
         </header>
 
         <div className="user-management-tabs" role="tablist" aria-label="User management sections">
@@ -602,9 +605,9 @@ export default function UserManagementPage() {
             type="button"
             role="tab"
             aria-selected={activeTab === "users"}
-            className={activeTab === "users" ? "active" : ""}
+            className={`ui-tooltip ${activeTab === "users" ? "active" : ""}`}
             onClick={() => setActiveTab("users")}
-            title="Manage staff user accounts and permissions"
+            data-tooltip="Manage staff user accounts and permissions"
           >
             Staff Accounts
           </button>
@@ -612,9 +615,9 @@ export default function UserManagementPage() {
             type="button"
             role="tab"
             aria-selected={activeTab === "audit"}
-            className={activeTab === "audit" ? "active" : ""}
+            className={`ui-tooltip ${activeTab === "audit" ? "active" : ""}`}
             onClick={() => setActiveTab("audit")}
-            title="Inspect administrative action and security audit logs"
+            data-tooltip="Inspect administrative action and security audit logs"
           >
             Audit Log
           </button>
@@ -793,19 +796,16 @@ export default function UserManagementPage() {
 
                 <div
                   style={{
-                    padding: "10px 14px",
+                    padding: "9px 13px",
                     borderRadius: "8px",
                     background: "rgba(217, 119, 6, 0.08)",
                     border: "1px solid rgba(217, 119, 6, 0.2)",
                     fontSize: "11px",
                     color: "var(--color-text-secondary)",
-                    lineHeight: 1.5,
+                    lineHeight: 1.45,
                   }}
                 >
-                  <strong>Admin Privacy &amp; Security Policy:</strong> Provide this temporary password
-                  to the user via an authorized secure channel. Once saved, RouteX securely hashes it with
-                  Argon2id. The system never displays passwords again, and Admins can never view or choose
-                  users&apos; permanent passwords.
+                  <strong>Note:</strong> Share this temporary password securely with the user. They will be required to set their permanent password on first sign-in.
                 </div>
 
                 <div>
@@ -875,7 +875,7 @@ export default function UserManagementPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedUsers.map((user) => {
+                    {paginatedUsers.map((user, userIndex) => {
                       const isRecoveryActive = Boolean(
                         user.recoveryExpiresAt && new Date(user.recoveryExpiresAt) > new Date(),
                       );
@@ -886,7 +886,7 @@ export default function UserManagementPage() {
                           key={user.id}
                           style={{
                             position: "relative",
-                            zIndex: openActionMenuUserId === user.id ? 25 : undefined,
+                            zIndex: openActionMenuUserId === user.id ? 150 : undefined,
                           }}
                         >
                           <td>
@@ -1025,6 +1025,10 @@ export default function UserManagementPage() {
                                 aria-expanded={openActionMenuUserId === user.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const spaceBelow = window.innerHeight - rect.bottom;
+                                  const isNearBottom = spaceBelow < 220 || userIndex >= paginatedUsers.length - 2;
+                                  setActionMenuOpensAbove(isNearBottom);
                                   setOpenActionMenuUserId((curr) => (curr === user.id ? null : user.id));
                                 }}
                                 title="Show more actions"
@@ -1038,7 +1042,7 @@ export default function UserManagementPage() {
 
                               {openActionMenuUserId === user.id && (
                                 <div
-                                  className="row-action-menu"
+                                  className={`row-action-menu${actionMenuOpensAbove ? " opens-above" : ""}`}
                                   role="menu"
                                   aria-label={`Actions for ${user.fullName}`}
                                 >

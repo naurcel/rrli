@@ -66,22 +66,19 @@ export function getTruckClassificationLabel(
   truckType: TruckType,
   capability: TruckStorageCapability,
 ): string {
-  return capability === "Refrigerated"
-    ? `${truckType} · Cold Storage (Reefer)`
-    : `${truckType} · Dry Cargo (Ambient)`;
+  const simplified = capability === "Refrigerated" ? "Cold" : "Dry";
+  return `${truckType} · ${simplified}`;
 }
 
 export const TRUCK_CLASSIFICATION_FILTER_OPTIONS = [
   { value: "all", label: "All Classifications" },
-  { value: "refrigerated", label: "Refrigerated / Cold Storage" },
-  { value: "dry", label: "Dry / Ambient Cargo" },
-  { value: "reefer-6w", label: "Refrigerated · 6-Wheeler" },
-  { value: "reefer-4w", label: "Refrigerated · 4-Wheeler" },
-  { value: "dry-10w", label: "Dry Cargo · 10-Wheeler" },
-  { value: "dry-4w", label: "Dry Cargo · 4-Wheeler" },
+  { value: "dry", label: "Dry" },
+  { value: "cold", label: "Cold" },
 ] as const;
 
-export type TruckClassificationFilterKey = (typeof TRUCK_CLASSIFICATION_FILTER_OPTIONS)[number]["value"];
+export type TruckClassificationFilterKey =
+  | (typeof TRUCK_CLASSIFICATION_FILTER_OPTIONS)[number]["value"]
+  | "refrigerated";
 
 export const TRUCK_PERFORMANCE_FILTER_OPTIONS = [
   { value: "all", label: "All Performance Tiers" },

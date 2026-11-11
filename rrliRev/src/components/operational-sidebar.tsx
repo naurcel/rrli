@@ -77,9 +77,12 @@ export function OperationalSidebar() {
       </nav>
 
       {navigation.management.length > 0 ? (
-        <nav className="management-navigation" aria-label="Management navigation">
-          {navigation.management.map(renderNavigationItem)}
-        </nav>
+        <>
+          <div className="sidebar-divider" role="separator" aria-orientation="horizontal" />
+          <nav className="management-navigation" aria-label="Management navigation">
+            {navigation.management.map(renderNavigationItem)}
+          </nav>
+        </>
       ) : null}
     </aside>
   );

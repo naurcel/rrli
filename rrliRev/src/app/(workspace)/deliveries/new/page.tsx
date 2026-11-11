@@ -5,11 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import { DeliveryCrewSection } from "@/components/delivery-crew-section";
+import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline";
+import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { RoundedSelect, type SelectOption } from "@/components/rounded-select";
 import { OperationalTopbar } from "@/components/operational-topbar";
-import { RecordDetailDrawer, type DetailSection } from "@/components/record-detail-drawer";
 import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery-repository";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
@@ -18,7 +20,15 @@ import {
 } from "@/features/deliveries/browser-preview-deliveries";
 import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
 import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
-import type { ExpenseResolutionStatus } from "@/features/deliveries/delivery-domain";
+import {
+  buildDeliveryTripRecord,
+  isDeliveryFinanciallyComplete,
+  type DeliveryTripRecord,
+  type ExpenseResolutionStatus,
+  type TruckOwnership,
+  type TruckTemperature,
+  type TruckType,
+} from "@/features/deliveries/delivery-domain";
 import { getDeliveryDateWindow } from "@/features/deliveries/delivery-recording-policy";
 import { formatPeso } from "@/lib/format";
 
@@ -322,6 +332,10 @@ export default function NewCompletedDeliveryPage() {
 
     const expensesComplete = activeExpenseKeys.every((key) => {
       const status = expenseStatuses[key];
+      const isAllowance = key === "driverAllowance" || key === "helperAllowance" || key === "helper2Allowance";
+      if (isAllowance) {
+        return status === "not_applicable" || status === "confirmed";
+      }
       return status === "not_applicable" || (status === "confirmed" && numberValue(values[key]) != null);
     });
 
@@ -506,117 +520,112 @@ export default function NewCompletedDeliveryPage() {
     }
   }
 
-  const previewSections = useMemo<DetailSection[]>(() => [
-    {
-      eyebrow: "TRIP DETAILS",
-      title: "Delivery overview",
-      rows: [
-        { label: "Waybill", value: values.waybillNumber || "Not entered" },
-        { label: "Delivery date", value: values.deliveryDate },
-        { label: "Client", value: clientName || "Not selected" },
-        { label: "Origin", value: values.origin || "Not entered" },
-      ],
-    },
-    {
-      eyebrow: "ASSIGNED VEHICLE",
-      title: "Truck details",
-      rowSpan: 2,
-      className: "delivery-preview-truck-section",
-      customContent: plateNumber ? (
-        <DeliveryTruckInfoSection
-          plateNumber={plateNumber}
-          truckType="6-Wheeler"
-          truckTemperature={truckTemperature ? `${truckTemperature}°C` : "Ambient"}
-          truckOwnership="Owned"
-        />
-      ) : undefined,
-      rows: plateNumber
-        ? [
-            { label: "Distance", value: `${values.distanceKm || "0"} km` },
-            { label: "Fuel rate", value: `${formatPeso(numberValue(values.fuelRate))} / liter` },
-          ]
-        : [
-            { label: "Truck", value: "Not selected" },
-            { label: "Temperature", value: truckTemperature ? `${truckTemperature}°C` : "Not entered" },
-            { label: "Distance", value: `${values.distanceKm || "0"} km` },
-            { label: "Fuel rate", value: `${formatPeso(numberValue(values.fuelRate))} / liter` },
-          ],
-    },
-    {
-      eyebrow: "CREW ASSIGNMENT",
-      title: `Trip Crew (1 Driver · ${hasSecondHelper ? "2 Helpers" : "1 Helper"})`,
-      rows: [
-        {
-          label: "Driver",
-          value: `${driverName ? `${driverName} — ` : ""}Rate: ${formatPeso(numberValue(values.driverDailyRate))} | Allowance: ${formatPeso(numberValue(values.driverAllowance))}`,
-        },
-        {
-          label: hasSecondHelper ? "Helper 1" : "Helper",
-          value: `${helper1Name ? `${helper1Name} — ` : ""}Rate: ${formatPeso(numberValue(values.helperDailyRate))} | Allowance: ${formatPeso(numberValue(values.helperAllowance))}`,
-        },
-        ...(hasSecondHelper
-          ? [
-              {
-                label: "Helper 2",
-                value: `${helper2Name ? `${helper2Name} — ` : ""}Rate: ${formatPeso(numberValue(values.helper2DailyRate))} | Allowance: ${formatPeso(numberValue(values.helper2Allowance))}`,
-              },
-            ]
-          : []),
-      ],
-    },
-    {
-      eyebrow: "STORE DROP-OFF SEQUENCE",
-      title: `Route & Store Drop-offs (${dropoffs.length})`,
-      fullWidth: true,
-      customContent: (
-        <ol className="delivery-preview-stops">
-          {dropoffs.map((dropoff) => (
-            <li key={dropoff.id}>
-              <strong>{dropoff.storeName}</strong>
-              <span>{dropoff.destinationArea}</span>
-            </li>
-          ))}
-        </ol>
-      ),
-    },
-    {
-      eyebrow: "FINANCIAL REVIEW",
-      title: "Revenue and expenses",
-      rows: [
-        { label: "Revenue", value: formatPeso(financialReview.revenue) },
-        { label: "Store entry fees", value: formatPeso(financialReview.entryFees) },
-        { label: "Trip expenses", value: formatPeso(financialReview.totalExpenses) },
-        {
-          label: "Net profit",
-          value: formatPeso(financialReview.netIncome),
-          tone: financialReview.netIncome != null && financialReview.netIncome < 0 ? "warning" : "success",
-        },
-      ],
-    },
-    {
-      eyebrow: "FILES",
-      title: "POD and supporting documents",
-      customContent: (
-        <DeliveryFilePreview
-          podFiles={podFiles}
-          supportingFiles={supportingFiles}
-        />
-      ),
-    },
-  ], [
+  const previewTrip = useMemo<DeliveryTripRecord & { driverName?: string; helperName?: string; additionalCharges?: number | null }>(() => {
+    const normDropoffs = dropoffs.map((d, index) => ({
+      id: d.id,
+      sequence: index + 1,
+      storeName: d.storeName.trim() || `Stop #${index + 1}`,
+      destinationArea: d.destinationArea.trim() || "Unspecified Area",
+      entryFee: d.entryFeeStatus === "confirmed" ? numberValue(d.entryFee) ?? 0 : null,
+      entryFeeStatus: d.entryFeeStatus,
+      podSubmitted: podFiles.length > 0,
+      supportingDocsComplete: supportingFiles.length > 0,
+      documentRef: podFiles[0]?.name ?? "Pending upload",
+    }));
+
+    const driverRate = numberValue(values.driverDailyRate) ?? 0;
+    const driverAllow = numberValue(values.driverAllowance) ?? 0;
+    const helperRate = numberValue(values.helperDailyRate) ?? 0;
+    const helperAllow = numberValue(values.helperAllowance) ?? 0;
+    const helper2Rate = hasSecondHelper ? numberValue(values.helper2DailyRate) ?? 0 : 0;
+    const helper2Allow = hasSecondHelper ? numberValue(values.helper2Allowance) ?? 0 : 0;
+
+    const selectedTruck = references.trucks.find(
+      (t) => t.label.toUpperCase() === plateNumber.trim().toUpperCase(),
+    );
+    const registeredTruck = readBrowserPreviewTrucks().find(
+      (t) => t.plateNumber.toUpperCase() === plateNumber.trim().toUpperCase(),
+    );
+    const truckOwnership: TruckOwnership =
+      registeredTruck?.ownershipType ||
+      (selectedTruck?.ownershipType === "Subcontracted" ||
+      plateNumber?.toUpperCase().startsWith("SUB-") ||
+      plateNumber?.toUpperCase().includes("SUBCON")
+        ? "Subcontracted"
+        : "Owned");
+    const truckType: TruckType = registeredTruck?.truckType || "6-Wheeler";
+    const formattedTemp = (truckTemperature ? `${truckTemperature}°C` : "0°C") as TruckTemperature;
+
+    const baseRecord = buildDeliveryTripRecord({
+      id: idempotencyKeyRef.current || "preview-delivery-id",
+      waybillNumber: values.waybillNumber.trim() || "DRAFT",
+      deliveryDate: values.deliveryDate,
+      clientName: clientName || "Client Account",
+      plateNumber: plateNumber || "TRK-000",
+      truckType,
+      truckTemperature: formattedTemp,
+      truckOwnership,
+      rateBasis:
+        registeredTruck?.rateBasis ||
+        (truckOwnership === "Subcontracted" ? "Trucker Rate" : "Redeemed Rate"),
+      origin: values.origin || "Default Origin Hub",
+      distanceKm: numberValue(values.distanceKm) ?? 0,
+      fuelRate: numberValue(values.fuelRate) ?? 0,
+      deliveryRate: numberValue(values.deliveryRate) ?? 0,
+      expenses: {
+        dieselExpenses:
+          expenseStatuses.dieselExpenses === "confirmed"
+            ? numberValue(values.dieselExpenses)
+            : null,
+        tollGateExpenses:
+          expenseStatuses.tollGateExpenses === "confirmed"
+            ? numberValue(values.tollGateExpenses)
+            : null,
+        tollGateBreakdown: values.tollGateExpenses ? `${values.tollGateExpenses} total tolls` : "",
+        driverAllowance: driverAllow,
+        driverDailyRate: driverRate,
+        helperAllowance: helperAllow + helper2Allow,
+        helperDailyRate: helperRate + helper2Rate,
+        otherExpenses:
+          expenseStatuses.otherExpenses === "confirmed"
+            ? numberValue(values.otherExpenses)
+            : null,
+      },
+      expenseStates: {
+        dieselExpenses: expenseStatuses.dieselExpenses,
+        tollGateExpenses: expenseStatuses.tollGateExpenses,
+        driverAllowance: "confirmed",
+        driverDailyRate: "confirmed",
+        helperAllowance: "confirmed",
+        helperDailyRate: "confirmed",
+        otherExpenses: expenseStatuses.otherExpenses,
+      },
+      dropoffs: normDropoffs,
+      supportingDocuments: supportingFiles.map((f) => f.name),
+    });
+
+    return {
+      ...baseRecord,
+      driverName: driverName || undefined,
+      helperName: hasSecondHelper
+        ? `${helper1Name}${helper2Name ? `, ${helper2Name}` : ""}`
+        : helper1Name || undefined,
+      additionalCharges: numberValue(values.additionalCharges),
+    };
+  }, [
     clientName,
     driverName,
     dropoffs,
-    financialReview,
+    expenseStatuses,
     hasSecondHelper,
     helper1Name,
     helper2Name,
     plateNumber,
     podFiles,
+    references.trucks,
     supportingFiles,
     truckTemperature,
     values,
-    deliveryDateWindow.max,
   ]);
 
   const noReferences =
@@ -624,8 +633,167 @@ export default function NewCompletedDeliveryPage() {
 
   return (
     <>
-      <OperationalTopbar contextLabel="Record Completed Delivery" />
-      <div className="content-wrap delivery-entry-page">
+      <OperationalTopbar
+        contextLabel={previewing ? `Preview / Waybill #${values.waybillNumber || "DRAFT"}` : "Record Completed Delivery"}
+      />
+      {previewing ? (
+        <div className="content-wrap delivery-detail-page">
+          {/* Top Subnav */}
+          <div className="delivery-detail-subnav">
+            <button
+              type="button"
+              className="delivery-back-link"
+              onClick={() => {
+                setPreviewing(false);
+                if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+              <span>Back to Editing Form</span>
+            </button>
+          </div>
+
+          {submitError ? (
+            <div className="delivery-form-alert" role="alert" style={{ marginBottom: "16px" }}>{submitError}</div>
+          ) : null}
+
+          {/* Delivery Hero Banner */}
+          <header className="delivery-hero-card records-card">
+            <div className="delivery-hero-main">
+              <div className="delivery-hero-eyebrow-row">
+                <span className="waybill-tag">WAYBILL #{previewTrip.waybillNumber}</span>
+                <span className="delivery-date-tag">Date: {previewTrip.deliveryDate}</span>
+                <span className="routex-badge tone-primary" style={{ fontWeight: 700 }}>PREVIEW MODE</span>
+              </div>
+              <h1 className="delivery-hero-title">{previewTrip.clientName}</h1>
+              <div className="delivery-hero-status-pills">
+                <span className={`detail-status ${isDeliveryFinanciallyComplete(previewTrip) ? "success" : "warning"}`}>
+                  {isDeliveryFinanciallyComplete(previewTrip) ? "COMPLETE" : "INCOMPLETE"}
+                </span>
+                <span className={`drawer-dropoff-doc-pill ${previewTrip.podStatus === "Verified" ? "has-doc" : "no-doc"}`}>
+                  {previewTrip.podStatus === "Verified" ? "POD Attached" : "Missing POD"}
+                </span>
+                <span className="meta-pill">
+                  {previewTrip.dropoffs.length} {previewTrip.dropoffs.length === 1 ? "Drop-off" : "Drop-offs"}
+                </span>
+              </div>
+            </div>
+            <div className="delivery-hero-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setPreviewing(false);
+                  if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                disabled={submitting}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                <span>Back to edit</span>
+              </button>
+              <button
+                type="button"
+                className="primary-action-button"
+                onClick={recordDelivery}
+                disabled={submitting}
+              >
+                {submitting ? "Recording…" : "Confirm & Record Delivery"}
+              </button>
+            </div>
+          </header>
+
+          {/* 1. Primary Financial Performance & Analytics Card (Full-Width, High Visibility) */}
+          <section className="records-card delivery-section-card delivery-financial-analytics-card">
+            <div className="section-card-header delivery-analytics-header">
+              <div>
+                <h2 className="section-card-title">Financial Performance &amp; Analytics</h2>
+                <p className="section-card-subtitle">
+                  Waybill profitability, revenue realization, and trip expense distribution
+                </p>
+              </div>
+              <div className="delivery-analytics-badges">
+                <span className={`detail-status ${isDeliveryFinanciallyComplete(previewTrip) ? "success" : "warning"}`}>
+                  {isDeliveryFinanciallyComplete(previewTrip) ? "CONFIRMED FINANCIALS" : "REQUIRES CONFIRMATION"}
+                </span>
+                {isDeliveryFinanciallyComplete(previewTrip) && previewTrip.marginPercent != null ? (
+                  <span className="routex-badge tone-primary" style={{ fontWeight: 700 }}>
+                    {previewTrip.marginPercent.toFixed(1)}% MARGIN
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <DeliveryFinancialBreakdown trip={previewTrip} />
+          </section>
+
+          {/* 2. Operational Fulfillment & Fleet Specifications (Balanced 2-Column Grid) */}
+          <div className="delivery-detail-grid">
+            {/* Left Column: Store Drop-offs Fulfillment & Documents */}
+            <div className="delivery-detail-column">
+              <section className="records-card delivery-section-card">
+                <div className="section-card-header"><h2 className="section-card-title">Store Drop-offs ({previewTrip.dropoffs.length})</h2></div>
+                <DeliveryDropoffTimeline dropoffs={previewTrip.dropoffs} />
+              </section>
+              <section className="records-card delivery-section-card">
+                <div className="section-card-header"><h2 className="section-card-title">POD &amp; Supporting Documents</h2></div>
+                <DeliveryFilePreview podFiles={podFiles} supportingFiles={supportingFiles} />
+              </section>
+            </div>
+
+            {/* Right Column: Route, Vehicle & Crew Specifications */}
+            <div className="delivery-detail-column">
+              <section className="records-card delivery-section-card">
+                <div className="section-card-header"><h2 className="section-card-title">Trip Information</h2></div>
+                <div className="detail-meta-grid">
+                  <div className="detail-meta-item"><span className="meta-label">Client Account</span><strong className="meta-value">{previewTrip.clientName}</strong></div>
+                  <div className="detail-meta-item"><span className="meta-label">Origin Hub</span><strong className="meta-value">{previewTrip.origin || "Default Origin Hub"}</strong></div>
+                  <div className="detail-meta-item"><span className="meta-label">Transit Distance</span><strong className="meta-value">{previewTrip.distanceKm} km</strong></div>
+                  <div className="detail-meta-item"><span className="meta-label">Fuel Benchmark Rate</span><strong className="meta-value">{formatPeso(previewTrip.fuelRate)} / L</strong></div>
+                  <div className="detail-meta-item"><span className="meta-label">Delivery Date</span><strong className="meta-value">{previewTrip.deliveryDate}</strong></div>
+                  <div className="detail-meta-item"><span className="meta-label">Financial Status</span><strong className={`meta-value ${isDeliveryFinanciallyComplete(previewTrip) ? "tone-success" : "tone-warning"}`}>{isDeliveryFinanciallyComplete(previewTrip) ? "Confirmed (Complete)" : "Incomplete · Requires Confirmation"}</strong></div>
+                </div>
+              </section>
+              <section className="records-card delivery-section-card">
+                <div className="section-card-header"><h2 className="section-card-title">Assigned Vehicle</h2></div>
+                <DeliveryTruckInfoSection plateNumber={previewTrip.plateNumber} truckType={previewTrip.truckType} truckTemperature={previewTrip.truckTemperature} truckOwnership={previewTrip.truckOwnership} rateBasis={previewTrip.rateBasis} />
+              </section>
+              <section className="records-card delivery-section-card">
+                <div className="section-card-header"><h2 className="section-card-title">Delivery Crew</h2></div>
+                <DeliveryCrewSection driverName={previewTrip.driverName} helperName={previewTrip.helperName} driverRateText={`${formatPeso(numberValue(values.driverDailyRate))} + ${formatPeso(numberValue(values.driverAllowance))} allowance`} helperRateText={hasSecondHelper ? `${formatPeso((numberValue(values.helperDailyRate) ?? 0) + (numberValue(values.helper2DailyRate) ?? 0))} + ${formatPeso((numberValue(values.helperAllowance) ?? 0) + (numberValue(values.helper2Allowance) ?? 0))} allowance` : `${formatPeso(numberValue(values.helperDailyRate))} + ${formatPeso(numberValue(values.helperAllowance))} allowance`} />
+              </section>
+            </div>
+          </div>
+
+          {/* Bottom Actions Bar */}
+          <div className="delivery-form-actions" style={{ marginTop: "24px" }}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setPreviewing(false);
+                if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              disabled={submitting}
+            >
+              Back to edit
+            </button>
+            <button
+              type="button"
+              className="primary-action-button"
+              onClick={recordDelivery}
+              disabled={submitting}
+            >
+              {submitting ? "Recording…" : "Confirm & Record Delivery"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="content-wrap delivery-entry-page">
       <header className="page-intro">
         <div>
           <Link className="back-link" href="/deliveries">← Back to deliveries</Link>
@@ -979,16 +1147,29 @@ export default function NewCompletedDeliveryPage() {
                         />
                       </label>
                     </div>
-                    <AllowanceExpenseField
-                      label="Allowance"
-                      value={values.driverAllowance}
-                      status={expenseStatuses.driverAllowance}
-                      onValueChange={(value) => updateValue("driverAllowance", value)}
-                      onStatusChange={(status) => {
-                        setExpenseStatuses((current) => ({ ...current, driverAllowance: status }));
-                        if (status !== "confirmed") updateValue("driverAllowance", "");
-                      }}
-                    />
+                    <div className="daily-rate-field allowance-field">
+                      <label>
+                        <span className="field-label-text">Allowance</span>
+                        <span className="peso-input-wrap">
+                          <span className="peso-prefix" aria-hidden="true">₱</span>
+                          <input
+                            aria-label="Driver allowance"
+                            min="0"
+                            step="0.01"
+                            type="number"
+                            inputMode="decimal"
+                            className="no-spin-stepper peso-input"
+                            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                            value={values.driverAllowance}
+                            placeholder=""
+                            onChange={(event) => {
+                              updateValue("driverAllowance", event.target.value);
+                              setExpenseStatuses((current) => ({ ...current, driverAllowance: "confirmed" }));
+                            }}
+                          />
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 </section>
 
@@ -1031,16 +1212,29 @@ export default function NewCompletedDeliveryPage() {
                         />
                       </label>
                     </div>
-                    <AllowanceExpenseField
-                      label="Allowance"
-                      value={values.helperAllowance}
-                      status={expenseStatuses.helperAllowance}
-                      onValueChange={(value) => updateValue("helperAllowance", value)}
-                      onStatusChange={(status) => {
-                        setExpenseStatuses((current) => ({ ...current, helperAllowance: status }));
-                        if (status !== "confirmed") updateValue("helperAllowance", "");
-                      }}
-                    />
+                    <div className="daily-rate-field allowance-field">
+                      <label>
+                        <span className="field-label-text">Allowance</span>
+                        <span className="peso-input-wrap">
+                          <span className="peso-prefix" aria-hidden="true">₱</span>
+                          <input
+                            aria-label="Helper allowance"
+                            min="0"
+                            step="0.01"
+                            type="number"
+                            inputMode="decimal"
+                            className="no-spin-stepper peso-input"
+                            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                            value={values.helperAllowance}
+                            placeholder=""
+                            onChange={(event) => {
+                              updateValue("helperAllowance", event.target.value);
+                              setExpenseStatuses((current) => ({ ...current, helperAllowance: "confirmed" }));
+                            }}
+                          />
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 </section>
 
@@ -1095,16 +1289,29 @@ export default function NewCompletedDeliveryPage() {
                           />
                         </label>
                       </div>
-                      <AllowanceExpenseField
-                        label="Allowance"
-                        value={values.helper2Allowance}
-                        status={expenseStatuses.helper2Allowance}
-                        onValueChange={(value) => updateValue("helper2Allowance", value)}
-                        onStatusChange={(status) => {
-                          setExpenseStatuses((current) => ({ ...current, helper2Allowance: status }));
-                          if (status !== "confirmed") updateValue("helper2Allowance", "");
-                        }}
-                      />
+                      <div className="daily-rate-field allowance-field">
+                        <label>
+                          <span className="field-label-text">Allowance</span>
+                          <span className="peso-input-wrap">
+                            <span className="peso-prefix" aria-hidden="true">₱</span>
+                            <input
+                              aria-label="Helper 2 allowance"
+                              min="0"
+                              step="0.01"
+                              type="number"
+                              inputMode="decimal"
+                              className="no-spin-stepper peso-input"
+                              style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
+                              value={values.helper2Allowance}
+                              placeholder=""
+                              onChange={(event) => {
+                                updateValue("helper2Allowance", event.target.value);
+                                setExpenseStatuses((current) => ({ ...current, helper2Allowance: "confirmed" }));
+                              }}
+                            />
+                          </span>
+                        </label>
+                      </div>
                     </div>
                   </section>
                 ) : null}
@@ -1149,48 +1356,7 @@ export default function NewCompletedDeliveryPage() {
         {noReferences ? <p className="delivery-reference-warning">At least one client and truck required.</p> : null}
       </form>
       </div>
-      <RecordDetailDrawer
-        open={previewing}
-        eyebrow={`WAYBILL ${values.waybillNumber || "PREVIEW"}`}
-        title={clientName || "Delivery review"}
-        statusLabel="Ready to record"
-        sections={previewSections}
-        onClose={() => !submitting && setPreviewing(false)}
-        footer={(
-          <>
-            <button
-              type="button"
-              className="record-preview-icon-action ui-tooltip"
-              disabled={submitting}
-              onClick={() => setPreviewing(false)}
-              aria-label="Back to edit"
-              data-tooltip="Back to edit"
-              title="Back to edit"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="m14.7 6.3 3 3M5 19l3.7-.8 9-9a2.1 2.1 0 0 0-3-3l-9 9L5 19Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="record-preview-icon-action primary ui-tooltip"
-              disabled={submitting}
-              onClick={recordDelivery}
-              aria-label={submitting ? "Recording delivery" : "Confirm and record delivery"}
-              data-tooltip={submitting ? "Recording delivery" : "Confirm and record"}
-              title={submitting ? "Recording delivery" : "Confirm and record delivery"}
-            >
-              {submitting ? (
-                <span className="record-preview-spinner" aria-hidden="true" />
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="m5 12.5 4.2 4.2L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </button>
-          </>
-        )}
-      />
+      )}
     </>
   );
 }
@@ -1395,59 +1561,4 @@ function EntryFeeField({
   );
 }
 
-function AllowanceExpenseField({
-  label,
-  value,
-  status,
-  onValueChange,
-  onStatusChange,
-}: {
-  label: string;
-  value: string;
-  status: ExpenseResolutionStatus;
-  onValueChange: (value: string) => void;
-  onStatusChange: (status: ExpenseResolutionStatus) => void;
-}) {
-  return (
-    <div className="expense-resolution-field">
-      <span className="field-label-text">{label}</span>
-      <div className="expense-resolution-controls">
-        <span className={`peso-input-wrap ${status !== "confirmed" ? "is-disabled" : ""}`}>
-          {status === "confirmed" ? (
-            <span className="peso-prefix" aria-hidden="true">₱</span>
-          ) : null}
-          <input
-            aria-label={`${label} amount`}
-            disabled={status !== "confirmed"}
-            min="0"
-            step="0.01"
-            type="number"
-            inputMode="decimal"
-            className={`no-spin-stepper ${status === "confirmed" ? "peso-input" : ""}`}
-            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
-            value={status === "confirmed" ? value : ""}
-            placeholder={status === "confirmed" ? "" : status === "unknown" ? "Unknown" : "N/A"}
-            onChange={(event) => onValueChange(event.target.value)}
-          />
-        </span>
-        <div className="expense-resolution-options" role="group" aria-label={`${label} resolution`}>
-          {([
-            ["confirmed", "Amount"],
-            ["not_applicable", "N/A"],
-            ["unknown", "Unknown"],
-          ] as const).map(([val, text]) => (
-            <button
-              type="button"
-              key={val}
-              className={status === val ? "active" : ""}
-              aria-pressed={status === val}
-              onClick={() => onStatusChange(val)}
-            >
-              {text}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+

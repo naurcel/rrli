@@ -110,7 +110,7 @@ export function ConfirmExpenseDeletionDialog({
           </div>
 
           <div className="delete-delivery-warning">
-            <strong>Warning:</strong> Deleting this expense permanently removes it from company net profit calculations.
+            <strong>Warning:</strong> Deleting this expense permanently removes it from company financial records.
           </div>
         </div>
 
