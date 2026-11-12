@@ -13,9 +13,25 @@ export const metadata: Metadata = {
 const themeInitScript = `
 (function () {
   try {
-    var stored = window.localStorage.getItem("routex-theme");
-    if (stored === "dark" || stored === "light") {
-      document.documentElement.dataset.theme = stored;
+    var storedTheme = window.localStorage.getItem("routex-theme");
+    if (storedTheme === "dark" || storedTheme === "light") {
+      document.documentElement.dataset.theme = storedTheme;
+    }
+    for (var i = 0; i < window.localStorage.length; i++) {
+      var k = window.localStorage.key(i);
+      if (k && k.indexOf("routex.design-preferences.") === 0) {
+        var raw = window.localStorage.getItem(k);
+        if (raw) {
+          var p = JSON.parse(raw);
+          if (p.fontSize) document.documentElement.dataset.fontSize = p.fontSize;
+          if (p.compactness) document.documentElement.dataset.compactness = p.compactness;
+          if (typeof p.reduceMotion === "boolean") document.documentElement.dataset.reduceMotion = String(p.reduceMotion);
+          break;
+        }
+      }
+    }
+    if (!document.documentElement.dataset.reduceMotion && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      document.documentElement.dataset.reduceMotion = "true";
     }
   } catch (e) {}
 })();

@@ -11234,7 +11234,7 @@ html[data-theme="dark"] .fleet-status.highlight-metric {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 240px;
+  width: 260px;
   z-index: 1000;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -14438,6 +14438,384 @@ html[data-theme="dark"] .profile-dropdown-link:hover {
 
 html[data-theme="dark"] .profile-dropdown-logout:hover {
   background: rgba(239, 68, 68, 0.14);
+}
+
+/* =========================================================
+   RouteX Design Preferences: Profile Dropdown & Subpanel
+   ========================================================= */
+
+.profile-dropdown-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.profile-dropdown-prefs-trigger:hover .profile-dropdown-arrow {
+  transform: translateX(2px);
+  color: var(--color-accent);
+}
+
+.topbar-profile-dropdown.is-preferences-view {
+  width: 268px;
+  padding: 8px 10px 10px;
+}
+
+.profile-dropdown-prefs-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-prefs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 2px 4px;
+  gap: 6px;
+}
+
+.profile-prefs-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  box-shadow: none !important;
+}
+
+.profile-prefs-back-btn:hover {
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.05));
+  color: var(--color-text-primary);
+}
+
+.profile-prefs-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.profile-prefs-reset-btn {
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  box-shadow: none !important;
+}
+
+.profile-prefs-reset-btn:hover {
+  color: var(--color-accent);
+  background: var(--color-accent-soft, rgba(245, 158, 11, 0.08));
+}
+
+.profile-prefs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.profile-prefs-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-prefs-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.profile-prefs-current-val {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.profile-segmented-control {
+  display: flex;
+  background: var(--color-page);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.profile-segmented-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 5px 2px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: none !important;
+}
+
+.profile-segmented-btn:hover {
+  color: var(--color-text-primary);
+}
+
+.profile-segmented-btn.active {
+  background: var(--color-surface);
+  color: var(--color-accent-deep);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+.profile-prefs-toggle-section {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--color-border-subtle);
+  margin-top: 2px;
+}
+
+.profile-prefs-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.profile-prefs-sublabel {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  line-height: 1.25;
+}
+
+/* Dark theme overrides for design preferences dropdown */
+html[data-theme="dark"] .profile-dropdown-arrow {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .profile-segmented-control {
+  background: #111822;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .profile-segmented-btn {
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .profile-segmented-btn:hover {
+  color: #f1f5f9;
+}
+
+html[data-theme="dark"] .profile-segmented-btn.active {
+  background: #243041;
+  color: #fbbf24;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
+}
+
+html[data-theme="dark"] .profile-prefs-back-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .profile-prefs-reset-btn:hover {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+html[data-theme="dark"] .profile-prefs-toggle-section {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+/* =========================================================
+   RouteX Design Preferences: Global Token Modifiers
+   ========================================================= */
+
+/* --- 1. Font Size: Small (Scale ~0.92x) --- */
+html[data-font-size="small"] {
+  --font-size-base: 13px;
+}
+
+html[data-font-size="small"] body {
+  font-size: 13px;
+}
+
+html[data-font-size="small"] .records-table th,
+html[data-font-size="small"] .delivery-table th,
+html[data-font-size="small"] table th {
+  font-size: 9.5px !important;
+}
+
+html[data-font-size="small"] .records-table td,
+html[data-font-size="small"] .delivery-table td,
+html[data-font-size="small"] table td {
+  font-size: 11.5px !important;
+}
+
+html[data-font-size="small"] .sidebar-nav-item,
+html[data-font-size="small"] .sidebar-link {
+  font-size: 12px;
+}
+
+html[data-font-size="small"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-font-size="small"] select,
+html[data-font-size="small"] textarea {
+  font-size: 12px;
+}
+
+html[data-font-size="small"] .stat-card-title,
+html[data-font-size="small"] .metric-label {
+  font-size: 10.5px;
+}
+
+html[data-font-size="small"] .stat-card-value {
+  font-size: 19px;
+}
+
+html[data-font-size="small"] .routex-badge {
+  font-size: 9px;
+  min-height: 16px;
+  padding: 1px 5px;
+}
+
+/* --- 2. Font Size: Large (Scale ~1.08x) --- */
+html[data-font-size="large"] {
+  --font-size-base: 15px;
+}
+
+html[data-font-size="large"] body {
+  font-size: 15px;
+}
+
+html[data-font-size="large"] .records-table th,
+html[data-font-size="large"] .delivery-table th,
+html[data-font-size="large"] table th {
+  font-size: 11.5px !important;
+}
+
+html[data-font-size="large"] .records-table td,
+html[data-font-size="large"] .delivery-table td,
+html[data-font-size="large"] table td {
+  font-size: 13.5px !important;
+}
+
+html[data-font-size="large"] .sidebar-nav-item,
+html[data-font-size="large"] .sidebar-link {
+  font-size: 14px;
+}
+
+html[data-font-size="large"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-font-size="large"] select,
+html[data-font-size="large"] textarea {
+  font-size: 14px;
+}
+
+html[data-font-size="large"] .stat-card-title,
+html[data-font-size="large"] .metric-label {
+  font-size: 12px;
+}
+
+html[data-font-size="large"] .stat-card-value {
+  font-size: 24px;
+}
+
+html[data-font-size="large"] .routex-badge {
+  font-size: 10.5px;
+  min-height: 20px;
+  padding: 2px 7px;
+}
+
+/* --- 3. Compactness: Compact --- */
+html[data-compactness="compact"] .records-table th,
+html[data-compactness="compact"] .delivery-table th,
+html[data-compactness="compact"] table th {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+html[data-compactness="compact"] .records-table td,
+html[data-compactness="compact"] .delivery-table td,
+html[data-compactness="compact"] table td {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+html[data-compactness="compact"] .stat-card {
+  padding: 10px 14px !important;
+}
+
+html[data-compactness="compact"] .records-card {
+  padding: 12px 14px !important;
+}
+
+html[data-compactness="compact"] .stats-grid,
+html[data-compactness="compact"] .dashboard-kpi-grid {
+  gap: 10px !important;
+}
+
+html[data-compactness="compact"] .workspace-content-wrap,
+html[data-compactness="compact"] .main-content {
+  gap: 12px !important;
+}
+
+html[data-compactness="compact"] .sidebar-nav-item,
+html[data-compactness="compact"] .sidebar-link {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+html[data-compactness="compact"] .delivery-timeline-stop {
+  padding: 8px 10px !important;
+}
+
+/* --- 4. Reduce Motion: True --- */
+html[data-reduce-motion="true"] {
+  --motion-duration-fast: 40ms !important;
+  --motion-duration-normal: 50ms !important;
+  --motion-duration-slow: 60ms !important;
+  --motion-duration-entrance: 50ms !important;
+}
+
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+
+/* Preserve tactile 50ms transitions for critical interactive state feedback */
+html[data-reduce-motion="true"] button,
+html[data-reduce-motion="true"] a,
+html[data-reduce-motion="true"] input,
+html[data-reduce-motion="true"] select,
+html[data-reduce-motion="true"] .profile-theme-switch,
+html[data-reduce-motion="true"] .profile-theme-knob,
+html[data-reduce-motion="true"] .profile-segmented-btn {
+  transition-duration: 50ms !important;
+}
+
+html[data-reduce-motion="true"] .settings-hero-avatar-container::before,
+html[data-reduce-motion="true"] .settings-hero-avatar-glow {
+  animation: none !important;
 }
 
 /* =========================================================
