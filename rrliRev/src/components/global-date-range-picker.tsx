@@ -67,6 +67,7 @@ function serializeDateRange(range: DateRange): string {
     startDate: range.startDate ? toDateKey(range.startDate) : null,
     endDate: range.endDate ? toDateKey(range.endDate) : null,
     isAllTime: !range.startDate && !range.endDate,
+    preset: range.preset,
   });
 }
 
@@ -76,16 +77,17 @@ function parseStoredDateRange(raw: string): DateRange | null {
       startDate?: string | null;
       endDate?: string | null;
       isAllTime?: boolean;
+      preset?: DatePreset | "custom";
     };
     if (parsed.isAllTime || (!parsed.startDate && !parsed.endDate)) {
-      return { startDate: null, endDate: null };
+      return { startDate: null, endDate: null, preset: parsed.preset === "all" ? "all" : undefined };
     }
     const start = parsed.startDate ? parseDateValue(parsed.startDate) : null;
     const end = parsed.endDate ? parseDateValue(parsed.endDate) : null;
     if (start && isNaN(start.getTime())) return null;
     if (end && isNaN(end.getTime())) return null;
     if (start || end) {
-      return { startDate: start, endDate: end };
+      return { startDate: start, endDate: end, preset: parsed.preset };
     }
     return null;
   } catch {
@@ -117,7 +119,7 @@ export function GlobalDateRangeProvider({ children }: { children: ReactNode }) {
       memoryInitialized = true;
       return stored;
     }
-    const fallback = presetRange("all");
+    const fallback = { ...presetRange("all"), preset: "all" as const };
     memoryCachedRange = fallback;
     return fallback;
   });
@@ -291,12 +293,12 @@ export function GlobalDateRangePicker() {
 
     setDraftStart(nextRange.startDate);
     setDraftEnd(nextRange.endDate);
-    setRange(nextRange);
+    setRange({ ...nextRange, preset: "custom" });
     closePopover(true);
   };
 
   const choosePreset = (preset: DatePreset) => {
-    const next = presetRange(preset);
+    const next = { ...presetRange(preset), preset };
     setRange(next);
     setDraftStart(next.startDate);
     setDraftEnd(next.endDate);

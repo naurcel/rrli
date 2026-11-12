@@ -218,6 +218,8 @@ export function calculateNiceYRange(
 
 export type FinancialTimeSeriesPoint = {
   date: string;
+  label?: string;
+  granularity?: "day" | "week" | "month" | "custom";
   revenue: number;
   deliveryExpenses: number;
   companyExpenses: number;
@@ -226,6 +228,25 @@ export type FinancialTimeSeriesPoint = {
   tripCount: number;
 };
 
+function dateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function addCalendarDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function shortRangeLabel(start: Date, end: Date): string {
+  const startLabel = start.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const endLabel = end.toLocaleDateString("en-US", {
+    month: start.getMonth() === end.getMonth() ? undefined : "short",
+    day: "numeric",
+  });
+  return start.getTime() === end.getTime() ? startLabel : `${startLabel}–${endLabel}`;
+}
+
 /**
  * Aggregates delivery and company financial records into an aligned daily time series.
  * Only financially complete deliveries are counted towards revenue and delivery expenses.
@@ -233,7 +254,11 @@ export type FinancialTimeSeriesPoint = {
 export function buildFinancialTimeSeries(
   deliveries: readonly DeliveryTripRecord[],
   companyExpenses: readonly CompanyExpense[],
-  range: { startDate: Date | null; endDate: Date | null },
+  range: {
+    startDate: Date | null;
+    endDate: Date | null;
+    preset?: "all" | "today" | "week" | "month" | "year" | "last7" | "last15" | "last30" | "custom";
+  },
 ): FinancialTimeSeriesPoint[] {
   const deliveryAggregates = new Map<
     string,
@@ -281,6 +306,23 @@ export function buildFinancialTimeSeries(
     };
   };
 
+  const sumPoints = (
+    points: readonly FinancialTimeSeriesPoint[],
+    start: Date,
+    granularity: NonNullable<FinancialTimeSeriesPoint["granularity"]>,
+    label: string,
+  ): FinancialTimeSeriesPoint => ({
+    date: dateKey(start),
+    label,
+    granularity,
+    revenue: points.reduce((sum, point) => sum + point.revenue, 0),
+    deliveryExpenses: points.reduce((sum, point) => sum + point.deliveryExpenses, 0),
+    companyExpenses: points.reduce((sum, point) => sum + point.companyExpenses, 0),
+    expenses: points.reduce((sum, point) => sum + point.expenses, 0),
+    profit: points.reduce((sum, point) => sum + point.profit, 0),
+    tripCount: points.reduce((sum, point) => sum + point.tripCount, 0),
+  });
+
   if (range.startDate && range.endDate) {
     const days: FinancialTimeSeriesPoint[] = [];
     const cursor = new Date(range.startDate);
@@ -298,7 +340,59 @@ export function buildFinancialTimeSeries(
       cursor.setDate(cursor.getDate() + 1);
       step++;
     }
-    return days;
+    const preset = range.preset;
+    if (preset === "week" || preset === "today") {
+      return days.map((point) => ({ ...point, granularity: "day" }));
+    }
+
+    const aggregateSequentialBuckets = (
+      bucketDays: number,
+      granularity: "week" | "custom",
+    ) => {
+      const buckets: FinancialTimeSeriesPoint[] = [];
+      for (let index = 0; index < days.length; index += bucketDays) {
+        const bucketPoints = days.slice(index, index + bucketDays);
+        const bucketStart = addCalendarDays(new Date(range.startDate!), index);
+        const bucketEnd = addCalendarDays(bucketStart, bucketPoints.length - 1);
+        buckets.push(sumPoints(bucketPoints, bucketStart, granularity, shortRangeLabel(bucketStart, bucketEnd)));
+      }
+      return buckets;
+    };
+
+    if (preset === "month") {
+      return aggregateSequentialBuckets(7, "week");
+    }
+
+    if (preset === "year") {
+      const buckets: FinancialTimeSeriesPoint[] = [];
+      let monthStart = new Date(range.startDate.getFullYear(), range.startDate.getMonth(), 1);
+      while (monthStart <= end) {
+        const nextMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+        const bucketStart = monthStart < range.startDate ? new Date(range.startDate) : monthStart;
+        const monthEnd = addCalendarDays(nextMonth, -1);
+        const bucketEnd = monthEnd > end ? end : monthEnd;
+        const offset = Math.round((bucketStart.getTime() - range.startDate.getTime()) / 86_400_000);
+        const length = Math.round((bucketEnd.getTime() - bucketStart.getTime()) / 86_400_000) + 1;
+        const label = monthStart.toLocaleDateString("en-US", { month: "short" });
+        buckets.push(sumPoints(days.slice(offset, offset + length), bucketStart, "month", label));
+        monthStart = nextMonth;
+      }
+      return buckets;
+    }
+
+    if (preset === "custom") {
+      const bucketCount = Math.min(8, days.length);
+      return Array.from({ length: bucketCount }, (_, index) => {
+        const startIndex = Math.floor((index * days.length) / bucketCount);
+        const endIndex = Math.floor(((index + 1) * days.length) / bucketCount);
+        const bucketPoints = days.slice(startIndex, endIndex);
+        const bucketStart = addCalendarDays(new Date(range.startDate!), startIndex);
+        const bucketEnd = addCalendarDays(bucketStart, bucketPoints.length - 1);
+        return sumPoints(bucketPoints, bucketStart, "custom", shortRangeLabel(bucketStart, bucketEnd));
+      });
+    }
+
+    return days.map((point) => ({ ...point, granularity: "day" }));
   }
 
   const allDates = new Set<string>([

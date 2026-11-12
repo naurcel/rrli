@@ -403,9 +403,11 @@ function DashboardFinancialChart({
     [compProfitCoords],
   );
 
-  const tickIndexes = Array.from(
-    new Set([0, Math.floor((series.length - 1) / 2), series.length - 1]),
-  ).filter((index) => index >= 0 && index < series.length);
+  const tickIndexes = series.length <= 12
+    ? series.map((_, index) => index)
+    : Array.from(
+        new Set([0, Math.floor((series.length - 1) / 2), series.length - 1]),
+      ).filter((index) => index >= 0 && index < series.length);
 
   const selectedPoint = activeIndex !== null && activeIndex >= 0 && activeIndex < series.length
     ? series[activeIndex]
@@ -447,21 +449,22 @@ function DashboardFinancialChart({
   };
 
   const activeConfig = METRIC_CONFIG[metric];
+  const chartUnit = series[0]?.granularity ?? "day";
 
   const subtitleText = useMemo(() => {
     if (!hasData) return "No financial activity recorded in this period";
     if (metric === "revenue") {
-      return `Avg: ${formatPeso(totals.avgRevenue)}/day · Peak: ${formatPeso(totals.peakRevenue)}`;
+      return `Avg: ${formatPeso(totals.avgRevenue)}/${chartUnit} · Peak: ${formatPeso(totals.peakRevenue)}`;
     }
     if (metric === "expenses") {
-      return `Avg: ${formatPeso(totals.avgExpenses)}/day · Peak: ${formatPeso(totals.peakExpenses)}`;
+      return `Avg: ${formatPeso(totals.avgExpenses)}/${chartUnit} · Peak: ${formatPeso(totals.peakExpenses)}`;
     }
     if (metric === "profit") {
       const marginPart = totals.profitMargin !== null ? ` · ${formatPercent(totals.profitMargin)} margin` : "";
-      return `Avg: ${formatPeso(totals.avgProfit)}/day${marginPart}`;
+      return `Avg: ${formatPeso(totals.avgProfit)}/${chartUnit}${marginPart}`;
     }
     return "All daily revenue, expenses, and net profit for the selected period";
-  }, [hasData, metric, totals]);
+  }, [chartUnit, hasData, metric, totals]);
 
   return (
     <section className="records-card revenue-chart-card" aria-labelledby="revenue-over-time-heading">
@@ -878,7 +881,7 @@ function DashboardFinancialChart({
               >
                 <rect width={tooltipWidth} height={tooltipHeight} rx="8" />
                 <text className="chart-tooltip-label" x="11" y="16">
-                  {formatDashboardDate(selectedPoint.date)}
+                  {selectedPoint.label ?? formatDashboardDate(selectedPoint.date)}
                 </text>
                 {metric === "comparison" ? (
                   <>
@@ -932,7 +935,7 @@ function DashboardFinancialChart({
                   y={height - 13}
                   textAnchor="middle"
                 >
-                  {formatDashboardDate(point.date).replace(/, \d{4}$/, "")}
+                  {(point.label ?? formatDashboardDate(point.date)).replace(/, \d{4}$/, "")}
                 </text>
               );
             })}

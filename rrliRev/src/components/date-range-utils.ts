@@ -5,8 +5,6 @@
  * range validation, and preset calculation.
  */
 
-export type DateRange = { startDate: Date | null; endDate: Date | null };
-
 export type DatePreset =
   | "all"
   | "today"
@@ -16,6 +14,13 @@ export type DatePreset =
   | "last7"
   | "last15"
   | "last30";
+
+export type DateRange = {
+  startDate: Date | null;
+  endDate: Date | null;
+  /** Identifies picker presets so charts can use an appropriate aggregation. */
+  preset?: DatePreset | "custom";
+};
 
 export const MONTH_NAMES = [
   "January",
