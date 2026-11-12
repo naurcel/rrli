@@ -289,7 +289,7 @@ export function buildFinancialTimeSeries(
     end.setHours(0, 0, 0, 0);
 
     let step = 0;
-    while (cursor <= end && step < 62) {
+    while (cursor <= end && step < 732) {
       const year = cursor.getFullYear();
       const month = String(cursor.getMonth() + 1).padStart(2, "0");
       const day = String(cursor.getDate()).padStart(2, "0");

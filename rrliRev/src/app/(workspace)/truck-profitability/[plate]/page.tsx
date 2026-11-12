@@ -213,7 +213,7 @@ export default function TruckProfilePage({
       <OperationalTopbar contextLabel={`Truck ${normalizedPlate}`} />
 
       <div className="content-wrap fleet-detail-page truck-profile-page">
-        <Link className="back-link" href="/truck-profitability" title="Back to Trucks fleet overview">
+        <Link className="back-link" href="/truck-profitability" title="Back to Trucks">
           ← Back to Trucks
         </Link>
 
@@ -261,25 +261,16 @@ export default function TruckProfilePage({
               {actor.role === "admin" && (
                 <button
                   type="button"
-                  className="secondary-button"
-                  title="Permanently remove this truck from the fleet"
-                  style={{
-                    borderColor: "rgba(220, 38, 38, 0.3)",
-                    color: "#dc2626",
-                    fontWeight: 600,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "8px 14px",
-                  }}
+                  className="secondary-button danger-action"
+                  title="Delete truck"
                   onClick={() => setIsDeleteModalOpen(true)}
                 >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
                     <line x1="10" y1="11" x2="10" y2="17" />
                     <line x1="14" y1="11" x2="14" y2="17" />
                   </svg>
-                  Delete Truck
+                  <span>Delete Truck</span>
                 </button>
               )}
             </header>
@@ -302,9 +293,8 @@ export default function TruckProfilePage({
                     onClick={() => {
                       document.getElementById("truck-delivery-history")?.scrollIntoView({ behavior: "smooth" });
                     }}
-                    title="Click to view delivery history below"
+                    title="View delivery history"
                   >
-                    <span className="stat-label">TOTAL DELIVERIES</span>
                     <span className="stat-label">DELIVERIES</span>
                     <strong>{activeTruck.completedTrips}</strong>
                     {finalizedTripsCount < truckTrips.length ? (
@@ -313,15 +303,17 @@ export default function TruckProfilePage({
                       </span>
                     ) : null}
                   </article>
-                  <article className="stat-card"><span className="stat-label">STORE DROP-OFFS</span><strong>{activeTruck.totalStoresServed}</strong></article>
-                  <article className="stat-card"><span className="stat-label">DROP-OFFS</span><strong>{activeTruck.totalStoresServed}</strong></article>
+                  <article className="stat-card">
+                    <span className="stat-label">DROP-OFFS</span>
+                    <strong>{activeTruck.totalStoresServed}</strong>
+                  </article>
                   <article className="stat-card">
                     <span className="stat-label">REVENUE</span>
                     <strong>{formatPeso(activeTruck.totalEarnings)}</strong>
                     {pendingRevenue > 0 ? (
                       <span
                         className="stat-meta"
-                        title={`₱${pendingRevenue.toLocaleString()} pending from incomplete delivery runs with unresolved expenses`}
+                        title={`${formatPeso(pendingRevenue)} pending (unresolved expenses)`}
                         style={{ display: "block", fontSize: "11px", color: "var(--color-accent, #d97706)", marginTop: "2px", fontWeight: 500 }}
                       >
                         + {formatPeso(pendingRevenue)} pending
@@ -345,7 +337,7 @@ export default function TruckProfilePage({
                 <div
                   className="empty-state"
                   style={{ padding: "36px 20px" }}
-                  title="No completed deliveries recorded for this truck in the selected date range"
+                  title="No deliveries in date range"
                 >
                   <strong>No completed deliveries in this range</strong>
                   <span>No finalized trips have been recorded for {activeTruck.plateNumber} within the selected date range.</span>
@@ -380,7 +372,7 @@ export default function TruckProfilePage({
                                 router.push(`/deliveries/${encodeURIComponent(trip.id)}`);
                               }
                             }}
-                            title={`Click to view delivery details for waybill ${trip.waybillNumber}`}
+                            title={`View waybill ${trip.waybillNumber}`}
                           >
                             <td>
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -396,7 +388,7 @@ export default function TruckProfilePage({
                               {isFinanciallyIncomplete || trip.totalExpenses == null ? (
                                 <span
                                   className="profit-amount warning"
-                                  title={`Trip expenses incomplete: ${trip.financialIntegrityIssues.join(", ") || "Pending expense confirmation"}`}
+                                  title={`Incomplete expenses: ${trip.financialIntegrityIssues.join(", ") || "Pending confirmation"}`}
                                 >
                                   Incomplete
                                 </span>
@@ -408,7 +400,7 @@ export default function TruckProfilePage({
                               {isFinanciallyIncomplete || trip.netIncome == null ? (
                                 <span
                                   className="profit-amount warning"
-                                  title="Net profit computation deferred: Requires all trip expenses to be confirmed"
+                                  title="Net profit deferred: pending expenses"
                                 >
                                   Incomplete
                                 </span>
@@ -527,29 +519,20 @@ export default function TruckProfilePage({
                   </div>
                 </div>
 
-                <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <footer className="routex-dialog-footer">
                   <button
                     type="button"
                     className="secondary-button"
                     disabled={isDeleting}
                     onClick={() => setIsDeleteModalOpen(false)}
-                    style={{ minHeight: "38px", padding: "0 16px", fontSize: "13px" }}
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    className="primary-action-button"
+                    className="danger-confirm-button"
                     disabled={isDeleting}
                     onClick={handleDeleteTruck}
-                    style={{
-                      minHeight: "38px",
-                      padding: "0 16px",
-                      fontSize: "13px",
-                      background: "#dc2626",
-                      borderColor: "#dc2626",
-                      color: "#ffffff",
-                    }}
                   >
                     {isDeleting ? "Deleting..." : "Delete Truck"}
                   </button>

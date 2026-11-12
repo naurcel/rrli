@@ -392,7 +392,7 @@ export function DeliveryExcelImportClient({
             <h2>1. Upload Spreadsheet</h2>
             <p>Upload a CSV or XLSX file.</p>
           </div>
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
               <ImportIcon name="download" /> Download CSV Template
             </button>
@@ -447,15 +447,7 @@ export function DeliveryExcelImportClient({
               ) : null}
               <button
                 type="button"
-                className="filter-button"
-                style={{
-                  background: "var(--color-accent-deep)",
-                  color: "#fff",
-                  fontWeight: 700,
-                  padding: "8px 18px",
-                  borderRadius: "8px",
-                  border: 0,
-                }}
+                className="primary-action-button"
                 disabled={importing || validCount === 0}
                 onClick={commitImportBatch}
               >

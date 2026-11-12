@@ -144,14 +144,32 @@ export function formatDateRange(range: DateRange): string {
   return "All time";
 }
 
+export const BUSINESS_TIME_ZONE = "Asia/Manila";
 export const COMPANY_FOUNDATION_YEAR = 2024;
 export const COMPANY_FOUNDATION_DATE = "2024-01-01";
 
+/**
+ * Normalizes a reference timestamp into the start-of-day in Asia/Manila.
+ */
+export function getNowInManila(): Date {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.format(new Date()).split("-").map(Number);
+  const year = parts[0] ?? new Date().getFullYear();
+  const month = parts[1] ?? (new Date().getMonth() + 1);
+  const day = parts[2] ?? new Date().getDate();
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
 export function presetRange(
   preset: DatePreset,
-  referenceDate: Date = new Date(),
+  referenceDate?: Date,
 ): DateRange {
-  const today = startOfDay(referenceDate);
+  const today = referenceDate ? startOfDay(referenceDate) : startOfDay(getNowInManila());
   if (preset === "all") return { startDate: null, endDate: null };
   if (preset === "today") return { startDate: today, endDate: today };
   let start: Date;

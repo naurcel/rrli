@@ -253,9 +253,9 @@ const METRIC_CONFIG = {
     emptyMsg: "No net profit activity in this range",
   },
   comparison: {
-    label: "Comparison",
-    title: "Comparison over time",
-    subtitleSuffix: "revenue vs expenses vs profit",
+    label: "All",
+    title: "Financial overview over time",
+    subtitleSuffix: "all daily revenue, expenses, and net profit",
     color: "var(--color-accent-highlight, #f59e0b)",
     dotClass: "legend-dot-revenue",
     gradientId: "chart-fill-revenue",
@@ -414,8 +414,8 @@ function DashboardFinancialChart({
     ? singleCoordinates[activeIndex]
     : null;
 
-  const tooltipWidth = metric === "comparison" ? 172 : 160;
-  const tooltipHeight = metric === "comparison" ? 76 : 56;
+  const tooltipWidth = metric === "comparison" ? 180 : 160;
+  const tooltipHeight = metric === "comparison" ? 82 : 56;
   const activePointX = activeIndex !== null
     ? viewMode === "bar"
       ? xForBar(activeIndex)
@@ -460,7 +460,7 @@ function DashboardFinancialChart({
       const marginPart = totals.profitMargin !== null ? ` · ${formatPercent(totals.profitMargin)} margin` : "";
       return `Avg: ${formatPeso(totals.avgProfit)}/day${marginPart}`;
     }
-    return "Daily revenue, expenses, and net profit trends";
+    return "All daily revenue, expenses, and net profit for the selected period";
   }, [hasData, metric, totals]);
 
   return (
@@ -523,7 +523,7 @@ function DashboardFinancialChart({
               setMetric("comparison");
             }}
           >
-            Comparison
+            All
           </button>
         </div>
 
@@ -532,7 +532,7 @@ function DashboardFinancialChart({
             <div className="chart-comparison-key" aria-label="Chart series legend">
               <span className="chart-key-item"><i className="legend-dot-revenue" /> Revenue</span>
               <span className="chart-key-item"><i className="legend-dot-expenses" /> Expenses</span>
-              <span className="chart-key-item"><i className="legend-dot-profit" /> Profit</span>
+              <span className="chart-key-item"><i className="legend-dot-profit" /> Net profit</span>
             </div>
           )}
 
@@ -776,9 +776,9 @@ function DashboardFinancialChart({
                   const x = xForBar(index);
 
                   if (metric === "comparison") {
-                    const clusterWidth = Math.max(18, Math.min(76, barSlotWidth * 0.76));
-                    const barGap = Math.max(2, Math.min(3, clusterWidth * 0.04));
-                    const barW = Math.max(4, (clusterWidth - barGap * 2) / 3);
+                    const clusterWidth = Math.max(3, Math.min(76, barSlotWidth * 0.76));
+                    const barGap = barSlotWidth > 15 ? Math.max(1, Math.min(3, clusterWidth * 0.04)) : 0.5;
+                    const barW = Math.max(0.8, (clusterWidth - barGap * 2) / 3);
                     const startX = x - clusterWidth / 2;
 
                     const revY = yFor(point.revenue);
@@ -838,7 +838,7 @@ function DashboardFinancialChart({
                       : metric === "expenses"
                         ? point.expenses
                         : point.profit;
-                  const barW = Math.max(10, Math.min(48, barSlotWidth * 0.68));
+                  const barW = Math.max(1.5, Math.min(48, barSlotWidth * 0.68));
                   const barX = x - barW / 2;
                   const yVal = yFor(val);
                   const barY = Math.min(yVal, zeroY);
@@ -883,19 +883,19 @@ function DashboardFinancialChart({
                 {metric === "comparison" ? (
                   <>
                     <text className="chart-tooltip-value" x="11" y="32" fill="#f59e0b" fontSize="10">
-                      Rev: {formatPeso(selectedPoint.revenue)}
+                      Revenue: {formatPeso(selectedPoint.revenue)}
                     </text>
-                    <text className="chart-tooltip-value" x="11" y="47" fill="#f43f5e" fontSize="10">
-                      Exp: {formatPeso(selectedPoint.expenses)}
+                    <text className="chart-tooltip-value" x="11" y="48" fill="#f43f5e" fontSize="10">
+                      Expenses: {formatPeso(selectedPoint.expenses)}
                     </text>
                     <text
                       className="chart-tooltip-value"
                       x="11"
-                      y="62"
+                      y="64"
                       fill={selectedPoint.profit >= 0 ? "#10b981" : "#ef4444"}
                       fontSize="10"
                     >
-                      Profit: {formatPeso(selectedPoint.profit)}
+                      Net profit: {formatPeso(selectedPoint.profit)}
                     </text>
                   </>
                 ) : (
@@ -1256,34 +1256,45 @@ export default function DashboardPage() {
             </Link>
 
             {/* 4. Top Client */}
-            <Link
-              className="stat-card stat-card-link stat-card-top-client ui-tooltip"
-              href="/reports"
-              data-tooltip={
-                topClientData.isTied
-                  ? `Tied top clients: ${topClientData.allNames}`
-                  : topClientData.name !== "None"
-                    ? `Top client: ${topClientData.name} (${formatPeso(topClientData.revenue)})`
-                    : "No client revenue recorded in selected range"
-              }
-            >
-              <span className="stat-label">TOP CLIENT</span>
-              <strong className="stat-client-name">
-                {topClientData.name}
-              </strong>
-              <span className={`stat-meta ${topClientData.revenue > 0 ? "positive" : ""}`}>
-                {topClientData.revenue > 0
-                  ? topClientData.isTied
-                    ? `Tied at ${formatPeso(topClientData.revenue)} each`
-                    : `${formatPeso(topClientData.revenue)} revenue · ${topClientData.tripCount} ${topClientData.tripCount === 1 ? "trip" : "trips"}`
-                  : "No revenue in selected range"}
-              </span>
-            </Link>
+            {(() => {
+              const clientNameLen = topClientData.name.length;
+              const clientSizeClass =
+                clientNameLen <= 11
+                  ? "stat-client-name--short"
+                  : clientNameLen <= 24
+                    ? "stat-client-name--medium"
+                    : "stat-client-name--long";
+              return (
+                <Link
+                  className="stat-card stat-card-link stat-card-top-client ui-tooltip"
+                  href="/reports"
+                  data-tooltip={
+                    topClientData.isTied
+                      ? `Tied top clients: ${topClientData.allNames}`
+                      : topClientData.name !== "None"
+                        ? `Top client: ${topClientData.name} (${formatPeso(topClientData.revenue)})`
+                        : "No client revenue recorded in selected range"
+                  }
+                >
+                  <span className="stat-label">TOP CLIENT</span>
+                  <strong className={`stat-client-name ${clientSizeClass}`} title={topClientData.name}>
+                    {topClientData.name}
+                  </strong>
+                  <span className={`stat-meta ${topClientData.revenue > 0 ? "positive" : ""}`}>
+                    {topClientData.revenue > 0
+                      ? topClientData.isTied
+                        ? `Tied at ${formatPeso(topClientData.revenue)} each`
+                        : `${formatPeso(topClientData.revenue)} revenue · ${topClientData.tripCount} ${topClientData.tripCount === 1 ? "trip" : "trips"}`
+                      : "No revenue in selected range"}
+                  </span>
+                </Link>
+              );
+            })()}
           </section>
         </section>
 
         <div className={`dashboard-columns${loading ? " is-page-loading" : ""}`}>
-          <section className="records-card" aria-label="Recent completed deliveries">
+          <section className="records-card dashboard-recent-deliveries" aria-label="Recent completed deliveries">
             <div className="records-heading">
               <div>
                 <h2>Recent Deliveries</h2>
@@ -1396,7 +1407,7 @@ export default function DashboardPage() {
               </div>
               <ol className="top-truck-list">
                 {truckRankings.length === 0 ? (
-                  <li className="top-truck-empty" title="Rankings calculate exclusively from deliveries with confirmed expenses">
+                  <li className="top-truck-empty" title="Rankings require confirmed expenses">
                     No finalized truck records in this range.
                   </li>
                 ) : null}
@@ -1405,6 +1416,7 @@ export default function DashboardPage() {
                     <Link
                       className="top-truck-link"
                       href={`/truck-profitability/${truck.plate_number}`}
+                      title={`View ${truck.plate_number} details`}
                     >
                       <span className="truck-rank">{idx + 1}</span>
                       <div>
@@ -1493,36 +1505,39 @@ export default function DashboardPage() {
                               aria-label={`${isExpanded ? "Hide" : "Show"} missing details for ${delivery.waybillNumber}`}
                               onClick={(e) => toggleAttentionItem(delivery.id, e)}
                             >
-                              <span>{issues.length} {issues.length === 1 ? "missing" : "missing"}</span>
+                              <span>{issues.length} {issues.length === 1 ? "missing detail" : "missing details"}</span>
                               <span className={`attention-chevron${isExpanded ? " open" : ""}`} aria-hidden="true">▾</span>
                             </button>
                           </div>
 
-                          {isExpanded && (
-                            <div
-                              className="dashboard-attention-dropdown"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <div className="dashboard-attention-tags">
-                                {issues.map((issue, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="dashboard-attention-tag"
-                                    title={issue.tooltip ?? issue.label}
-                                  >
-                                    {issue.label}
-                                  </span>
-                                ))}
+                          <div
+                            className={`dashboard-attention-dropdown-wrapper${isExpanded ? " is-open" : ""}`}
+                            aria-hidden={!isExpanded}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="dashboard-attention-dropdown-inner">
+                              <div className="dashboard-attention-dropdown">
+                                <div className="dashboard-attention-tags">
+                                  {issues.map((issue, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="dashboard-attention-tag"
+                                      title={issue.tooltip ?? issue.label}
+                                    >
+                                      {issue.label}
+                                    </span>
+                                  ))}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="dashboard-attention-resolve-btn"
+                                  onClick={() => router.push(`/deliveries/${encodeURIComponent(delivery.id)}`)}
+                                >
+                                  Review delivery details →
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                className="dashboard-attention-resolve-btn"
-                                onClick={() => router.push(`/deliveries/${encodeURIComponent(delivery.id)}`)}
-                              >
-                                Review delivery details →
-                              </button>
                             </div>
-                          )}
+                          </div>
                         </div>
                       </div>
                     );

@@ -1206,49 +1206,74 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedRows.map((row, rowIdx) => (
-                      <tr
-                        key={
-                          (row.waybillNumber as string) ||
-                          (row.clientName as string) ||
-                          (row.plateNumber as string) ||
-                          rowIdx
-                        }
-                      >
-                        {processedReport.columns.map((col) => {
-                          const rawVal = row[col.id];
-                          if (col.dataType === "badge") {
-                            const isPositive =
-                              rawVal === "Finalized" || rawVal === "Complete";
+                    {(() => {
+                      const renderReportRow = (
+                        row: (typeof sortedRows)[number],
+                        rowIdx: number,
+                        extraClass?: string
+                      ) => (
+                        <tr
+                          key={
+                            `${extraClass ? extraClass + "-" : ""}${(row.waybillNumber as string) ||
+                            (row.clientName as string) ||
+                            (row.plateNumber as string) ||
+                            rowIdx}`
+                          }
+                          className={extraClass}
+                        >
+                          {processedReport.columns.map((col) => {
+                            const rawVal = row[col.id];
+                            if (col.dataType === "badge") {
+                              const isPositive =
+                                rawVal === "Finalized" || rawVal === "Complete";
+                              return (
+                                <td key={col.id} style={{ textAlign: col.align }}>
+                                  <span
+                                    className={`report-status-badge ${isPositive ? "status-positive" : "status-neutral"}`}
+                                    style={{
+                                      display: "inline-block",
+                                      padding: "2px 8px",
+                                      borderRadius: "12px",
+                                      fontSize: "10px",
+                                      fontWeight: 700,
+                                      backgroundColor: isPositive
+                                        ? "rgba(16, 185, 129, 0.15)"
+                                        : "rgba(107, 114, 128, 0.15)",
+                                      color: isPositive ? "#059669" : "var(--color-text-muted)",
+                                    }}
+                                  >
+                                    {String(rawVal ?? "—")}
+                                  </span>
+                                </td>
+                              );
+                            }
+
                             return (
                               <td key={col.id} style={{ textAlign: col.align }}>
-                                <span
-                                  style={{
-                                    display: "inline-block",
-                                    padding: "2px 8px",
-                                    borderRadius: "12px",
-                                    fontSize: "10px",
-                                    fontWeight: 700,
-                                    backgroundColor: isPositive
-                                      ? "rgba(16, 185, 129, 0.15)"
-                                      : "rgba(107, 114, 128, 0.15)",
-                                    color: isPositive ? "#059669" : "var(--color-text-muted)",
-                                  }}
-                                >
-                                  {String(rawVal ?? "—")}
-                                </span>
+                                {formatCellValue(rawVal, col.dataType)}
                               </td>
                             );
-                          }
+                          })}
+                        </tr>
+                      );
 
-                          return (
-                            <td key={col.id} style={{ textAlign: col.align }}>
-                              {formatCellValue(rawVal, col.dataType)}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
+                      if (sortedRows.length > paginatedRows.length) {
+                        return (
+                          <>
+                            {paginatedRows.map((row, rowIdx) =>
+                              renderReportRow(row, rowIdx, "report-screen-only-row")
+                            )}
+                            {sortedRows.map((row, rowIdx) =>
+                              renderReportRow(row, rowIdx, "report-print-only-row")
+                            )}
+                          </>
+                        );
+                      }
+
+                      return paginatedRows.map((row, rowIdx) =>
+                        renderReportRow(row, rowIdx)
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>

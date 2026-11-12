@@ -887,8 +887,8 @@ export default function TruckProfitabilityPage() {
               <button
                 type="button"
                 className="secondary-button page-intro-action"
-                data-tooltip="Add new driver or helper to the fleet roster"
-                title="Add new driver or helper to the fleet roster"
+                data-tooltip="Add crew member"
+                title="Add crew member"
                 onClick={() => {
                   setCrewFormError(null);
                   setCrewFullName("");
@@ -902,8 +902,8 @@ export default function TruckProfitabilityPage() {
               <button
                 type="button"
                 className="primary-action-button page-intro-action"
-                data-tooltip="Register an owned or subcontracted vehicle"
-                title="Register an owned or subcontracted vehicle"
+                data-tooltip="Add truck"
+                title="Add truck"
                 onClick={() => {
                   setFormError(null);
                   setIsAddTruckOpen(true);
@@ -988,7 +988,7 @@ export default function TruckProfitabilityPage() {
                   type="search"
                   placeholder="Search by plate number…"
                   aria-label="Filter trucks by plate number"
-                  title="Filter trucks by plate number"
+                  title="Search plate"
                   value={plateSearch}
                   onChange={(e) => setPlateSearch(e.target.value)}
                 />
@@ -1032,7 +1032,7 @@ export default function TruckProfitabilityPage() {
                   className="filter-clear-action-btn"
                   onClick={handleResetFilters}
                   aria-label="Clear all truck filters"
-                  title="Clear all active truck filters"
+                  title="Clear all filters"
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <line x1="18" y1="6" x2="6" y2="18" />
@@ -1055,7 +1055,7 @@ export default function TruckProfitabilityPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label="Remove date range filter"
-                      title="Remove date range filter"
+                      title="Clear date filter"
                       onClick={() =>
                         setRange({ startDate: null, endDate: null })
                       }
@@ -1071,7 +1071,7 @@ export default function TruckProfitabilityPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label="Remove plate search"
-                      title="Remove plate search filter"
+                      title="Clear plate filter"
                       onClick={() => setPlateSearch("")}
                     >
                       ×
@@ -1087,7 +1087,7 @@ export default function TruckProfitabilityPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label="Remove classification filter"
-                      title="Remove classification filter"
+                      title="Clear classification"
                       onClick={() => setClassificationFilter("all")}
                     >
                       ×
@@ -1102,7 +1102,7 @@ export default function TruckProfitabilityPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label="Remove performance tier filter"
-                      title="Remove performance tier filter"
+                      title="Clear tier filter"
                       onClick={() => setPerformanceFilter("all")}
                     >
                       ×
@@ -1117,7 +1117,7 @@ export default function TruckProfitabilityPage() {
                       type="button"
                       className="filter-chip-remove"
                       aria-label="Reset sort to default"
-                      title="Reset truck sort order to default"
+                      title="Reset sort"
                       onClick={() => setOwnedTruckSort("netProfit")}
                     >
                       ×
@@ -1127,7 +1127,7 @@ export default function TruckProfitabilityPage() {
                 <button
                   type="button"
                   className="filter-chip-clear-all"
-                  title="Clear all active truck filters"
+                  title="Clear all filters"
                   onClick={handleResetFilters}
                 >
                   Clear all
@@ -1137,7 +1137,7 @@ export default function TruckProfitabilityPage() {
           </div>
 
           {loading || error ? null : filteredOwnedTrucks.length === 0 ? (
-            <div className="empty-state" title="No owned trucks match the current filter criteria">
+            <div className="empty-state" title="No matching trucks">
               <strong>No owned trucks match the selected filters</strong>
               <span>Try clearing filters or adjusting your search criteria.</span>
             </div>
@@ -1156,7 +1156,7 @@ export default function TruckProfitabilityPage() {
                     <Link
                       className="fleet-card-link"
                       href={`/truck-profitability/${truck.plateNumber}`}
-                      title={`View financial and trip details for truck ${truck.plateNumber}`}
+                      title={`View ${truck.plateNumber} details`}
                     >
                       <div className="truck-card-photo-wrap">
                         <TruckPhoto plateNumber={truck.plateNumber} />
@@ -1188,7 +1188,7 @@ export default function TruckProfitabilityPage() {
                             {truck.pendingEarnings > 0 ? (
                               <span
                                 className="truck-card-pending-revenue"
-                                title={`₱${truck.pendingEarnings.toLocaleString()} pending from incomplete delivery runs not yet included in finalized totals`}
+                                title={`${formatPeso(truck.pendingEarnings)} pending (unresolved expenses)`}
                                 style={{
                                   display: "block",
                                   fontSize: "11px",
@@ -1253,7 +1253,7 @@ export default function TruckProfitabilityPage() {
                     <td
                       colSpan={actor.role === "admin" ? 6 : 5}
                       style={{ textAlign: "center", padding: "24px", color: "var(--color-text-muted)" }}
-                      title="No subcontracted trucks registered in the fleet"
+                      title="No subcontracted trucks"
                     >
                       No subcontracted trucks registered yet.
                     </td>
@@ -1281,7 +1281,7 @@ export default function TruckProfitabilityPage() {
                             className="icon-only-action compact danger ui-tooltip"
                             aria-label={`Delete truck ${truck.plateNumber}`}
                             data-tooltip="Delete truck"
-                            title={`Delete truck ${truck.plateNumber}`}
+                            title={`Delete ${truck.plateNumber}`}
                             onClick={() => setTruckToDelete({ plateNumber: truck.plateNumber, truckType: truck.truckType })}
                           >
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1313,7 +1313,7 @@ export default function TruckProfitabilityPage() {
         <section className="records-card fleet-drivers-section" aria-label="Fleet crew" style={{ marginTop: "24px" }}>
           <div className="records-heading">
             <div>
-              <h2>Drivers &amp; Helpers</h2>
+              <h2>Crew</h2>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <input
@@ -1322,7 +1322,7 @@ export default function TruckProfitabilityPage() {
                 placeholder="Search crew members..."
                 value={crewSearch}
                 onChange={(e) => setCrewSearch(e.target.value)}
-                aria-label="Search drivers and helpers"
+                aria-label="Search crew members"
               />
 
               <div className="crew-role-filter-pills" role="tablist" aria-label="Filter crew by role">
@@ -1331,7 +1331,7 @@ export default function TruckProfitabilityPage() {
                   role="tab"
                   aria-selected={crewRoleFilter === "All"}
                   className={`crew-role-tab ${crewRoleFilter === "All" ? "active" : ""}`}
-                  title="Show all fleet crew members"
+                  title="All crew"
                   onClick={() => setCrewRoleFilter("All")}
                 >
                   All ({crew.length})
@@ -1341,7 +1341,7 @@ export default function TruckProfitabilityPage() {
                   role="tab"
                   aria-selected={crewRoleFilter === "Driver"}
                   className={`crew-role-tab ${crewRoleFilter === "Driver" ? "active" : ""}`}
-                  title="Show only drivers"
+                  title="Drivers only"
                   onClick={() => setCrewRoleFilter("Driver")}
                 >
                   Drivers ({driverCount})
@@ -1351,7 +1351,7 @@ export default function TruckProfitabilityPage() {
                   role="tab"
                   aria-selected={crewRoleFilter === "Helper"}
                   className={`crew-role-tab ${crewRoleFilter === "Helper" ? "active" : ""}`}
-                  title="Show only helpers"
+                  title="Helpers only"
                   onClick={() => setCrewRoleFilter("Helper")}
                 >
                   Helpers ({helperCount})
@@ -1363,8 +1363,8 @@ export default function TruckProfitabilityPage() {
                   type="button"
                   className="secondary-button ui-tooltip"
                   style={{ padding: "6px 12px", fontSize: "12px" }}
-                  data-tooltip="Add new driver or helper to the fleet roster"
-                  title="Add new driver or helper to the fleet roster"
+                  data-tooltip="Add crew member"
+                  title="Add crew member"
                   onClick={() => {
                     setCrewFormError(null);
                     setCrewFullName("");
@@ -1373,7 +1373,7 @@ export default function TruckProfitabilityPage() {
                     setIsAddCrewOpen(true);
                   }}
                 >
-                  + Add Driver / Helper
+                  + Add Crew Member
                 </button>
               )}
             </div>
@@ -2180,29 +2180,20 @@ export default function TruckProfitabilityPage() {
                   </div>
                 </div>
 
-                <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <footer className="routex-dialog-footer">
                   <button
                     type="button"
                     className="secondary-button"
                     disabled={isDeletingCrew}
                     onClick={() => setCrewToDelete(null)}
-                    style={{ minHeight: "38px", padding: "0 16px", fontSize: "13px" }}
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    className="primary-action-button"
+                    className="danger-confirm-button"
                     disabled={isDeletingCrew}
                     onClick={handleConfirmDeleteCrew}
-                    style={{
-                      minHeight: "38px",
-                      padding: "0 16px",
-                      fontSize: "13px",
-                      background: "#dc2626",
-                      borderColor: "#dc2626",
-                      color: "#ffffff",
-                    }}
                   >
                     {isDeletingCrew ? "Deleting..." : `Delete ${crewToDelete.assignmentType}`}
                   </button>

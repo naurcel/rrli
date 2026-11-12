@@ -265,16 +265,10 @@ export function ReportCustomizerModal({
 
           <button
             type="button"
+            className="routex-dialog-close"
             onClick={onClose}
             aria-label="Close dialog"
-            style={{
-              background: "transparent",
-              border: 0,
-              fontSize: "20px",
-              cursor: "pointer",
-              color: "var(--color-text-muted)",
-              padding: "4px 8px",
-            }}
+            title="Close dialog (Esc)"
           >
             ×
           </button>
