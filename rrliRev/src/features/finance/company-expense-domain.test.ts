@@ -198,5 +198,10 @@ describe("Company Expense Domain & Profitability Calculations", () => {
     assert.ok(financePageSrc.includes("sanitizePositiveDecimalInput"));
     assert.ok(editModalSrc.includes("sanitizePositiveDecimalInput"));
     assert.ok(editModalSrc.includes("routex-dialog finance-expense-dialog"));
+
+    // Only 3 summary cards (no redundant EXPENSE ENTRIES card) and vertical 3-dots row action menu
+    assert.ok(!financePageSrc.includes("EXPENSE ENTRIES"));
+    assert.ok(financePageSrc.includes("row-action-more-btn"));
+    assert.ok(financePageSrc.includes("row-action-menu"));
   });
 });

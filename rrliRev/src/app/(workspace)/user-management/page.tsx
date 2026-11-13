@@ -1043,11 +1043,12 @@ export default function UserManagementPage() {
                                   >
                                     {user.isActive ? "Deactivate User" : "Reactivate User"}
                                   </button>
+                                  <div className="row-action-menu-divider" role="separator" />
                                   <button
                                     type="button"
                                     role="menuitem"
+                                    className="row-action-menu-danger"
                                     disabled={isSelf}
-                                    style={{ color: isSelf ? undefined : "var(--color-danger, #dc2626)" }}
                                     onClick={() => {
                                       setOpenActionMenuUserId(null);
                                       setUserToDelete(user);

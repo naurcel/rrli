@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
@@ -11,9 +11,16 @@ import {
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
-import { TruckPhoto } from "@/components/truck-photo";
+import {
+  getTruckPhotoFromStorage,
+  saveTruckPhotoFile,
+  storageKey,
+  TRUCK_PHOTO_EVENT,
+  TruckPhoto,
+} from "@/components/truck-photo";
 import {
   getDeliveryIncompleteIssues,
   isDeliveryFinanciallyComplete,
@@ -25,14 +32,18 @@ import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-r
 import {
   getFleetTrucks,
   getTruckStorageCapability,
+  type FleetTruck,
+  type TruckStorageCapability,
 } from "@/features/deliveries/truck-registry";
 import {
+  BROWSER_PREVIEW_TRUCKS_CHANGED,
   deleteBrowserPreviewTruck,
   readBrowserPreviewTrucks,
+  updateBrowserPreviewTruck,
 } from "@/features/deliveries/browser-preview-trucks";
 import { upsertBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
-import { canManageDocuments } from "@/lib/auth/rbac";
+import { canManageDocuments, canManageTrucks } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
 export default function TruckProfilePage({
@@ -56,6 +67,31 @@ export default function TruckProfilePage({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [localTrucks, setLocalTrucks] = useState<FleetTruck[]>([]);
+  const canManage = canManageTrucks(actor.role);
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editPlateNumber, setEditPlateNumber] = useState("");
+  const [editTruckType, setEditTruckType] = useState<FleetTruck["truckType"]>("6-Wheeler");
+  const [editStorageCapability, setEditStorageCapability] = useState<TruckStorageCapability>("Refrigerated");
+  const [editOwnershipType, setEditOwnershipType] = useState<FleetTruck["ownershipType"]>("Owned");
+  const [editProvider, setEditProvider] = useState("");
+  const [editContactPerson, setEditContactPerson] = useState("");
+  const [editTruckPhotoFile, setEditTruckPhotoFile] = useState<File | null>(null);
+  const [editTruckPhotoPreview, setEditTruckPhotoPreview] = useState<string | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const syncLocal = () => setLocalTrucks(readBrowserPreviewTrucks());
+    syncLocal();
+    window.addEventListener(BROWSER_PREVIEW_TRUCKS_CHANGED, syncLocal);
+    window.addEventListener("storage", syncLocal);
+    return () => {
+      window.removeEventListener(BROWSER_PREVIEW_TRUCKS_CHANGED, syncLocal);
+      window.removeEventListener("storage", syncLocal);
+    };
+  }, []);
 
   const truckTrips = useMemo(
     () =>
@@ -96,14 +132,15 @@ export default function TruckProfilePage({
   );
 
   const registeredTruck = useMemo(() => {
-    const all = [...getFleetTrucks(), ...readBrowserPreviewTrucks()];
+    const all = [...localTrucks, ...getFleetTrucks()];
     return all.find((candidate) => candidate.plateNumber.toUpperCase() === normalizedPlate) ?? null;
-  }, [normalizedPlate]);
+  }, [normalizedPlate, localTrucks]);
 
   const activeTruck = useMemo(() => {
     if (truck) {
       return {
         ...truck,
+        truckType: registeredTruck?.truckType ?? truck.truckType,
         completedTrips: Math.max(truck.completedTrips, truckTrips.length),
         totalStoresServed: Math.max(truck.totalStoresServed, totalDropoffsCount),
       };
@@ -171,6 +208,106 @@ export default function TruckProfilePage({
     const start = (historyPage - 1) * HISTORY_PAGE_SIZE;
     return sortedTruckTrips.slice(start, start + HISTORY_PAGE_SIZE);
   }, [sortedTruckTrips, historyPage]);
+
+  function openEditModal() {
+    if (!activeTruck) return;
+    setEditError(null);
+    const resolvedCapability = getTruckStorageCapability(
+      activeTruck.plateNumber,
+      registeredTruck?.storageCapability,
+    );
+    const resolvedOwnership = registeredTruck?.ownershipType ?? "Owned";
+    setEditPlateNumber(activeTruck.plateNumber);
+    setEditTruckType(activeTruck.truckType);
+    setEditStorageCapability(resolvedCapability);
+    setEditOwnershipType(resolvedOwnership);
+    setEditProvider(registeredTruck?.provider ?? "");
+    setEditContactPerson(registeredTruck?.contactPerson ?? "");
+    setEditTruckPhotoFile(null);
+    setEditTruckPhotoPreview(getTruckPhotoFromStorage(activeTruck.plateNumber));
+    setIsEditModalOpen(true);
+  }
+
+  async function handleUpdateTruck(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeTruck) return;
+    setEditError(null);
+
+    const nextPlate = editPlateNumber.trim().toUpperCase();
+    if (!nextPlate) {
+      setEditError("Plate number is required.");
+      return;
+    }
+    if (editOwnershipType === "Subcontracted" && !editProvider.trim()) {
+      setEditError("Provider is required for subcontracted trucks.");
+      return;
+    }
+
+    setEditSubmitting(true);
+    try {
+      const browserLocal = readBrowserPreviewTrucks().some(
+        (t) => t.plateNumber.toUpperCase() === activeTruck.plateNumber.toUpperCase(),
+      );
+      const response = await fetch("/api/trucks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          originalPlateNumber: activeTruck.plateNumber,
+          plateNumber: nextPlate,
+          truckType: editTruckType,
+          storageCapability: editStorageCapability,
+          ownershipType: editOwnershipType,
+          provider: editOwnershipType === "Subcontracted" ? editProvider.trim() : null,
+          contactPerson: editOwnershipType === "Subcontracted" ? (editContactPerson.trim() || null) : null,
+          browserLocal,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+        truck?: FleetTruck;
+      } | null;
+
+      if (!response.ok || !payload?.ok || !payload.truck) {
+        setEditError(payload?.message ?? "Unable to update truck. Please verify input.");
+        return;
+      }
+
+      const updatedTruck: FleetTruck = {
+        ...payload.truck,
+        storageCapability: editStorageCapability,
+      };
+
+      updateBrowserPreviewTruck(activeTruck.plateNumber, updatedTruck);
+
+      const oldKey = storageKey(activeTruck.plateNumber);
+      const newKey = storageKey(updatedTruck.plateNumber);
+      if (oldKey !== newKey && !editTruckPhotoFile && typeof window !== "undefined") {
+        const existingPhoto = window.localStorage.getItem(oldKey);
+        if (existingPhoto) {
+          window.localStorage.setItem(newKey, existingPhoto);
+          window.dispatchEvent(new Event(TRUCK_PHOTO_EVENT));
+        }
+      }
+      if (editTruckPhotoFile) {
+        await saveTruckPhotoFile(updatedTruck.plateNumber, editTruckPhotoFile);
+      }
+
+      setLocalTrucks(readBrowserPreviewTrucks());
+      setIsEditModalOpen(false);
+
+      if (updatedTruck.ownershipType === "Subcontracted") {
+        router.push("/truck-profitability");
+      } else if (updatedTruck.plateNumber.toUpperCase() !== activeTruck.plateNumber.toUpperCase()) {
+        router.push(`/truck-profitability/${encodeURIComponent(updatedTruck.plateNumber)}`);
+      }
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update truck.");
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
 
   async function handleDeleteTruck() {
     if (!activeTruck) return;
@@ -259,19 +396,29 @@ export default function TruckProfilePage({
               </div>
 
               {actor.role === "admin" && (
-                <button
-                  type="button"
-                  className="secondary-button danger-action"
-                  title="Delete truck"
-                  onClick={() => setIsDeleteModalOpen(true)}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                    <line x1="10" y1="11" x2="10" y2="17" />
-                    <line x1="14" y1="11" x2="14" y2="17" />
-                  </svg>
-                  <span>Delete Truck</span>
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    title="Edit truck details"
+                    onClick={openEditModal}
+                  >
+                    <span>Edit Truck</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button danger-action"
+                    title="Delete truck"
+                    onClick={() => setIsDeleteModalOpen(true)}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                    <span>Delete Truck</span>
+                  </button>
+                </div>
               )}
             </header>
 
@@ -542,6 +689,219 @@ export default function TruckProfilePage({
             document.body
           )
         : null}
+
+      {isEditModalOpen && activeTruck && (
+        <div
+          className="routex-dialog-layer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-truck-profile-dialog-title"
+        >
+          <div
+            className="routex-dialog-backdrop"
+            onClick={() => !editSubmitting && setIsEditModalOpen(false)}
+          />
+          <div className="routex-dialog add-truck-dialog">
+            <header className="routex-dialog-header">
+              <div>
+                <h2 id="edit-truck-profile-dialog-title">Edit Truck</h2>
+              </div>
+              <button
+                type="button"
+                className="routex-dialog-close"
+                aria-label="Close dialog"
+                title="Close dialog (Esc)"
+                disabled={editSubmitting}
+                onClick={() => setIsEditModalOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+
+            <form onSubmit={handleUpdateTruck}>
+              <div className="routex-dialog-body add-truck-dialog-body">
+                {editError && (
+                  <div className="notice" role="alert" style={{ marginBottom: "0" }}>
+                    <span className="notice-icon" aria-hidden="true">!</span>
+                    <div>
+                      <strong>Validation Error:</strong>
+                      <span>{editError}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="routex-dialog-field">
+                    <label htmlFor="edit-profile-truck-plate" style={{ fontWeight: 600, fontSize: "12px" }}>
+                      Plate Number *
+                    </label>
+                    <input
+                      id="edit-profile-truck-plate"
+                      type="text"
+                      required
+                      placeholder="e.g. NBE 4892"
+                      value={editPlateNumber}
+                      onChange={(e) => setEditPlateNumber(e.target.value.toUpperCase())}
+                      style={{
+                        minHeight: "38px",
+                        height: "38px",
+                        padding: "0 12px",
+                        borderRadius: "9px",
+                        border: "1px solid var(--color-border)",
+                        background: "var(--glass-surface-strong)",
+                        fontFamily: "var(--font-mono, monospace)",
+                        fontWeight: 600,
+                        letterSpacing: "0.5px",
+                      }}
+                    />
+                  </div>
+
+                  <div className="routex-dialog-field">
+                    <label htmlFor="edit-profile-truck-ownership" style={{ fontWeight: 600, fontSize: "12px" }}>
+                      Fleet Ownership *
+                    </label>
+                    <RoundedSelect
+                      value={editOwnershipType}
+                      options={[
+                        { value: "Owned", label: "Owned" },
+                        { value: "Subcontracted", label: "Subcontracted" },
+                      ]}
+                      onChange={(value) => setEditOwnershipType(value as FleetTruck["ownershipType"])}
+                      ariaLabel="Select fleet ownership"
+                    />
+                  </div>
+                </div>
+
+                <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="routex-dialog-field">
+                    <label htmlFor="edit-profile-truck-type" style={{ fontWeight: 600, fontSize: "12px" }}>
+                      Vehicle Size *
+                    </label>
+                    <RoundedSelect
+                      value={editTruckType}
+                      options={["4-Wheeler", "6-Wheeler", "10-Wheeler"]}
+                      onChange={(value) => setEditTruckType(value as FleetTruck["truckType"])}
+                      ariaLabel="Select vehicle size"
+                    />
+                  </div>
+
+                  <div className="routex-dialog-field">
+                    <label htmlFor="edit-profile-truck-capability" style={{ fontWeight: 600, fontSize: "12px" }}>
+                      Classification *
+                    </label>
+                    <RoundedSelect
+                      value={editStorageCapability}
+                      options={[
+                        { value: "Refrigerated", label: "Cold" },
+                        { value: "Dry", label: "Dry" },
+                      ]}
+                      onChange={(value) => setEditStorageCapability(value as TruckStorageCapability)}
+                      ariaLabel="Select truck classification"
+                    />
+                  </div>
+                </div>
+
+                {editOwnershipType === "Subcontracted" && (
+                  <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div className="routex-dialog-field">
+                      <label htmlFor="edit-profile-truck-provider" style={{ fontWeight: 600, fontSize: "12px" }}>
+                        Hauler / Provider *
+                      </label>
+                      <input
+                        id="edit-profile-truck-provider"
+                        type="text"
+                        required
+                        placeholder="e.g. Northline Hauling"
+                        value={editProvider}
+                        onChange={(e) => setEditProvider(e.target.value)}
+                        style={{
+                          minHeight: "38px",
+                          height: "38px",
+                          padding: "0 12px",
+                          borderRadius: "9px",
+                          border: "1px solid var(--color-border)",
+                          background: "var(--glass-surface-strong)",
+                        }}
+                      />
+                    </div>
+
+                    <div className="routex-dialog-field">
+                      <label htmlFor="edit-profile-truck-contact" style={{ fontWeight: 600, fontSize: "12px" }}>
+                        Contact Person
+                      </label>
+                      <input
+                        id="edit-profile-truck-contact"
+                        type="text"
+                        placeholder="e.g. Adrian Cruz"
+                        value={editContactPerson}
+                        onChange={(e) => setEditContactPerson(e.target.value)}
+                        style={{
+                          minHeight: "38px",
+                          height: "38px",
+                          padding: "0 12px",
+                          borderRadius: "9px",
+                          border: "1px solid var(--color-border)",
+                          background: "var(--glass-surface-strong)",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="truck-create-photo-field">
+                  <div className="truck-create-photo-preview">
+                    {editTruckPhotoPreview ? <img src={editTruckPhotoPreview} alt="Selected truck preview" /> : <span>No photo</span>}
+                  </div>
+                  <div className="routex-dialog-field">
+                    <label htmlFor="edit-profile-truck-photo" style={{ fontWeight: 600, fontSize: "12px" }}>
+                      Truck Picture (Optional)
+                    </label>
+                    <input
+                      id="edit-profile-truck-photo"
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        if (!file) return;
+                        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+                          setEditError("Choose an image file smaller than 10 MB.");
+                          event.target.value = "";
+                          return;
+                        }
+                        setEditError(null);
+                        setEditTruckPhotoFile(file);
+                        const reader = new FileReader();
+                        reader.onload = () => setEditTruckPhotoPreview(String(reader.result));
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <footer className="routex-dialog-footer">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={editSubmitting}
+                  title="Cancel editing truck and close dialog"
+                  onClick={() => setIsEditModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={editSubmitting}
+                  title="Save truck changes"
+                >
+                  {editSubmitting ? "Saving Changes..." : "Save Changes"}
+                </button>
+              </footer>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

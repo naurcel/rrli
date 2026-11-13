@@ -11,6 +11,7 @@ import {
   getSubcontractedTrucks,
   registerFleetTruck,
   resetDynamicFleetTrucks,
+  updateFleetTruck,
   type FleetTruck,
 } from "./truck-registry.ts";
 import {
@@ -114,4 +115,65 @@ test("mergeRegisteredTrucks correctly combines base trucks without duplicate pla
   assert.equal(merged.length, baseTrucks.length);
   assert.equal(merged[0]?.plateNumber, "NGS 4281");
 });
+
+test("updateFleetTruck updates both owned and subcontracted trucks and prevents duplicate plates", () => {
+  resetDynamicFleetTrucks();
+
+  // 1. Update a base Owned truck (NGS 4281)
+  const ownedUpdate = updateFleetTruck("NGS 4281", {
+    plateNumber: "NGS 4281",
+    truckType: "10-Wheeler",
+    storageCapability: "Dry",
+    ownershipType: "Owned",
+    provider: null,
+    contactPerson: null,
+  });
+  assert.equal(ownedUpdate.ok, true);
+  if (ownedUpdate.ok) {
+    assert.equal(ownedUpdate.truck.truckType, "10-Wheeler");
+    assert.equal(ownedUpdate.truck.storageCapability, "Dry");
+  }
+  const updatedOwned = getOwnedTrucks().find((t) => t.plateNumber === "NGS 4281");
+  assert.ok(updatedOwned);
+  assert.equal(updatedOwned.truckType, "10-Wheeler");
+  assert.equal(updatedOwned.storageCapability, "Dry");
+
+  // 2. Update a base Subcontracted truck (KLM 4821) including plate rename
+  const subUpdate = updateFleetTruck("KLM 4821", {
+    plateNumber: "KLM 9999",
+    truckType: "6-Wheeler",
+    storageCapability: "Refrigerated",
+    ownershipType: "Subcontracted",
+    provider: "Updated Northline Hauling",
+    contactPerson: "Updated Adrian Cruz",
+  });
+  assert.equal(subUpdate.ok, true);
+  assert.equal(
+    getSubcontractedTrucks().some((t) => t.plateNumber === "KLM 4821"),
+    false,
+    "Old plate must be replaced",
+  );
+  const updatedSub = getSubcontractedTrucks().find((t) => t.plateNumber === "KLM 9999");
+  assert.ok(updatedSub);
+  assert.equal(updatedSub.truckType, "6-Wheeler");
+  assert.equal(updatedSub.provider, "Updated Northline Hauling");
+  assert.equal(updatedSub.contactPerson, "Updated Adrian Cruz");
+
+  // 3. Reject duplicate plate number against another existing truck
+  const duplicateUpdate = updateFleetTruck("KLM 9999", {
+    plateNumber: "DAA 7310",
+    truckType: "6-Wheeler",
+    storageCapability: "Refrigerated",
+    ownershipType: "Subcontracted",
+    provider: "Updated Northline Hauling",
+    contactPerson: "Updated Adrian Cruz",
+  });
+  assert.equal(duplicateUpdate.ok, false);
+  if (!duplicateUpdate.ok) {
+    assert.equal(duplicateUpdate.code, "DUPLICATE_PLATE");
+  }
+
+  resetDynamicFleetTrucks();
+});
+
 

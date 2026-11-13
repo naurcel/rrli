@@ -66,11 +66,31 @@ export default function FinancePage() {
   const [page, setPage] = useState(1);
 
   // Edit & Delete dialog states
+  const [openActionExpenseId, setOpenActionExpenseId] = useState<string | null>(null);
+  const [actionMenuOpensAbove, setActionMenuOpensAbove] = useState(false);
   const [editingExpense, setEditingExpense] = useState<CompanyExpense | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingExpense, setDeletingExpense] = useState<CompanyExpense | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openActionExpenseId) return;
+    function handleClickOutside() {
+      setOpenActionExpenseId(null);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpenActionExpenseId(null);
+      }
+    }
+    document.addEventListener("click", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openActionExpenseId]);
 
   // Fetch or sync company expenses
   const loadExpenses = useCallback(async () => {
@@ -467,14 +487,6 @@ export default function FinancePage() {
 
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">EXPENSE ENTRIES</span>
-            </div>
-            <strong>{expenseMetrics.count}</strong>
-            <span className="stat-meta">Recorded entries</span>
-          </article>
-
-          <article className="stat-card">
-            <div className="stat-card-header">
               <span className="stat-label">AVERAGE EXPENSE</span>
             </div>
             <strong>{formatPeso(expenseMetrics.average)}</strong>
@@ -660,13 +672,21 @@ export default function FinancePage() {
                       className="money"
                     />
                     {canManage ? (
-                      <th className="finance-actions-col">Actions</th>
+                      <th style={{ width: "48px", textAlign: "right" }}>
+                        <span className="sr-only">Actions</span>
+                      </th>
                     ) : null}
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedExpenses.map((exp) => (
-                    <tr key={exp.id}>
+                  {paginatedExpenses.map((exp, expIndex) => (
+                    <tr
+                      key={exp.id}
+                      style={{
+                        position: "relative",
+                        zIndex: openActionExpenseId === exp.id ? 150 : undefined,
+                      }}
+                    >
                       <td className="cell-date">{exp.expenseDate}</td>
                       <td>
                         <strong>
@@ -679,27 +699,79 @@ export default function FinancePage() {
                         <strong>{formatPeso(exp.amount)}</strong>
                       </td>
                       {canManage ? (
-                        <td className="finance-actions-cell">
-                          <div className="finance-row-actions">
+                        <td style={{ textAlign: "right" }}>
+                          <div
+                            className="table-row-actions"
+                            style={{ position: "relative", display: "inline-block" }}
+                          >
                             <button
                               type="button"
-                              className="secondary-button finance-action-btn"
-                              onClick={() => setEditingExpense(exp)}
-                              title="Edit company expense"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-button finance-action-btn danger"
-                              onClick={() => {
-                                setDeleteError(null);
-                                setDeletingExpense(exp);
+                              className="row-action-more-btn"
+                              aria-label={`More actions for ${exp.description || "Total Company Expenses"}`}
+                              title="More actions"
+                              aria-haspopup="menu"
+                              aria-expanded={openActionExpenseId === exp.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const spaceBelow = window.innerHeight - rect.bottom;
+                                const isNearBottom =
+                                  spaceBelow < 200 ||
+                                  expIndex >= paginatedExpenses.length - 2;
+                                setActionMenuOpensAbove(isNearBottom);
+                                setOpenActionExpenseId((curr) =>
+                                  curr === exp.id ? null : exp.id,
+                                );
                               }}
-                              title="Delete company expense"
                             >
-                              Delete
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 16 16"
+                                fill="currentColor"
+                                aria-hidden="true"
+                              >
+                                <circle cx="8" cy="3" r="1.5" />
+                                <circle cx="8" cy="8" r="1.5" />
+                                <circle cx="8" cy="13" r="1.5" />
+                              </svg>
                             </button>
+
+                            {openActionExpenseId === exp.id ? (
+                              <div
+                                className={`row-action-menu${actionMenuOpensAbove ? " opens-above" : ""}`}
+                                role="menu"
+                                aria-label={`Actions for ${exp.description || "Total Company Expenses"}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setOpenActionExpenseId(null);
+                                    setEditingExpense(exp);
+                                  }}
+                                >
+                                  Edit Expense
+                                </button>
+                                <div
+                                  className="row-action-menu-divider"
+                                  role="separator"
+                                />
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-action-menu-danger"
+                                  onClick={() => {
+                                    setOpenActionExpenseId(null);
+                                    setDeleteError(null);
+                                    setDeletingExpense(exp);
+                                  }}
+                                >
+                                  Delete Expense
+                                </button>
+                              </div>
+                            ) : null}
                           </div>
                         </td>
                       ) : null}

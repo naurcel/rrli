@@ -98,23 +98,30 @@ export const dynamicFleetTrucks: FleetTruck[] = [];
 export const deletedTruckPlateNumbers = new Set<string>();
 
 export function getFleetTrucks(): readonly FleetTruck[] {
-  return [...FLEET_TRUCKS, ...dynamicFleetTrucks].filter(
-    (t) => !deletedTruckPlateNumbers.has(t.plateNumber.toUpperCase()),
-  );
+  const byIdOrPlate = new Map<string, FleetTruck>();
+  for (const truck of FLEET_TRUCKS) {
+    if (deletedTruckPlateNumbers.has(truck.plateNumber.toUpperCase())) continue;
+    byIdOrPlate.set(truck.id, truck);
+  }
+  for (const truck of dynamicFleetTrucks) {
+    if (deletedTruckPlateNumbers.has(truck.plateNumber.toUpperCase())) continue;
+    // Remove any existing entry with the same plate number if ID differs
+    for (const [key, existing] of byIdOrPlate.entries()) {
+      if (existing.plateNumber.toUpperCase() === truck.plateNumber.toUpperCase()) {
+        byIdOrPlate.delete(key);
+      }
+    }
+    byIdOrPlate.set(truck.id, truck);
+  }
+  return [...byIdOrPlate.values()];
 }
 
 export function getOwnedTrucks(): readonly FleetTruck[] {
-  return [
-    ...OWNED_TRUCKS,
-    ...dynamicFleetTrucks.filter((truck) => truck.ownershipType === "Owned"),
-  ].filter((t) => !deletedTruckPlateNumbers.has(t.plateNumber.toUpperCase()));
+  return getFleetTrucks().filter((truck) => truck.ownershipType === "Owned");
 }
 
 export function getSubcontractedTrucks(): readonly FleetTruck[] {
-  return [
-    ...SUBCONTRACTED_TRUCKS,
-    ...dynamicFleetTrucks.filter((truck) => truck.ownershipType === "Subcontracted"),
-  ].filter((t) => !deletedTruckPlateNumbers.has(t.plateNumber.toUpperCase()));
+  return getFleetTrucks().filter((truck) => truck.ownershipType === "Subcontracted");
 }
 
 export function registerFleetTruck(truck: FleetTruck): { ok: true; truck: FleetTruck } | { ok: false; error: string } {
@@ -137,6 +144,81 @@ export function registerFleetTruck(truck: FleetTruck): { ok: true; truck: FleetT
   dynamicFleetTrucks.push(registered);
   deletedTruckPlateNumbers.delete(normalizedPlate);
   return { ok: true, truck: registered };
+}
+
+export function updateFleetTruck(
+  originalIdentifier: string,
+  updates: {
+    plateNumber: string;
+    truckType: TruckType;
+    storageCapability?: TruckStorageCapability;
+    ownershipType: TruckOwnership;
+    rateBasis?: DeliveryRateBasis;
+    provider?: string | null;
+    contactPerson?: string | null;
+  },
+):
+  | { ok: true; truck: FleetTruck }
+  | { ok: false; code: "NOT_FOUND" | "DUPLICATE_PLATE" | "VALIDATION_ERROR"; error: string } {
+  const normalizedOriginal = originalIdentifier.trim().toUpperCase();
+  const currentFleet = getFleetTrucks();
+  const target = currentFleet.find(
+    (t) => t.id === originalIdentifier || t.plateNumber.toUpperCase() === normalizedOriginal,
+  );
+  if (!target) {
+    return { ok: false, code: "NOT_FOUND", error: "Truck not found." };
+  }
+
+  const normalizedNextPlate = updates.plateNumber.trim().toUpperCase();
+  if (!normalizedNextPlate) {
+    return { ok: false, code: "VALIDATION_ERROR", error: "Plate number is required." };
+  }
+
+  const duplicate = currentFleet.some(
+    (t) =>
+      t.id !== target.id &&
+      t.plateNumber.toUpperCase() !== target.plateNumber.toUpperCase() &&
+      t.plateNumber.toUpperCase() === normalizedNextPlate,
+  );
+  if (duplicate) {
+    return {
+      ok: false,
+      code: "DUPLICATE_PLATE",
+      error: `Truck with plate number "${normalizedNextPlate}" already exists.`,
+    };
+  }
+
+  const oldPlateUpper = target.plateNumber.toUpperCase();
+  if (oldPlateUpper !== normalizedNextPlate) {
+    deletedTruckPlateNumbers.add(oldPlateUpper);
+  }
+  deletedTruckPlateNumbers.delete(normalizedNextPlate);
+
+  const rateBasis =
+    updates.rateBasis ??
+    (updates.ownershipType === "Owned" ? "Redeemed Rate" : "Trucker Rate");
+
+  const updatedTruck: FleetTruck = {
+    ...target,
+    plateNumber: normalizedNextPlate,
+    truckType: updates.truckType,
+    storageCapability: updates.storageCapability ?? target.storageCapability,
+    ownershipType: updates.ownershipType,
+    rateBasis,
+    provider: updates.ownershipType === "Subcontracted" ? (updates.provider?.trim() || null) : null,
+    contactPerson: updates.ownershipType === "Subcontracted" ? (updates.contactPerson?.trim() || null) : null,
+  };
+
+  const dynIndex = dynamicFleetTrucks.findIndex(
+    (t) => t.id === target.id || t.plateNumber.toUpperCase() === oldPlateUpper,
+  );
+  if (dynIndex >= 0) {
+    dynamicFleetTrucks[dynIndex] = updatedTruck;
+  } else {
+    dynamicFleetTrucks.push(updatedTruck);
+  }
+
+  return { ok: true, truck: updatedTruck };
 }
 
 export function deleteFleetTruck(identifier: string): { ok: true } | { ok: false; error: string } {

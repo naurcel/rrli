@@ -42,9 +42,40 @@ export function upsertBrowserPreviewTruck(truck: FleetTruck): void {
   const current = readBrowserPreviewTrucks();
   const updated = [
     { ...truck, plateNumber: normalized },
-    ...current.filter((candidate) => candidate.plateNumber.toUpperCase() !== normalized),
+    ...current.filter(
+      (candidate) =>
+        candidate.plateNumber.toUpperCase() !== normalized &&
+        candidate.id !== truck.id,
+    ),
   ];
   window.localStorage.setItem(BROWSER_PREVIEW_TRUCKS_KEY, JSON.stringify(updated));
+  window.dispatchEvent(new Event(BROWSER_PREVIEW_TRUCKS_CHANGED));
+}
+
+export function updateBrowserPreviewTruck(originalPlateNumber: string, truck: FleetTruck): void {
+  if (typeof window === "undefined") return;
+  const origNorm = originalPlateNumber.trim().toUpperCase();
+  const nextNorm = truck.plateNumber.trim().toUpperCase();
+  const current = readBrowserPreviewTrucks();
+  const updated = [
+    { ...truck, plateNumber: nextNorm },
+    ...current.filter(
+      (candidate) =>
+        candidate.plateNumber.toUpperCase() !== origNorm &&
+        candidate.plateNumber.toUpperCase() !== nextNorm &&
+        candidate.id !== truck.id,
+    ),
+  ];
+  window.localStorage.setItem(BROWSER_PREVIEW_TRUCKS_KEY, JSON.stringify(updated));
+
+  const deleted = readBrowserDeletedTrucks().map((p) => p.toUpperCase());
+  const nextDeleted = new Set(deleted);
+  if (origNorm !== nextNorm) {
+    nextDeleted.add(origNorm);
+  }
+  nextDeleted.delete(nextNorm);
+  window.localStorage.setItem(BROWSER_DELETED_TRUCKS_KEY, JSON.stringify([...nextDeleted]));
+
   window.dispatchEvent(new Event(BROWSER_PREVIEW_TRUCKS_CHANGED));
 }
 
@@ -89,10 +120,19 @@ export function mergeRegisteredTrucks(baseTrucks: readonly FleetTruck[]): FleetT
   const activeBase = baseTrucks.filter((truck) => !deleted.has(truck.plateNumber.toUpperCase()));
   if (local.length === 0) return activeBase;
 
-  const seen = new Set(activeBase.map((truck) => truck.plateNumber.toUpperCase()));
-  const extra = local.filter(
-    (truck) => !seen.has(truck.plateNumber.toUpperCase()) && !deleted.has(truck.plateNumber.toUpperCase()),
-  );
-  return [...activeBase, ...extra];
+  const byKey = new Map<string, FleetTruck>();
+  for (const truck of activeBase) {
+    byKey.set(truck.plateNumber.toUpperCase(), truck);
+  }
+  for (const truck of local) {
+    if (deleted.has(truck.plateNumber.toUpperCase())) continue;
+    for (const [key, existing] of byKey.entries()) {
+      if (existing.id === truck.id) {
+        byKey.delete(key);
+      }
+    }
+    byKey.set(truck.plateNumber.toUpperCase(), truck);
+  }
+  return [...byKey.values()];
 }
 
