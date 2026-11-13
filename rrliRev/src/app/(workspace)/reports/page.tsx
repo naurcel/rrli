@@ -7,6 +7,7 @@ import {
   addDays,
   formatDateRange,
   formatShortDate,
+  GlobalDateRangePicker,
   parseDateValue,
   toDateKey,
   useGlobalDateRange,
@@ -731,7 +732,10 @@ export default function ReportsPage() {
 
   return (
     <>
-      <OperationalTopbar contextLabel="Delivery Operations & Truck Reports" />
+      <OperationalTopbar
+        contextLabel="Delivery Operations & Truck Reports"
+        showDateFilter={false}
+      />
 
       <div className="content-wrap report-page">
         <header className="page-intro report-intro">
@@ -860,30 +864,34 @@ export default function ReportsPage() {
               ))}
             </div>
 
-            {/* Custom Saved Formats Selector */}
-            {customTemplates.length > 0 && (
-              <div className="report-custom-selector">
-                <label htmlFor="custom-format-dropdown">
-                  Custom Formats:
-                </label>
-                <select
-                  id="custom-format-dropdown"
-                  value={activeTemplate.isDefault ? "" : activeTemplate.id}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      setActiveTemplateId(e.target.value);
-                    }
-                  }}
-                >
-                  <option value="">— Select Saved Layout ({customTemplates.length}) —</option>
-                  {customTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div className="report-tabs-bar-controls">
+              {/* Custom Saved Formats Selector */}
+              {customTemplates.length > 0 && (
+                <div className="report-custom-selector">
+                  <label htmlFor="custom-format-dropdown">
+                    Custom Formats:
+                  </label>
+                  <select
+                    id="custom-format-dropdown"
+                    value={activeTemplate.isDefault ? "" : activeTemplate.id}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setActiveTemplateId(e.target.value);
+                      }
+                    }}
+                  >
+                    <option value="">— Select Saved Layout ({customTemplates.length}) —</option>
+                    {customTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <GlobalDateRangePicker />
+            </div>
           </div>
 
           {/* Daily Trip Fixed-Day Date Navigation Controls */}
@@ -945,7 +953,7 @@ export default function ReportsPage() {
                 </button>
               </div>
               <span className="daily-trip-notice">
-                Fixed to {formatShortDate(parseDateValue(dailyDate))} · Ignores global date filter
+                Fixed to {formatShortDate(parseDateValue(dailyDate))} (Single-day report)
               </span>
             </div>
           )}
@@ -1231,14 +1239,8 @@ export default function ReportsPage() {
                                   <span
                                     className={`report-status-badge ${isPositive ? "status-positive" : "status-neutral"}`}
                                     style={{
-                                      display: "inline-block",
-                                      padding: "2px 8px",
-                                      borderRadius: "12px",
-                                      fontSize: "10px",
-                                      fontWeight: 700,
-                                      backgroundColor: isPositive
-                                        ? "rgba(16, 185, 129, 0.15)"
-                                        : "rgba(107, 114, 128, 0.15)",
+                                      fontSize: "11px",
+                                      fontWeight: 600,
                                       color: isPositive ? "#059669" : "var(--color-text-muted)",
                                     }}
                                   >

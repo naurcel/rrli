@@ -175,11 +175,15 @@ export function presetRange(
   referenceDate?: Date,
 ): DateRange {
   const today = referenceDate ? startOfDay(referenceDate) : startOfDay(getNowInManila());
-  if (preset === "all") return { startDate: null, endDate: null };
-  if (preset === "today") return { startDate: today, endDate: today };
+  if (preset === "all") return { startDate: null, endDate: null, preset: "all" };
+  if (preset === "today") return { startDate: today, endDate: today, preset: "today" };
   let start: Date;
+  let end: Date = today;
   if (preset === "week") {
-    start = addDays(today, -today.getDay());
+    const dayOfWeek = today.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    start = addDays(today, diffToMonday);
+    end = addDays(start, 6);
   } else if (preset === "month") {
     start = new Date(today.getFullYear(), today.getMonth(), 1);
   } else if (preset === "year") {
@@ -192,5 +196,5 @@ export function presetRange(
   if (start.getTime() < minAllowed.getTime()) {
     start = minAllowed;
   }
-  return { startDate: start, endDate: today };
+  return { startDate: start, endDate: end, preset };
 }

@@ -95,10 +95,10 @@ export function DeliveryDropoffTimeline({
                     stop.entryFeeStatus === "not_applicable"
                       ? "Not applicable: No entry fee charged for this store location"
                       : stop.entryFeeStatus === "unknown"
-                      ? "Pending confirmation: Entry fee amount requires confirmation"
+                      ? "Entry fee amount not yet recorded"
                       : stop.entryFee === 0 || stop.entryFee == null
                       ? "No entry fee incurred at this store"
-                      : `Confirmed entry fee: ₱${Number(stop.entryFee).toLocaleString("en-PH")}`
+                      : `Entry fee: ₱${Number(stop.entryFee).toLocaleString("en-PH")}`
                   }
                 >
                   {entryFee}

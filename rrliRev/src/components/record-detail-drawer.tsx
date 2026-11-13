@@ -118,7 +118,7 @@ export function RecordDetailDrawer({
             {statusLabel ? (
               <span
                 className={`detail-status ${statusTone}`}
-                title={statusLabel === "Incomplete" ? "Trip financials contain unconfirmed expenses requiring resolution" : "Delivery completed and verified"}
+                title={statusLabel === "Incomplete" ? "Trip financials contain incomplete expenses" : "Delivery completed"}
               >
                 {statusLabel}
               </span>

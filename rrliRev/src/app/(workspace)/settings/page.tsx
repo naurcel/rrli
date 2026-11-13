@@ -755,7 +755,7 @@ export default function SettingsPage() {
                       <tr key={roleKey} className={isCurrentRole ? "settings-current-role-row" : undefined}>
                         <td>
                           <strong>{meta.label}</strong>
-                          {isCurrentRole ? <span className="settings-current-role-tag">Your Role</span> : null}
+                          {isCurrentRole ? <span className="settings-current-role-tag">(Your Role)</span> : null}
                         </td>
                         <td>
                           <span className={`access-pill ${meta.accessLevel}`}>

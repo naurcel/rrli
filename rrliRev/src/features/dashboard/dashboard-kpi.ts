@@ -341,41 +341,72 @@ export function buildFinancialTimeSeries(
       step++;
     }
     const preset = range.preset;
-    if (preset === "week" || preset === "today") {
+    if (preset === "today") {
       return days.map((point) => ({ ...point, granularity: "day" }));
     }
 
-    const aggregateSequentialBuckets = (
-      bucketDays: number,
-      granularity: "week" | "custom",
-    ) => {
-      const buckets: FinancialTimeSeriesPoint[] = [];
-      for (let index = 0; index < days.length; index += bucketDays) {
-        const bucketPoints = days.slice(index, index + bucketDays);
-        const bucketStart = addCalendarDays(new Date(range.startDate!), index);
-        const bucketEnd = addCalendarDays(bucketStart, bucketPoints.length - 1);
-        buckets.push(sumPoints(bucketPoints, bucketStart, granularity, shortRangeLabel(bucketStart, bucketEnd)));
-      }
-      return buckets;
-    };
+    if (preset === "week") {
+      const startDay = range.startDate.getDay();
+      const endDay = end.getDay();
+      const monday =
+        startDay === 1
+          ? new Date(range.startDate)
+          : addCalendarDays(end, endDay === 0 ? -6 : 1 - endDay);
+      monday.setHours(0, 0, 0, 0);
+
+      return Array.from({ length: 7 }, (_, index) => {
+        const dayDate = addCalendarDays(monday, index);
+        const point = makePoint(dateKey(dayDate));
+        const label = dayDate.toLocaleDateString("en-US", { weekday: "short" });
+        return {
+          ...point,
+          label,
+          granularity: "day",
+        };
+      });
+    }
 
     if (preset === "month") {
-      return aggregateSequentialBuckets(7, "week");
+      const monthStart = new Date(range.startDate.getFullYear(), range.startDate.getMonth(), 1);
+      const monthLastDay = new Date(
+        range.startDate.getFullYear(),
+        range.startDate.getMonth() + 1,
+        0,
+      );
+      const effectiveEnd = end > monthLastDay ? end : monthLastDay;
+      const monthDays: FinancialTimeSeriesPoint[] = [];
+      const monthCursor = new Date(monthStart);
+      while (monthCursor <= effectiveEnd) {
+        monthDays.push(makePoint(dateKey(monthCursor)));
+        monthCursor.setDate(monthCursor.getDate() + 1);
+      }
+
+      const buckets: FinancialTimeSeriesPoint[] = [];
+      for (let index = 0; index < monthDays.length; index += 7) {
+        const bucketPoints = monthDays.slice(index, index + 7);
+        const bucketStart = addCalendarDays(monthStart, index);
+        const bucketEnd = addCalendarDays(bucketStart, bucketPoints.length - 1);
+        buckets.push(
+          sumPoints(bucketPoints, bucketStart, "week", shortRangeLabel(bucketStart, bucketEnd)),
+        );
+      }
+      return buckets;
     }
 
     if (preset === "year") {
+      const year = range.startDate.getFullYear();
       const buckets: FinancialTimeSeriesPoint[] = [];
-      let monthStart = new Date(range.startDate.getFullYear(), range.startDate.getMonth(), 1);
-      while (monthStart <= end) {
-        const nextMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
-        const bucketStart = monthStart < range.startDate ? new Date(range.startDate) : monthStart;
-        const monthEnd = addCalendarDays(nextMonth, -1);
-        const bucketEnd = monthEnd > end ? end : monthEnd;
-        const offset = Math.round((bucketStart.getTime() - range.startDate.getTime()) / 86_400_000);
-        const length = Math.round((bucketEnd.getTime() - bucketStart.getTime()) / 86_400_000) + 1;
+      for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+        const monthStart = new Date(year, monthIndex, 1);
+        const monthEnd = new Date(year, monthIndex + 1, 0);
+        const monthPoints: FinancialTimeSeriesPoint[] = [];
+        const monthCursor = new Date(monthStart);
+        while (monthCursor <= monthEnd) {
+          monthPoints.push(makePoint(dateKey(monthCursor)));
+          monthCursor.setDate(monthCursor.getDate() + 1);
+        }
         const label = monthStart.toLocaleDateString("en-US", { month: "short" });
-        buckets.push(sumPoints(days.slice(offset, offset + length), bucketStart, "month", label));
-        monthStart = nextMonth;
+        buckets.push(sumPoints(monthPoints, monthStart, "month", label));
       }
       return buckets;
     }

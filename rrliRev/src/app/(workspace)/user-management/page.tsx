@@ -926,68 +926,32 @@ export default function UserManagementPage() {
                             {isRecoveryActive ? (
                               <span
                                 style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "6px",
                                   fontSize: "12px",
                                   color: "#b45309",
                                   fontWeight: 500,
                                 }}
                                 title={`Reset authorized until ${new Date(user.recoveryExpiresAt!).toLocaleTimeString()}`}
                               >
-                                <span
-                                  style={{
-                                    width: "6px",
-                                    height: "6px",
-                                    borderRadius: "50%",
-                                    background: "#d97706",
-                                    flexShrink: 0,
-                                  }}
-                                />
                                 Reset Authorized (24h)
                               </span>
                             ) : user.mustChangePassword ? (
                               <span
                                 style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "6px",
                                   fontSize: "12px",
                                   color: "#2563eb",
                                   fontWeight: 500,
                                 }}
                               >
-                                <span
-                                  style={{
-                                    width: "6px",
-                                    height: "6px",
-                                    borderRadius: "50%",
-                                    background: "#3b82f6",
-                                    flexShrink: 0,
-                                  }}
-                                />
                                 Initial Setup Pending
                               </span>
                             ) : (
                               <span
                                 style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "6px",
                                   fontSize: "12px",
                                   color: "#059669",
                                   fontWeight: 500,
                                 }}
                               >
-                                <span
-                                  style={{
-                                    width: "6px",
-                                    height: "6px",
-                                    borderRadius: "50%",
-                                    background: "#10b981",
-                                    flexShrink: 0,
-                                  }}
-                                />
                                 Setup Complete
                               </span>
                             )}
@@ -995,23 +959,11 @@ export default function UserManagementPage() {
                           <td>
                             <span
                               style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
                                 fontSize: "12px",
                                 color: user.isActive ? "#059669" : "var(--color-text-muted)",
                                 fontWeight: 500,
                               }}
                             >
-                              <span
-                                style={{
-                                  width: "6px",
-                                  height: "6px",
-                                  borderRadius: "50%",
-                                  background: user.isActive ? "#10b981" : "#9ca3af",
-                                  flexShrink: 0,
-                                }}
-                              />
                               {user.isActive ? "Active" : "Deactivated"}
                             </span>
                           </td>
@@ -1305,7 +1257,6 @@ export default function UserManagementPage() {
                             </td>
                             <td>
                               <span className={`pod-status ${actionBadgeClass(entry.action)}`}>
-                                <i aria-hidden="true" />
                                 {entry.action.replaceAll(".", " ")}
                               </span>
                             </td>

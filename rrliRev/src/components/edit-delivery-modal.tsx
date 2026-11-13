@@ -20,6 +20,11 @@ import {
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
 import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
+import {
+  handlePositiveDecimalKeyDown,
+  sanitizePersonNameInput,
+  sanitizePositiveDecimalInput,
+} from "@/features/deliveries/delivery-input-utils";
 import { formatPeso } from "@/lib/format";
 
 type CorrectionDropoffDraft = {
@@ -125,41 +130,6 @@ export function EditDeliveryModal({
 
   function handleClose() {
     if (submitting) return;
-    const initialExpenses = {
-      dieselExpenses: delivery?.expenses.dieselExpenses != null ? String(delivery.expenses.dieselExpenses) : "",
-      tollGateExpenses: delivery?.expenses.tollGateExpenses != null ? String(delivery.expenses.tollGateExpenses) : "",
-      driverAllowance: delivery?.expenses.driverAllowance != null ? String(delivery.expenses.driverAllowance) : "",
-      driverDailyRate: delivery?.expenses.driverDailyRate != null ? String(delivery.expenses.driverDailyRate) : "",
-      helperAllowance: delivery?.expenses.helperAllowance != null ? String(delivery.expenses.helperAllowance) : "",
-      helperDailyRate: delivery?.expenses.helperDailyRate != null ? String(delivery.expenses.helperDailyRate) : "",
-      otherExpenses: delivery?.expenses.otherExpenses != null ? String(delivery.expenses.otherExpenses) : "",
-    };
-    const initialDropoffs = (delivery?.dropoffs ?? []).map((d) => ({
-      storeName: d.storeName,
-      destinationArea: d.destinationArea,
-      entryFee: d.entryFee != null ? String(d.entryFee) : "",
-      entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
-    }));
-    const currentDropoffsClean = dropoffs.map((d) => ({
-      storeName: d.storeName,
-      destinationArea: d.destinationArea,
-      entryFee: d.entryFee,
-      entryFeeStatus: d.entryFeeStatus,
-    }));
-    const dirty =
-      reason.trim().length > 0 ||
-      rate !== (delivery?.deliveryRate != null ? String(delivery.deliveryRate) : "") ||
-      driverName !== (delivery?.driverName ?? "") ||
-      helperName !== (delivery?.helperName ?? "") ||
-      supportingFiles.length > 0 ||
-      JSON.stringify(existingDocs) !== JSON.stringify(delivery?.supportingDocuments ?? []) ||
-      JSON.stringify(expenses) !== JSON.stringify(initialExpenses) ||
-      JSON.stringify(initialDropoffs) !== JSON.stringify(currentDropoffsClean) ||
-      Object.entries(statuses).some(
-        ([key, value]) =>
-          value !== delivery?.expenseStates[key as keyof DeliveryLedgerItem["expenseStates"]],
-      );
-    if (dirty && !window.confirm("Discard the unsaved delivery correction?")) return;
     onClose();
   }
 
@@ -197,7 +167,7 @@ export function EditDeliveryModal({
 
   const entryFeeSummary = (() => {
     const hasUnknown = dropoffs.some((d) => d.entryFeeStatus === "unknown");
-    if (hasUnknown) return "Unknown · requires confirmation";
+    if (hasUnknown) return "Incomplete";
     const allNa = dropoffs.length > 0 && dropoffs.every((d) => d.entryFeeStatus === "not_applicable");
     if (allNa) return "Not applicable";
     const total = dropoffs.reduce((sum, d) => {
@@ -333,7 +303,7 @@ export function EditDeliveryModal({
       const status = updatedStates[key];
       if (status === "unknown") return [`${key} is unresolved.`];
       if (status === "confirmed" && updatedExpenses[key] == null) {
-        return [`${key} has no confirmed amount.`];
+        return [`${key} has no amount entered.`];
       }
       return [];
     });
@@ -458,27 +428,22 @@ export function EditDeliveryModal({
 
             {/* Revenue */}
             <div className="delivery-rate-banner">
-              <div className="delivery-rate-banner-header">
-                <h3 className="delivery-finance-group-title">Revenue</h3>
-              </div>
               <div className="delivery-rate-input-row">
                 <label htmlFor="corr-rate" className="field-label-text">
-                  Revenue (₱)
+                  Delivery rate (₱)
                 </label>
                 <div className="peso-input-wrap">
                   <span className="peso-prefix" aria-hidden="true">₱</span>
                   <input
                     id="corr-rate"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
+                    type="text"
                     inputMode="decimal"
                     required
                     className="no-spin-stepper peso-input"
-                    style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
                     placeholder="0.00"
                     value={rate}
-                    onChange={(e) => setRate(e.target.value)}
+                    onKeyDown={handlePositiveDecimalKeyDown}
+                    onChange={(e) => setRate(sanitizePositiveDecimalInput(e.target.value, 2))}
                   />
                 </div>
               </div>
@@ -866,15 +831,13 @@ export function DialogExpenseField({
             id={id}
             aria-label={`${displayLabel} amount`}
             disabled={status !== "confirmed"}
-            min="0"
-            step="0.01"
-            type="number"
+            type="text"
             inputMode="decimal"
             className={`no-spin-stepper ${status === "confirmed" ? "peso-input" : ""}`}
-            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
             value={status === "confirmed" ? value : ""}
             placeholder={status === "confirmed" ? "0.00" : status === "unknown" ? "Amount unknown (click to enter)" : "N/A (click to enter)"}
-            onChange={(e) => onValueChange(e.target.value)}
+            onKeyDown={handlePositiveDecimalKeyDown}
+            onChange={(e) => onValueChange(sanitizePositiveDecimalInput(e.target.value, 2))}
           />
         </span>
         {!hideStatusSwitch && onStatusChange ? (

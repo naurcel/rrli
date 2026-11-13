@@ -269,21 +269,30 @@ test("buildFinancialTimeSeries merges deliveries and company expenses correctly"
   assert.equal(day.tripCount, 1);
 });
 
-test("buildFinancialTimeSeries uses daily points for This Week", () => {
+test("buildFinancialTimeSeries uses Monday-to-Sunday daily points for This Week", () => {
   const series = buildFinancialTimeSeries([], [], {
-    startDate: new Date("2026-11-01T00:00:00"),
-    endDate: new Date("2026-11-07T00:00:00"),
+    startDate: new Date("2026-11-02T00:00:00"),
+    endDate: new Date("2026-11-08T00:00:00"),
     preset: "week",
   });
 
   assert.equal(series.length, 7);
+  assert.deepEqual(series.map((point) => point.label), [
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat",
+    "Sun",
+  ]);
   assert.ok(series.every((point) => point.granularity === "day"));
 });
 
-test("buildFinancialTimeSeries uses seven-day buckets for This Month", () => {
+test("buildFinancialTimeSeries uses seven-day buckets across the full month for This Month", () => {
   const series = buildFinancialTimeSeries([], [], {
     startDate: new Date("2026-11-01T00:00:00"),
-    endDate: new Date("2026-11-30T00:00:00"),
+    endDate: new Date("2026-11-12T00:00:00"),
     preset: "month",
   });
 
@@ -292,10 +301,10 @@ test("buildFinancialTimeSeries uses seven-day buckets for This Month", () => {
   assert.ok(series.every((point) => point.granularity === "week"));
 });
 
-test("buildFinancialTimeSeries uses calendar months for This Year", () => {
+test("buildFinancialTimeSeries uses all 12 calendar months for This Year", () => {
   const series = buildFinancialTimeSeries([], [], {
     startDate: new Date("2026-01-01T00:00:00"),
-    endDate: new Date("2026-12-31T00:00:00"),
+    endDate: new Date("2026-11-12T00:00:00"),
     preset: "year",
   });
 

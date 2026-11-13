@@ -36,8 +36,8 @@ function formatExpenseResolution(
   status: ExpenseResolutionStatus | null | undefined,
 ): string {
   if (status === "not_applicable") return "N/A";
-  if (status === "unknown" || value == null || !Number.isFinite(value)) return "Unknown (Pending)";
-  return `${formatPeso(value)} · Confirmed`;
+  if (status === "unknown" || value == null || !Number.isFinite(value)) return "Incomplete";
+  return formatPeso(value);
 }
 
 export default function DeliveryDetailsPageWrapper({
@@ -322,8 +322,8 @@ function DeliveryDetailsPageContent({
                 className={`detail-status ${isComplete ? "success" : "warning"}`}
                 title={
                   isComplete
-                    ? "Delivery financials confirmed and finalized"
-                    : `Incomplete financials: ${delivery.financialIntegrityIssues.join(", ") || "requires confirmation"}`
+                    ? "Delivery record complete"
+                    : `Incomplete financials: ${delivery.financialIntegrityIssues.join(", ") || "incomplete expenses"}`
                 }
               >
                 {isComplete ? "COMPLETE" : "INCOMPLETE"}
@@ -389,9 +389,6 @@ function DeliveryDetailsPageContent({
               </p>
             </div>
             <div className="delivery-analytics-badges">
-              <span className={`detail-status ${isComplete ? "success" : "warning"}`}>
-                {isComplete ? "CONFIRMED FINANCIALS" : "REQUIRES CONFIRMATION"}
-              </span>
               {isComplete && delivery.marginPercent != null ? (
                 <span className="routex-badge tone-primary" style={{ fontWeight: 700 }}>
                   {delivery.marginPercent.toFixed(1)}% MARGIN
@@ -461,14 +458,14 @@ function DeliveryDetailsPageContent({
                 <div className="detail-meta-item">
                   <span className="meta-label">Financial Status</span>
                   <strong className={`meta-value ${isComplete ? "tone-success" : "tone-warning"}`}>
-                    {isComplete ? "Confirmed (Complete)" : "Incomplete · Requires Confirmation"}
+                    {isComplete ? "Complete" : "Incomplete"}
                   </strong>
                 </div>
               </div>
 
               {isIncomplete && delivery.financialIntegrityIssues.length > 0 ? (
                 <div className="delivery-integrity-alert" style={{ marginTop: "14px" }}>
-                  <strong>Unconfirmed Expenses:</strong>
+                  <strong>Incomplete Expenses:</strong>
                   <ul>
                     {delivery.financialIntegrityIssues.map((issue, idx) => (
                       <li key={idx}>{issue}</li>

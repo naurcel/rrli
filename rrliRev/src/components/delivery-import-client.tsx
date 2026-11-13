@@ -477,7 +477,6 @@ export function DeliveryExcelImportClient({
                   <tr key={row.id}>
                     <td>
                       <span className={`pod-status ${row.isValid ? "attached" : "missing"}`}>
-                        <i aria-hidden="true" />
                         {row.isValid ? "Valid" : row.validationIssue ?? "Invalid"}
                       </span>
                     </td>

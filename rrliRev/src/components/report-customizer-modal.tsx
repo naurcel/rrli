@@ -453,13 +453,9 @@ export function ReportCustomizerModal({
                           <td style={{ padding: "10px 12px" }}>
                             <span
                               style={{
-                                display: "inline-block",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                background: "var(--color-surface-subtle)",
-                                fontSize: "10px",
+                                fontSize: "11px",
                                 textTransform: "uppercase",
-                                fontWeight: 700,
+                                fontWeight: 600,
                                 color: "var(--color-text-muted)",
                               }}
                             >

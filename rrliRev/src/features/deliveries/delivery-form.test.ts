@@ -4,6 +4,11 @@ import test from "node:test";
 import {
   type ExpenseResolutionStatus,
 } from "./delivery-domain.ts";
+import {
+  sanitizePersonNameInput,
+  sanitizePositiveDecimalInput,
+  sanitizeSignedDecimalInput,
+} from "./delivery-input-utils.ts";
 
 /**
  * Pure calculation logic matching NewCompletedDeliveryPage financialReview
@@ -355,4 +360,24 @@ test("RECORD-DELIVERY: Truck selection groups into Owned Trucks and Subcontracte
   assert.equal(grouped[0].group, "Owned Trucks");
   assert.equal(grouped[1].group, "Owned Trucks");
   assert.equal(grouped[2].group, "Subcontracted Trucks");
+});
+
+test("RECORD-DELIVERY: Numeric input sanitization strips letters, signs, and extra decimals", () => {
+  assert.equal(sanitizePositiveDecimalInput("abc"), "");
+  assert.equal(sanitizePositiveDecimalInput("12e34"), "1234");
+  assert.equal(sanitizePositiveDecimalInput("28000.559"), "28000.55");
+  assert.equal(sanitizePositiveDecimalInput("12..34.56"), "12.34");
+  assert.equal(sanitizePositiveDecimalInput("-500.25"), "500.25");
+  assert.equal(sanitizePositiveDecimalInput("₱1,250.50"), "1250.50");
+
+  // Signed decimal (Temperature in °C)
+  assert.equal(sanitizeSignedDecimalInput("-18.45", 1), "-18.4");
+  assert.equal(sanitizeSignedDecimalInput("-abc", 1), "-");
+  assert.equal(sanitizeSignedDecimalInput("4.2", 1), "4.2");
+  assert.equal(sanitizeSignedDecimalInput("--12..5", 1), "-12.5");
+
+  // Person name sanitization (Driver / Helper names cannot contain digits)
+  assert.equal(sanitizePersonNameInput("Juan123 Dela45 Cruz"), "Juan Dela Cruz");
+  assert.equal(sanitizePersonNameInput("999"), "");
+  assert.equal(sanitizePersonNameInput("Pedro Santos Jr."), "Pedro Santos Jr.");
 });

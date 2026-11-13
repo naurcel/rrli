@@ -1260,13 +1260,23 @@ export default function DashboardPage() {
 
             {/* 4. Top Client */}
             {(() => {
-              const clientNameLen = topClientData.name.length;
+              const rawName = topClientData.name.trim() || "None";
+              const clientNameLen = rawName.length;
+              const longestWordLen = Math.max(
+                ...rawName.split(/\s+/).map((w) => w.length),
+                1,
+              );
+              const effectiveLen = Math.max(clientNameLen, longestWordLen * 1.6);
               const clientSizeClass =
-                clientNameLen <= 11
-                  ? "stat-client-name--short"
-                  : clientNameLen <= 24
-                    ? "stat-client-name--medium"
-                    : "stat-client-name--long";
+                effectiveLen <= 9
+                  ? "stat-client-name--xs"
+                  : effectiveLen <= 15
+                    ? "stat-client-name--short"
+                    : effectiveLen <= 23
+                      ? "stat-client-name--medium"
+                      : effectiveLen <= 35
+                        ? "stat-client-name--long"
+                        : "stat-client-name--xl";
               return (
                 <Link
                   className="stat-card stat-card-link stat-card-top-client ui-tooltip"
@@ -1280,9 +1290,11 @@ export default function DashboardPage() {
                   }
                 >
                   <span className="stat-label">TOP CLIENT</span>
-                  <strong className={`stat-client-name ${clientSizeClass}`} title={topClientData.name}>
-                    {topClientData.name}
-                  </strong>
+                  <div className="stat-client-body">
+                    <strong className={`stat-client-name ${clientSizeClass}`} title={topClientData.name}>
+                      {topClientData.name}
+                    </strong>
+                  </div>
                   <span className={`stat-meta ${topClientData.revenue > 0 ? "positive" : ""}`}>
                     {topClientData.revenue > 0
                       ? topClientData.isTied
@@ -1369,7 +1381,7 @@ export default function DashboardPage() {
                           {isFinanciallyIncomplete || trip.netIncome == null ? (
                             <span
                               className="profit-amount warning"
-                              title="Net profit computation deferred: Requires all trip expenses to be confirmed"
+                              title="Net profit calculation requires all trip expenses to be recorded"
                             >
                               Incomplete
                             </span>

@@ -87,6 +87,10 @@ function parseStoredDateRange(raw: string): DateRange | null {
     if (start && isNaN(start.getTime())) return null;
     if (end && isNaN(end.getTime())) return null;
     if (start || end) {
+      if (parsed.preset === "week" && (start || end)) {
+        const ref = end ?? start!;
+        return presetRange("week", ref);
+      }
       return { startDate: start, endDate: end, preset: parsed.preset };
     }
     return null;

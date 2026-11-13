@@ -20,6 +20,7 @@ export function RoundedSelect({
   allowCustomValue = false,
   searchPlaceholder = "Type to search...",
   customValueLabel,
+  inputFilter,
 }: {
   value: string;
   options: readonly (string | SelectOption)[];
@@ -32,6 +33,7 @@ export function RoundedSelect({
   allowCustomValue?: boolean;
   searchPlaceholder?: string;
   customValueLabel?: (query: string) => React.ReactNode;
+  inputFilter?: (raw: string) => string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -152,7 +154,12 @@ export function RoundedSelect({
                 ref={searchRef}
                 type="search"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  const next = inputFilter
+                    ? inputFilter(event.target.value)
+                    : event.target.value;
+                  setQuery(next);
+                }}
                 placeholder={searchPlaceholder}
                 aria-label={`Search ${ariaLabel.toLocaleLowerCase()}`}
                 onKeyDown={(event) => {

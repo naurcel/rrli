@@ -53,6 +53,11 @@ import {
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
 import { deleteDeliveryRecord } from "@/features/deliveries/delivery-deletion-client";
+import {
+  handlePositiveDecimalKeyDown,
+  sanitizePersonNameInput,
+  sanitizePositiveDecimalInput,
+} from "@/features/deliveries/delivery-input-utils";
 import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
 
 function toDateKey(date: Date): string {
@@ -66,9 +71,9 @@ function formatExpenseResolution(
   value: number | null,
   state: ExpenseResolutionStatus,
 ): string {
-  if (state === "unknown") return "Unknown · requires confirmation";
+  if (state === "unknown") return "Incomplete";
   if (state === "not_applicable") return "Not applicable";
-  return `${formatPeso(value)} · Confirmed`;
+  return formatPeso(value);
 }
 
 type CorrectionDropoffDraft = {
@@ -261,7 +266,7 @@ export default function DeliveriesPage() {
   const correctionEntryFeeSummary = useMemo(() => {
     const hasUnknown = correctionDropoffs.some((d) => d.entryFeeStatus === "unknown");
     const allNa = correctionDropoffs.length > 0 && correctionDropoffs.every((d) => d.entryFeeStatus === "not_applicable");
-    if (hasUnknown) return "Unknown · requires confirmation";
+    if (hasUnknown) return "Incomplete";
     if (allNa) return "Not applicable";
     const total = correctionDropoffs.reduce((sum, d) => {
       if (d.entryFeeStatus === "confirmed" && d.entryFee !== "") {
@@ -329,39 +334,6 @@ export default function DeliveriesPage() {
 
   function closeCorrectionModal() {
     if (correctionSubmitting) return;
-    const initialExpenses = correctingTrip ? {
-      dieselExpenses: correctingTrip.expenses.dieselExpenses != null ? String(correctingTrip.expenses.dieselExpenses) : "",
-      tollGateExpenses: correctingTrip.expenses.tollGateExpenses != null ? String(correctingTrip.expenses.tollGateExpenses) : "",
-      driverAllowance: correctingTrip.expenses.driverAllowance != null ? String(correctingTrip.expenses.driverAllowance) : "",
-      driverDailyRate: correctingTrip.expenses.driverDailyRate != null ? String(correctingTrip.expenses.driverDailyRate) : "",
-      helperAllowance: correctingTrip.expenses.helperAllowance != null ? String(correctingTrip.expenses.helperAllowance) : "",
-      helperDailyRate: correctingTrip.expenses.helperDailyRate != null ? String(correctingTrip.expenses.helperDailyRate) : "",
-      otherExpenses: correctingTrip.expenses.otherExpenses != null ? String(correctingTrip.expenses.otherExpenses) : "",
-    } : {};
-    const initialDropoffs = (correctingTrip?.dropoffs ?? []).map((d) => ({
-      storeName: d.storeName,
-      destinationArea: d.destinationArea,
-      entryFee: d.entryFee != null ? String(d.entryFee) : "",
-      entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
-    }));
-    const currentDropoffsClean = correctionDropoffs.map((d) => ({
-      storeName: d.storeName,
-      destinationArea: d.destinationArea,
-      entryFee: d.entryFee,
-      entryFeeStatus: d.entryFeeStatus,
-    }));
-    const dirty = Boolean(correctingTrip) && (
-      correctionReason.trim().length > 0 ||
-      correctionDeliveryRate !== (correctingTrip?.deliveryRate != null ? String(correctingTrip.deliveryRate) : "") ||
-      correctionDriverName !== (correctingTrip?.driverName ?? "") ||
-      correctionHelperName !== (correctingTrip?.helperName ?? "") ||
-      correctionSupportingFiles.length > 0 ||
-      JSON.stringify(correctionExistingSupportingDocs) !== JSON.stringify(correctingTrip?.supportingDocuments ?? []) ||
-      JSON.stringify(correctionExpenses) !== JSON.stringify(initialExpenses) ||
-      JSON.stringify(initialDropoffs) !== JSON.stringify(currentDropoffsClean) ||
-      Object.entries(correctionStatuses).some(([key, value]) => value !== correctingTrip?.expenseStates[key as keyof DeliveryLedgerItem["expenseStates"]])
-    );
-    if (dirty && !window.confirm("Discard the unsaved delivery correction?")) return;
     setCorrectingTrip(null);
   }
 
@@ -1548,7 +1520,6 @@ export default function DeliveriesPage() {
                           title={trip.dropoffs.map((d) => `#${d.sequence} ${d.storeName} (${d.destinationArea})`).join("\n")}
                         >
                           <span className="dropoff-count-badge">
-                            <span className="store-pin-dot" aria-hidden="true" />
                             {trip.dropoffs.length} {trip.dropoffs.length === 1 ? "store" : "stores"}
                           </span>
                           {trip.dropoffs.length > 0 ? (
@@ -1568,7 +1539,7 @@ export default function DeliveriesPage() {
                         {isFinanciallyIncomplete || trip.totalExpenses == null ? (
                           <span
                             className="profit-amount warning"
-                            title={`Trip expenses incomplete: ${trip.financialIntegrityIssues.join(", ") || "Pending expense confirmation"}`}
+                            title={`Trip expenses incomplete: ${trip.financialIntegrityIssues.join(", ") || "Incomplete trip expenses"}`}
                           >
                             Incomplete
                           </span>
@@ -1581,7 +1552,7 @@ export default function DeliveriesPage() {
                           {isFinanciallyIncomplete || trip.netIncome == null ? (
                             <span
                               className="profit-amount warning"
-                              title="Net profit computation deferred: Requires all trip expenses to be confirmed"
+                              title="Net profit calculation requires all trip expenses to be recorded"
                             >
                               Incomplete
                             </span>
@@ -1677,16 +1648,14 @@ export default function DeliveriesPage() {
                       <span className="peso-prefix" aria-hidden="true">₱</span>
                       <input
                         id="corr-rate"
-                        type="number"
-                        step="0.01"
-                        min="0.01"
+                        type="text"
                         inputMode="decimal"
                         required
                         className="no-spin-stepper peso-input"
-                        style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
                         placeholder="0.00"
                         value={correctionDeliveryRate}
-                        onChange={(e) => setCorrectionDeliveryRate(e.target.value)}
+                        onKeyDown={handlePositiveDecimalKeyDown}
+                        onChange={(e) => setCorrectionDeliveryRate(sanitizePositiveDecimalInput(e.target.value, 2))}
                       />
                     </div>
                   </div>
@@ -1822,7 +1791,8 @@ export default function DeliveriesPage() {
                             value: driver.label,
                             label: driver.label,
                           }))}
-                          onChange={setCorrectionDriverName}
+                          onChange={(val) => setCorrectionDriverName(sanitizePersonNameInput(val))}
+                          inputFilter={sanitizePersonNameInput}
                           ariaLabel="Driver name"
                           className="crew-name-select"
                           placeholder="Select or add driver"
@@ -1868,7 +1838,8 @@ export default function DeliveriesPage() {
                             value: helper.label,
                             label: helper.label,
                           }))}
-                          onChange={setCorrectionHelperName}
+                          onChange={(val) => setCorrectionHelperName(sanitizePersonNameInput(val))}
+                          inputFilter={sanitizePersonNameInput}
                           ariaLabel="Helper name"
                           className="crew-name-select"
                           placeholder="Select or add helper"
@@ -2170,15 +2141,13 @@ function DialogExpenseField({
             id={id}
             aria-label={`${displayLabel} amount`}
             disabled={status !== "confirmed"}
-            min="0"
-            step="0.01"
-            type="number"
+            type="text"
             inputMode="decimal"
             className={`no-spin-stepper ${status === "confirmed" ? "peso-input" : ""}`}
-            style={{ MozAppearance: "textfield", WebkitAppearance: "none", appearance: "none" }}
             value={status === "confirmed" ? value : ""}
             placeholder={status === "confirmed" ? "0.00" : status === "unknown" ? "Amount unknown (click to enter)" : "N/A (click to enter)"}
-            onChange={(e) => onValueChange(e.target.value)}
+            onKeyDown={handlePositiveDecimalKeyDown}
+            onChange={(e) => onValueChange(sanitizePositiveDecimalInput(e.target.value, 2))}
           />
         </span>
         <div className="expense-resolution-options" role="group" aria-label={`${displayLabel} resolution`}>

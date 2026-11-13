@@ -172,6 +172,10 @@ test("presetRange calculates all standard presets correctly relative to referenc
   assert.equal(toDateKey(last30.endDate!), "2026-11-04");
   assert.equal(toDateKey(last30.startDate!), "2026-10-06");
 
+  const thisWeek = presetRange("week", ref);
+  assert.equal(toDateKey(thisWeek.startDate!), "2026-11-02");
+  assert.equal(toDateKey(thisWeek.endDate!), "2026-11-08");
+
   const thisMonth = presetRange("month", ref);
   assert.equal(toDateKey(thisMonth.startDate!), "2026-11-01");
   assert.equal(toDateKey(thisMonth.endDate!), "2026-11-04");

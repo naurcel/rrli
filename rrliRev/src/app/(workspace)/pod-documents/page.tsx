@@ -394,7 +394,6 @@ export default function PodDocumentsPage() {
                               : "Missing POD: Proof of delivery document has not been uploaded yet"
                           }
                         >
-                          <i aria-hidden="true" />
                           {item.hasPod ? "Attached" : "Missing"}
                         </span>
                       </td>
