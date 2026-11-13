@@ -1566,63 +1566,49 @@ export default function TruckProfitabilityPage() {
                   </div>
                 )}
 
-                <div className="truck-create-photo-field">
-                  <div className="truck-create-photo-preview">
-                    {truckPhotoPreview ? <img src={truckPhotoPreview} alt="Selected truck preview" /> : <span>No photo selected</span>}
-                  </div>
+                <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div className="routex-dialog-field">
-                    <label htmlFor="new-truck-photo">Truck Picture</label>
+                    <label htmlFor="new-truck-plate" style={{ fontWeight: 600, fontSize: "12px" }}>
+                      Plate Number *
+                    </label>
                     <input
-                      id="new-truck-photo"
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0] ?? null;
-                        if (!file) return;
-                        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
-                          setFormError("Choose an image file smaller than 10 MB.");
-                          event.target.value = "";
-                          return;
-                        }
-                        setFormError(null);
-                        setTruckPhotoFile(file);
-                        const reader = new FileReader();
-                        reader.onload = () => setTruckPhotoPreview(String(reader.result));
-                        reader.readAsDataURL(file);
+                      id="new-truck-plate"
+                      type="text"
+                      required
+                      placeholder="e.g. NBE 4892"
+                      value={plateNumber}
+                      onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
+                      style={{
+                        minHeight: "38px",
+                        height: "38px",
+                        padding: "0 12px",
+                        borderRadius: "9px",
+                        border: "1px solid var(--color-border)",
+                        background: "var(--glass-surface-strong)",
+                        fontFamily: "var(--font-mono, monospace)",
+                        fontWeight: 600,
+                        letterSpacing: "0.5px",
                       }}
                     />
-                    <small>You can replace the picture before saving.</small>
+                  </div>
+
+                  <div className="routex-dialog-field">
+                    <label htmlFor="new-truck-ownership" style={{ fontWeight: 600, fontSize: "12px" }}>
+                      Fleet Ownership *
+                    </label>
+                    <RoundedSelect
+                      value={ownershipType}
+                      options={[
+                        { value: "Owned", label: "Owned" },
+                        { value: "Subcontracted", label: "Subcontracted" },
+                      ]}
+                      onChange={(value) => setOwnershipType(value as FleetTruck["ownershipType"])}
+                      ariaLabel="Select fleet ownership"
+                    />
                   </div>
                 </div>
 
-                <div className="routex-dialog-field">
-                  <label htmlFor="new-truck-plate" style={{ fontWeight: 600, fontSize: "12px" }}>
-                    Plate Number *
-                  </label>
-                  <input
-                    id="new-truck-plate"
-                    type="text"
-                    required
-                    placeholder="e.g. NBE 4892"
-                    value={plateNumber}
-                    onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
-                    style={{
-                      minHeight: "42px",
-                      padding: "0 12px",
-                      borderRadius: "10px",
-                      border: "1px solid var(--color-border)",
-                      background: "var(--glass-surface-strong)",
-                      fontFamily: "var(--font-mono, monospace)",
-                      fontWeight: 600,
-                      letterSpacing: "0.5px",
-                    }}
-                  />
-                  <small style={{ color: "var(--color-text-muted)", fontSize: "11px" }}>
-                    Official Philippine LTO vehicle plate registration number.
-                  </small>
-                </div>
-
-                <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div className="routex-dialog-field">
                     <label htmlFor="new-truck-type" style={{ fontWeight: 600, fontSize: "12px" }}>
                       Vehicle Size *
@@ -1651,23 +1637,8 @@ export default function TruckProfitabilityPage() {
                   </div>
                 </div>
 
-                <div className="routex-dialog-field">
-                  <label htmlFor="new-truck-ownership" style={{ fontWeight: 600, fontSize: "12px" }}>
-                    Fleet Ownership *
-                  </label>
-                  <RoundedSelect
-                    value={ownershipType}
-                    options={[
-                      { value: "Owned", label: "Owned" },
-                      { value: "Subcontracted", label: "Subcontracted" },
-                    ]}
-                    onChange={(value) => setOwnershipType(value as FleetTruck["ownershipType"])}
-                    ariaLabel="Select fleet ownership"
-                  />
-                </div>
-
                 {ownershipType === "Subcontracted" && (
-                  <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                  <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     <div className="routex-dialog-field">
                       <label htmlFor="new-truck-provider" style={{ fontWeight: 600, fontSize: "12px" }}>
                         Hauler / Provider *
@@ -1680,9 +1651,10 @@ export default function TruckProfitabilityPage() {
                         value={provider}
                         onChange={(e) => setProvider(e.target.value)}
                         style={{
-                          minHeight: "42px",
+                          minHeight: "38px",
+                          height: "38px",
                           padding: "0 12px",
-                          borderRadius: "10px",
+                          borderRadius: "9px",
                           border: "1px solid var(--color-border)",
                           background: "var(--glass-surface-strong)",
                         }}
@@ -1700,9 +1672,10 @@ export default function TruckProfitabilityPage() {
                         value={contactPerson}
                         onChange={(e) => setContactPerson(e.target.value)}
                         style={{
-                          minHeight: "42px",
+                          minHeight: "38px",
+                          height: "38px",
                           padding: "0 12px",
-                          borderRadius: "10px",
+                          borderRadius: "9px",
                           border: "1px solid var(--color-border)",
                           background: "var(--glass-surface-strong)",
                         }}
@@ -1710,6 +1683,36 @@ export default function TruckProfitabilityPage() {
                     </div>
                   </div>
                 )}
+
+                <div className="truck-create-photo-field">
+                  <div className="truck-create-photo-preview">
+                    {truckPhotoPreview ? <img src={truckPhotoPreview} alt="Selected truck preview" /> : <span>No photo</span>}
+                  </div>
+                  <div className="routex-dialog-field">
+                    <label htmlFor="new-truck-photo" style={{ fontWeight: 600, fontSize: "12px" }}>
+                      Truck Picture (Optional)
+                    </label>
+                    <input
+                      id="new-truck-photo"
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        if (!file) return;
+                        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+                          setFormError("Choose an image file smaller than 10 MB.");
+                          event.target.value = "";
+                          return;
+                        }
+                        setFormError(null);
+                        setTruckPhotoFile(file);
+                        const reader = new FileReader();
+                        reader.onload = () => setTruckPhotoPreview(String(reader.result));
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
 
               <footer className="routex-dialog-footer">

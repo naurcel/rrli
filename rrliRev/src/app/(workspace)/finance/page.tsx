@@ -1,18 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmExpenseDeletionDialog } from "@/components/confirm-expense-deletion-dialog";
+import { EditCompanyExpenseModal } from "@/components/edit-company-expense-modal";
 import {
   formatDateRange,
   GlobalDateRangePicker,
   toDateKey,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
-import { EditCompanyExpenseModal } from "@/components/edit-company-expense-modal";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import {
+  SortableTableHeader,
+  type TableSortDirection,
+} from "@/components/sortable-table-header";
 import { TablePagination } from "@/components/table-pagination";
+import {
+  handlePositiveDecimalKeyDown,
+  sanitizePositiveDecimalInput,
+} from "@/features/deliveries/delivery-input-utils";
 import {
   deleteBrowserPreviewExpense,
   readBrowserPreviewExpenses,
@@ -40,7 +49,9 @@ export default function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // New expense form state (clean & direct: amount + date + optional note)
+  // Record Expense Modal state
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [newDescription, setNewDescription] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newDate, setNewDate] = useState(() => toDateKey(new Date()));
   const [newNotes, setNewNotes] = useState("");
@@ -51,7 +62,7 @@ export default function FinancePage() {
   // Table filtering & sorting state
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<"date" | "amount">("date");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [sortDirection, setSortDirection] = useState<TableSortDirection>("desc");
   const [page, setPage] = useState(1);
 
   // Edit & Delete dialog states
@@ -80,14 +91,13 @@ export default function FinancePage() {
       // Fallback to browser preview storage
     }
 
-    // Browser preview mode fallback
     const previewExpenses = readBrowserPreviewExpenses();
     setExpenses(previewExpenses);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    loadExpenses();
+    void loadExpenses();
   }, [loadExpenses]);
 
   // Reactive listeners for cross-tab or cross-component expense events
@@ -98,11 +108,21 @@ export default function FinancePage() {
     };
 
     window.addEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, handleExpenseChange);
-
     return () => {
       window.removeEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, handleExpenseChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isRecordModalOpen) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !submitting) {
+        setIsRecordModalOpen(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isRecordModalOpen, submitting]);
 
   // Filter expenses by global date range
   const dateFilteredExpenses = useMemo(() => {
@@ -137,35 +157,83 @@ export default function FinancePage() {
     let result = [...dateFilteredExpenses];
 
     if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
       result = result.filter(
         (e) =>
           e.description.toLowerCase().includes(q) ||
           (e.notes && e.notes.toLowerCase().includes(q)) ||
-          e.expenseDate.includes(q),
+          (e.createdBy && e.createdBy.toLowerCase().includes(q)) ||
+          e.expenseDate.includes(q) ||
+          e.amount.toString().includes(q),
       );
     }
 
     result.sort((a, b) => {
-      let comp = 0;
+      let cmp = 0;
       if (sortField === "date") {
-        comp = a.expenseDate.localeCompare(b.expenseDate);
-      } else {
-        comp = a.amount - b.amount;
+        cmp = a.expenseDate.localeCompare(b.expenseDate);
+        if (cmp === 0) cmp = a.createdAt.localeCompare(b.createdAt);
+      } else if (sortField === "amount") {
+        cmp = a.amount - b.amount;
       }
-      return sortDirection === "asc" ? comp : -comp;
+      return sortDirection === "asc" ? cmp : -cmp;
     });
 
     return result;
   }, [dateFilteredExpenses, searchQuery, sortField, sortDirection]);
 
-  // Pagination calculation
+  // Pagination slice
   const totalItems = filteredAndSortedExpenses.length;
   const pageCount = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
   const paginatedExpenses = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return filteredAndSortedExpenses.slice(start, start + PAGE_SIZE);
   }, [filteredAndSortedExpenses, page]);
+
+  useEffect(() => {
+    if (page > pageCount) {
+      setPage(pageCount);
+    }
+  }, [page, pageCount]);
+
+  const hasActiveFilters = Boolean(
+    searchQuery.trim() || range.startDate || range.endDate,
+  );
+
+  function clearFilters() {
+    setSearchQuery("");
+    setRange({ startDate: null, endDate: null });
+    setPage(1);
+  }
+
+  function handleSort(key: string, direction: TableSortDirection) {
+    if (key === "date" || key === "amount") {
+      setSortField(key);
+      setSortDirection(direction);
+      setPage(1);
+    }
+  }
+
+  function handleResetSort() {
+    setSortField("date");
+    setSortDirection("desc");
+    setPage(1);
+  }
+
+  function openRecordModal() {
+    setFormError(null);
+    setNewDescription("");
+    setNewAmount("");
+    setNewDate(toDateKey(new Date()));
+    setNewNotes("");
+    setIsRecordModalOpen(true);
+  }
+
+  function closeRecordModal() {
+    if (submitting) return;
+    setIsRecordModalOpen(false);
+    setFormError(null);
+  }
 
   // Handle new expense submission
   async function handleCreateExpense(e: React.FormEvent) {
@@ -174,8 +242,14 @@ export default function FinancePage() {
     setFormSuccess(null);
     setSubmitting(true);
 
+    const resolvedDescription =
+      newDescription.trim() ||
+      (newNotes.trim()
+        ? `Company Expenses - ${newNotes.trim()}`
+        : "Total Company Expenses");
+
     const validation = validateCompanyExpenseInput({
-      description: newNotes ? `Company Expenses - ${newNotes}` : "Total Company Expenses",
+      description: resolvedDescription,
       amount: newAmount,
       expenseDate: newDate,
       notes: newNotes,
@@ -198,10 +272,17 @@ export default function FinancePage() {
         const data = await res.json();
         if (data.ok && data.expense) {
           upsertBrowserPreviewExpense(data.expense);
-          setExpenses((prev) => [data.expense, ...prev.filter((item) => item.id !== data.expense.id)]);
+          setExpenses((prev) => [
+            data.expense,
+            ...prev.filter((item) => item.id !== data.expense.id),
+          ]);
+          setNewDescription("");
           setNewAmount("");
           setNewNotes("");
-          setFormSuccess(`Recorded ₱${validation.data.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} company expenses.`);
+          setIsRecordModalOpen(false);
+          setFormSuccess(
+            `Recorded ${formatPeso(validation.data.amount)} company expense.`,
+          );
           setSubmitting(false);
           return;
         }
@@ -225,9 +306,13 @@ export default function FinancePage() {
 
     upsertBrowserPreviewExpense(newRecord);
     setExpenses((prev) => [newRecord, ...prev]);
+    setNewDescription("");
     setNewAmount("");
     setNewNotes("");
-    setFormSuccess(`Recorded ₱${validation.data.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} company expenses.`);
+    setIsRecordModalOpen(false);
+    setFormSuccess(
+      `Recorded ${formatPeso(validation.data.amount)} company expense.`,
+    );
     setSubmitting(false);
   }
 
@@ -245,8 +330,11 @@ export default function FinancePage() {
         const resData = await res.json();
         if (resData.ok && resData.expense) {
           upsertBrowserPreviewExpense(resData.expense);
-          setExpenses((prev) => prev.map((e) => (e.id === id ? resData.expense : e)));
+          setExpenses((prev) =>
+            prev.map((e) => (e.id === id ? resData.expense : e)),
+          );
           setEditingExpense(null);
+          setFormSuccess(`Updated ${formatPeso(data.amount)} company expense.`);
           setIsSavingEdit(false);
           return;
         }
@@ -267,6 +355,7 @@ export default function FinancePage() {
       setExpenses((prev) => prev.map((e) => (e.id === id ? updated : e)));
     }
     setEditingExpense(null);
+    setFormSuccess(`Updated ${formatPeso(data.amount)} company expense.`);
     setIsSavingEdit(false);
   }
 
@@ -289,6 +378,7 @@ export default function FinancePage() {
         deleteBrowserPreviewExpense(id);
         setExpenses((prev) => prev.filter((e) => e.id !== id));
         setDeletingExpense(null);
+        setFormSuccess("Deleted company expense record.");
         setIsDeleting(false);
         return;
       }
@@ -300,17 +390,8 @@ export default function FinancePage() {
     deleteBrowserPreviewExpense(id);
     setExpenses((prev) => prev.filter((e) => e.id !== id));
     setDeletingExpense(null);
+    setFormSuccess("Deleted company expense record.");
     setIsDeleting(false);
-  }
-
-  function toggleSort(field: "date" | "amount") {
-    if (sortField === field) {
-      setSortDirection((curr) => (curr === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortDirection(field === "amount" || field === "date" ? "desc" : "asc");
-    }
-    setPage(1);
   }
 
   return (
@@ -321,303 +402,180 @@ export default function FinancePage() {
         <header className="page-intro">
           <div>
             <h1>Finance</h1>
-            <p className="subtitle">
-              Company operating expense ledger and records.
-            </p>
+            <p className="subtitle">Company operating expense ledger and records.</p>
+          </div>
+          <div className="page-intro-actions">
+            {canManage ? (
+              <button
+                type="button"
+                className="primary-action-button page-intro-action"
+                onClick={openRecordModal}
+                title="Record a company operating expense"
+              >
+                + Record Expense
+              </button>
+            ) : (
+              <span className="settings-readonly-pill">
+                View-Only ({actor.roleLabel})
+              </span>
+            )}
           </div>
         </header>
 
-        {/* Top KPI Cards Summary: Company Expenses Overview */}
-        <section
-          className="dashboard-kpi-grid"
-          aria-label="Company expenses overview"
-          style={{ marginBottom: "20px" }}
-        >
-          {/* Card 1: Total Company Expenses */}
-          <article className="stat-card" style={{ borderColor: "rgba(217, 119, 6, 0.25)" }}>
-            <span className="stat-label">TOTAL COMPANY EXPENSES</span>
-            <strong style={{ color: "var(--color-accent-deep, #92400e)" }}>
-              {formatPeso(expenseMetrics.total)}
-            </strong>
+        {error ? (
+          <div className="notice" role="alert">
+            <span className="notice-icon" aria-hidden="true">
+              !
+            </span>
+            <div>
+              <strong>Error:</strong>
+              <span>{error}</span>
+            </div>
+          </div>
+        ) : null}
+
+        {formSuccess ? (
+          <div className="notice" role="status">
+            <span className="notice-icon" aria-hidden="true">
+              ✓
+            </span>
+            <div style={{ flex: 1 }}>
+              <span>{formSuccess}</span>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              style={{ minHeight: "28px", padding: "0 10px", fontSize: "11px" }}
+              onClick={() => setFormSuccess(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
+        {/* Summary KPI Cards */}
+        <section className="stat-grid" aria-label="Company expense summary">
+          <article className="stat-card">
+            <div className="stat-card-header">
+              <span className="stat-label">TOTAL COMPANY EXPENSES</span>
+            </div>
+            <strong>{formatPeso(expenseMetrics.total)}</strong>
             <span className="stat-meta">
-              {expenseMetrics.count} {expenseMetrics.count === 1 ? "record" : "records"} in selected period
+              {formatDateRange(range)}
             </span>
           </article>
 
-          {/* Card 2: Recorded Entries */}
           <article className="stat-card">
-            <span className="stat-label">EXPENSE ENTRIES</span>
+            <div className="stat-card-header">
+              <span className="stat-label">EXPENSE ENTRIES</span>
+            </div>
             <strong>{expenseMetrics.count}</strong>
-            <span className="stat-meta">
-              Operating expense entries recorded
-            </span>
+            <span className="stat-meta">Recorded entries</span>
           </article>
 
-          {/* Card 3: Average Expense */}
           <article className="stat-card">
-            <span className="stat-label">AVERAGE EXPENSE</span>
+            <div className="stat-card-header">
+              <span className="stat-label">AVERAGE EXPENSE</span>
+            </div>
             <strong>{formatPeso(expenseMetrics.average)}</strong>
-            <span className="stat-meta">
-              Average per recorded entry
-            </span>
+            <span className="stat-meta">Per entry average</span>
           </article>
 
-          {/* Card 4: Largest Expense */}
           <article className="stat-card">
-            <span className="stat-label">LARGEST EXPENSE</span>
+            <div className="stat-card-header">
+              <span className="stat-label">LARGEST EXPENSE</span>
+            </div>
             <strong>{formatPeso(expenseMetrics.highest)}</strong>
             <span className="stat-meta">
               {expenseMetrics.highestEntry
-                ? `Recorded on ${expenseMetrics.highestEntry.expenseDate}`
-                : "No recorded expenses"}
+                ? expenseMetrics.highestEntry.expenseDate
+                : "No entries recorded"}
             </span>
           </article>
         </section>
 
-        {/* Clean, Centered Expense Input Area */}
-        {canManage ? (
-          <section
-            className="records-card finance-entry-card"
-            aria-label="Input total company expenses"
-            style={{
-              maxWidth: "540px",
-              margin: "0 auto 28px",
-              padding: "24px 28px",
-              border: "1px solid var(--color-border-subtle, rgba(0,0,0,0.08))",
-              boxShadow: "0 4px 16px -2px rgba(0,0,0,0.05)",
-            }}
-          >
-            <div style={{ textAlign: "center", marginBottom: "18px" }}>
-              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 750, color: "var(--color-text-primary)" }}>
-                Company Expenses
-              </h2>
-            </div>
-
-            {formError ? (
-              <div className="notice" role="alert" style={{ marginBottom: "16px" }}>
-                <span className="notice-icon" aria-hidden="true">!</span>
-                <div>
-                  <strong>Validation Notice:</strong>
-                  <span>{formError}</span>
-                </div>
-              </div>
-            ) : null}
-
-            {formSuccess ? (
-              <div className="notice" role="status" style={{ marginBottom: "16px", borderColor: "rgba(16, 185, 129, 0.3)", background: "rgba(16, 185, 129, 0.08)" }}>
-                <span className="notice-icon" aria-hidden="true" style={{ background: "#10b981" }}>✓</span>
-                <div>
-                  <strong style={{ color: "#047857" }}>Saved:</strong>
-                  <span style={{ color: "#065f46" }}>{formSuccess}</span>
-                </div>
-              </div>
-            ) : null}
-
-            <form onSubmit={handleCreateExpense}>
-              {/* Visually Centered Hero Amount Input */}
-              <div
-                className="finance-amount-hero-box"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "18px 20px",
-                  background: "var(--color-surface-subtle, rgba(0, 0, 0, 0.02))",
-                  border: "1px solid var(--color-border, #e5e7eb)",
-                  borderRadius: "10px",
-                  marginBottom: "16px",
-                }}
-              >
-                <label htmlFor="new-expense-amount" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", marginBottom: "6px" }}>
-                  Amount (₱ PHP)
-                </label>
-                <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "100%", maxWidth: "340px" }}>
-                  <span style={{ fontSize: "28px", fontWeight: 800, color: "var(--color-accent, #d97706)", marginRight: "6px" }} aria-hidden="true">
-                    ₱
-                  </span>
-                  <input
-                    id="new-expense-amount"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                    disabled={submitting}
-                    required
-                    style={{
-                      width: "100%",
-                      fontSize: "26px",
-                      fontWeight: 800,
-                      textAlign: "center",
-                      border: "none",
-                      outline: "none",
-                      background: "transparent",
-                      color: "var(--color-text-primary)",
-                      letterSpacing: "-0.02em",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Date & Note Row */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "18px" }}>
-                <div>
-                  <label htmlFor="new-expense-date" className="field-label-text">
-                    Date <span style={{ color: "var(--color-danger, #dc2626)" }}>*</span>
-                  </label>
-                  <input
-                    id="new-expense-date"
-                    type="date"
-                    min="2024-01-01"
-                    className="finance-input"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    disabled={submitting}
-                    required
-                    style={{ width: "100%", marginTop: "4px" }}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="new-expense-notes" className="field-label-text">
-                    Note / Reference <span style={{ fontWeight: 400, color: "var(--color-text-muted)" }}>(Optional)</span>
-                  </label>
-                  <input
-                    id="new-expense-notes"
-                    type="text"
-                    className="finance-input"
-                    placeholder="e.g. November total expenses"
-                    value={newNotes}
-                    onChange={(e) => setNewNotes(e.target.value)}
-                    disabled={submitting}
-                    style={{ width: "100%", marginTop: "4px" }}
-                  />
-                </div>
-              </div>
-
-              {/* Submit Action */}
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <button
-                  type="submit"
-                  className="primary-action-button"
-                  disabled={submitting}
-                  style={{ minWidth: "220px", padding: "11px 24px", fontSize: "13px" }}
-                >
-                  {submitting ? "Saving…" : "Save Total Company Expenses"}
-                </button>
-              </div>
-            </form>
-          </section>
-        ) : (
-          <div
-            className="notice"
-            role="status"
-            style={{
-              maxWidth: "540px",
-              margin: "0 auto 28px",
-              background: "var(--color-surface-subtle, rgba(0,0,0,0.03))",
-              borderColor: "var(--color-border-subtle, rgba(0,0,0,0.1))",
-            }}
-          >
-            <span className="notice-icon" aria-hidden="true">i</span>
-            <div>
-              <strong>View-Only Access:</strong>
-              <span>Company operating expenses are managed by Finance and Admin personnel.</span>
-            </div>
-          </div>
-        )}
-
-        {/* Expense Records Ledger (Clean & Minimal: Date, Amount, Note, Recorded By, Actions) */}
-        <section className={`records-card finance-ledger-card${loading ? " is-loading" : ""}`} aria-label="Company expenses ledger">
+        {/* Expense Ledger */}
+        <section
+          className="records-card finance-ledger-card"
+          aria-label="Company expense ledger"
+        >
           <div className="records-heading">
-            <div className="records-heading-copy">
+            <div>
               <h2>Expense Ledger</h2>
             </div>
-            <div className="records-heading-meta">
-              <span className="ledger-total-badge">
-                {filteredAndSortedExpenses.length} record{filteredAndSortedExpenses.length === 1 ? "" : "s"}
-              </span>
-            </div>
+            <span className="ledger-total-badge">
+              {filteredAndSortedExpenses.length} of {expenses.length} records
+            </span>
           </div>
 
-          {/* Search & Filter Toolbar */}
-          <div className="filters">
-            <label className="search-box">
-              <span className="sr-only">Search notes or dates</span>
+          <div className="filters" aria-label="Filter company expenses">
+            <label
+              className="search-box"
+              title="Search expenses by description, note, user, date, or amount"
+            >
               <svg
-                width="14"
-                height="14"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
+                width="15"
+                height="15"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                style={{ flexShrink: 0 }}
               >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
               </svg>
               <input
                 type="search"
-                placeholder="Search notes or dates…"
                 aria-label="Search company expenses"
+                placeholder="Search description, note, or user…"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setPage(1);
                 }}
               />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  aria-label="Clear search query"
+                  title="Clear search"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setPage(1);
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
             </label>
 
             <GlobalDateRangePicker />
 
-            {searchQuery || range.startDate || range.endDate ? (
+            {hasActiveFilters ? (
               <button
                 type="button"
-                className="filter-button filter-clear"
-                onClick={() => {
-                  setSearchQuery("");
-                  setRange({ startDate: null, endDate: null });
-                  setPage(1);
-                }}
+                className="secondary-button filter-clear-action-btn"
+                onClick={clearFilters}
+                title="Reset all active filters"
               >
-                Clear filters
+                Clear Filters
               </button>
             ) : null}
           </div>
 
-          {(searchQuery.trim() || range.startDate || range.endDate) && (
+          {hasActiveFilters ? (
             <div className="active-filter-chips" aria-label="Active filters">
-              <span className="active-chips-label">Active filters:</span>
-              {(range.startDate || range.endDate) && (
+              <span className="filter-chips-label">Filtered by:</span>
+              {searchQuery.trim() ? (
                 <span className="filter-chip">
-                  <span className="filter-chip-category">Date:</span>{" "}
-                  {formatDateRange(range)}
-                  <button
-                    type="button"
-                    className="filter-chip-remove"
-                    aria-label="Remove date range filter"
-                    title="Remove date range filter"
-                    onClick={() => {
-                      setRange({ startDate: null, endDate: null });
-                      setPage(1);
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
-              {searchQuery.trim() && (
-                <span className="filter-chip">
-                  <span className="filter-chip-category">Search:</span> {searchQuery.trim()}
+                  <span className="filter-chip-category">Search:</span>{" "}
+                  {searchQuery.trim()}
                   <button
                     type="button"
                     className="filter-chip-remove"
                     aria-label="Remove search filter"
-                    title="Remove search filter"
                     onClick={() => {
                       setSearchQuery("");
                       setPage(1);
@@ -626,109 +584,121 @@ export default function FinancePage() {
                     ×
                   </button>
                 </span>
-              )}
+              ) : null}
+              {range.startDate || range.endDate ? (
+                <span className="filter-chip">
+                  <span className="filter-chip-category">Date:</span>{" "}
+                  {formatDateRange(range)}
+                  <button
+                    type="button"
+                    className="filter-chip-remove"
+                    aria-label="Remove date range filter"
+                    onClick={() => {
+                      setRange({ startDate: null, endDate: null });
+                      setPage(1);
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ) : null}
               <button
                 type="button"
                 className="filter-chip-clear-all"
-                title="Clear all active filters"
-                onClick={() => {
-                  setSearchQuery("");
-                  setRange({ startDate: null, endDate: null });
-                  setPage(1);
-                }}
+                onClick={clearFilters}
               >
                 Clear all
               </button>
             </div>
-          )}
+          ) : null}
 
-          {/* Table */}
-          {error ? (
-            <div className="empty-state" role="alert">
-              <strong>Finance database is unavailable</strong>
-              <span>{error}</span>
-            </div>
-          ) : loading ? (
+          {loading ? (
             <div className="empty-state" role="status">
-              <strong>Loading company expense ledger…</strong>
-              <span>Retrieving operating expense records.</span>
+              <strong>Loading expense ledger…</strong>
+              <span>Retrieving company operating expense records.</span>
             </div>
-          ) : paginatedExpenses.length === 0 ? (
+          ) : filteredAndSortedExpenses.length === 0 ? (
             <div className="empty-state">
-              <strong>No company expenses recorded</strong>
+              <strong>
+                {expenses.length === 0
+                  ? "No company expenses recorded yet"
+                  : "No expenses match the active filters"}
+              </strong>
               <span>
-                {searchQuery
-                  ? "Try adjusting your search criteria."
-                  : "No operating expenses recorded for this date range."}
+                {expenses.length === 0
+                  ? canManage
+                    ? "Use + Record Expense to add the first company operating expense."
+                    : "No company operating expenses have been recorded yet."
+                  : "Try clearing the search query or selecting All Dates."}
               </span>
             </div>
           ) : (
             <div className="table-wrap">
-              <table>
+              <table className="finance-ledger-table">
                 <thead>
                   <tr>
-                    <th
-                      style={{ cursor: "pointer", userSelect: "none" }}
-                      onClick={() => toggleSort("date")}
-                      title="Click to sort by date"
-                    >
-                      Date {sortField === "date" ? (sortDirection === "asc" ? "↑" : "↓") : ""}
-                    </th>
-                    <th
-                      style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
-                      onClick={() => toggleSort("amount")}
-                      title="Click to sort by amount"
-                    >
-                      Total Amount (₱) {sortField === "amount" ? (sortDirection === "asc" ? "↑" : "↓") : ""}
-                    </th>
+                    <SortableTableHeader
+                      label="Date"
+                      sortKey="date"
+                      activeSortKey={sortField}
+                      direction={sortDirection}
+                      defaultDirection="desc"
+                      onSort={handleSort}
+                      onReset={handleResetSort}
+                    />
+                    <th>Description</th>
                     <th>Note / Reference</th>
                     <th>Recorded By</th>
-                    {canManage ? <th style={{ textAlign: "center", width: "90px" }}>Actions</th> : null}
+                    <SortableTableHeader
+                      label="Amount"
+                      sortKey="amount"
+                      activeSortKey={sortField}
+                      direction={sortDirection}
+                      defaultDirection="desc"
+                      onSort={handleSort}
+                      onReset={handleResetSort}
+                      className="money"
+                    />
+                    {canManage ? (
+                      <th className="finance-actions-col">Actions</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedExpenses.map((exp) => (
-                    <tr key={exp.id} className="record-row">
-                      <td className="cell-date">
-                        <span className="date-main">{exp.expenseDate}</span>
+                    <tr key={exp.id}>
+                      <td className="cell-date">{exp.expenseDate}</td>
+                      <td>
+                        <strong>
+                          {exp.description || "Total Company Expenses"}
+                        </strong>
                       </td>
-                      <td className="money" style={{ textAlign: "right", fontWeight: 700, color: "var(--color-accent-deep, #92400e)" }}>
-                        {formatPeso(exp.amount)}
-                      </td>
-                      <td style={{ color: exp.notes ? "var(--color-text-secondary)" : "var(--color-text-muted)" }}>
-                        {exp.notes || exp.description || "—"}
-                      </td>
-                      <td style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
-                        {exp.createdBy || "operations"}
+                      <td className="finance-note-cell">{exp.notes || "—"}</td>
+                      <td>{exp.createdBy || "system"}</td>
+                      <td className="money">
+                        <strong>{formatPeso(exp.amount)}</strong>
                       </td>
                       {canManage ? (
-                        <td style={{ textAlign: "center" }}>
-                          <div style={{ display: "inline-flex", gap: "10px", alignItems: "center" }}>
+                        <td className="finance-actions-cell">
+                          <div className="finance-row-actions">
                             <button
                               type="button"
-                              className="icon-only-action compact ui-tooltip"
-                              aria-label="Edit expense amount"
-                              title="Edit expense amount"
+                              className="secondary-button finance-action-btn"
                               onClick={() => setEditingExpense(exp)}
+                              title="Edit company expense"
                             >
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
+                              Edit
                             </button>
                             <button
                               type="button"
-                              className="icon-only-action compact danger ui-tooltip"
-                              aria-label="Delete expense record"
-                              title="Delete expense record"
+                              className="secondary-button finance-action-btn danger"
                               onClick={() => {
                                 setDeleteError(null);
                                 setDeletingExpense(exp);
                               }}
+                              title="Delete company expense"
                             >
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              </svg>
+                              Delete
                             </button>
                           </div>
                         </td>
@@ -736,45 +706,206 @@ export default function FinancePage() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="finance-ledger-tfoot-row">
+                    <td colSpan={4}>
+                      Filtered Total ({filteredAndSortedExpenses.length}{" "}
+                      {filteredAndSortedExpenses.length === 1
+                        ? "entry"
+                        : "entries"}
+                      )
+                    </td>
+                    <td className="money">
+                      <strong>
+                        {formatPeso(
+                          filteredAndSortedExpenses.reduce(
+                            (s, e) => s + e.amount,
+                            0,
+                          ),
+                        )}
+                      </strong>
+                    </td>
+                    {canManage ? <td /> : null}
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
 
-          {/* Pagination (Strictly 10 records per page per Rule 3D) */}
-          {totalItems > 0 ? (
-            <TablePagination
-              page={page}
-              pageCount={pageCount}
-              totalItems={totalItems}
-              pageSize={PAGE_SIZE}
-              onPageChange={setPage}
-              itemLabel="company expenses"
-              itemCountInPage={paginatedExpenses.length}
-            />
-          ) : null}
+          <TablePagination
+            page={page}
+            pageCount={pageCount}
+            totalItems={totalItems}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+            loading={loading}
+            itemLabel="expenses"
+            itemCountInPage={paginatedExpenses.length}
+          />
         </section>
       </div>
 
-      {/* Edit Expense Modal */}
-      {editingExpense ? (
-        <EditCompanyExpenseModal
-          expense={editingExpense}
-          pending={isSavingEdit}
-          onClose={() => setEditingExpense(null)}
-          onSave={handleSaveEdit}
-        />
-      ) : null}
+      {/* Record Expense Modal */}
+      {isRecordModalOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="record-expense-modal-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={closeRecordModal}
+              />
+              <div
+                className="routex-dialog finance-expense-dialog"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <header className="routex-dialog-header">
+                  <div>
+                    <h2 id="record-expense-modal-title">Record Expense</h2>
+                  </div>
+                  <button
+                    type="button"
+                    className="routex-dialog-close"
+                    aria-label="Close record expense modal"
+                    title="Close dialog (Esc)"
+                    disabled={submitting}
+                    onClick={closeRecordModal}
+                  >
+                    ×
+                  </button>
+                </header>
+
+                <form onSubmit={handleCreateExpense}>
+                  <div className="routex-dialog-body finance-expense-dialog-body">
+                    {formError ? (
+                      <div className="delivery-form-alert" role="alert">
+                        {formError}
+                      </div>
+                    ) : null}
+
+                    <div className="routex-dialog-grid-2">
+                      <div className="routex-dialog-field">
+                        <label htmlFor="finance-expense-amount">
+                          Amount (₱) <span className="field-required-tag">*</span>
+                        </label>
+                        <div className="peso-input-wrap">
+                          <span className="peso-prefix" aria-hidden="true">
+                            ₱
+                          </span>
+                          <input
+                            id="finance-expense-amount"
+                            type="text"
+                            inputMode="decimal"
+                            className="peso-input"
+                            placeholder="0.00"
+                            value={newAmount}
+                            onKeyDown={handlePositiveDecimalKeyDown}
+                            onChange={(e) =>
+                              setNewAmount(
+                                sanitizePositiveDecimalInput(e.target.value),
+                              )
+                            }
+                            disabled={submitting}
+                            required
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+
+                      <div className="routex-dialog-field">
+                        <label htmlFor="finance-expense-date">
+                          Date <span className="field-required-tag">*</span>
+                        </label>
+                        <input
+                          id="finance-expense-date"
+                          type="date"
+                          min="2024-01-01"
+                          value={newDate}
+                          onChange={(e) => setNewDate(e.target.value)}
+                          disabled={submitting}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="routex-dialog-field">
+                      <label htmlFor="finance-expense-description">
+                        Description{" "}
+                        <span className="field-required-tag">(Optional)</span>
+                      </label>
+                      <input
+                        id="finance-expense-description"
+                        type="text"
+                        placeholder="Total Company Expenses"
+                        value={newDescription}
+                        onChange={(e) => setNewDescription(e.target.value)}
+                        disabled={submitting}
+                      />
+                    </div>
+
+                    <div className="routex-dialog-field">
+                      <label htmlFor="finance-expense-notes">
+                        Note / Reference{" "}
+                        <span className="field-required-tag">(Optional)</span>
+                      </label>
+                      <input
+                        id="finance-expense-notes"
+                        type="text"
+                        placeholder="e.g. Utilities, office supplies, invoice #"
+                        value={newNotes}
+                        onChange={(e) => setNewNotes(e.target.value)}
+                        disabled={submitting}
+                      />
+                    </div>
+                  </div>
+
+                  <footer className="routex-dialog-footer">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={submitting}
+                      onClick={closeRecordModal}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="primary-action-button"
+                      disabled={submitting}
+                    >
+                      {submitting ? "Saving…" : "Record Expense"}
+                    </button>
+                  </footer>
+                </form>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {/* Edit Modal */}
+      <EditCompanyExpenseModal
+        expense={editingExpense}
+        pending={isSavingEdit}
+        onClose={() => setEditingExpense(null)}
+        onSave={handleSaveEdit}
+      />
 
       {/* Delete Confirmation Dialog */}
-      {deletingExpense ? (
-        <ConfirmExpenseDeletionDialog
-          expense={deletingExpense}
-          pending={isDeleting}
-          error={deleteError}
-          onCancel={() => setDeletingExpense(null)}
-          onConfirm={handleConfirmDelete}
-        />
-      ) : null}
+      <ConfirmExpenseDeletionDialog
+        expense={deletingExpense}
+        pending={isDeleting}
+        error={deleteError}
+        onCancel={() => {
+          setDeleteError(null);
+          setDeletingExpense(null);
+        }}
+        onConfirm={handleConfirmDelete}
+      />
     </>
   );
 }

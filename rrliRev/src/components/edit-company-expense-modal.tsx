@@ -8,6 +8,10 @@ import {
   type ValidatedCompanyExpense,
   validateCompanyExpenseInput,
 } from "@/features/finance/company-expense-domain";
+import {
+  handlePositiveDecimalKeyDown,
+  sanitizePositiveDecimalInput,
+} from "@/features/deliveries/delivery-input-utils";
 
 export function EditCompanyExpenseModal({
   expense,
@@ -36,6 +40,17 @@ export function EditCompanyExpenseModal({
     }
   }, [expense]);
 
+  useEffect(() => {
+    if (!expense) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !pending) {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [expense, pending, onClose]);
+
   if (!expense || typeof document === "undefined") return null;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -57,7 +72,9 @@ export function EditCompanyExpenseModal({
     try {
       await onSave(expense!.id, validation.data);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to save company expense changes.");
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to save company expense changes.",
+      );
     }
   }
 
@@ -70,15 +87,13 @@ export function EditCompanyExpenseModal({
       style={{ zIndex: 1000 }}
     >
       <div className="routex-dialog-backdrop" onClick={() => !pending && onClose()} />
-      <div className="routex-dialog" style={{ maxWidth: "480px" }}>
-        <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
+      <div
+        className="routex-dialog finance-expense-dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="routex-dialog-header">
           <div>
-            <h2 id="edit-expense-modal-title" style={{ fontSize: "17px" }}>
-              Edit Company Expense
-            </h2>
-            <p style={{ margin: "2px 0 0", fontSize: "11px", color: "var(--color-text-muted)" }}>
-              Update company operating expense amount.
-            </p>
+            <h2 id="edit-expense-modal-title">Edit Expense</h2>
           </div>
           <button
             type="button"
@@ -93,86 +108,83 @@ export function EditCompanyExpenseModal({
         </header>
 
         <form onSubmit={handleSubmit}>
-          <div className="routex-dialog-body" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div className="routex-dialog-body finance-expense-dialog-body">
             {errorMessage ? (
-              <div className="notice" role="alert">
-                <span className="notice-icon" aria-hidden="true">!</span>
-                <div>
-                  <strong>Validation Notice:</strong>
-                  <span>{errorMessage}</span>
-                </div>
+              <div className="delivery-form-alert" role="alert">
+                {errorMessage}
               </div>
             ) : null}
 
-            {/* Prominent Centered Amount Input */}
-            <div className="finance-amount-hero-box" style={{ padding: "16px 20px", textAlign: "center" }}>
-              <label htmlFor="edit-expense-amount" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", display: "block", marginBottom: "6px" }}>
-                Total Company Expenses (₱ PHP)
-              </label>
-              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "100%", maxWidth: "300px" }}>
-                <span style={{ fontSize: "24px", fontWeight: 800, color: "var(--color-accent, #d97706)", marginRight: "6px" }} aria-hidden="true">
-                  ₱
-                </span>
+            <div className="routex-dialog-grid-2">
+              <div className="routex-dialog-field">
+                <label htmlFor="edit-expense-amount">
+                  Amount (₱) <span className="field-required-tag">*</span>
+                </label>
+                <div className="peso-input-wrap">
+                  <span className="peso-prefix" aria-hidden="true">
+                    ₱
+                  </span>
+                  <input
+                    id="edit-expense-amount"
+                    type="text"
+                    inputMode="decimal"
+                    className="peso-input"
+                    placeholder="0.00"
+                    value={amount}
+                    onKeyDown={handlePositiveDecimalKeyDown}
+                    onChange={(e) => setAmount(sanitizePositiveDecimalInput(e.target.value))}
+                    disabled={pending}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="routex-dialog-field">
+                <label htmlFor="edit-expense-date">
+                  Date <span className="field-required-tag">*</span>
+                </label>
                 <input
-                  id="edit-expense-amount"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  id="edit-expense-date"
+                  type="date"
+                  min="2024-01-01"
+                  value={expenseDate}
+                  onChange={(e) => setExpenseDate(e.target.value)}
                   disabled={pending}
                   required
-                  style={{
-                    width: "100%",
-                    fontSize: "24px",
-                    fontWeight: 800,
-                    textAlign: "center",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    color: "var(--color-text-primary)",
-                  }}
                 />
               </div>
             </div>
 
-            {/* Expense Date */}
-            <div>
-              <label htmlFor="edit-expense-date" className="field-label-text">
-                Expense Date <span style={{ color: "var(--color-danger, #dc2626)" }}>*</span>
+            <div className="routex-dialog-field">
+              <label htmlFor="edit-expense-description">
+                Description <span className="field-required-tag">(Optional)</span>
               </label>
               <input
-                id="edit-expense-date"
-                type="date"
-                min="2024-01-01"
-                className="finance-input"
-                value={expenseDate}
-                onChange={(e) => setExpenseDate(e.target.value)}
+                id="edit-expense-description"
+                type="text"
+                placeholder="Total Company Expenses"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
                 disabled={pending}
-                required
-                style={{ width: "100%", marginTop: "4px" }}
               />
             </div>
 
-            {/* Optional Notes */}
-            <div>
-              <label htmlFor="edit-expense-notes" className="field-label-text">
-                Note / Reference <span style={{ fontWeight: 400, color: "var(--color-text-muted)" }}>(Optional)</span>
+            <div className="routex-dialog-field">
+              <label htmlFor="edit-expense-notes">
+                Note / Reference <span className="field-required-tag">(Optional)</span>
               </label>
               <input
                 id="edit-expense-notes"
                 type="text"
-                className="finance-input"
-                placeholder="Optional note or reference..."
+                placeholder="e.g. Utilities, office supplies, invoice #"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 disabled={pending}
-                style={{ width: "100%", marginTop: "4px" }}
               />
             </div>
           </div>
 
-          <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+          <footer className="routex-dialog-footer">
             <button
               type="button"
               className="secondary-button"

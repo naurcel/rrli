@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { CompanyExpense } from "@/features/finance/company-expense-domain";
@@ -21,6 +21,23 @@ export function ConfirmExpenseDeletionDialog({
 }) {
   const [reason, setReason] = useState("");
 
+  useEffect(() => {
+    if (expense) {
+      setReason("");
+    }
+  }, [expense]);
+
+  useEffect(() => {
+    if (!expense) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !pending) {
+        onCancel();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [expense, pending, onCancel]);
+
   if (!expense || typeof document === "undefined") return null;
 
   return createPortal(
@@ -32,13 +49,18 @@ export function ConfirmExpenseDeletionDialog({
       style={{ zIndex: 1000 }}
     >
       <div className="routex-dialog-backdrop" onClick={() => !pending && onCancel()} />
-      <div className="routex-dialog" style={{ maxWidth: "460px" }}>
-        <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
+      <div
+        className="routex-dialog finance-expense-dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="routex-dialog-header">
           <div>
-            <h2 id="delete-expense-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
-              Confirm Expense Deletion
+            <h2
+              id="delete-expense-dialog-title"
+              style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)", background: "none", WebkitTextFillColor: "var(--color-danger, #dc2626)" }}
+            >
+              Delete Expense
             </h2>
-            <p style={{ margin: "2px 0 0", fontSize: "11px" }}>Action is audited and permanently logged.</p>
           </div>
           <button
             type="button"
@@ -52,69 +74,52 @@ export function ConfirmExpenseDeletionDialog({
           </button>
         </header>
 
-        <div className="routex-dialog-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: "14px" }}>
+        <div className="routex-dialog-body finance-expense-dialog-body">
           {error ? (
-            <div className="notice" role="alert">
-              <span className="notice-icon" aria-hidden="true">!</span>
-              <div>
-                <strong>Error:</strong>
-                <span>{error}</span>
-              </div>
+            <div className="delivery-form-alert" role="alert">
+              {error}
             </div>
           ) : null}
 
           <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)" }}>
-            Are you sure you want to delete this company operating expense?
+            Delete <strong>{expense.description || "Total Company Expenses"}</strong> ({formatPeso(expense.amount)})?
           </p>
 
           <div className="delete-delivery-summary">
             <div>
-              <span>Description</span>
-              <strong>{expense.description}</strong>
-            </div>
-            <div>
-              <span>Amount</span>
-              <strong style={{ color: "var(--color-accent, #d97706)" }}>{formatPeso(expense.amount)}</strong>
-            </div>
-            <div>
-              <span>Expense Date</span>
+              <span>Date</span>
               <strong>{expense.expenseDate}</strong>
             </div>
             <div>
-              <span>Category</span>
-              <strong>{expense.category}</strong>
+              <span>Amount</span>
+              <strong>{formatPeso(expense.amount)}</strong>
+            </div>
+            <div>
+              <span>Recorded By</span>
+              <strong>{expense.createdBy || "system"}</strong>
+            </div>
+            <div>
+              <span>Note</span>
+              <strong>{expense.notes || "—"}</strong>
             </div>
           </div>
 
-          <div>
-            <label htmlFor="delete-expense-reason" style={{ display: "block", fontSize: "11.5px", fontWeight: 600, color: "var(--color-text-muted)", marginBottom: "4px" }}>
-              Deletion Reason (Audited):
+          <div className="routex-dialog-field">
+            <label htmlFor="delete-expense-reason">
+              Reason <span className="field-required-tag">(Optional)</span>
             </label>
             <input
               id="delete-expense-reason"
               type="text"
-              placeholder="e.g. Duplicate entry, incorrect receipt, voided transaction..."
+              placeholder="e.g. Duplicate entry, incorrect amount"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               disabled={pending}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                fontSize: "12px",
-                borderRadius: "6px",
-                border: "1px solid var(--color-border, #d1d5db)",
-                background: "var(--color-surface, #ffffff)",
-                color: "var(--color-text-primary)",
-              }}
             />
-          </div>
-
-          <div className="delete-delivery-warning">
-            <strong>Warning:</strong> Deleting this expense permanently removes it from company financial records.
           </div>
         </div>
 
-        <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+        <footer className="routex-dialog-footer">
           <button
             type="button"
             className="secondary-button"
@@ -131,7 +136,7 @@ export function ConfirmExpenseDeletionDialog({
             onClick={() => onConfirm(reason)}
             title="Permanently delete this company expense"
           >
-            {pending ? "Deleting…" : "Confirm Delete"}
+            {pending ? "Deleting…" : "Delete"}
           </button>
         </footer>
       </div>

@@ -585,13 +585,12 @@ export default function DeliveriesPage() {
   useEffect(() => {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => {
-      const params = new URLSearchParams({ page: String(page), pageSize: "10" });
+      const params = new URLSearchParams({ page: "1", pageSize: "100" });
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
       if (selectedClients.length > 0) params.set("clientIds", selectedClients.join(","));
       if (selectedTrucks.length > 0) params.set("truckIds", selectedTrucks.join(","));
       if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
       if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
-      if (statusFilter !== "all") params.set("status", statusFilter);
       const [sortField, direction] = sort.split(":");
       params.set("sort", sortField);
       params.set("direction", direction);
@@ -617,12 +616,11 @@ export default function DeliveriesPage() {
           if (!response.ok || !data.ok) {
             throw new Error(data.message ?? "Unable to load delivery records.");
           }
-          const local = data.source === "bundled-mock" && page === 1
+          const local = data.source === "bundled-mock"
             ? selectBrowserPreviewDeliveries({
                 search: searchQuery,
                 clientIds: selectedClients.length > 0 ? selectedClients : undefined,
                 truckIds: selectedTrucks.length > 0 ? selectedTrucks : undefined,
-                status: statusFilter !== "all" ? statusFilter : undefined,
                 dateFrom: range.startDate ? toDateKey(range.startDate) : undefined,
                 dateTo: range.endDate ? toDateKey(range.endDate) : undefined,
               })
@@ -631,9 +629,8 @@ export default function DeliveriesPage() {
           const localIds = new Set(local.map((item) => item.id));
           const combined = [...local, ...remote.filter((item) => !localIds.has(item.id))];
           setDeliveries(sortDeliveryLedgerItems(combined, sortField, direction as TableSortDirection));
-          const combinedTotal = (data.total ?? 0) + local.length;
-          setTotal(combinedTotal);
-          setPageCount(Math.max(data.pageCount ?? 1, Math.ceil(combinedTotal / 10)));
+          setTotal(combined.length);
+          setPageCount(Math.max(1, Math.ceil(combined.length / 10)));
           const remoteClients = data.filters?.clients ?? [];
           const existingClientIds = new Set(remoteClients.map((c) => c.id));
           const extraPreviewClients: DeliveryFilterOption[] = [];
@@ -699,7 +696,7 @@ export default function DeliveriesPage() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [page, range, searchQuery, selectedClients, selectedTrucks, sort, statusFilter]);
+  }, [range, searchQuery, selectedClients, selectedTrucks, sort]);
 
   const isInitialParamsParsed = useRef(false);
 
@@ -777,6 +774,18 @@ export default function DeliveriesPage() {
     }
     return sortedDeliveriesBase;
   }, [sortedDeliveriesBase, statusFilter]);
+
+  const filteredPageCount = Math.max(1, Math.ceil(filteredDeliveries.length / 10));
+  const paginatedDeliveries = useMemo(() => {
+    const startIdx = (page - 1) * 10;
+    return filteredDeliveries.slice(startIdx, startIdx + 10);
+  }, [filteredDeliveries, page]);
+
+  useEffect(() => {
+    if (page > filteredPageCount) {
+      setPage(filteredPageCount);
+    }
+  }, [page, filteredPageCount]);
 
   const summary = useMemo(() => {
     const financiallyComplete = sortedDeliveriesBase.filter(isDeliveryFinanciallyComplete);
@@ -1468,7 +1477,7 @@ export default function DeliveriesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredDeliveries.map((trip) => {
+                  {paginatedDeliveries.map((trip) => {
                     const isIncomplete = isDeliveryIncomplete(trip);
                     const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                     return (
@@ -1583,13 +1592,13 @@ export default function DeliveriesPage() {
 
           <TablePagination
             page={page}
-            pageCount={pageCount}
-            totalItems={total}
+            pageCount={filteredPageCount}
+            totalItems={filteredDeliveries.length}
             pageSize={10}
             onPageChange={setPage}
             loading={loading}
             itemLabel="deliveries"
-            itemCountInPage={filteredDeliveries.length}
+            itemCountInPage={paginatedDeliveries.length}
           />
         </section>
       </div>

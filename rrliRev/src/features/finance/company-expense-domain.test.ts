@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 
 import {
   calculateCompanyProfitability,
@@ -169,5 +171,32 @@ describe("Company Expense Domain & Profitability Calculations", () => {
     assert.equal(monthly[0].total, 60000);
     assert.equal(monthly[1].monthKey, "2026-11");
     assert.equal(monthly[1].total, 2000);
+  });
+
+  it("enforces unified ledger layout and compact neumorphic modal workflow on Finance page", () => {
+    const financePageSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/app/(workspace)/finance/page.tsx"),
+      "utf8",
+    );
+    const editModalSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/edit-company-expense-modal.tsx"),
+      "utf8",
+    );
+
+    // Uses shared SortableTableHeader, GlobalDateRangePicker, and TablePagination
+    assert.ok(financePageSrc.includes("SortableTableHeader"));
+    assert.ok(financePageSrc.includes("GlobalDateRangePicker"));
+    assert.ok(financePageSrc.includes("TablePagination"));
+
+    // Record Expense is a popup modal triggered from the page intro, not an inline form card
+    assert.ok(financePageSrc.includes("+ Record Expense"));
+    assert.ok(financePageSrc.includes("routex-dialog finance-expense-dialog"));
+    assert.ok(!financePageSrc.includes("finance-entry-card"));
+    assert.ok(!financePageSrc.includes("finance-amount-hero-box"));
+
+    // Both Record and Edit modals use shared numeric input guards and compact 2-column grid
+    assert.ok(financePageSrc.includes("sanitizePositiveDecimalInput"));
+    assert.ok(editModalSrc.includes("sanitizePositiveDecimalInput"));
+    assert.ok(editModalSrc.includes("routex-dialog finance-expense-dialog"));
   });
 });

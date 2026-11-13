@@ -102,6 +102,7 @@ export default function NewCompletedDeliveryPage() {
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
   const idempotencyKeyRef = useRef("");
   const [clientName, setClientName] = useState("");
   const [plateNumber, setPlateNumber] = useState("");
@@ -492,7 +493,11 @@ export default function NewCompletedDeliveryPage() {
       setSubmitError(`Delivery date must be between ${deliveryDateWindow.min} and ${deliveryDateWindow.max}.`);
       return;
     }
-    void recordDelivery();
+    buildPayload();
+    setPreviewing(true);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   async function recordDelivery() {
@@ -524,6 +529,7 @@ export default function NewCompletedDeliveryPage() {
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to record the completed delivery.");
       setSubmitting(false);
+      setPreviewing(false);
     }
   }
 
@@ -533,10 +539,202 @@ export default function NewCompletedDeliveryPage() {
   return (
     <>
       <OperationalTopbar
-        contextLabel="Record Completed Delivery"
+        contextLabel={previewing ? `Preview / Waybill #${values.waybillNumber || "DRAFT"}` : "Record Completed Delivery"}
         showDateFilter={false}
       />
       <div className="content-wrap delivery-entry-page">
+      {previewing ? (
+        <>
+          <header className="page-intro">
+            <div>
+              <button
+                type="button"
+                className="back-link"
+                onClick={() => {
+                  setPreviewing(false);
+                  if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              >
+                ← Back to edit
+              </button>
+              <h1>Preview delivery</h1>
+              <p className="subtitle">
+                Review the inputted delivery details before recording.
+              </p>
+            </div>
+          </header>
+
+          <div className="delivery-entry-form">
+            {submitError ? <div className="delivery-form-alert" role="alert">{submitError}</div> : null}
+
+            <section className="delivery-form-section">
+              <FormHeading number="01" title="Trip details" />
+              <div className="detail-meta-grid">
+                <div className="detail-meta-item">
+                  <span className="meta-label">Waybill</span>
+                  <strong className="meta-value">{values.waybillNumber || "—"}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Delivery date</span>
+                  <strong className="meta-value">{values.deliveryDate || "—"}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Client</span>
+                  <strong className="meta-value">{clientName || "—"}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Truck plate</span>
+                  <strong className="meta-value">{plateNumber || "—"}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Temperature</span>
+                  <strong className="meta-value">{truckTemperature ? `${truckTemperature}°C` : "—"}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Fuel rate</span>
+                  <strong className="meta-value">{formatPeso(numberValue(values.fuelRate) ?? 0)} / L</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Origin</span>
+                  <strong className="meta-value">{values.origin || "—"}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Distance</span>
+                  <strong className="meta-value">{values.distanceKm ? `${values.distanceKm} km` : "—"}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section className="delivery-form-section">
+              <FormHeading number="02" title={`Store drop-offs (${dropoffs.length})`} />
+              <div className="drawer-dropoff-timeline" aria-label="Drop-off stops sequence">
+                {dropoffs.map((stop, index) => {
+                  const isLast = index === dropoffs.length - 1;
+                  const entryFeeVal = numberValue(stop.entryFee) ?? 0;
+                  return (
+                    <div
+                      key={stop.id}
+                      className={`drawer-dropoff-item ${isLast ? "is-last" : ""}`}
+                    >
+                      <div className="drawer-dropoff-node" aria-hidden="true">
+                        <span className="drawer-dropoff-number">{index + 1}</span>
+                      </div>
+                      <div className="drawer-dropoff-card">
+                        <div className="drawer-dropoff-card-header">
+                          <span className="drawer-dropoff-stop-tag">{getStopLabel(index)}</span>
+                        </div>
+                        <div className="drawer-dropoff-body">
+                          <strong className="drawer-dropoff-store">{stop.storeName || `Stop #${index + 1}`}</strong>
+                          {stop.destinationArea ? (
+                            <span className="drawer-dropoff-destination">{stop.destinationArea}</span>
+                          ) : null}
+                        </div>
+                        <div className="drawer-dropoff-footer">
+                          <span className="drawer-dropoff-fee-label">Entry fee:</span>
+                          <span className="drawer-dropoff-fee-val">
+                            {entryFeeVal === 0 ? "₱0.00" : formatPeso(entryFeeVal)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="delivery-form-section">
+              <FormHeading number="03" title="Rate & expenses" />
+              <div className="detail-meta-grid">
+                <div className="detail-meta-item">
+                  <span className="meta-label">Delivery rate</span>
+                  <strong className="meta-value">{formatPeso(numberValue(values.deliveryRate) ?? 0)}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Additional charges</span>
+                  <strong className="meta-value">{formatPeso(numberValue(values.additionalCharges) ?? 0)}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Diesel fuel</span>
+                  <strong className="meta-value">{formatPeso(numberValue(values.dieselExpenses) ?? 0)}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Highway tolls</span>
+                  <strong className="meta-value">{formatPeso(numberValue(values.tollGateExpenses) ?? 0)}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Store entry fees</span>
+                  <strong className="meta-value">{formatPeso(financialReview.entryFees ?? 0)}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Other expenses</span>
+                  <strong className="meta-value">{formatPeso(numberValue(values.otherExpenses) ?? 0)}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Driver ({driverName || "—"})</span>
+                  <strong className="meta-value">
+                    {formatPeso(numberValue(values.driverDailyRate) ?? 0)} rate · {formatPeso(numberValue(values.driverAllowance) ?? 0)} allowance
+                  </strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">
+                    {hasSecondHelper ? `Helper 1 (${helper1Name || "—"})` : `Helper (${helper1Name || "—"})`}
+                  </span>
+                  <strong className="meta-value">
+                    {formatPeso(numberValue(values.helperDailyRate) ?? 0)} rate · {formatPeso(numberValue(values.helperAllowance) ?? 0)} allowance
+                  </strong>
+                </div>
+                {hasSecondHelper ? (
+                  <div className="detail-meta-item">
+                    <span className="meta-label">Helper 2 ({helper2Name || "—"})</span>
+                    <strong className="meta-value">
+                      {formatPeso(numberValue(values.helper2DailyRate) ?? 0)} rate · {formatPeso(numberValue(values.helper2Allowance) ?? 0)} allowance
+                    </strong>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="delivery-financial-review" aria-label="Financial review">
+                <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
+                <div><span>Store Entry Fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
+                <div><span>Expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
+                <div className={financialReview.netIncome == null ? "" : financialReview.netIncome < 0 ? "negative" : "positive"}>
+                  <span>Net Profit</span>
+                  <strong>{formatPeso(financialReview.netIncome)}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section className="delivery-form-section">
+              <FormHeading number="04" title="Documents" />
+              <DeliveryFilePreview podFiles={podFiles} supportingFiles={supportingFiles} />
+            </section>
+
+            <div className="delivery-form-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setPreviewing(false);
+                  if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                disabled={submitting}
+              >
+                Back to edit
+              </button>
+              <button
+                type="button"
+                className="primary-action-button"
+                onClick={() => void recordDelivery()}
+                disabled={submitting}
+              >
+                {submitting ? "Recording…" : "Record delivery"}
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
       <header className="page-intro">
         <div>
           <Link className="back-link" href="/deliveries">← Back to deliveries</Link>
@@ -1115,13 +1313,82 @@ export default function NewCompletedDeliveryPage() {
         <div className="delivery-form-actions">
           <Link className="secondary-button" href="/deliveries">Cancel</Link>
           <button className="primary-action-button" type="submit" disabled={submitting || referencesLoading || noReferences}>
-            {submitting ? "Recording…" : "Record delivery"}
+            Preview delivery
           </button>
         </div>
         {noReferences ? <p className="delivery-reference-warning">At least one client and truck required.</p> : null}
       </form>
+        </>
+      )}
       </div>
     </>
+  );
+}
+
+function DeliveryFilePreview({
+  podFiles,
+  supportingFiles,
+}: {
+  podFiles: File[];
+  supportingFiles: File[];
+}) {
+  const [previews, setPreviews] = useState<Array<{
+    file: File;
+    kind: "pod" | "supporting";
+    url: string;
+  }>>([]);
+
+  useEffect(() => {
+    const nextPreviews = [
+      ...podFiles.map((file) => ({ file, kind: "pod" as const, url: URL.createObjectURL(file) })),
+      ...supportingFiles.map((file) => ({ file, kind: "supporting" as const, url: URL.createObjectURL(file) })),
+    ];
+
+    setPreviews(nextPreviews);
+    return () => nextPreviews.forEach(({ url }) => URL.revokeObjectURL(url));
+  }, [podFiles, supportingFiles]);
+
+  if (previews.length === 0) {
+    return <p className="delivery-file-preview-empty">No files attached.</p>;
+  }
+
+  return (
+    <div className="delivery-file-preview-grid">
+      {previews.map(({ file, kind, url }, index) => (
+        <article className="delivery-file-preview-card" key={`${kind}-${file.name}-${file.lastModified}-${index}`}>
+          <div className="delivery-file-preview-visual">
+            {file.type.startsWith("image/") ? (
+              // Browser-created object URLs cannot be optimized by next/image.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={url} alt={`Preview of ${file.name}`} />
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M7 3.5h6l4 4V20.5H7V3.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                <path d="M13 3.5v4h4M9.5 12h5M9.5 15h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+              </svg>
+            )}
+          </div>
+          <div className="delivery-file-preview-copy">
+            <span>{kind === "pod" ? "POD" : "Supporting"}</span>
+            <strong title={file.name}>{file.name}</strong>
+          </div>
+          <a
+            className="delivery-file-view-action ui-tooltip"
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`View ${file.name}`}
+            data-tooltip="View file"
+            title="View file"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3.5 12s3.1-5 8.5-5 8.5 5 8.5 5-3.1 5-8.5 5-8.5-5-8.5-5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+              <circle cx="12" cy="12" r="2.2" stroke="currentColor" strokeWidth="1.7" />
+            </svg>
+          </a>
+        </article>
+      ))}
+    </div>
   );
 }
 
