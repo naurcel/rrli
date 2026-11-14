@@ -1,0 +1,171 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R] /Count 2 >>
+endobj
+4 0 obj
+<< /Length 5688 >>
+stream
+BT /F2 8.5 Tf 0.85 0.47 0.02 rg 42.00 799.89 Td (R.R. LEUS TRUCKING / LOGISTICS INC. \(RRLI\) - ROUTEX) Tj ET
+BT /F1 8.5 Tf 0.39 0.45 0.55 rg 388.28 799.89 Td (Executive Briefing | Corporate Structure) Tj ET
+BT /F2 14 Tf 0.06 0.09 0.16 rg 42.00 784.89 Td (RouteX: Centralized Enterprise System Architecture) Tj ET
+0.96 0.62 0.04 RG 1.5 w 42.00 775.89 m 553.28 775.89 l S
+1 0.984 0.92 rg 0.96 0.62 0.04 RG 0.75 w 42.00 709.89 511.28 60.00 re B
+0.96 0.62 0.04 rg 42.00 709.89 3.50 60.00 re f
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 761.89 Td (EXECUTIVE SUMMARY: RouteX is not merely a tracking database or an operational logbook; it serves as RRLI's central) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 750.39 Td (operational and financial nervous system \(TMS & ERP\). It eliminates fragmented 'spreadsheet chaos', disconnected) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 738.89 Td (messaging channels, and delayed paperwork by establishing a single, authoritative, real-time source of truth for every) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 727.39 Td (delivery waybill, fleet asset, crew member, operational expense, and client billing ledger across the entire company.) Tj ET
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 691.89 Td (1. What Centralization Means in Relation to the Company) Tj ET
+BT /F1 8.8 Tf 0.2 0.25 0.33 rg 42.00 679.89 Td (In a decentralized or fragmented logistics business, each department maintains isolated records: Dispatch has a) Tj ET
+BT /F1 8.8 Tf 0.2 0.25 0.33 rg 42.00 668.39 Td (spreadsheet of trips, drivers text fuel receipts, accounting maintains payroll notebooks, customer service calls) Tj ET
+BT /F1 8.8 Tf 0.2 0.25 0.33 rg 42.00 656.89 Td (warehouses to locate signed delivery receipts, and management receives reports only weeks after month-end.) Tj ET
+BT /F1 8.8 Tf 0.2 0.25 0.33 rg 42.00 645.39 Td (Centralization in RouteX means every department works on the exact same live operational entity.) Tj ET
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 625.89 Td (2. Five Operational Pillars Unified into One Central Platform) Tj ET
+0.98 0.985 0.99 rg 0.89 0.91 0.94 RG 0.75 w 42.00 564.89 511.28 55.00 re B
+0.2 0.35 0.55 rg 42.00 564.89 2.50 55.00 re f
+BT /F2 9.5 Tf 0.06 0.09 0.16 rg 50.00 611.89 Td (A. Operations & Dispatch) Tj ET
+BT /F2 7.5 Tf 0.85 0.47 0.02 rg 403.28 611.89 Td ([ DISPATCH & EXECUTION ]) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 598.89 Td (Schedules trips, assigns fleet trucks and crew \(Driver & Helper\), validates temperature compliance \(-20 deg C to 20 deg) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 587.89 Td (C\), monitors multi-stop drop-offs, and imports Daily Trip Reports \(DTRs\) directly from spreadsheets with automated) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 576.89 Td (validation and duplicate prevention.) Tj ET
+0.98 0.985 0.99 rg 0.89 0.91 0.94 RG 0.75 w 42.00 511.89 511.28 55.00 re B
+0.2 0.35 0.55 rg 42.00 511.89 2.50 55.00 re f
+BT /F2 9.5 Tf 0.06 0.09 0.16 rg 50.00 558.89 Td (B. Fleet & Asset Management) Tj ET
+BT /F2 7.5 Tf 0.85 0.47 0.02 rg 403.28 558.89 Td ([ FLEET & CREW ASSETS ]) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 545.89 Td (Maintains active registry of Owned and Subcontracted trucks, tracks mileage and fuel efficiency, monitors truck) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 534.89 Td (maintenance history, and manages driver/helper personnel records with mandatory contact phone numbers and verified) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 523.89 Td (assignments.) Tj ET
+0.98 0.985 0.99 rg 0.89 0.91 0.94 RG 0.75 w 42.00 458.89 511.28 55.00 re B
+0.2 0.35 0.55 rg 42.00 458.89 2.50 55.00 re f
+BT /F2 9.5 Tf 0.06 0.09 0.16 rg 50.00 505.89 Td (C. Finance & Accounting) Tj ET
+BT /F2 7.5 Tf 0.85 0.47 0.02 rg 403.28 505.89 Td ([ FINANCIAL SETTLEMENT ]) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 492.89 Td (Eliminates manual reconciliations by linking trip revenues directly to verified variable costs \(diesel, SLEX/NLEX tollways,) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 481.89 Td (driver rates, helper allowances, store entry fees\). Automatically calculates trip net profit while cleanly isolating company) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 470.89 Td (overhead expenses.) Tj ET
+0.98 0.985 0.99 rg 0.89 0.91 0.94 RG 0.75 w 42.00 405.89 511.28 55.00 re B
+0.2 0.35 0.55 rg 42.00 405.89 2.50 55.00 re f
+BT /F2 9.5 Tf 0.06 0.09 0.16 rg 50.00 452.89 Td (D. Customer Accounts & Billing) Tj ET
+BT /F2 7.5 Tf 0.85 0.47 0.02 rg 403.28 452.89 Td ([ CLIENT INVOICING & POD ]) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 439.89 Td (Customer representatives inspect verified digital Proof of Delivery \(POD\) attachments in an in-app lightbox modal, track) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 428.89 Td (completion status, and generate audit-compliant trip ledgers for major corporate clients including Landers, MCCI, and) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 417.89 Td (Vanguard.) Tj ET
+0.98 0.985 0.99 rg 0.89 0.91 0.94 RG 0.75 w 42.00 363.89 511.28 44.00 re B
+0.2 0.35 0.55 rg 42.00 363.89 2.50 44.00 re f
+BT /F2 9.5 Tf 0.06 0.09 0.16 rg 50.00 399.89 Td (E. Executive Governance & Administration) Tj ET
+BT /F2 7.5 Tf 0.85 0.47 0.02 rg 403.28 399.89 Td ([ EXECUTIVE OVERSIGHT ]) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 386.89 Td (Provides real-time visibility into company-wide gross revenue, fleet net profit margins, pending collections, and user role) Tj ET
+BT /F1 8.4 Tf 0.28 0.33 0.42 rg 50.00 375.89 Td (administration \(Admin, Operations, Finance, View-Only\) backed by an immutable, timestamped system audit ledger.) Tj ET
+BT /F1 8 Tf 0.55 0.60 0.68 rg 42 22 Td (RouteX Centralized System Overview  |  R.R. Leus Trucking Inc.  |  Page 1 of 2) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 6945 >>
+stream
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 799.89 Td (3. The Centralized End-to-End Delivery Lifecycle) Tj ET
+BT /F1 8.8 Tf 0.2 0.25 0.33 rg 42.00 787.89 Td (Every delivery trip in RRLI follows a single, connected pipeline inside RouteX. Data entered at the start automatically) Tj ET
+BT /F1 8.8 Tf 0.2 0.25 0.33 rg 42.00 776.39 Td (flows into accounting and billing without duplicate entry:) Tj ET
+0.96 0.97 0.98 rg 0.85 0.88 0.92 RG 0.75 w 42.00 736.39 511.28 30.50 re B
+BT /F2 7.8 Tf 0.85 0.47 0.02 rg 52.00 758.89 Td (STEP 1: TRIP INGESTION) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 192.00 758.89 Td (DTR Import / Dispatch) Tj ET
+BT /F1 8.3 Tf 0.3 0.35 0.43 rg 52.00 746.89 Td (Trips are recorded or batch imported via CSV/TSV with multi-stop grouping and strict date/rate validation.) Tj ET
+0.96 0.97 0.98 rg 0.85 0.88 0.92 RG 0.75 w 42.00 707.89 511.28 30.50 re B
+BT /F2 7.8 Tf 0.85 0.47 0.02 rg 52.00 730.39 Td (STEP 2: FIELD EXECUTION) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 192.00 730.39 Td (Route & Reefer Monitoring) Tj ET
+BT /F1 8.3 Tf 0.3 0.35 0.43 rg 52.00 718.39 Td (Truck plate, driver, helper, origin hub, distance, and temperature are bound to the waybill number.) Tj ET
+0.96 0.97 0.98 rg 0.85 0.88 0.92 RG 0.75 w 42.00 679.39 511.28 30.50 re B
+BT /F2 7.8 Tf 0.85 0.47 0.02 rg 52.00 701.89 Td (STEP 3: POD VERIFICATION) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 192.00 701.89 Td (Proof of Delivery Upload) Tj ET
+BT /F1 8.3 Tf 0.3 0.35 0.43 rg 52.00 689.89 Td (Signed store receipts are uploaded and inspected directly via in-app lightbox with zoom and rotate controls.) Tj ET
+0.96 0.97 0.98 rg 0.85 0.88 0.92 RG 0.75 w 42.00 650.89 511.28 30.50 re B
+BT /F2 7.8 Tf 0.85 0.47 0.02 rg 52.00 673.39 Td (STEP 4: RECONCILIATION) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 192.00 673.39 Td (Variable Cost Binding) Tj ET
+BT /F1 8.3 Tf 0.3 0.35 0.43 rg 52.00 661.39 Td (Diesel, tollways, and crew allowances are logged and validated against actual trip receipts.) Tj ET
+0.96 0.97 0.98 rg 0.85 0.88 0.92 RG 0.75 w 42.00 622.39 511.28 30.50 re B
+BT /F2 7.8 Tf 0.85 0.47 0.02 rg 52.00 644.89 Td (STEP 5: BILLING & PROFIT) Tj ET
+BT /F2 9 Tf 0.06 0.09 0.16 rg 192.00 644.89 Td (Net Margin & Invoicing) Tj ET
+BT /F1 8.3 Tf 0.3 0.35 0.43 rg 52.00 632.89 Td (Trip rate minus expenses resolves real net profit; automated client summary reports ready for billing.) Tj ET
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 608.39 Td (4. Comparative Analysis: Fragmented Operations vs. Centralized RouteX) Tj ET
+0.99 0.99 1 rg 0.82 0.85 0.9 RG 0.75 w 42.00 565.39 511.28 39.00 re B
+0.82 0.85 0.9 RG 1 w 154.48 604.39 m 154.48 565.39 l S
+0.82 0.85 0.9 RG 1 w 353.88 604.39 m 353.88 565.39 l S
+BT /F2 8.2 Tf 0.06 0.09 0.16 rg 48.00 596.39 Td (Data Architecture) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 596.39 Td (Scattered Excel files on individual PCs, paper logbooks,) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 585.89 Td (and chat messages.) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 596.39 Td (Single shared repository; live, synchronized state across) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 585.89 Td (all workspaces.) Tj ET
+0.99 0.99 1 rg 0.82 0.85 0.9 RG 0.75 w 42.00 522.39 511.28 39.00 re B
+0.82 0.85 0.9 RG 1 w 154.48 561.39 m 154.48 522.39 l S
+0.82 0.85 0.9 RG 1 w 353.88 561.39 m 353.88 522.39 l S
+BT /F2 8.2 Tf 0.06 0.09 0.16 rg 48.00 553.39 Td (Proof of Delivery \(POD\)) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 553.39 Td (Physical receipts filed in warehouse boxes; customer) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 542.89 Td (inquiries took days.) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 553.39 Td (Instant digital POD repository with in-app zoom/rotate) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 542.89 Td (viewer and direct waybill links.) Tj ET
+0.99 0.99 1 rg 0.82 0.85 0.9 RG 0.75 w 42.00 479.39 511.28 39.00 re B
+0.82 0.85 0.9 RG 1 w 154.48 518.39 m 154.48 479.39 l S
+0.82 0.85 0.9 RG 1 w 353.88 518.39 m 353.88 479.39 l S
+BT /F2 8.2 Tf 0.06 0.09 0.16 rg 48.00 510.39 Td (Trip Expenses & Fuel) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 510.39 Td (Paper fuel receipts handed in late; high risk of lost slips) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 499.89 Td (or inflated costs.) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 510.39 Td (All expenses tied directly to waybill records with) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 499.89 Td (confirmed vs unconfirmed status.) Tj ET
+0.99 0.99 1 rg 0.82 0.85 0.9 RG 0.75 w 42.00 436.39 511.28 39.00 re B
+0.82 0.85 0.9 RG 1 w 154.48 475.39 m 154.48 436.39 l S
+0.82 0.85 0.9 RG 1 w 353.88 475.39 m 353.88 436.39 l S
+BT /F2 8.2 Tf 0.06 0.09 0.16 rg 48.00 467.39 Td (Truck Profitability) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 467.39 Td (Calculated manually weeks after month-end; unable to) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 456.89 Td (stop losing trucks.) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 467.39 Td (Real-time KPI cards \(Revenue, Expenses, Net Profit %,) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 456.89 Td (Mileage\) updated per trip.) Tj ET
+0.99 0.99 1 rg 0.82 0.85 0.9 RG 0.75 w 42.00 393.39 511.28 39.00 re B
+0.82 0.85 0.9 RG 1 w 154.48 432.39 m 154.48 393.39 l S
+0.82 0.85 0.9 RG 1 w 353.88 432.39 m 353.88 393.39 l S
+BT /F2 8.2 Tf 0.06 0.09 0.16 rg 48.00 424.39 Td (Accountability & Security) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 424.39 Td (No audit records of who altered rates, edited trips, or) Tj ET
+BT /F1 7.8 Tf 0.45 0.48 0.55 rg 160.48 413.89 Td (deleted records.) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 424.39 Td (Immutable audit log tracking user identity, timestamp,) Tj ET
+BT /F1 7.8 Tf 0.08 0.4 0.2 rg 359.88 413.89 Td (and before/after changes.) Tj ET
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 373.39 Td (5. Strategic Organizational Value for RRLI) Tj ET
+BT /F2 8.8 Tf 0.85 0.47 0.02 rg 46.00 361.39 Td (-) Tj ET
+BT /F1 8.4 Tf 0.2 0.25 0.33 rg 56.00 361.39 Td (Executive Decision-Making: Company leadership monitors live fleet profitability, client revenue margins, and pending) Tj ET
+BT /F1 8.4 Tf 0.2 0.25 0.33 rg 56.00 349.89 Td (collections from a single screen without waiting for manual reports.) Tj ET
+BT /F2 8.8 Tf 0.85 0.47 0.02 rg 46.00 336.39 Td (-) Tj ET
+BT /F1 8.4 Tf 0.2 0.25 0.33 rg 56.00 336.39 Td (Scalability Without Overhead: As RRLI acquires more reefer trucks and expands into new distribution hubs, operational) Tj ET
+BT /F1 8.4 Tf 0.2 0.25 0.33 rg 56.00 324.89 Td (volume increases without requiring proportional administrative hires.) Tj ET
+BT /F2 8.8 Tf 0.85 0.47 0.02 rg 46.00 311.39 Td (-) Tj ET
+BT /F1 8.4 Tf 0.2 0.25 0.33 rg 56.00 311.39 Td (Corporate Client Trust: Major accounts \(Landers, MCCI, Vanguard\) receive transparent, accurate, and timestamped trip) Tj ET
+BT /F1 8.4 Tf 0.2 0.25 0.33 rg 56.00 299.89 Td (statements backed by instantly verifiable Proof of Delivery.) Tj ET
+BT /F1 8 Tf 0.55 0.60 0.68 rg 42 22 Td (RouteX Centralized System Overview  |  R.R. Leus Trucking Inc.  |  Page 2 of 2) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Type /Catalog /Pages 3 0 R >>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000009 00000 n 
+0000000079 00000 n 
+0000000154 00000 n 
+0000000217 00000 n 
+0000005957 00000 n 
+0000006099 00000 n 
+0000013096 00000 n 
+0000013238 00000 n 
+trailer
+<< /Size 9 /Root 8 0 R >>
+startxref
+13287
+%%EOF

@@ -39,6 +39,11 @@ export const SUBCONTRACTED_TRUCKS = [
   { id: "21000000-0000-4000-8000-000000000008", plateNumber: "VWX 6385", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Harborlink Transport", contactPerson: "Dennis Flores" },
   { id: "21000000-0000-4000-8000-000000000009", plateNumber: "EFG 9013", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Greenlane Hauling", contactPerson: "Nina Garcia" },
   { id: "21000000-0000-4000-8000-000000000010", plateNumber: "JRS 3760", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Transpeak Logistics", contactPerson: "Victor Aquino" },
+  { id: "21000000-0000-4000-8000-000000000011", plateNumber: "XYZ 9102", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Apex Cargo Movers", contactPerson: "Danilo Ramos" },
+  { id: "21000000-0000-4000-8000-000000000012", plateNumber: "NKL 3824", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Southwind Freight", contactPerson: "Grace Bautista" },
+  { id: "21000000-0000-4000-8000-000000000013", plateNumber: "WXY 4819", truckType: "10-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Pacific Link Haulers", contactPerson: "Ernesto Dizon" },
+  { id: "21000000-0000-4000-8000-000000000014", plateNumber: "BVC 1928", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Polar Express Logistics", contactPerson: "Theresa Ocampo" },
+  { id: "21000000-0000-4000-8000-000000000015", plateNumber: "QWE 7341", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Golden Route Transport", contactPerson: "Fernando Tan" },
 ] as const satisfies readonly FleetTruck[];
 
 export const KNOWN_REFRIGERATED_PLATES = new Set([
@@ -51,6 +56,8 @@ export const KNOWN_REFRIGERATED_PLATES = new Set([
   "HJK 2207",
   "VWX 6385",
   "JRS 3760",
+  "XYZ 9102",
+  "BVC 1928",
 ]);
 
 export function getTruckStorageCapability(

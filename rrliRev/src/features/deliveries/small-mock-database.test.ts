@@ -17,14 +17,14 @@ test("keeps the RouteX mock database intentionally small and internally related"
     SMALL_MOCK_DATABASE.clients.map((client) => client.name),
     ["Landers", "Manila Comisario Central Inc. (MCCI)", "Vanguard"],
   );
-  assert.equal(SMALL_MOCK_DATABASE.trucks.length, 16);
+  assert.equal(SMALL_MOCK_DATABASE.trucks.length, 21);
   assert.equal(
     SMALL_MOCK_DATABASE.trucks.filter((truck) => truck.ownershipType === "Owned").length,
     6,
   );
   assert.equal(
     SMALL_MOCK_DATABASE.trucks.filter((truck) => truck.ownershipType === "Subcontracted").length,
-    10,
+    15,
   );
   const ownedTrucks = SMALL_MOCK_DATABASE.trucks.filter(
     (truck) => truck.ownershipType === "Owned",
@@ -40,19 +40,19 @@ test("keeps the RouteX mock database intentionally small and internally related"
   );
   assert.equal(SMALL_MOCK_DATABASE.drivers.length, 2);
   assert.equal(SMALL_MOCK_DATABASE.helpers.length, 2);
-  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 9);
+  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 15);
   assert.equal(
     SMALL_MOCK_DATABASE.deliveries.reduce(
       (count, delivery) => count + delivery.record.dropoffs.length,
       0,
     ),
-    12,
+    18,
   );
 });
 
-test("returns exactly three deliveries per client and honors the current seven-day filter", () => {
+test("returns exactly five deliveries per client and honors the current seven-day filter", () => {
   for (const client of SMALL_MOCK_DATABASE.clients) {
-    assert.equal(filterSmallMockDeliveries({ clientId: client.id }).length, 3);
+    assert.equal(filterSmallMockDeliveries({ clientId: client.id }).length, 5);
   }
 
   assert.equal(
@@ -60,11 +60,11 @@ test("returns exactly three deliveries per client and honors the current seven-d
       dateFrom: SMALL_MOCK_PERIOD.start,
       dateTo: SMALL_MOCK_PERIOD.end,
     }).length,
-    9,
+    15,
   );
   assert.equal(
     filterSmallMockDeliveries({ dateFrom: "2026-10-29", dateTo: "2026-10-31" }).length,
-    3,
+    7,
   );
   assert.equal(
     filterSmallMockDeliveries({ dateFrom: "2026-10-01", dateTo: "2026-10-26" }).length,
@@ -102,7 +102,7 @@ test("excludes the incomplete trip from confirmed truck profitability", () => {
   const summaries = summarizeTruckProfitability(records);
 
   assert.equal(summaries.length, 7);
-  assert.equal(summaries.reduce((count, truck) => count + truck.completedTrips, 0), 8);
+  assert.equal(summaries.reduce((count, truck) => count + truck.completedTrips, 0), 14);
   for (const summary of summaries) {
     assert.equal(summary.netProfit, summary.totalEarnings - summary.totalExpenses);
   }

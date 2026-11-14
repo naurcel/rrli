@@ -12,6 +12,7 @@ export type ServerUserProfileRecord = {
   username: string;
   normalizedUsername: string;
   email: string;
+  phoneNumber?: string;
   fullName: string;
   role: UserRole;
   isActive: boolean;
@@ -60,6 +61,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     username: "admin",
     normalizedUsername: "admin",
     email: "admin@routex.local",
+    phoneNumber: "+63 917 123 4567",
     fullName: "Shinryu",
     role: "admin",
     avatarUrl: "/profiles/shinryu.png",
@@ -79,6 +81,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     username: "operations",
     normalizedUsername: "operations",
     email: "operations@routex.local",
+    phoneNumber: "+63 918 234 5678",
     fullName: "Marc Rancel (Delivery Operations)",
     role: "operations",
     isActive: true,
@@ -97,6 +100,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     username: "finance",
     normalizedUsername: "finance",
     email: "finance@routex.local",
+    phoneNumber: "+63 919 345 6789",
     fullName: "Louiza Joy (Finance)",
     role: "finance",
     isActive: true,
@@ -115,6 +119,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     username: "hr",
     normalizedUsername: "hr",
     email: "hr@routex.local",
+    phoneNumber: "+63 920 456 7890",
     fullName: "Jelene Punongbayan (HR)",
     role: "hr",
     isActive: true,
@@ -133,6 +138,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     username: "secretary",
     normalizedUsername: "secretary",
     email: "secretary@routex.local",
+    phoneNumber: "+63 921 567 8901",
     fullName: "Zean Kurt (Secretary)",
     role: "secretary",
     isActive: true,
@@ -151,6 +157,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     username: "customerrep",
     normalizedUsername: "customerrep",
     email: "csrep@routex.local",
+    phoneNumber: "+63 922 678 9012",
     fullName: "Rain Ibasco (Customer Representative)",
     role: "customer_representative",
     isActive: true,
@@ -186,6 +193,9 @@ function getStore(): Map<string, ServerAccountEntry> {
         existing.normalizedUsername = account.normalizedUsername;
       }
       existing.fullName = account.fullName;
+      if (!existing.phoneNumber) {
+        existing.phoneNumber = account.phoneNumber;
+      }
 
       // Seed hashes are generated when this module loads. During development,
       // hot reload can leave an older untouched seed record in the global store
@@ -210,6 +220,7 @@ function stripSensitiveFields(entry: ServerAccountEntry): ServerUserProfileRecor
     username: entry.username,
     normalizedUsername: entry.normalizedUsername,
     email: entry.email,
+    phoneNumber: entry.phoneNumber,
     fullName: entry.fullName,
     role: entry.role,
     isActive: entry.isActive,
@@ -305,6 +316,7 @@ export function createServerAccountProfile(input: {
   role: UserRole;
   temporaryPassword: string;
   email?: string;
+  phoneNumber?: string;
 }):
   | { ok: true; profile: ServerUserProfileRecord }
   | { ok: false; message: string } {
@@ -323,6 +335,7 @@ export function createServerAccountProfile(input: {
   }
 
   const normalizedEmail = (input.email || `${usernameCheck.normalized}@routex.local`).trim().toLowerCase();
+  const normalizedPhone = input.phoneNumber?.trim() || "+63 900 000 0000";
   const nowIso = new Date().toISOString();
   const id = `usr-${input.role.slice(0, 3)}-${Date.now().toString(36)}`;
 
@@ -331,6 +344,7 @@ export function createServerAccountProfile(input: {
     username: input.username.trim(),
     normalizedUsername: usernameCheck.normalized,
     email: normalizedEmail,
+    phoneNumber: normalizedPhone,
     fullName: input.fullName.trim(),
     role: input.role,
     isActive: true,
@@ -343,6 +357,40 @@ export function createServerAccountProfile(input: {
 
   getStore().set(id, entry);
   return { ok: true, profile: stripSensitiveFields(entry) };
+}
+
+/**
+ * Updates a user's contact information (email and phone number).
+ */
+export function updateServerAccountContact(
+  userId: string,
+  email: string,
+  phoneNumber: string,
+):
+  | { ok: true; profile: ServerUserProfileRecord }
+  | { ok: false; message: string } {
+  const store = getStore();
+  const existing = store.get(userId);
+  if (!existing) {
+    return { ok: false, message: "The specified user account was not found." };
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedPhone = phoneNumber.trim();
+
+  if (!normalizedEmail || !normalizedEmail.includes("@")) {
+    return { ok: false, message: "A valid email address is required." };
+  }
+
+  if (!normalizedPhone || normalizedPhone.length < 7) {
+    return { ok: false, message: "A valid phone number is required (min 7 digits)." };
+  }
+
+  existing.email = normalizedEmail;
+  existing.phoneNumber = normalizedPhone;
+  existing.updatedAt = new Date().toISOString();
+
+  return { ok: true, profile: stripSensitiveFields(existing) };
 }
 
 /**

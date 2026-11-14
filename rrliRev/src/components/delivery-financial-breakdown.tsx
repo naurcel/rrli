@@ -22,8 +22,8 @@ export {
 };
 
 /**
- * Reusable Donut Pie Chart visualizing expense distribution
- * Upgraded to high-visibility, large size with interactive center readout
+ * Reusable Pie Chart visualizing expense distribution
+ * Rendered as a full circle pie graph with interactive hover slice readout
  */
 export function ExpenseDonutPieChart({
   slices,
@@ -34,6 +34,7 @@ export function ExpenseDonutPieChart({
   centerLabel = "Total Expenses",
   valueFormatter = formatPeso,
   size = "large",
+  innerRadius = 0,
 }: {
   slices: readonly ExpenseCategorySlice[];
   totalExpenses: number | null;
@@ -43,6 +44,7 @@ export function ExpenseDonutPieChart({
   centerLabel?: string;
   valueFormatter?: (amount: number) => string;
   size?: "standard" | "large";
+  innerRadius?: number;
 }) {
   const chartId = useId();
   const [hoveredSliceId, setHoveredSliceId] = useState<string | null>(null);
@@ -55,13 +57,20 @@ export function ExpenseDonutPieChart({
       cx: 100,
       cy: 100,
       outerRadius: 82,
-      innerRadius: 52,
+      innerRadius,
     });
-  }, [slices, totalExpenses, isComplete]);
+  }, [slices, totalExpenses, isComplete, innerRadius]);
 
   const activeHovered = useMemo(() => {
     if (!hoveredSliceId) return null;
     return arcs.find((a) => a.slice.id === hoveredSliceId) ?? null;
+  }, [arcs, hoveredSliceId]);
+
+  const renderedArcs = useMemo(() => {
+    if (!hoveredSliceId) return arcs;
+    const hovered = arcs.find((a) => a.slice.id === hoveredSliceId);
+    if (!hovered) return arcs;
+    return [...arcs.filter((a) => a.slice.id !== hoveredSliceId), hovered];
   }, [arcs, hoveredSliceId]);
 
   return (
@@ -104,14 +113,16 @@ export function ExpenseDonutPieChart({
                   strokeDasharray="6 4"
                   opacity="0.85"
                 />
-                <circle
-                  cx="100"
-                  cy="100"
-                  r="50"
-                  fill="var(--color-surface, #ffffff)"
-                  stroke="var(--color-border, rgba(148, 163, 184, 0.25))"
-                  strokeWidth="1"
-                />
+                {innerRadius > 0 && (
+                  <circle
+                    cx="100"
+                    cy="100"
+                    r={Math.max(10, innerRadius - 2)}
+                    fill="var(--color-surface, #ffffff)"
+                    stroke="var(--color-border, rgba(148, 163, 184, 0.25))"
+                    strokeWidth="1"
+                  />
+                )}
                 <g transform="translate(90, 72)" aria-hidden="true">
                   <path
                     d="m10 2 9 16H1L10 2z"
@@ -139,7 +150,7 @@ export function ExpenseDonutPieChart({
                 <circle
                   cx="100"
                   cy="100"
-                  r="50"
+                  r="82"
                   fill="var(--color-surface, #ffffff)"
                   stroke="var(--color-border, rgba(148, 163, 184, 0.25))"
                   strokeWidth="1"
@@ -165,7 +176,7 @@ export function ExpenseDonutPieChart({
               /* Confirmed expense pie slices */
               <>
                 <g className="donut-arcs-group">
-                  {arcs.map((arc) => {
+                  {renderedArcs.map((arc) => {
                     const isHovered = hoveredSliceId === arc.slice.id;
                     return (
                       <path
@@ -174,7 +185,7 @@ export function ExpenseDonutPieChart({
                         fill={arc.slice.color}
                         className={`donut-slice ${isHovered ? "is-hovered" : ""}`}
                         stroke="var(--color-surface, #ffffff)"
-                        strokeWidth="2"
+                        strokeWidth="1.5"
                         strokeLinejoin="round"
                         tabIndex={0}
                         role="graphics-symbol"
@@ -188,66 +199,69 @@ export function ExpenseDonutPieChart({
                   })}
                 </g>
 
-                {/* Inner hole with live interactive center readout */}
-                <circle
-                  cx="100"
-                  cy="100"
-                  r="50"
-                  fill="var(--color-surface, #ffffff)"
-                  stroke="var(--color-border, rgba(148, 163, 184, 0.3))"
-                  strokeWidth="1.2"
-                  className="donut-center-circle"
-                />
+                {innerRadius > 0 && (
+                  <>
+                    <circle
+                      cx="100"
+                      cy="100"
+                      r={Math.max(10, innerRadius - 2)}
+                      fill="var(--color-surface, #ffffff)"
+                      stroke="var(--color-border, rgba(148, 163, 184, 0.3))"
+                      strokeWidth="1.2"
+                      className="donut-center-circle"
+                    />
 
-                <g className="donut-center-live-text" aria-hidden="true" pointerEvents="none">
-                  {activeHovered ? (
-                    <>
-                      <text
-                        x="100"
-                        y="93"
-                        textAnchor="middle"
-                        className="donut-center-hero-val"
-                      >
-                        {valueFormatter(activeHovered.slice.amount)}
-                      </text>
-                      <text
-                        x="100"
-                        y="108"
-                        textAnchor="middle"
-                        className="donut-center-sub-share"
-                      >
-                        {activeHovered.percentage.toFixed(1)}% of total
-                      </text>
-                      <text
-                        x="100"
-                        y="120"
-                        textAnchor="middle"
-                        className="donut-center-sub-name"
-                      >
-                        {activeHovered.slice.label}
-                      </text>
-                    </>
-                  ) : (
-                    <>
-                      <text
-                        x="100"
-                        y="95"
-                        textAnchor="middle"
-                        className="donut-center-hero-val"
-                      >
-                        {totalExpenses != null ? valueFormatter(totalExpenses) : "—"}
-                      </text>
-                      <text
-                        x="100"
-                        y="112"
-                        textAnchor="middle"
-                        className="donut-center-sub"
-                      >
-                        {centerLabel}
-                      </text>
-                    </>
-                  )}
-                </g>
+                    <g className="donut-center-live-text" aria-hidden="true" pointerEvents="none">
+                      {activeHovered ? (
+                        <>
+                          <text
+                            x="100"
+                            y="93"
+                            textAnchor="middle"
+                            className="donut-center-hero-val"
+                          >
+                            {valueFormatter(activeHovered.slice.amount)}
+                          </text>
+                          <text
+                            x="100"
+                            y="108"
+                            textAnchor="middle"
+                            className="donut-center-sub-share"
+                          >
+                            {activeHovered.percentage.toFixed(1)}% of total
+                          </text>
+                          <text
+                            x="100"
+                            y="120"
+                            textAnchor="middle"
+                            className="donut-center-sub-name"
+                          >
+                            {activeHovered.slice.label}
+                          </text>
+                        </>
+                      ) : (
+                        <>
+                          <text
+                            x="100"
+                            y="95"
+                            textAnchor="middle"
+                            className="donut-center-hero-val"
+                          >
+                            {totalExpenses != null ? valueFormatter(totalExpenses) : "—"}
+                          </text>
+                          <text
+                            x="100"
+                            y="112"
+                            textAnchor="middle"
+                            className="donut-center-sub"
+                          >
+                            {centerLabel}
+                          </text>
+                        </>
+                      )}
+                    </g>
+                  </>
+                )}
               </>
             )}
           </svg>

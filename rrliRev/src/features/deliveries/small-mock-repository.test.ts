@@ -23,10 +23,10 @@ test("mock repository filters, sorts, and paginates with the persisted API shape
   const result = listSmallMockDeliveryRecords(query(
     "dateFrom=2026-10-27&dateTo=2026-11-02&sort=delivery_date&direction=desc&page=1&pageSize=10",
   ));
-  assert.equal(result.total, 9);
+  assert.equal(result.total, 15);
   assert.equal(result.items[0]?.deliveryDate, "2026-11-02");
   assert.equal(result.filters.clients.length, 3);
-  assert.equal(result.filters.trucks.length, 16);
+  assert.equal(result.filters.trucks.length, 21);
 
   const missingPod = listSmallMockDeliveryRecords(query("podStatus=Incomplete&pageSize=10"));
   assert.equal(missingPod.total, 4);
@@ -51,7 +51,7 @@ test("mock profitability honors dates and excludes financially incomplete trips"
     dateFrom: "2026-10-27",
     dateTo: "2026-11-02",
   });
-  assert.equal(full.deliveries, 8);
+  assert.equal(full.deliveries, 14);
   assert.equal(full.deliveryIds.length, full.deliveries);
   assert.equal(new Set(full.deliveryIds).size, full.deliveries);
   assert.equal(full.trucks.length, 7);
@@ -74,7 +74,7 @@ test("mock repository filters by multiple clients and multiple trucks", () => {
   const multiClient = listSmallMockDeliveryRecords(
     query(`clientIds=${client1},${client2}&pageSize=10`),
   );
-  assert.equal(multiClient.total, 6);
+  assert.equal(multiClient.total, 10);
   assert.ok(
     multiClient.items.every(
       (item) => item.clientId === client1 || item.clientId === client2,

@@ -11,7 +11,14 @@ import {
   SMALL_MOCK_DATABASE,
 } from "@/features/deliveries/small-mock-database";
 import { buildDeliveryTripRecord, type TruckTemperature } from "@/features/deliveries/delivery-domain";
-import { dynamicMockDeliveries, getAllMockDeliveries } from "@/features/deliveries/small-mock-repository";
+import {
+  dynamicMockDeliveries,
+  getAllMockDeliveries,
+  savePersistedMockDeliveries,
+} from "@/features/deliveries/small-mock-repository";
+import { getFleetTrucks } from "@/features/deliveries/truck-registry";
+import { getFleetCrew } from "@/features/deliveries/driver-registry";
+import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 
 const importRowSchema = z.object({
   waybillNumber: z.string().trim().min(3, "Waybill number is required."),
@@ -38,10 +45,12 @@ const importRowSchema = z.object({
   driverAllowanceStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("confirmed"),
   driverDailyRate: z.number().nullable().default(null),
   driverDailyRateStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("confirmed"),
+  driverName: z.string().trim().nullable().optional(),
   helperAllowance: z.number().nullable().default(null),
   helperAllowanceStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("confirmed"),
   helperDailyRate: z.number().nullable().default(null),
   helperDailyRateStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("confirmed"),
+  helperName: z.string().trim().nullable().optional(),
   otherExpenses: z.number().nullable().default(null),
   otherExpensesStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("confirmed"),
   dropoffs: z.array(
@@ -97,12 +106,16 @@ export async function POST(request: Request) {
 
   // Track results
   const committed: string[] = [];
+  const committedRecords: DeliveryLedgerItem[] = [];
   const errors: { waybill: string; reason: string }[] = [];
   const duplicates: string[] = [];
 
   if (!isSupabaseConfigured()) {
     // Process rows against small mock database
     const allDeliveries = getAllMockDeliveries();
+    const fleetTrucks = getFleetTrucks();
+    const fleetCrew = getFleetCrew();
+
     for (const row of rows) {
       if (allDeliveries.some((d) => d.record.waybillNumber === row.waybillNumber)) {
         duplicates.push(row.waybillNumber);
@@ -115,10 +128,36 @@ export async function POST(request: Request) {
           row.clientName.toLowerCase().includes(c.name.toLowerCase())
         ) ?? registerMockClient(row.clientName);
 
-      const truck = SMALL_MOCK_DATABASE.trucks.find((t) =>
-        t.plateNumber.toLowerCase().replace(/\s+/g, "") ===
-        row.plateNumber.toLowerCase().replace(/\s+/g, "")
-      ) ?? SMALL_MOCK_DATABASE.trucks[0];
+      const truck =
+        fleetTrucks.find((t) =>
+          t.plateNumber.toLowerCase().replace(/\s+/g, "") ===
+          row.plateNumber.toLowerCase().replace(/\s+/g, "")
+        ) ??
+        SMALL_MOCK_DATABASE.trucks.find((t) =>
+          t.plateNumber.toLowerCase().replace(/\s+/g, "") ===
+          row.plateNumber.toLowerCase().replace(/\s+/g, "")
+        ) ??
+        SMALL_MOCK_DATABASE.trucks[0];
+
+      const matchedDriver = row.driverName
+        ? fleetCrew.find(
+            (c) =>
+              c.assignmentType === "Driver" &&
+              c.fullName.toLowerCase() === row.driverName?.toLowerCase(),
+          )
+        : null;
+      const driverId = matchedDriver?.id ?? SMALL_MOCK_DATABASE.drivers[0]?.id ?? "drv-1";
+      const driverName = row.driverName || matchedDriver?.fullName || SMALL_MOCK_DATABASE.drivers[0]?.fullName || "Assigned Driver";
+
+      const matchedHelper = row.helperName
+        ? fleetCrew.find(
+            (c) =>
+              c.assignmentType === "Helper" &&
+              c.fullName.toLowerCase() === row.helperName?.toLowerCase(),
+          )
+        : null;
+      const helperId = matchedHelper?.id ?? SMALL_MOCK_DATABASE.helpers[0]?.id ?? "hlp-1";
+      const helperName = row.helperName || matchedHelper?.fullName || SMALL_MOCK_DATABASE.helpers[0]?.fullName || "Assigned Helper";
 
       const id = crypto.randomUUID();
       const record = buildDeliveryTripRecord({
@@ -165,15 +204,27 @@ export async function POST(request: Request) {
         record,
         clientId: client.id,
         truckId: truck.id,
-        driverId: SMALL_MOCK_DATABASE.drivers[0]?.id ?? "drv-1",
-        helperId: SMALL_MOCK_DATABASE.helpers[0]?.id ?? "hlp-1",
+        driverId,
+        helperId,
+        driverName,
+        helperName,
         scenario: "Imported batch record",
       };
       dynamicMockDeliveries.push(newMockDelivery);
       allDeliveries.push(newMockDelivery);
 
       committed.push(row.waybillNumber);
+      committedRecords.push({
+        ...record,
+        clientId: client.id,
+        truckId: truck.id,
+        deliveryStatus: "Completed",
+        driverName,
+        helperName,
+      });
     }
+
+    savePersistedMockDeliveries();
 
     recordAuditEntry({
       actorId: auth.actor.id,
@@ -192,6 +243,7 @@ export async function POST(request: Request) {
       totalRows: rows.length,
       committedCount: committed.length,
       committedWaybills: committed,
+      committedRecords,
       duplicateCount: duplicates.length,
       duplicateWaybills: duplicates,
       errors,

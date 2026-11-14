@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { OperationalTopbar } from "@/components/operational-topbar";
@@ -25,6 +26,7 @@ type ManagedUserRecord = {
   id: string;
   username: string;
   email: string;
+  phoneNumber?: string;
   fullName: string;
   role: UserRole;
   roleLabel: string;
@@ -60,6 +62,7 @@ export default function UserManagementPage() {
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [confirmTemporaryPassword, setConfirmTemporaryPassword] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("operations");
@@ -76,6 +79,13 @@ export default function UserManagementPage() {
   const [newUsernameInput, setNewUsernameInput] = useState("");
   const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
   const [editUsernameError, setEditUsernameError] = useState<string | null>(null);
+
+  // Edit contact dialog state
+  const [editingContactUser, setEditingContactUser] = useState<ManagedUserRecord | null>(null);
+  const [editEmailInput, setEditEmailInput] = useState("");
+  const [editPhoneInput, setEditPhoneInput] = useState("");
+  const [isUpdatingContact, setIsUpdatingContact] = useState(false);
+  const [editContactError, setEditContactError] = useState<string | null>(null);
 
   // Delete user confirmation dialog state
   const [userToDelete, setUserToDelete] = useState<ManagedUserRecord | null>(null);
@@ -118,6 +128,26 @@ export default function UserManagementPage() {
       document.removeEventListener("keydown", handleGlobalKeyDown);
     };
   }, [openActionMenuUserId]);
+
+  useEffect(() => {
+    if (!userToDelete) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !isDeletingUser) {
+        setUserToDelete(null);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [userToDelete, isDeletingUser]);
+
+  useEffect(() => {
+    if (!userToDelete) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [userToDelete]);
 
   useEffect(() => {
     fetch("/api/users")
@@ -312,6 +342,26 @@ export default function UserManagementPage() {
       return;
     }
 
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setFeedback({
+        tone: "error",
+        text: "A valid email address is required.",
+      });
+      setIsCreating(false);
+      return;
+    }
+
+    const cleanPhone = phoneNumber.trim();
+    if (!cleanPhone || cleanPhone.length < 7) {
+      setFeedback({
+        tone: "error",
+        text: "A valid phone number is required (at least 7 digits).",
+      });
+      setIsCreating(false);
+      return;
+    }
+
     try {
       const response = await fetch("/api/users", {
         method: "POST",
@@ -321,7 +371,8 @@ export default function UserManagementPage() {
           username: cleanUsername,
           temporaryPassword,
           confirmTemporaryPassword,
-          email: email.trim() || undefined,
+          email: cleanEmail,
+          phoneNumber: cleanPhone,
           role: newRole,
         }),
       });
@@ -344,6 +395,7 @@ export default function UserManagementPage() {
       setFullName("");
       setUsername("");
       setEmail("");
+      setPhoneNumber("");
       setTemporaryPassword("");
       setConfirmTemporaryPassword("");
       setFeedback({
@@ -549,6 +601,67 @@ export default function UserManagementPage() {
     }
   }
 
+  async function handleConfirmUpdateContact(event: FormEvent) {
+    event.preventDefault();
+    if (!editingContactUser) return;
+    setIsUpdatingContact(true);
+    setEditContactError(null);
+
+    const cleanEmail = editEmailInput.trim().toLowerCase();
+    const cleanPhone = editPhoneInput.trim();
+
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setEditContactError("Please enter a valid email address.");
+      setIsUpdatingContact(false);
+      return;
+    }
+
+    if (!cleanPhone || cleanPhone.length < 7) {
+      setEditContactError("Please enter a valid phone number (min 7 digits).");
+      setIsUpdatingContact(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-contact",
+          userId: editingContactUser.id,
+          email: cleanEmail,
+          phoneNumber: cleanPhone,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+        user?: ManagedUserRecord;
+      } | null;
+
+      if (!response.ok || !payload?.ok || !payload.user) {
+        setEditContactError(payload?.message ?? "Could not update contact details.");
+        return;
+      }
+
+      setUsers((current) =>
+        current.map((u) => (u.id === editingContactUser.id ? { ...u, ...payload.user } : u)),
+      );
+
+      setFeedback({
+        tone: "success",
+        text: `Successfully updated contact details for ${editingContactUser.fullName} (@${editingContactUser.username}).`,
+      });
+      setEditingContactUser(null);
+      void loadAuditEntries(true);
+    } catch {
+      setEditContactError("Network or server error while updating contact details.");
+    } finally {
+      setIsUpdatingContact(false);
+    }
+  }
+
   async function handleConfirmDeleteUser() {
     if (!userToDelete || isDeletingUser) return;
     setIsDeletingUser(true);
@@ -679,17 +792,11 @@ export default function UserManagementPage() {
                   <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
                     Full Name
                     <input
+                      className="user-management-input"
                       type="text"
                       placeholder="e.g. Carlo Mendoza"
                       value={fullName}
                       onChange={(event) => setFullName(event.target.value)}
-                      style={{
-                        minHeight: "42px",
-                        padding: "0 12px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--color-border)",
-                        background: "var(--glass-surface-strong)",
-                      }}
                       required
                     />
                   </label>
@@ -697,17 +804,11 @@ export default function UserManagementPage() {
                   <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
                     Username
                     <input
+                      className="user-management-input"
                       type="text"
                       placeholder="e.g. cmendoza"
                       value={username}
                       onChange={(event) => setUsername(event.target.value.toLowerCase())}
-                      style={{
-                        minHeight: "42px",
-                        padding: "0 12px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--color-border)",
-                        background: "var(--glass-surface-strong)",
-                      }}
                       required
                     />
                     <small style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>
@@ -726,19 +827,26 @@ export default function UserManagementPage() {
                   </div>
 
                   <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
-                    Email Address (Optional)
+                    Email Address
                     <input
+                      className="user-management-input"
                       type="email"
-                      placeholder="Defaults to @username@routex.local"
+                      placeholder="e.g. carlo.mendoza@routex.local"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      style={{
-                        minHeight: "42px",
-                        padding: "0 12px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--color-border)",
-                        background: "var(--glass-surface-strong)",
-                      }}
+                      required
+                    />
+                  </label>
+
+                  <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
+                    Phone Number
+                    <input
+                      className="user-management-input"
+                      type="tel"
+                      placeholder="e.g. +63 917 123 4567"
+                      value={phoneNumber}
+                      onChange={(event) => setPhoneNumber(event.target.value)}
+                      required
                     />
                   </label>
                 </div>
@@ -754,17 +862,11 @@ export default function UserManagementPage() {
                   <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
                     Temporary Password
                     <input
+                      className="user-management-input"
                       type="password"
                       placeholder="Enter temporary password"
                       value={temporaryPassword}
                       onChange={(event) => setTemporaryPassword(event.target.value)}
-                      style={{
-                        minHeight: "42px",
-                        padding: "0 12px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--color-border)",
-                        background: "var(--glass-surface-strong)",
-                      }}
                       required
                     />
                   </label>
@@ -772,17 +874,11 @@ export default function UserManagementPage() {
                   <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
                     Confirm Temporary Password
                     <input
+                      className="user-management-input"
                       type="password"
                       placeholder="Re-enter temporary password"
                       value={confirmTemporaryPassword}
                       onChange={(event) => setConfirmTemporaryPassword(event.target.value)}
-                      style={{
-                        minHeight: "42px",
-                        padding: "0 12px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--color-border)",
-                        background: "var(--glass-surface-strong)",
-                      }}
                       required
                     />
                   </label>
@@ -892,8 +988,14 @@ export default function UserManagementPage() {
                           <td>
                             <strong>{user.fullName}</strong>
                             <br />
-                            <small style={{ color: "var(--color-text-muted)", fontSize: "11px" }}>
-                              {user.email}
+                            <small style={{ color: "var(--color-text-muted)", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                              <span>{user.email}</span>
+                              {user.phoneNumber ? (
+                                <>
+                                  <span aria-hidden="true" style={{ opacity: 0.5 }}>·</span>
+                                  <span>{user.phoneNumber}</span>
+                                </>
+                              ) : null}
                             </small>
                           </td>
                           <td>
@@ -1013,6 +1115,19 @@ export default function UserManagementPage() {
                                   <button
                                     type="button"
                                     role="menuitem"
+                                    onClick={() => {
+                                      setOpenActionMenuUserId(null);
+                                      setEditingContactUser(user);
+                                      setEditEmailInput(user.email);
+                                      setEditPhoneInput(user.phoneNumber || "");
+                                      setEditContactError(null);
+                                    }}
+                                  >
+                                    Edit Contact Info
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
                                     disabled={isSelf}
                                     onClick={() => {
                                       setOpenActionMenuUserId(null);
@@ -1121,13 +1236,7 @@ export default function UserManagementPage() {
                     onChange={(event) => setAuditSearch(event.target.value)}
                     placeholder="Search user, action, waybill, or details…"
                     style={{
-                      minHeight: "40px",
-                      padding: "0 12px",
-                      borderRadius: "10px",
-                      border: "1px solid var(--color-border)",
-                      background: "var(--glass-surface-strong)",
                       minWidth: "240px",
-                      fontSize: "12px",
                     }}
                   />
                   <RoundedSelect
@@ -1425,16 +1534,11 @@ export default function UserManagementPage() {
               <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
                 Current Username
                 <input
+                  className="user-management-input"
                   type="text"
                   disabled
                   value={`@${editingUser.username}`}
                   style={{
-                    minHeight: "40px",
-                    padding: "0 12px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--color-border)",
-                    background: "var(--color-surface-subtle)",
-                    color: "var(--color-text-muted)",
                     fontWeight: 600,
                   }}
                 />
@@ -1445,17 +1549,11 @@ export default function UserManagementPage() {
               <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
                 New Username
                 <input
+                  className="user-management-input"
                   type="text"
                   value={newUsernameInput}
                   onChange={(e) => setNewUsernameInput(e.target.value.toLowerCase())}
                   placeholder="e.g. cmendoza_ops"
-                  style={{
-                    minHeight: "40px",
-                    padding: "0 12px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--color-border)",
-                    background: "var(--glass-surface-strong)",
-                  }}
                   required
                 />
                 <small style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>
@@ -1502,110 +1600,208 @@ export default function UserManagementPage() {
         </div>
       ) : null}
 
-      {/* Delete User Confirmation Screen */}
-      {userToDelete ? (
-        <div className="routex-dialog-layer" role="dialog" aria-modal="true" aria-labelledby="delete-user-dialog-title">
-          <div className="routex-dialog-backdrop" onClick={() => !isDeletingUser && setUserToDelete(null)} />
-          <div className="routex-dialog" style={{ maxWidth: "460px" }}>
-            <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
-              <div>
-                <h2 id="delete-user-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
-                  Delete User
-                </h2>
-                <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
-                  Action is audited and logged.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="routex-dialog-close"
-                aria-label="Close confirmation dialog"
-                title="Close confirmation dialog (Esc)"
-                disabled={isDeletingUser}
-                onClick={() => setUserToDelete(null)}
-              >
-                ×
-              </button>
-            </header>
+      {/* Edit Contact Info Modal */}
+      {editingContactUser ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(15, 23, 21, 0.72)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-contact-dialog-title"
+        >
+          <form
+            onSubmit={handleConfirmUpdateContact}
+            className="records-card"
+            style={{
+              width: "min(100%, 460px)",
+              padding: "26px",
+              background: "var(--color-surface)",
+              boxShadow: "0 24px 64px rgba(15, 23, 21, 0.3)",
+              borderRadius: "16px",
+            }}
+          >
+            <h2 id="edit-contact-dialog-title" style={{ margin: "0 0 8px", fontSize: "18px" }}>
+              Edit Contact Details
+            </h2>
+            <p style={{ fontSize: "12px", color: "var(--color-text-secondary)", margin: "0 0 16px" }}>
+              Update contact info for <strong>{editingContactUser.fullName}</strong> (@{editingContactUser.username}).
+            </p>
 
-            <div className="routex-dialog-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: "14px" }}>
-              <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)" }}>
-                Are you sure you want to delete the user account for <strong>{userToDelete.fullName}</strong> (<code>@{userToDelete.username}</code>)?
-              </p>
-
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "8px",
-                  background: "var(--color-surface-subtle)",
-                  border: "1px solid var(--color-border)",
-                  fontSize: "12px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "6px",
-                }}
-              >
-                <div>
-                  <span style={{ color: "var(--color-text-muted)" }}>Assigned Role: </span>
-                  <strong>{userToDelete.roleLabel}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "var(--color-text-muted)" }}>Email: </span>
-                  <span>{userToDelete.email}</span>
-                </div>
-                <div>
-                  <span style={{ color: "var(--color-text-muted)" }}>Account Status: </span>
-                  <span>{userToDelete.isActive ? "Active" : "Deactivated"}</span>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  background: "rgba(239, 68, 68, 0.08)",
-                  border: "1px solid rgba(239, 68, 68, 0.2)",
-                  color: "#dc2626",
-                  fontSize: "11px",
-                  lineHeight: 1.4,
-                }}
-              >
-                <strong>Warning:</strong> Deleting this account will permanently remove their login access.
-              </div>
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
+                Email Address
+                <input
+                  className="user-management-input"
+                  type="email"
+                  value={editEmailInput}
+                  onChange={(e) => setEditEmailInput(e.target.value)}
+                  placeholder="e.g. user@routex.local"
+                  required
+                />
+              </label>
             </div>
 
-            <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
+                Phone Number
+                <input
+                  className="user-management-input"
+                  type="tel"
+                  value={editPhoneInput}
+                  onChange={(e) => setEditPhoneInput(e.target.value)}
+                  placeholder="e.g. +63 917 123 4567"
+                  required
+                />
+                <small style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>
+                  Primary mobile or office contact number for account recovery and operational alerts.
+                </small>
+              </label>
+            </div>
+
+            {editContactError ? (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  background: "rgba(239, 68, 68, 0.1)",
+                  color: "#dc2626",
+                  fontSize: "12px",
+                  marginBottom: "16px",
+                }}
+              >
+                {editContactError}
+              </div>
+            ) : null}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
               <button
                 type="button"
                 className="secondary-button"
-                disabled={isDeletingUser}
-                onClick={() => setUserToDelete(null)}
-                style={{ minHeight: "38px", padding: "0 16px", fontSize: "13px" }}
+                onClick={() => setEditingContactUser(null)}
+                disabled={isUpdatingContact}
+                style={{ minHeight: "38px", padding: "0 16px", fontSize: "12px" }}
               >
                 Cancel
               </button>
               <button
-                type="button"
-                disabled={isDeletingUser}
-                onClick={handleConfirmDeleteUser}
-                style={{
-                  background: "#dc2626",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "8px",
-                  padding: "0 18px",
-                  minHeight: "38px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: isDeletingUser ? "not-allowed" : "pointer",
-                }}
+                type="submit"
+                className="primary-action-button"
+                disabled={isUpdatingContact}
+                style={{ minHeight: "38px", padding: "0 18px", fontSize: "12px" }}
               >
-                {isDeletingUser ? "Deleting Account…" : "Confirm Delete"}
+                {isUpdatingContact ? "Updating…" : "Save Contact Info"}
               </button>
-            </footer>
-          </div>
+            </div>
+          </form>
         </div>
       ) : null}
+
+      {/* Delete User Confirmation Screen */}
+      {userToDelete && typeof document !== "undefined"
+        ? createPortal(
+            <div className="routex-dialog-layer" role="dialog" aria-modal="true" aria-labelledby="delete-user-dialog-title" style={{ zIndex: 1000 }}>
+              <div className="routex-dialog-backdrop" onClick={() => !isDeletingUser && setUserToDelete(null)} />
+              <div className="routex-dialog" style={{ maxWidth: "460px" }}>
+                <header className="routex-dialog-header" style={{ flexShrink: 0 }}>
+                  <div>
+                    <h2 id="delete-user-dialog-title" style={{ fontSize: "17px", color: "var(--color-danger, #dc2626)" }}>
+                      Delete User
+                    </h2>
+                    <p style={{ margin: "2px 0 0", fontSize: "11px" }}>
+                      Action is audited and logged.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="routex-dialog-close"
+                    aria-label="Close confirmation dialog"
+                    title="Close confirmation dialog (Esc)"
+                    disabled={isDeletingUser}
+                    onClick={() => setUserToDelete(null)}
+                  >
+                    ×
+                  </button>
+                </header>
+
+                <div className="routex-dialog-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)" }}>
+                    Are you sure you want to delete the user account for <strong>{userToDelete.fullName}</strong> (<code>@{userToDelete.username}</code>)?
+                  </p>
+
+                  <div
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      background: "var(--color-surface-subtle)",
+                      border: "1px solid var(--color-border)",
+                      fontSize: "12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>Assigned Role: </span>
+                      <strong>{userToDelete.roleLabel}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>Email: </span>
+                      <span>{userToDelete.email}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--color-text-muted)" }}>Account Status: </span>
+                      <span>{userToDelete.isActive ? "Active" : "Deactivated"}</span>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "6px",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      color: "#dc2626",
+                      fontSize: "11px",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <strong>Warning:</strong> Deleting this account will permanently remove their login access.
+                  </div>
+                </div>
+
+                <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={isDeletingUser}
+                    onClick={() => setUserToDelete(null)}
+                    style={{ minHeight: "38px", padding: "0 16px", fontSize: "13px" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-confirm-button"
+                    disabled={isDeletingUser}
+                    onClick={handleConfirmDeleteUser}
+                  >
+                    {isDeletingUser ? "Deleting Account…" : "Confirm Delete"}
+                  </button>
+                </footer>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

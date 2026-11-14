@@ -38,6 +38,15 @@ export function ConfirmExpenseDeletionDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [expense, pending, onCancel]);
 
+  useEffect(() => {
+    if (!expense) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [expense]);
+
   if (!expense || typeof document === "undefined") return null;
 
   return createPortal(

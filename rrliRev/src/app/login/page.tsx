@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
 import { RouteXFooter } from "@/components/routex-footer";
+import { LoginVisualCarousel } from "@/components/login-visual-carousel";
 import { evaluatePasswordCriteria } from "@/lib/auth/password-policy";
 import { isSupabaseConfigured } from "@/lib/config/env";
 
@@ -432,23 +433,7 @@ export default function LoginPage() {
         </button>
       </div>
 
-      <section className="login-visual" aria-label="RouteX logistics">
-        <img
-          className="login-visual-media"
-          src="/branding/login-glow.gif"
-          alt=""
-          aria-hidden="true"
-        />
-        <div className="login-visual-overlay" />
-        <div className="login-visual-copy">
-          <h1>
-            Excellence in motion,
-            <br />
-            your logistics redemption.
-          </h1>
-          <span>Redeemed Route Logistics Inc.</span>
-        </div>
-      </section>
+      <LoginVisualCarousel />
 
       <section className="login-panel" aria-labelledby="sign-in-title">
         <div className="login-form-wrap">

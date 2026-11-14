@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
@@ -18,6 +19,26 @@ export function ConfirmDeliveryDeletionDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  useEffect(() => {
+    if (!delivery) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !pending) {
+        onCancel();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [delivery, pending, onCancel]);
+
+  useEffect(() => {
+    if (!delivery) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [delivery]);
+
   if (!delivery || typeof document === "undefined") return null;
 
   return createPortal(

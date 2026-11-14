@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
@@ -10,6 +11,7 @@ import {
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
+import { ImageViewerModal } from "@/components/image-viewer-modal";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import { isImageDocument, openDocumentInNewTab, triggerDocumentDownload } from "@/features/deliveries/pod-utils";
 import { derivePodVerificationStatus } from "@/features/deliveries/delivery-domain";
@@ -60,6 +62,32 @@ export default function PodDocumentsPage() {
   const [docActionError, setDocActionError] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [docSubmitting, setDocSubmitting] = useState(false);
+  const [fullscreenImage, setFullscreenImage] = useState<{
+    url: string;
+    title: string;
+    subtitle?: string;
+    filename?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!inspectingStop) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !docSubmitting) {
+        setInspectingStop(null);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [inspectingStop, docSubmitting]);
+
+  useEffect(() => {
+    if (!inspectingStop) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [inspectingStop]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -420,10 +448,11 @@ export default function PodDocumentsPage() {
         </section>
       </div>
 
-      {inspectingStop ? (
-        <div className="routex-dialog-layer" role="dialog" aria-modal="true" aria-labelledby="doc-dialog-title">
-          <div className="routex-dialog-backdrop" onClick={() => !docSubmitting && setInspectingStop(null)} />
-          <div className="routex-dialog">
+      {inspectingStop && typeof document !== "undefined"
+        ? createPortal(
+            <div className="routex-dialog-layer" role="dialog" aria-modal="true" aria-labelledby="doc-dialog-title" style={{ zIndex: 1000 }}>
+              <div className="routex-dialog-backdrop" onClick={() => !docSubmitting && setInspectingStop(null)} />
+              <div className="routex-dialog">
             <header className="routex-dialog-header">
               <div>
                 <h2 id="doc-dialog-title">Proof of Delivery Document</h2>
@@ -510,6 +539,16 @@ export default function PodDocumentsPage() {
                         src={docDetail.downloadUrl}
                         alt={`POD for ${inspectingStop.stop.storeName}`}
                         className="pod-preview-image"
+                        onClick={() =>
+                          setFullscreenImage({
+                            url: docDetail.downloadUrl!,
+                            title: `Proof of Delivery · ${inspectingStop.stop.storeName}`,
+                            subtitle: `Waybill #${inspectingStop.waybillNumber} · Drop-off #${inspectingStop.stop.sequence}`,
+                            filename: docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf",
+                          })
+                        }
+                        style={{ cursor: "pointer" }}
+                        title="Click to view full photo in popup"
                       />
                     ) : (
                       <iframe
@@ -522,9 +561,16 @@ export default function PodDocumentsPage() {
                       <button
                         type="button"
                         className="secondary-button"
-                        title="Open proof of delivery document in a new browser tab"
+                        title="View proof of delivery in popup"
                         style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                        onClick={() => void openDocumentInNewTab(docDetail.downloadUrl!, docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf")}
+                        onClick={() =>
+                          setFullscreenImage({
+                            url: docDetail.downloadUrl!,
+                            title: `Proof of Delivery · ${inspectingStop.stop.storeName}`,
+                            subtitle: `Waybill #${inspectingStop.waybillNumber} · Drop-off #${inspectingStop.stop.sequence}`,
+                            filename: docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf",
+                          })
+                        }
                       >
                         <svg
                           width="13"
@@ -537,11 +583,10 @@ export default function PodDocumentsPage() {
                           strokeLinejoin="round"
                           aria-hidden="true"
                         >
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                          <polyline points="15 3 21 3 21 9" />
-                          <line x1="10" y1="14" x2="21" y2="3" />
+                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7Z" />
+                          <circle cx="12" cy="12" r="3" />
                         </svg>
-                        <span>Open in New Tab</span>
+                        <span>View in Popup</span>
                       </button>
                       <button
                         type="button"
@@ -622,8 +667,18 @@ export default function PodDocumentsPage() {
               ) : null}
             </footer>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
+
+      <ImageViewerModal
+        isOpen={Boolean(fullscreenImage)}
+        onClose={() => setFullscreenImage(null)}
+        imageUrl={fullscreenImage?.url ?? ""}
+        title={fullscreenImage?.title ?? ""}
+        subtitle={fullscreenImage?.subtitle}
+        filename={fullscreenImage?.filename}
+      />
     </>
   );
 }

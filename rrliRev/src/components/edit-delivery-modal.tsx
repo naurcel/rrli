@@ -126,6 +126,26 @@ export function EditDeliveryModal({
     setError(null);
   }, [delivery]);
 
+  useEffect(() => {
+    if (!delivery) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !submitting) {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [delivery, submitting, onClose]);
+
+  useEffect(() => {
+    if (!delivery) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [delivery]);
+
   if (!delivery || typeof document === "undefined") return null;
 
   function handleClose() {

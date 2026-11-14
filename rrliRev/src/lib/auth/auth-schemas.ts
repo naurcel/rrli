@@ -88,7 +88,32 @@ export const createUserAccountSchema = z.object({
     .string()
     .min(8, "Temporary password must be at least 8 characters."),
   confirmTemporaryPassword: z.string().optional(),
-  email: z.string().trim().email().optional(),
+  email: z.string().trim().email("Please enter a valid email address."),
+  phoneNumber: z
+    .string()
+    .trim()
+    .min(7, "Phone number must be at least 7 digits.")
+    .max(25, "Phone number cannot exceed 25 characters."),
+});
+
+export const updateContactInfoSchema = z.object({
+  email: z.string().trim().email("Please enter a valid email address."),
+  phoneNumber: z
+    .string()
+    .trim()
+    .min(7, "Phone number must be at least 7 digits.")
+    .max(25, "Phone number cannot exceed 25 characters."),
+  currentPassword: z.string().min(1, "Enter your current password."),
+});
+
+export const adminUpdateContactSchema = z.object({
+  userId: z.string().trim().min(1, "User ID is required."),
+  email: z.string().trim().email("Please enter a valid email address."),
+  phoneNumber: z
+    .string()
+    .trim()
+    .min(7, "Phone number must be at least 7 digits.")
+    .max(25, "Phone number cannot exceed 25 characters."),
 });
 
 export const updateUserRoleSchema = z.object({

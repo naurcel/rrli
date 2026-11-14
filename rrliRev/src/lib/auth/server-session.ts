@@ -30,6 +30,7 @@ export type AuthenticatedActor = {
   id: string;
   username: string;
   email: string;
+  phoneNumber?: string;
   fullName: string;
   role: UserRole;
   roleLabel: string;
@@ -50,6 +51,7 @@ function buildAuthenticatedActor(params: {
   id: string;
   username: string;
   email: string;
+  phoneNumber?: string;
   fullName: string;
   role: UserRole;
   providerMode: AuthProviderMode;
@@ -63,6 +65,7 @@ function buildAuthenticatedActor(params: {
     id: params.id,
     username: params.username,
     email: params.email,
+    phoneNumber: params.phoneNumber,
     fullName: params.fullName,
     role: params.role,
     roleLabel: meta.label,
@@ -164,6 +167,7 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
     id: account.id,
     username: account.username,
     email: account.email,
+    phoneNumber: account.phoneNumber,
     fullName: account.fullName,
     role: account.role,
     providerMode: "server-local",

@@ -26,12 +26,7 @@ export function DeliveryCrewSection({
       {/* Drivers Column */}
       <div className="crew-column">
         <div className="crew-column-header">
-          <span className="crew-role-badge driver">
-            Drivers
-          </span>
-          <span className="crew-count-pill" title={`${drivers.length} driver(s) assigned`}>
-            {drivers.length}
-          </span>
+          <strong className="crew-column-title">Drivers</strong>
         </div>
 
         {drivers.length === 0 ? (
@@ -47,13 +42,6 @@ export function DeliveryCrewSection({
                 </div>
                 <div className="crew-member-info">
                   <strong className="crew-member-name">{driver}</strong>
-                  <span className="crew-member-title">
-                    {drivers.length > 1
-                      ? index === 0
-                        ? "Lead Driver"
-                        : `Relief Driver #${index}`
-                      : "Assigned Driver"}
-                  </span>
                 </div>
               </div>
             ))}
@@ -71,12 +59,7 @@ export function DeliveryCrewSection({
       {/* Helpers Column */}
       <div className="crew-column">
         <div className="crew-column-header">
-          <span className="crew-role-badge helper">
-            Helpers
-          </span>
-          <span className="crew-count-pill" title={`${helpers.length} helper(s) assigned`}>
-            {helpers.length}
-          </span>
+          <strong className="crew-column-title">Helpers</strong>
         </div>
 
         {helpers.length === 0 ? (
@@ -92,9 +75,6 @@ export function DeliveryCrewSection({
                 </div>
                 <div className="crew-member-info">
                   <strong className="crew-member-name">{helper}</strong>
-                  <span className="crew-member-title">
-                    {helpers.length > 1 ? `Delivery Helper #${index + 1}` : "Assigned Helper"}
-                  </span>
                 </div>
               </div>
             ))}

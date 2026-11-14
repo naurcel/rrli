@@ -50,14 +50,28 @@ export function GlobalTooltip() {
 
     function findTooltipTarget(node: EventTarget | null): HTMLElement | null {
       if (!(node instanceof HTMLElement)) return null;
+      // If the node itself or an ancestor has aria-expanded="true", it's an open dropdown/menu trigger - don't show tooltip
+      const expandedContainer = node.closest<HTMLElement>('[aria-expanded="true"]');
+      if (expandedContainer) return null;
+
       // Prioritize explicit custom tooltip container
       const dataTooltipEl = node.closest<HTMLElement>("[data-tooltip]");
-      if (dataTooltipEl) return dataTooltipEl;
-      return node.closest<HTMLElement>("[title]");
+      if (dataTooltipEl) {
+        if (dataTooltipEl.getAttribute("aria-expanded") === "true") return null;
+        return dataTooltipEl;
+      }
+      const titleEl = node.closest<HTMLElement>("[title]");
+      if (titleEl && titleEl.getAttribute("aria-expanded") === "true") return null;
+      return titleEl;
     }
 
     function showTooltip(target: HTMLElement) {
       try {
+        if (target.getAttribute("aria-expanded") === "true") {
+          hideTooltip();
+          return;
+        }
+
         let text = target.getAttribute("data-tooltip");
         if (!text || !text.trim()) {
           const title = target.getAttribute("title") || target.getAttribute("data-routex-title");

@@ -34,6 +34,8 @@ const SECURITY_QUESTION_OPTIONS: readonly SelectOption[] = [
 export default function SettingsPage() {
   const actor = useAuthenticatedActor();
   const [currentUsername, setCurrentUsername] = useState(actor.username);
+  const [currentEmail, setCurrentEmail] = useState(actor.email);
+  const [currentPhone, setCurrentPhone] = useState(actor.phoneNumber ?? "+63 917 123 4567");
 
   // Profile Photo state
   const [currentAvatar, setCurrentAvatar] = useState<string | null>(() => {
@@ -42,6 +44,13 @@ export default function SettingsPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoFeedback, setPhotoFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+
+  // Change Contact Details form (Email & Phone Number)
+  const [contactEmail, setContactEmail] = useState(actor.email);
+  const [contactPhone, setContactPhone] = useState(actor.phoneNumber ?? "+63 917 123 4567");
+  const [contactPassword, setContactPassword] = useState("");
+  const [contactFeedback, setContactFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [contactSubmitting, setContactSubmitting] = useState(false);
 
   // Change Username form
   const [newUsername, setNewUsername] = useState("");
@@ -83,6 +92,14 @@ export default function SettingsPage() {
       .then((data) => {
         if (data?.ok && data.actor) {
           if (data.actor.username) setCurrentUsername(data.actor.username);
+          if (data.actor.email) {
+            setCurrentEmail(data.actor.email);
+            setContactEmail(data.actor.email);
+          }
+          if (data.actor.phoneNumber) {
+            setCurrentPhone(data.actor.phoneNumber);
+            setContactPhone(data.actor.phoneNumber);
+          }
           if (data.actor.securityQuestion) setCurrentQuestion(data.actor.securityQuestion);
           if (data.actor.avatarUrl) {
             setCurrentAvatar(data.actor.avatarUrl);
@@ -238,6 +255,60 @@ export default function SettingsPage() {
       setUsernameFeedback({ tone: "error", text: err instanceof Error ? err.message : "Error updating username." });
     } finally {
       setUsernameSubmitting(false);
+    }
+  }
+
+  // Handle Update Contact Details (Email & Phone Number)
+  async function handleContactSubmit(e: FormEvent) {
+    e.preventDefault();
+    setContactFeedback(null);
+
+    const cleanEmail = contactEmail.trim().toLowerCase();
+    const cleanPhone = contactPhone.trim();
+
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setContactFeedback({ tone: "error", text: "Please enter a valid email address." });
+      return;
+    }
+
+    if (!cleanPhone || cleanPhone.length < 7) {
+      setContactFeedback({ tone: "error", text: "Please enter a valid phone number (min 7 digits)." });
+      return;
+    }
+
+    if (!contactPassword) {
+      setContactFeedback({ tone: "error", text: "Enter your current password to confirm contact changes." });
+      return;
+    }
+
+    setContactSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-contact",
+          email: cleanEmail,
+          phoneNumber: cleanPhone,
+          currentPassword: contactPassword,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.message ?? "Failed to update contact details.");
+      }
+
+      setCurrentEmail(data.profile?.email ?? cleanEmail);
+      if (data.profile?.phoneNumber) {
+        setCurrentPhone(data.profile.phoneNumber);
+      }
+      setContactPassword("");
+      setContactFeedback({ tone: "success", text: data.message ?? "Contact information updated successfully." });
+    } catch (err) {
+      setContactFeedback({ tone: "error", text: err instanceof Error ? err.message : "Error updating contact details." });
+    } finally {
+      setContactSubmitting(false);
     }
   }
 
@@ -399,7 +470,9 @@ export default function SettingsPage() {
                 {actor.roleLabel}
               </span>
               <span className="settings-hero-dot" aria-hidden="true">·</span>
-              <span className="settings-hero-email">{actor.email}</span>
+              <span className="settings-hero-email">{currentEmail}</span>
+              <span className="settings-hero-dot" aria-hidden="true">·</span>
+              <span className="settings-hero-phone">{currentPhone}</span>
             </div>
           </div>
 
@@ -507,6 +580,79 @@ export default function SettingsPage() {
                   style={{ minHeight: "42px", padding: "0 22px" }}
                 >
                   {usernameSubmitting ? "Updating…" : "Save Username"}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          {/* Section 1b: Contact Information (Email & Phone Number) */}
+          <section className="records-card settings-card-section" aria-label="Contact Information">
+            <div className="settings-section-header">
+              <h2>Contact Information</h2>
+              <p>Manage your verified email address and primary phone number.</p>
+            </div>
+
+            <form onSubmit={handleContactSubmit} className="settings-form-body">
+              {contactFeedback ? (
+                <div className={`settings-form-alert ${contactFeedback.tone}`}>
+                  {contactFeedback.text}
+                </div>
+              ) : null}
+
+              <div className="settings-field-row-2col">
+                <div className="settings-form-field">
+                  <label>Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. user@routex.local"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    className="settings-input"
+                  />
+                  <small className="settings-field-hint">
+                    Used for notifications, audit trail, and account recovery.
+                  </small>
+                </div>
+
+                <div className="settings-form-field">
+                  <label>Phone Number</label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="e.g. +63 917 123 4567"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    className="settings-input"
+                  />
+                  <small className="settings-field-hint">
+                    Primary contact number for urgent operational and security dispatch.
+                  </small>
+                </div>
+              </div>
+
+              <div className="settings-form-field">
+                <label>Confirm Current Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter current password"
+                  value={contactPassword}
+                  onChange={(e) => setContactPassword(e.target.value)}
+                  className="settings-input"
+                  minLength={8}
+                />
+              </div>
+
+              <div className="settings-form-actions">
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={contactSubmitting}
+                  title="Save your email and phone number"
+                  style={{ minHeight: "42px", padding: "0 22px" }}
+                >
+                  {contactSubmitting ? "Updating…" : "Save Contact Info"}
                 </button>
               </div>
             </form>

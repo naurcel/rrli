@@ -196,6 +196,29 @@ export default function DeliveriesPage() {
   const [deleteDeliveryError, setDeleteDeliveryError] = useState<string | null>(null);
   const [activeKpi, setActiveKpi] = useState<"earnings" | "expenses" | "profit" | null>(null);
   const [financialActionMessage, setFinancialActionMessage] = useState<string | null>(null);
+  const [openActionDeliveryId, setOpenActionDeliveryId] = useState<string | null>(null);
+  const [actionOpensAbove, setActionOpensAbove] = useState(false);
+
+  useEffect(() => {
+    if (!openActionDeliveryId) return;
+    function handleGlobalClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".table-row-actions")) {
+        setOpenActionDeliveryId(null);
+      }
+    }
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpenActionDeliveryId(null);
+      }
+    }
+    document.addEventListener("click", handleGlobalClick);
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener("click", handleGlobalClick);
+      document.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [openActionDeliveryId]);
 
   function navigateToDelivery(trip: DeliveryLedgerItem) {
     const query = new URLSearchParams();
@@ -1474,16 +1497,18 @@ export default function DeliveriesPage() {
                     <SortableTableHeader label="Revenue" sortKey="delivery_rate" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Expenses" sortKey="total_expenses" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Net Profit" sortKey="net_income" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
+                    <th style={{ width: "40px", textAlign: "center" }}><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedDeliveries.map((trip) => {
+                  {paginatedDeliveries.map((trip, tripIndex) => {
                     const isIncomplete = isDeliveryIncomplete(trip);
                     const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                     return (
                       <tr
                         key={trip.id}
                         className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
+                        style={{ position: "relative", zIndex: openActionDeliveryId === trip.id ? 150 : undefined }}
                         tabIndex={0}
                         onClick={() => {
                           setActiveKpi(null);
@@ -1579,6 +1604,80 @@ export default function DeliveriesPage() {
                                 </span>
                               ) : null}
                             </>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                        <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
+                          <button
+                            type="button"
+                            className="row-action-more-btn"
+                            aria-label={`Actions for waybill ${trip.waybillNumber}`}
+                            title="More actions"
+                            aria-haspopup="menu"
+                            aria-expanded={openActionDeliveryId === trip.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const spaceBelow = window.innerHeight - rect.bottom;
+                              const isNearBottom = spaceBelow < 220 || tripIndex >= paginatedDeliveries.length - 2;
+                              setActionOpensAbove(isNearBottom);
+                              setOpenActionDeliveryId((curr) => (curr === trip.id ? null : trip.id));
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                              <circle cx="8" cy="3" r="1.5" />
+                              <circle cx="8" cy="8" r="1.5" />
+                              <circle cx="8" cy="13" r="1.5" />
+                            </svg>
+                          </button>
+
+                          {openActionDeliveryId === trip.id && (
+                            <div
+                              className={`row-action-menu${actionOpensAbove ? " opens-above" : ""}`}
+                              role="menu"
+                              aria-label={`Actions for waybill ${trip.waybillNumber}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setOpenActionDeliveryId(null);
+                                  navigateToDelivery(trip);
+                                }}
+                              >
+                                View Details
+                              </button>
+                              {canWrite && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setOpenActionDeliveryId(null);
+                                    openCorrectionModal(trip);
+                                  }}
+                                >
+                                  Edit Financials
+                                </button>
+                              )}
+                              {actor.role === "admin" && (
+                                <>
+                                  <div className="row-action-menu-divider" role="separator" />
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-action-menu-danger"
+                                    onClick={() => {
+                                      setOpenActionDeliveryId(null);
+                                      openDeleteDeliveryModal(trip);
+                                    }}
+                                  >
+                                    Delete Delivery
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>

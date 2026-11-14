@@ -216,7 +216,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
         aria-haspopup="menu"
         aria-controls={menuId}
         aria-label={`User menu for @${actor.username}`}
-        title={`@${actor.username} (${actor.roleLabel})`}
+        title={!isOpen ? `${actor.fullName || actor.username} · ${actor.roleLabel}` : undefined}
         onClick={() => setIsOpen((prev) => !prev)}
       >
         <div className="topbar-avatar">

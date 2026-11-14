@@ -81,6 +81,28 @@ function DeliveryDetailsPageContent({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isActionMenuOpen) return;
+    function handleGlobalClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".table-row-actions")) {
+        setIsActionMenuOpen(false);
+      }
+    }
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setIsActionMenuOpen(false);
+      }
+    }
+    document.addEventListener("click", handleGlobalClick);
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener("click", handleGlobalClick);
+      document.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [isActionMenuOpen]);
 
   // Sync active delivery when id or allDeliveries changes
   useEffect(() => {
@@ -319,62 +341,96 @@ function DeliveryDetailsPageContent({
 
             <div className="delivery-hero-status-pills">
               <span
-                className={`detail-status ${isComplete ? "success" : "warning"}`}
+                className={`simple-hero-badge ${isComplete ? "positive" : "warning"}`}
                 title={
                   isComplete
                     ? "Delivery record complete"
                     : `Incomplete financials: ${delivery.financialIntegrityIssues.join(", ") || "incomplete expenses"}`
                 }
               >
-                {isComplete ? "COMPLETE" : "INCOMPLETE"}
+                <span className="simple-badge-dot" />
+                {isComplete ? "Complete" : "Incomplete"}
               </span>
 
+              <span className="simple-hero-badge-sep">·</span>
+
               <span
-                className={`drawer-dropoff-doc-pill ${delivery.podStatus === "Verified" ? "has-doc" : "no-doc"}`}
+                className={`simple-hero-badge ${delivery.podStatus === "Verified" ? "positive" : "warning"}`}
                 title={delivery.podStatus === "Verified" ? "Proof of delivery attached for all stops" : "Missing POD on one or more stops"}
               >
                 {delivery.podStatus === "Verified" ? "POD Attached" : "Missing POD"}
               </span>
 
-              <span className="meta-pill">
+              <span className="simple-hero-badge-sep">·</span>
+
+              <span className="simple-hero-badge neutral">
                 {delivery.dropoffs.length} {delivery.dropoffs.length === 1 ? "Drop-off" : "Drop-offs"}
               </span>
 
-              <span className="meta-pill">
+              <span className="simple-hero-badge-sep">·</span>
+
+              <span className="simple-hero-badge neutral">
                 Version {delivery.version}
               </span>
             </div>
           </div>
 
           {canWrite ? (
-            <div className="delivery-hero-actions">
+            <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
               <button
                 type="button"
-                className="secondary-button"
-                onClick={() => setEditingTrip(delivery)}
-                title="Edit delivery revenue, drop-offs, crew, and expenses"
+                className="row-action-more-btn"
+                aria-label={`Actions for waybill ${delivery.waybillNumber}`}
+                title="More actions"
+                aria-haspopup="menu"
+                aria-expanded={isActionMenuOpen}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsActionMenuOpen((curr) => !curr);
+                }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <circle cx="8" cy="3" r="1.5" />
+                  <circle cx="8" cy="8" r="1.5" />
+                  <circle cx="8" cy="13" r="1.5" />
                 </svg>
-                <span>Edit delivery</span>
               </button>
 
-              {actor.role === "admin" ? (
-                <button
-                  type="button"
-                  className="secondary-button danger-action"
-                  onClick={() => setDeliveryToDelete(delivery)}
-                  title="Delete this delivery record (audited admin action)"
+              {isActionMenuOpen && (
+                <div
+                  className="row-action-menu"
+                  role="menu"
+                  aria-label={`Actions for waybill ${delivery.waybillNumber}`}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                  <span>Delete</span>
-                </button>
-              ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setEditingTrip(delivery);
+                    }}
+                  >
+                    Edit Delivery
+                  </button>
+                  {actor.role === "admin" && (
+                    <>
+                      <div className="row-action-menu-divider" role="separator" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="row-action-menu-danger"
+                        onClick={() => {
+                          setIsActionMenuOpen(false);
+                          setDeliveryToDelete(delivery);
+                        }}
+                      >
+                        Delete Delivery
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           ) : null}
         </header>

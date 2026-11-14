@@ -8,10 +8,12 @@ import {
   changeSecurityQuestionSchema,
   changeUsernameSchema,
   initialSetupSchema,
+  updateContactInfoSchema,
 } from "@/lib/auth/auth-schemas";
 import {
   completeInitialServerAccountSetup,
   updateServerAccountAvatar,
+  updateServerAccountContact,
   updateServerAccountPassword,
   updateServerAccountSecurityQuestion,
   updateServerAccountUsername,
@@ -74,6 +76,56 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: `Username updated to '${result.profile.username}'.`,
+      profile: result.profile,
+    });
+  }
+
+  // 1b. Update Contact Info (Email & Phone Number)
+  if (action === "update-contact") {
+    const parsed = updateContactInfoSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid contact information." },
+        { status: 400 },
+      );
+    }
+
+    const { email, phoneNumber, currentPassword } = parsed.data;
+
+    // Verify current password
+    if (!verifyServerAccountCurrentPassword(actor.id, currentPassword)) {
+      return NextResponse.json(
+        { ok: false, message: "The current password you entered is incorrect." },
+        { status: 403 },
+      );
+    }
+
+    const oldEmail = actor.email;
+    const oldPhone = actor.phoneNumber || "None";
+    const result = updateServerAccountContact(actor.id, email, phoneNumber);
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
+    }
+
+    recordAuditEntry({
+      actorId: actor.id,
+      actorEmail: result.profile.email,
+      action: "user.contact_updated",
+      entityType: "user",
+      entityId: actor.id,
+      summary: `User '@${actor.username}' updated contact details (email: ${result.profile.email}, phone: ${result.profile.phoneNumber}).`,
+      changes: {
+        oldEmail,
+        newEmail: result.profile.email,
+        oldPhone,
+        newPhone: result.profile.phoneNumber,
+        userId: actor.id,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Contact information updated successfully.",
       profile: result.profile,
     });
   }

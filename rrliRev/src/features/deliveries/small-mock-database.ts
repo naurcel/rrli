@@ -509,6 +509,248 @@ const DELIVERIES = [
       }],
     }),
   },
+  {
+    clientId: CLIENTS[0].id,
+    truckId: TRUCKS[1].id,
+    driverId: DRIVERS[0].id,
+    helperId: HELPERS[0].id,
+    scenario: "Landers temperature-controlled replenishment from Calamba hub to Landers Otis Manila branch.",
+    record: buildDeliveryTripRecord({
+      id: "40000000-0000-4000-8000-000000000010",
+      waybillNumber: "WB-261033",
+      deliveryDate: "2026-10-29",
+      clientName: CLIENTS[0].name,
+      plateNumber: TRUCKS[1].plateNumber,
+      truckType: TRUCKS[1].truckType,
+      truckTemperature: "-18°C",
+      origin: "Fictional Origin: Landers Greater Manila Consolidation Hub, Calamba, Laguna",
+      distanceKm: 89,
+      fuelRate: 85.0,
+      deliveryRate: 23500,
+      expenses: {
+        dieselExpenses: 3800,
+        tollGateExpenses: 850,
+        tollGateBreakdown: "SLEX & Skyway Stage 3 tolls",
+        driverAllowance: 350,
+        driverDailyRate: 950,
+        helperAllowance: 250,
+        helperDailyRate: 650,
+        otherExpenses: 150,
+      },
+      dropoffs: [{
+        id: "50000000-0000-4000-8000-000000000013",
+        sequence: 1,
+        storeName: "Landers Superstore - Otis",
+        destinationArea: "Paco, Manila, Metro Manila",
+        entryFee: 150,
+        podSubmitted: true,
+        supportingDocsComplete: true,
+        documentRef: "SAMPLE-POD-LND-10.pdf",
+      }],
+    }),
+  },
+  {
+    clientId: CLIENTS[0].id,
+    truckId: TRUCKS[4].id,
+    driverId: DRIVERS[1].id,
+    helperId: HELPERS[1].id,
+    scenario: "Landers express cold delivery to Landers Uptown BGC store.",
+    record: buildDeliveryTripRecord({
+      id: "40000000-0000-4000-8000-000000000011",
+      waybillNumber: "WB-261034",
+      deliveryDate: "2026-10-31",
+      clientName: CLIENTS[0].name,
+      plateNumber: TRUCKS[4].plateNumber,
+      truckType: TRUCKS[4].truckType,
+      truckTemperature: "-18°C",
+      origin: "Fictional Origin: Landers Greater Manila Consolidation Hub, Calamba, Laguna",
+      distanceKm: 76,
+      fuelRate: 84.0,
+      deliveryRate: 19000,
+      expenses: {
+        dieselExpenses: 3100,
+        tollGateExpenses: 700,
+        tollGateBreakdown: "SLEX & C-5 corridor tolls",
+        driverAllowance: 300,
+        driverDailyRate: 900,
+        helperAllowance: 200,
+        helperDailyRate: 600,
+        otherExpenses: 100,
+      },
+      dropoffs: [{
+        id: "50000000-0000-4000-8000-000000000014",
+        sequence: 1,
+        storeName: "Landers Superstore - Uptown Bonifacio",
+        destinationArea: "Bonifacio Global City, Taguig, Metro Manila",
+        entryFee: 120,
+        podSubmitted: true,
+        supportingDocsComplete: true,
+        documentRef: "SAMPLE-POD-LND-11.pdf",
+      }],
+    }),
+  },
+  {
+    clientId: CLIENTS[1].id,
+    truckId: TRUCKS[2].id,
+    driverId: DRIVERS[0].id,
+    helperId: HELPERS[1].id,
+    scenario: "MCCI chilled commissary dispatch to Kuya J SM North EDSA.",
+    record: buildDeliveryTripRecord({
+      id: "40000000-0000-4000-8000-000000000012",
+      waybillNumber: "WB-261035",
+      deliveryDate: "2026-10-28",
+      clientName: CLIENTS[1].name,
+      plateNumber: TRUCKS[2].plateNumber,
+      truckType: TRUCKS[2].truckType,
+      truckTemperature: "4°C",
+      origin: "MCCI Central Commissary, San Pedro, Laguna",
+      distanceKm: 92,
+      fuelRate: 86.0,
+      deliveryRate: 21500,
+      expenses: {
+        dieselExpenses: 3950,
+        tollGateExpenses: 950,
+        tollGateBreakdown: "SLEX & Skyway tolls",
+        driverAllowance: 350,
+        driverDailyRate: 950,
+        helperAllowance: 250,
+        helperDailyRate: 700,
+        otherExpenses: 200,
+      },
+      dropoffs: [{
+        id: "50000000-0000-4000-8000-000000000015",
+        sequence: 1,
+        storeName: "Kuya J Restaurant - SM North EDSA",
+        destinationArea: "Bago Bantay, Quezon City, Metro Manila",
+        entryFee: 180,
+        podSubmitted: true,
+        supportingDocsComplete: true,
+        documentRef: "SAMPLE-POD-MCC-12.pdf",
+      }],
+    }),
+  },
+  {
+    clientId: CLIENTS[1].id,
+    truckId: SUBCONTRACTED_TRUCKS[0].id,
+    driverId: DRIVERS[1].id,
+    helperId: HELPERS[0].id,
+    scenario: "Subcontracted dry seasoning replenishment to Popeyes Robinsons Galleria.",
+    record: buildDeliveryTripRecord({
+      id: "40000000-0000-4000-8000-000000000013",
+      waybillNumber: "WB-261036",
+      deliveryDate: "2026-10-31",
+      clientName: CLIENTS[1].name,
+      plateNumber: SUBCONTRACTED_TRUCKS[0].plateNumber,
+      truckType: SUBCONTRACTED_TRUCKS[0].truckType,
+      truckTemperature: "22°C",
+      truckOwnership: "Subcontracted",
+      rateBasis: "Trucker Rate",
+      origin: "MCCI Central Commissary, San Pedro, Laguna",
+      distanceKm: 65,
+      fuelRate: 83.5,
+      deliveryRate: 7800,
+      expenses: {
+        dieselExpenses: 2100,
+        tollGateExpenses: 450,
+        tollGateBreakdown: "SLEX connector round trip",
+        driverAllowance: 300,
+        driverDailyRate: 850,
+        helperAllowance: 200,
+        helperDailyRate: 600,
+        otherExpenses: 100,
+      },
+      dropoffs: [{
+        id: "50000000-0000-4000-8000-000000000016",
+        sequence: 1,
+        storeName: "Popeyes - Robinsons Galleria",
+        destinationArea: "Ortigas Center, Quezon City, Metro Manila",
+        entryFee: 100,
+        podSubmitted: true,
+        supportingDocsComplete: true,
+        documentRef: "SAMPLE-POD-MCC-13.pdf",
+      }],
+    }),
+  },
+  {
+    clientId: CLIENTS[2].id,
+    truckId: TRUCKS[5].id,
+    driverId: DRIVERS[0].id,
+    helperId: HELPERS[0].id,
+    scenario: "Vanguard wholesale hardware replenishment to Wilcon Depot Kawit.",
+    record: buildDeliveryTripRecord({
+      id: "40000000-0000-4000-8000-000000000014",
+      waybillNumber: "WB-261037",
+      deliveryDate: "2026-10-27",
+      clientName: CLIENTS[2].name,
+      plateNumber: TRUCKS[5].plateNumber,
+      truckType: TRUCKS[5].truckType,
+      truckTemperature: "20°C",
+      origin: "Fictional Origin: Vanguard Southern Luzon Logistics Facility, Carmona, Cavite",
+      distanceKm: 58,
+      fuelRate: 82.0,
+      deliveryRate: 15000,
+      expenses: {
+        dieselExpenses: 2400,
+        tollGateExpenses: 300,
+        tollGateBreakdown: "CAVITEX expressway tolls",
+        driverAllowance: 300,
+        driverDailyRate: 850,
+        helperAllowance: 200,
+        helperDailyRate: 600,
+        otherExpenses: 100,
+      },
+      dropoffs: [{
+        id: "50000000-0000-4000-8000-000000000017",
+        sequence: 1,
+        storeName: "Wilcon Depot - Kawit",
+        destinationArea: "Magdalo, Kawit, Cavite",
+        entryFee: 100,
+        podSubmitted: true,
+        supportingDocsComplete: true,
+        documentRef: "SAMPLE-POD-VGD-14.pdf",
+      }],
+    }),
+  },
+  {
+    clientId: CLIENTS[2].id,
+    truckId: TRUCKS[3].id,
+    driverId: DRIVERS[1].id,
+    helperId: HELPERS[1].id,
+    scenario: "Vanguard retail distribution to S&R Nuvali Santa Rosa branch.",
+    record: buildDeliveryTripRecord({
+      id: "40000000-0000-4000-8000-000000000015",
+      waybillNumber: "WB-261038",
+      deliveryDate: "2026-10-30",
+      clientName: CLIENTS[2].name,
+      plateNumber: TRUCKS[3].plateNumber,
+      truckType: TRUCKS[3].truckType,
+      truckTemperature: "-18°C",
+      origin: "Fictional Origin: Vanguard Industrial Cross-Dock Hub, Biñan, Laguna",
+      distanceKm: 42,
+      fuelRate: 83.0,
+      deliveryRate: 14000,
+      expenses: {
+        dieselExpenses: 2100,
+        tollGateExpenses: 250,
+        tollGateBreakdown: "CALAX Nuvali tolls",
+        driverAllowance: 300,
+        driverDailyRate: 850,
+        helperAllowance: 200,
+        helperDailyRate: 600,
+        otherExpenses: 100,
+      },
+      dropoffs: [{
+        id: "50000000-0000-4000-8000-000000000018",
+        sequence: 1,
+        storeName: "S&R Membership Shopping - Nuvali",
+        destinationArea: "Don Jose, Santa Rosa City, Laguna",
+        entryFee: 100,
+        podSubmitted: true,
+        supportingDocsComplete: true,
+        documentRef: "SAMPLE-POD-VGD-15.pdf",
+      }],
+    }),
+  },
 ] as const satisfies readonly SmallMockDelivery[];
 
 const DOCUMENT_DELIVERY_STATUSES = [
@@ -521,6 +763,12 @@ const DOCUMENT_DELIVERY_STATUSES = [
   "Verified",
   "Submitted",
   "Verified",
+  "Verified",
+  "Submitted",
+  "Verified",
+  "Submitted",
+  "Verified",
+  "Submitted",
 ] as const satisfies readonly SmallMockDocumentStatus[];
 
 const DOCUMENTS: readonly SmallMockDocument[] = DELIVERIES.flatMap((delivery, deliveryIndex) =>
@@ -609,16 +857,16 @@ export function validateSmallMockDatabase(): string[] {
 
   if (clients.length !== 3) issues.push("Expected exactly 3 mock clients.");
   if (trucks.filter((truck) => truck.ownershipType === "Owned").length !== 6) issues.push("Expected exactly 6 owned mock trucks.");
-  if (trucks.filter((truck) => truck.ownershipType === "Subcontracted").length !== 10) issues.push("Expected exactly 10 subcontracted mock trucks.");
+  if (trucks.filter((truck) => truck.ownershipType === "Subcontracted").length !== 15) issues.push("Expected exactly 15 subcontracted mock trucks.");
   if (drivers.length !== 2) issues.push("Expected exactly 2 mock drivers.");
   if (helpers.length !== 2) issues.push("Expected exactly 2 mock helpers.");
-  if (deliveries.length !== 9) issues.push("Expected exactly 9 mock deliveries.");
-  if (dropoffCount !== 12) issues.push("Expected exactly 12 mock drop-offs.");
+  if (deliveries.length !== 15) issues.push("Expected exactly 15 mock deliveries.");
+  if (dropoffCount !== 18) issues.push("Expected exactly 18 mock drop-offs.");
   if (waybills.size !== deliveries.length) issues.push("Mock waybill numbers must be unique.");
 
   for (const client of clients) {
     const count = deliveries.filter((delivery) => delivery.clientId === client.id).length;
-    if (count !== 3) issues.push(`${client.name} must have exactly 3 deliveries.`);
+    if (count !== 5) issues.push(`${client.name} must have exactly 5 deliveries.`);
   }
   for (const delivery of deliveries) {
     const truck = trucks.find((candidate) => candidate.id === delivery.truckId);
@@ -640,8 +888,8 @@ export function validateSmallMockDatabase(): string[] {
 
   const finalized = deliveries.filter((delivery) => delivery.record.financialState === "finalized");
   const incomplete = deliveries.filter((delivery) => delivery.record.financialState === "incomplete");
-  if (finalized.length !== 8 || incomplete.length !== 1) {
-    issues.push("Expected 8 financially finalized deliveries and 1 incomplete delivery.");
+  if (finalized.length !== 14 || incomplete.length !== 1) {
+    issues.push("Expected 14 financially finalized deliveries and 1 incomplete delivery.");
   }
   if (summarizeTruckProfitability(deliveries.map((delivery) => delivery.record)).length !== 7) {
     issues.push("All 6 owned trucks and the active subcontracted truck must appear in confirmed profitability summaries.");
@@ -754,6 +1002,72 @@ export const SMALL_MOCK_COMPANY_EXPENSES = [
     createdBy: "operations",
     createdAt: "2026-11-06T13:45:00.000Z",
     updatedAt: "2026-11-06T13:45:00.000Z",
+  },
+  {
+    id: "50000000-0000-4000-8000-000000000010",
+    description: "Fleet Management System Cloud License - Nov 2026",
+    amount: 6200,
+    expenseDate: "2026-11-08",
+    category: "Office & Admin",
+    notes: "SaaS software subscription for GPS dispatch tracking and cloud sync.",
+    createdBy: "operations",
+    createdAt: "2026-11-08T09:15:00.000Z",
+    updatedAt: "2026-11-08T09:15:00.000Z",
+  },
+  {
+    id: "50000000-0000-4000-8000-000000000011",
+    description: "Depot Security & Night Patrol Services",
+    amount: 16500,
+    expenseDate: "2026-11-10",
+    category: "Rent & Facilities",
+    notes: "Contracted security services for Calamba staging logistics yard.",
+    createdBy: "admin",
+    createdAt: "2026-11-10T10:00:00.000Z",
+    updatedAt: "2026-11-10T10:00:00.000Z",
+  },
+  {
+    id: "50000000-0000-4000-8000-000000000012",
+    description: "Cold Storage Unit Periodic Thermostat Inspection",
+    amount: 3800,
+    expenseDate: "2026-11-11",
+    category: "Maintenance & Repairs",
+    notes: "Calibrated staging area cold room thermometers and backup refrigeration compressor.",
+    createdBy: "operations",
+    createdAt: "2026-11-11T14:30:00.000Z",
+    updatedAt: "2026-11-11T14:30:00.000Z",
+  },
+  {
+    id: "50000000-0000-4000-8000-000000000013",
+    description: "Warehouse Backup Generator Fuel (Diesel)",
+    amount: 5400,
+    expenseDate: "2026-11-12",
+    category: "Utilities",
+    notes: "120 liters diesel fuel refill for standby emergency cold-chain generator.",
+    createdBy: "operations",
+    createdAt: "2026-11-12T11:00:00.000Z",
+    updatedAt: "2026-11-12T11:00:00.000Z",
+  },
+  {
+    id: "50000000-0000-4000-8000-000000000014",
+    description: "Operations Crew Uniforms & High-Vis Safety Gear",
+    amount: 4750,
+    expenseDate: "2026-11-13",
+    category: "Office & Admin",
+    notes: "Reflective safety vests, steel-toe boots, and company ID lanyards for staging personnel.",
+    createdBy: "operations",
+    createdAt: "2026-11-13T15:20:00.000Z",
+    updatedAt: "2026-11-13T15:20:00.000Z",
+  },
+  {
+    id: "50000000-0000-4000-8000-000000000015",
+    description: "Barangay & Municipal Commercial Operation Permits",
+    amount: 7200,
+    expenseDate: "2026-11-14",
+    category: "Insurance & Legal",
+    notes: "Q4 municipal dispatch staging clearance and environmental inspection renewal.",
+    createdBy: "admin",
+    createdAt: "2026-11-14T08:45:00.000Z",
+    updatedAt: "2026-11-14T08:45:00.000Z",
   },
 ];
 

@@ -92,6 +92,27 @@ export default function FinancePage() {
     };
   }, [openActionExpenseId]);
 
+  useEffect(() => {
+    if (!isRecordModalOpen) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !submitting) {
+        setIsRecordModalOpen(false);
+        setFormError(null);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isRecordModalOpen, submitting]);
+
+  useEffect(() => {
+    if (!isRecordModalOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isRecordModalOpen]);
+
   // Fetch or sync company expenses
   const loadExpenses = useCallback(async () => {
     setLoading(true);

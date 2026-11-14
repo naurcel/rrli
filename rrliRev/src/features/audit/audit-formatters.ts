@@ -42,6 +42,7 @@ const FIELD_LABEL_MAP: Record<string, string> = {
   ratebasis: "Rate Basis",
   role: "Assigned Role",
   email: "Email Address",
+  phonenumber: "Phone Number",
   roles: "System Roles",
   version: "Record Version",
   dropoffid: "Store Drop-off Reference",

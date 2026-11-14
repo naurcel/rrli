@@ -129,9 +129,9 @@ test("POD document attachment updates dropoffs and document reference", () => {
   assert.equal(dropoff.documentRef, "POD-VERIFIED-TEST.pdf");
 });
 
-test("dynamic batch deliveries are queryable without corrupting the 9 base seed fixtures", () => {
+test("dynamic batch deliveries are queryable without corrupting the 15 base seed fixtures", () => {
   const baseCount = SMALL_MOCK_DATABASE.deliveries.length;
-  assert.equal(baseCount, 9, "Base mock database must remain exactly 9 deliveries.");
+  assert.equal(baseCount, 15, "Base mock database must remain exactly 15 deliveries.");
 
   const importId = "imp-test-uuid-001";
   const newRecord = buildDeliveryTripRecord({
@@ -180,7 +180,7 @@ test("dynamic batch deliveries are queryable without corrupting the 9 base seed 
   });
 
   // Base fixtures are untouched
-  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 9);
+  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 15);
 
   // All deliveries include the dynamic import
   const all = getAllMockDeliveries();

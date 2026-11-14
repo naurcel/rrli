@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { type DeliveryTripRecord } from "@/features/deliveries/delivery-domain";
 import {
@@ -191,27 +192,39 @@ export function ReportCustomizerModal({
     }
   }
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !saving && !isDeleting) {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, saving, isDeleting, onClose]);
 
-  return (
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
+  if (!isOpen || typeof document === "undefined") return null;
+
+  return createPortal(
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        background: "rgba(15, 23, 21, 0.72)",
-        backdropFilter: "blur(6px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "20px",
-      }}
+      className="routex-dialog-layer"
       role="dialog"
       aria-modal="true"
       aria-labelledby="customizer-modal-title"
+      style={{ zIndex: 1000 }}
     >
+      <div className="routex-dialog-backdrop" onClick={() => !saving && !isDeleting && onClose()} />
       <div
-        className="records-card report-customizer-dialog"
+        className="routex-dialog records-card report-customizer-dialog"
         style={{
           width: "min(100%, 920px)",
           maxHeight: "92vh",
@@ -236,22 +249,7 @@ export function ReportCustomizerModal({
         >
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  minHeight: "18px",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  background: "rgba(180, 83, 9, 0.12)",
-                  color: "var(--color-accent)",
-                  border: "1px solid rgba(180, 83, 9, 0.25)",
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                }}
-              >
+              <span className="simple-hero-badge warning">
                 Admin Tool
               </span>
               <h2 id="customizer-modal-title" style={{ margin: 0, fontSize: "18px" }}>
@@ -954,6 +952,7 @@ export function ReportCustomizerModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

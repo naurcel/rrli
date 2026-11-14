@@ -69,6 +69,32 @@ export default function TruckProfilePage({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [localTrucks, setLocalTrucks] = useState<FleetTruck[]>([]);
   const canManage = canManageTrucks(actor.role);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [openRowActionTripId, setOpenRowActionTripId] = useState<string | null>(null);
+  const [rowActionOpensAbove, setRowActionOpensAbove] = useState(false);
+
+  useEffect(() => {
+    if (!isActionMenuOpen && !openRowActionTripId) return;
+    function handleGlobalClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".table-row-actions")) {
+        setIsActionMenuOpen(false);
+        setOpenRowActionTripId(null);
+      }
+    }
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setIsActionMenuOpen(false);
+        setOpenRowActionTripId(null);
+      }
+    }
+    document.addEventListener("click", handleGlobalClick);
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener("click", handleGlobalClick);
+      document.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [isActionMenuOpen, openRowActionTripId]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editPlateNumber, setEditPlateNumber] = useState("");
@@ -345,6 +371,50 @@ export default function TruckProfilePage({
     }
   }
 
+  useEffect(() => {
+    if (!isActionMenuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".table-row-actions")) {
+        setIsActionMenuOpen(false);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setIsActionMenuOpen(false);
+      }
+    }
+    document.addEventListener("click", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isActionMenuOpen]);
+
+  const hasActiveModal = Boolean(isEditModalOpen || isDeleteModalOpen);
+
+  useEffect(() => {
+    if (!hasActiveModal) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (isEditModalOpen && !editSubmitting) setIsEditModalOpen(false);
+        if (isDeleteModalOpen && !isDeleting) setIsDeleteModalOpen(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hasActiveModal, isEditModalOpen, editSubmitting, isDeleteModalOpen, isDeleting]);
+
+  useEffect(() => {
+    if (!hasActiveModal) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [hasActiveModal]);
+
   return (
     <>
       <OperationalTopbar contextLabel={`Truck ${normalizedPlate}`} />
@@ -396,28 +466,57 @@ export default function TruckProfilePage({
               </div>
 
               {actor.role === "admin" && (
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
                   <button
                     type="button"
-                    className="secondary-button"
-                    title="Edit truck details"
-                    onClick={openEditModal}
+                    className="row-action-more-btn"
+                    aria-label={`More actions for ${activeTruck.plateNumber}`}
+                    title="More actions"
+                    aria-haspopup="menu"
+                    aria-expanded={isActionMenuOpen}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsActionMenuOpen((curr) => !curr);
+                    }}
                   >
-                    <span>Edit Truck</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button danger-action"
-                    title="Delete truck"
-                    onClick={() => setIsDeleteModalOpen(true)}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      <line x1="10" y1="11" x2="10" y2="17" />
-                      <line x1="14" y1="11" x2="14" y2="17" />
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                      <circle cx="8" cy="3" r="1.5" />
+                      <circle cx="8" cy="8" r="1.5" />
+                      <circle cx="8" cy="13" r="1.5" />
                     </svg>
-                    <span>Delete Truck</span>
                   </button>
+
+                  {isActionMenuOpen && (
+                    <div
+                      className="row-action-menu"
+                      role="menu"
+                      aria-label={`Actions for ${activeTruck.plateNumber}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsActionMenuOpen(false);
+                          openEditModal();
+                        }}
+                      >
+                        Edit Truck
+                      </button>
+                      <div className="row-action-menu-divider" role="separator" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="row-action-menu-danger"
+                        onClick={() => {
+                          setIsActionMenuOpen(false);
+                          setIsDeleteModalOpen(true);
+                        }}
+                      >
+                        Delete Truck
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </header>
@@ -427,51 +526,56 @@ export default function TruckProfilePage({
                 <TruckPhoto plateNumber={activeTruck.plateNumber} editable />
               </article>
 
-              <article className="records-card truck-profile-card truck-profile-availability">
-                <div className="records-heading">
-                  <div>
-                    <h2>Operational Summary</h2>
-                  </div>
-                </div>
-                <div className="truck-performance-kpis" aria-label="Truck performance metrics">
-                  <article
-                    className="stat-card"
-                    style={{ cursor: "pointer" }}
-                    onClick={() => {
-                      document.getElementById("truck-delivery-history")?.scrollIntoView({ behavior: "smooth" });
-                    }}
-                    title="View delivery history"
+              <div className="truck-performance-kpis" aria-label="Truck performance metrics">
+                <article className="stat-card">
+                  <span className="stat-label">REVENUE</span>
+                  <strong>{formatPeso(activeTruck.totalEarnings)}</strong>
+                  <span
+                    className={`stat-meta ${finalizedTripsCount > 0 ? "positive" : ""}`}
                   >
-                    <span className="stat-label">DELIVERIES</span>
-                    <strong>{activeTruck.completedTrips}</strong>
-                    {finalizedTripsCount < truckTrips.length ? (
-                      <span className="stat-meta" style={{ display: "block", fontSize: "11px", marginTop: "2px" }}>
-                        {finalizedTripsCount} finalized
-                      </span>
-                    ) : null}
-                  </article>
-                  <article className="stat-card">
-                    <span className="stat-label">DROP-OFFS</span>
-                    <strong>{activeTruck.totalStoresServed}</strong>
-                  </article>
-                  <article className="stat-card">
-                    <span className="stat-label">REVENUE</span>
-                    <strong>{formatPeso(activeTruck.totalEarnings)}</strong>
-                    {pendingRevenue > 0 ? (
-                      <span
-                        className="stat-meta"
-                        title={`${formatPeso(pendingRevenue)} pending (unresolved expenses)`}
-                        style={{ display: "block", fontSize: "11px", color: "var(--color-accent, #d97706)", marginTop: "2px", fontWeight: 500 }}
-                      >
-                        + {formatPeso(pendingRevenue)} pending
-                      </span>
-                    ) : null}
-                  </article>
-                  <article className="stat-card"><span className="stat-label">EXPENSES</span><strong>{formatPeso(activeTruck.totalExpenses)}</strong></article>
-                  <article className="stat-card"><span className="stat-label">NET PROFIT</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPeso(activeTruck.netProfit)}</strong></article>
-                  <article className="stat-card"><span className="stat-label">PROFIT MARGIN</span><strong className={activeTruck.netProfit < 0 ? "warning" : undefined}>{formatPercent(activeTruck.marginPercent)}</strong></article>
-                </div>
-              </article>
+                    {finalizedTripsCount > 0
+                      ? `${finalizedTripsCount} completed ${finalizedTripsCount === 1 ? "trip" : "trips"} · ${activeTruck.totalStoresServed} drop-offs`
+                      : `${activeTruck.completedTrips} trips recorded`}
+                  </span>
+                  {pendingRevenue > 0 ? (
+                    <span
+                      className="stat-meta"
+                      title={`${formatPeso(pendingRevenue)} pending (unresolved expenses)`}
+                      style={{ display: "block", fontSize: "11px", color: "var(--color-accent, #d97706)", marginTop: "2px", fontWeight: 500 }}
+                    >
+                      + {formatPeso(pendingRevenue)}
+                    </span>
+                  ) : null}
+                </article>
+
+                <article className="stat-card">
+                  <span className="stat-label">EXPENSES</span>
+                  <strong>{formatPeso(activeTruck.totalExpenses)}</strong>
+                  <span className="stat-meta">
+                    {activeTruck.totalExpenses > 0
+                      ? `${formatPeso(activeTruck.totalExpenses)} vehicle operational costs`
+                      : "No expenses in this range"}
+                  </span>
+                </article>
+
+                <article className="stat-card">
+                  <span className="stat-label">NET PROFIT</span>
+                  <strong className={activeTruck.netProfit >= 0 ? undefined : "warning"}>
+                    {formatPeso(activeTruck.netProfit)}
+                  </strong>
+                  <span
+                    className={`stat-meta ${
+                      activeTruck.netProfit >= 0 ? "positive" : "warning"
+                    }`}
+                  >
+                    {activeTruck.totalEarnings > 0 && activeTruck.marginPercent !== null
+                      ? `${formatPercent(activeTruck.marginPercent)} profit margin`
+                      : activeTruck.netProfit < 0 && activeTruck.marginPercent !== null
+                        ? `${formatPercent(activeTruck.marginPercent)} loss margin`
+                        : "Net margin after all vehicle expenses"}
+                  </span>
+                </article>
+              </div>
             </section>
 
             <section className="records-card truck-profile-deliveries" id="truck-delivery-history" aria-label="Truck delivery history">
@@ -501,16 +605,18 @@ export default function TruckProfilePage({
                         <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                         <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                        <th style={{ width: "40px", textAlign: "center" }}><span className="sr-only">Actions</span></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedTruckTrips.map((trip) => {
+                      {paginatedTruckTrips.map((trip, tripIndex) => {
                         const isIncomplete = isDeliveryIncomplete(trip);
                         const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                         return (
                           <tr
                             key={trip.id}
                             className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
+                            style={{ position: "relative", zIndex: openRowActionTripId === trip.id ? 150 : undefined }}
                             tabIndex={0}
                             onClick={() => router.push(`/deliveries/${encodeURIComponent(trip.id)}`)}
                             onKeyDown={(event) => {
@@ -554,6 +660,64 @@ export default function TruckProfilePage({
                               ) : (
                                 formatPeso(trip.netIncome)
                               )}
+                            </td>
+                            <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                              <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
+                                <button
+                                  type="button"
+                                  className="row-action-more-btn"
+                                  aria-label={`Actions for waybill ${trip.waybillNumber}`}
+                                  title="More actions"
+                                  aria-haspopup="menu"
+                                  aria-expanded={openRowActionTripId === trip.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const spaceBelow = window.innerHeight - rect.bottom;
+                                    const isNearBottom = spaceBelow < 220 || tripIndex >= paginatedTruckTrips.length - 2;
+                                    setRowActionOpensAbove(isNearBottom);
+                                    setOpenRowActionTripId((curr) => (curr === trip.id ? null : trip.id));
+                                  }}
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+
+                                {openRowActionTripId === trip.id && (
+                                  <div
+                                    className={`row-action-menu${rowActionOpensAbove ? " opens-above" : ""}`}
+                                    role="menu"
+                                    aria-label={`Actions for waybill ${trip.waybillNumber}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setOpenRowActionTripId(null);
+                                        router.push(`/deliveries/${encodeURIComponent(trip.id)}`);
+                                      }}
+                                    >
+                                      View Details
+                                    </button>
+                                    {canManage && (
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={() => {
+                                          setOpenRowActionTripId(null);
+                                          router.push(`/deliveries?edit=${encodeURIComponent(trip.id)}`);
+                                        }}
+                                      >
+                                        Edit Financials
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -690,18 +854,20 @@ export default function TruckProfilePage({
           )
         : null}
 
-      {isEditModalOpen && activeTruck && (
-        <div
-          className="routex-dialog-layer"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-truck-profile-dialog-title"
-        >
-          <div
-            className="routex-dialog-backdrop"
-            onClick={() => !editSubmitting && setIsEditModalOpen(false)}
-          />
-          <div className="routex-dialog add-truck-dialog">
+      {isEditModalOpen && activeTruck && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-truck-profile-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => !editSubmitting && setIsEditModalOpen(false)}
+              />
+              <div className="routex-dialog add-truck-dialog">
             <header className="routex-dialog-header">
               <div>
                 <h2 id="edit-truck-profile-dialog-title">Edit Truck</h2>
@@ -900,8 +1066,9 @@ export default function TruckProfilePage({
               </footer>
             </form>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      ) : null}
     </>
   );
 }

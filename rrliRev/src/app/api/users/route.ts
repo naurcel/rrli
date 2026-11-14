@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 import {
+  adminUpdateContactSchema,
   adminUpdateUsernameSchema,
   authorizeResetSchema,
   createUserAccountSchema,
@@ -14,6 +15,7 @@ import {
   deleteServerAccount,
   findServerAccountById,
   listServerAccountProfiles,
+  updateServerAccountContact,
   updateServerAccountProfile,
   updateServerAccountUsername,
 } from "@/lib/auth/server-account-store";
@@ -200,6 +202,7 @@ export async function POST(request: Request) {
     role: parsed.data.role,
     temporaryPassword: parsed.data.temporaryPassword,
     email: parsed.data.email,
+    phoneNumber: parsed.data.phoneNumber,
   });
 
   if (!created.ok) {
@@ -331,6 +334,56 @@ export async function PATCH(request: Request) {
       ok: true,
       message: `Username updated to @${updateRes.profile.username}.`,
       profile: updateRes.profile,
+    });
+  }
+
+  // 2b. Admin update contact info (email & phone number)
+  if (action === "update-contact") {
+    const parsed = adminUpdateContactSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid contact data." },
+        { status: 400 },
+      );
+    }
+
+    const targetUser = findServerAccountById(parsed.data.userId);
+    if (!targetUser) {
+      return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
+    }
+
+    const oldEmail = targetUser.email;
+    const oldPhone = targetUser.phoneNumber || "None";
+    const updateRes = updateServerAccountContact(targetUser.id, parsed.data.email, parsed.data.phoneNumber);
+    if (!updateRes.ok) {
+      return NextResponse.json({ ok: false, message: updateRes.message }, { status: 400 });
+    }
+
+    recordAuditEntry({
+      actorId: auth.actor.id,
+      actorEmail: auth.actor.email,
+      action: "user.contact_changed_by_admin",
+      entityType: "user",
+      entityId: targetUser.id,
+      summary: `Admin @${auth.actor.username} updated contact information for ${targetUser.fullName} (@${targetUser.username}).`,
+      changes: {
+        oldEmail,
+        newEmail: updateRes.profile.email,
+        oldPhone,
+        newPhone: updateRes.profile.phoneNumber,
+      },
+    });
+
+    const meta = getRoleMetadata(updateRes.profile.role);
+    return NextResponse.json({
+      ok: true,
+      message: `Contact details updated for @${updateRes.profile.username}.`,
+      user: {
+        ...updateRes.profile,
+        roleLabel: meta.label,
+        accessLevel: meta.accessLevel,
+        accessLevelLabel: meta.accessLevelLabel,
+      },
     });
   }
 

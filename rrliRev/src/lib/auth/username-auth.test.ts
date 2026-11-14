@@ -15,6 +15,7 @@ import {
   findServerAccountByUsername,
   getServerAccountRecoveryState,
   resetServerAccountPasswordWithToken,
+  updateServerAccountContact,
   updateServerAccountPassword,
   updateServerAccountUsername,
   verifyServerAccountCredentials,
@@ -337,4 +338,32 @@ test("Password self-management under Account Settings", async () => {
 
   // Restore password
   updateServerAccountPassword(user.id, currentPassword);
+});
+
+test("Contact info self-management and records preservation", async () => {
+  const user = findServerAccountByUsername("admin");
+  assert.ok(user);
+  if (!user) return;
+
+  assert.equal(user.phoneNumber, "+63 917 123 4567");
+  assert.equal(user.email, "admin@routex.local");
+
+  // Invalid email rejected
+  const badEmailRes = updateServerAccountContact(user.id, "invalid-email", "+63 999 888 7777");
+  assert.equal(badEmailRes.ok, false);
+
+  // Invalid phone rejected
+  const badPhoneRes = updateServerAccountContact(user.id, "admin-new@routex.local", "123");
+  assert.equal(badPhoneRes.ok, false);
+
+  // Valid update succeeds
+  const updatedRes = updateServerAccountContact(user.id, "admin.shinryu@routex.ph", "+63 999 111 2222");
+  assert.equal(updatedRes.ok, true);
+  if (updatedRes.ok) {
+    assert.equal(updatedRes.profile.email, "admin.shinryu@routex.ph");
+    assert.equal(updatedRes.profile.phoneNumber, "+63 999 111 2222");
+  }
+
+  // Restore admin contact info
+  updateServerAccountContact(user.id, "admin@routex.local", "+63 917 123 4567");
 });

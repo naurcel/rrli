@@ -16,6 +16,7 @@ import {
   generateMockPodSvgReceipt,
   openDocumentInNewTab,
 } from "@/features/deliveries/pod-utils";
+import { ImageViewerModal } from "@/components/image-viewer-modal";
 
 type DocumentDetail = { filename?: string; downloadUrl?: string | null };
 
@@ -33,6 +34,12 @@ export function DeliveryPodDocuments({
   const [uploadingStopId, setUploadingStopId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successNote, setSuccessNote] = useState<string | null>(null);
+  const [viewingImage, setViewingImage] = useState<{
+    url: string;
+    title: string;
+    subtitle?: string;
+    filename?: string;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetStopIdRef = useRef<string | null>(null);
@@ -135,14 +142,38 @@ export function DeliveryPodDocuments({
       const res = await fetch(`/api/deliveries/documents?deliveryId=${trip.id}&dropoffId=${stop.id}`);
       const data = (await res.json().catch(() => null)) as { ok?: boolean; document?: DocumentDetail } | null;
       if (res.ok && data?.ok && data.document?.downloadUrl) {
-        void openDocumentInNewTab(data.document.downloadUrl, stop.documentRef || "pod.pdf");
+        setViewingImage({
+          url: data.document.downloadUrl,
+          title: `Proof of Delivery · ${stop.storeName}`,
+          subtitle: `Waybill #${trip.waybillNumber} · Drop-off #${stop.sequence} (${stop.destinationArea})`,
+          filename: stop.documentRef || "pod.pdf",
+        });
         return;
       }
     } catch {
       // fallback to mock receipt
     }
     const fallbackUrl = generateMockPodSvgReceipt(trip, stop, stop.documentRef || "pod.pdf");
-    void openDocumentInNewTab(fallbackUrl, stop.documentRef || "pod.pdf");
+    setViewingImage({
+      url: fallbackUrl,
+      title: `Proof of Delivery Receipt · ${stop.storeName}`,
+      subtitle: `Waybill #${trip.waybillNumber} · Drop-off #${stop.sequence} (${stop.destinationArea})`,
+      filename: stop.documentRef || "pod.svg",
+    });
+  }
+
+  function handleViewSupportingDocument(docName: string) {
+    const fallbackUrl = generateMockPodSvgReceipt(
+      trip,
+      { storeName: docName, destinationArea: "Supporting Document" },
+      docName,
+    );
+    setViewingImage({
+      url: fallbackUrl,
+      title: `Supporting Document · ${docName}`,
+      subtitle: `Waybill #${trip.waybillNumber} · ${trip.clientName}`,
+      filename: docName,
+    });
   }
 
   return (
@@ -352,7 +383,13 @@ export function DeliveryPodDocuments({
         {trip.supportingDocuments && trip.supportingDocuments.length > 0 ? (
           <div className="delivery-supporting-docs-chip-row">
             {trip.supportingDocuments.map((docName, idx) => (
-              <span key={idx} className="delivery-supporting-doc-pill">
+              <button
+                key={idx}
+                type="button"
+                className="delivery-supporting-doc-pill clickable"
+                onClick={() => handleViewSupportingDocument(docName)}
+                title={`Click to view document: ${docName}`}
+              >
                 <svg
                   width="13"
                   height="13"
@@ -372,8 +409,8 @@ export function DeliveryPodDocuments({
                   <polyline points="10 9 9 9 8 9" />
                 </svg>
                 <span className="doc-name">{docName}</span>
-                <span className="pill-status">Attached</span>
-              </span>
+                <span className="pill-status">View</span>
+              </button>
             ))}
           </div>
         ) : (
@@ -382,6 +419,15 @@ export function DeliveryPodDocuments({
           </p>
         )}
       </div>
+
+      <ImageViewerModal
+        isOpen={Boolean(viewingImage)}
+        onClose={() => setViewingImage(null)}
+        imageUrl={viewingImage?.url ?? ""}
+        title={viewingImage?.title ?? ""}
+        subtitle={viewingImage?.subtitle}
+        filename={viewingImage?.filename}
+      />
     </div>
   );
 }

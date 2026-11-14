@@ -8,6 +8,7 @@ import {
   getTruckPhotoFromStorage,
   storageKey,
 } from "./truck-photo-storage";
+import { ImageViewerModal } from "@/components/image-viewer-modal";
 
 export {
   TRUCK_PHOTO_EVENT,
@@ -59,6 +60,7 @@ export function TruckPhoto({
   const [photo, setPhoto] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
 
   const normalizedPlate = plateNumber.trim().toUpperCase();
 
@@ -129,6 +131,9 @@ export function TruckPhoto({
           src={photo}
           alt={`Assigned truck ${plateNumber}`}
           className="truck-photo-img"
+          onClick={() => setIsViewerOpen(true)}
+          style={{ cursor: "pointer" }}
+          title="Click to view photo in popup"
         />
       ) : (
         <div
@@ -189,6 +194,17 @@ export function TruckPhoto({
         <p className="truck-photo-error" role="alert">
           {message}
         </p>
+      ) : null}
+
+      {photo ? (
+        <ImageViewerModal
+          isOpen={isViewerOpen}
+          onClose={() => setIsViewerOpen(false)}
+          imageUrl={photo}
+          title={`Truck Photo · ${plateNumber}`}
+          subtitle="Official fleet vehicle photo on file"
+          filename={`truck-${plateNumber.replace(/\s+/g, "-")}.jpg`}
+        />
       ) : null}
     </div>
   );

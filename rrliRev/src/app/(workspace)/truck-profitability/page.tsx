@@ -89,6 +89,49 @@ export default function TruckProfitabilityPage() {
   const [classificationFilter, setClassificationFilter] = useState<TruckClassificationFilterKey>("all");
   const [performanceFilter, setPerformanceFilter] = useState<TruckPerformanceFilterKey>("all");
   const [ownedTruckSort, setOwnedTruckSort] = useState<OwnedTruckSort>("netProfit");
+  const [ownedViewMode, setOwnedViewMode] = useState<"grid" | "list">("grid");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("routex-owned-trucks-view-mode");
+      if (saved === "grid" || saved === "list") {
+        setOwnedViewMode(saved);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  function handleOwnedViewModeChange(mode: "grid" | "list") {
+    setOwnedViewMode(mode);
+    try {
+      localStorage.setItem("routex-owned-trucks-view-mode", mode);
+    } catch {
+      // ignore
+    }
+  }
+
+  const [ownedListSort, setOwnedListSort] = useState<{
+    key: string;
+    direction: TableSortDirection;
+  }>({ key: "netProfit", direction: "desc" });
+
+  function sortOwnedList(key: string, direction: TableSortDirection) {
+    setOwnedListSort({ key, direction });
+    if (key === "plateNumber" || key === "plate") {
+      setOwnedTruckSort("plate");
+    } else if (key === "totalEarnings" || key === "revenue") {
+      setOwnedTruckSort("revenue");
+    } else if (key === "totalExpenses" || key === "expenses") {
+      setOwnedTruckSort("expenses");
+    } else if (key === "netProfit") {
+      setOwnedTruckSort("netProfit");
+    } else if (key === "marginPercent" || key === "margin") {
+      setOwnedTruckSort("margin");
+    } else if (key === "completedTrips" || key === "deliveries") {
+      setOwnedTruckSort("deliveries");
+    }
+  }
 
   const [subcontractedSort, setSubcontractedSort] = useState<{
     key: SubcontractedTruckSortKey;
@@ -159,9 +202,68 @@ export default function TruckProfitabilityPage() {
       setOpenOwnedActionPlate(null);
       setOpenSubcontractedActionPlate(null);
     }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpenCrewActionId(null);
+        setOpenOwnedActionPlate(null);
+        setOpenSubcontractedActionPlate(null);
+      }
+    }
     document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [openCrewActionId, openOwnedActionPlate, openSubcontractedActionPlate]);
+
+  const hasActiveModal = Boolean(
+    isAddTruckOpen ||
+    editingTruck ||
+    truckToDelete ||
+    isAddCrewOpen ||
+    editingCrewMember ||
+    crewToDelete,
+  );
+
+  useEffect(() => {
+    if (!hasActiveModal) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        if (isAddTruckOpen && !submitting) setIsAddTruckOpen(false);
+        if (editingTruck && !editSubmitting) setEditingTruck(null);
+        if (truckToDelete && !isDeletingTruck) setTruckToDelete(null);
+        if (isAddCrewOpen && !crewSubmitting) setIsAddCrewOpen(false);
+        if (editingCrewMember && !editCrewSubmitting) setEditingCrewMember(null);
+        if (crewToDelete && !isDeletingCrew) setCrewToDelete(null);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    hasActiveModal,
+    isAddTruckOpen,
+    submitting,
+    editingTruck,
+    editSubmitting,
+    truckToDelete,
+    isDeletingTruck,
+    isAddCrewOpen,
+    crewSubmitting,
+    editingCrewMember,
+    editCrewSubmitting,
+    crewToDelete,
+    isDeletingCrew,
+  ]);
+
+  useEffect(() => {
+    if (!hasActiveModal) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [hasActiveModal]);
 
   const filteredCrew = useMemo(() => {
     let list = crew;
@@ -685,6 +787,19 @@ export default function TruckProfitabilityPage() {
     );
   }, [plateSearch, sortedSubcontractedTrucks]);
 
+  const [ownedPage, setOwnedPage] = useState(1);
+  const OWNED_PAGE_SIZE = 10;
+  const ownedPageCount = Math.max(1, Math.ceil(filteredOwnedTrucks.length / OWNED_PAGE_SIZE));
+
+  useEffect(() => {
+    setOwnedPage(1);
+  }, [plateSearch, classificationFilter, performanceFilter, ownedTruckSort]);
+
+  const paginatedOwnedTrucks = useMemo(() => {
+    const start = (ownedPage - 1) * OWNED_PAGE_SIZE;
+    return filteredOwnedTrucks.slice(start, start + OWNED_PAGE_SIZE);
+  }, [filteredOwnedTrucks, ownedPage]);
+
   const [subcontractedPage, setSubcontractedPage] = useState(1);
   const SUBCONTRACTED_PAGE_SIZE = 10;
   const subcontractedPageCount = Math.max(1, Math.ceil(filteredSubcontractedTrucks.length / SUBCONTRACTED_PAGE_SIZE));
@@ -1128,6 +1243,38 @@ export default function TruckProfitabilityPage() {
                 <span className="ledger-total-badge">
                   {filteredOwnedTrucks.length} of {allOwnedTrucks.length} trucks · {refrigeratedCount} Cold · {dryCount} Dry
                 </span>
+                <div className="chart-view-mode-toggle" role="group" aria-label="Owned trucks display view">
+                  <button
+                    type="button"
+                    className={`ui-tooltip ${ownedViewMode === "grid" ? "active" : ""}`}
+                    onClick={() => handleOwnedViewModeChange("grid")}
+                    data-tooltip="Grid view"
+                    aria-label="Grid view"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="3" y="3" width="7" height="7" />
+                      <rect x="14" y="3" width="7" height="7" />
+                      <rect x="14" y="14" width="7" height="7" />
+                      <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className={`ui-tooltip ${ownedViewMode === "list" ? "active" : ""}`}
+                    onClick={() => handleOwnedViewModeChange("list")}
+                    data-tooltip="List view"
+                    aria-label="List view"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="8" y1="6" x2="21" y2="6" />
+                      <line x1="8" y1="12" x2="21" y2="12" />
+                      <line x1="8" y1="18" x2="21" y2="18" />
+                      <line x1="3" y1="6" x2="3.01" y2="6" />
+                      <line x1="3" y1="12" x2="3.01" y2="12" />
+                      <line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1306,167 +1453,377 @@ export default function TruckProfitabilityPage() {
               <strong>No owned trucks match the selected filters</strong>
               <span>Try clearing filters or adjusting your search criteria.</span>
             </div>
-          ) : (
-            <div className="fleet-card-grid truck-profitability-card-grid">
-              {filteredOwnedTrucks.map((truck, index) => {
-                const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
-                const isRefrigerated = capability === "Refrigerated";
+          ) : ownedViewMode === "grid" ? (
+            <>
+              <div className="fleet-card-grid truck-profitability-card-grid">
+                {paginatedOwnedTrucks.map((truck, index) => {
+                  const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
+                  const isRefrigerated = capability === "Refrigerated";
 
-                return (
-                  <div
-                    className="fleet-card truck-profitability-card"
-                    key={truck.plateNumber}
-                    style={{
-                      position: "relative",
-                      overflow: openOwnedActionPlate === truck.plateNumber ? "visible" : undefined,
-                      zIndex: openOwnedActionPlate === truck.plateNumber ? 150 : undefined,
-                    }}
-                  >
-                    <Link
-                      className="fleet-card-link"
-                      href={`/truck-profitability/${truck.plateNumber}`}
-                      title={`View ${truck.plateNumber} details`}
+                  return (
+                    <div
+                      className="fleet-card truck-profitability-card"
+                      key={truck.plateNumber}
+                      style={{
+                        position: "relative",
+                        overflow: openOwnedActionPlate === truck.plateNumber ? "visible" : undefined,
+                        zIndex: openOwnedActionPlate === truck.plateNumber ? 150 : undefined,
+                      }}
                     >
-                      <div className="truck-card-photo-wrap" style={{ overflow: "hidden", borderRadius: "23px 23px 0 0" }}>
-                        <TruckPhoto plateNumber={truck.plateNumber} />
-                        <span className={`truck-capability-pill ${isRefrigerated ? "refrigerated" : "ambient"}`}>
-                          {isRefrigerated ? "Cold" : "Dry"}
-                        </span>
-                        {isPerformanceSort && (
-                          <span className="truck-rank-badge">
-                            #{index + 1}
-                          </span>
-                        )}
-                      </div>
-                      <div className="fleet-card-body">
-                        <div className="fleet-card-title">
-                          <div>
-                            <h2>{truck.plateNumber}</h2>
-                            <div className="truck-type-meta-row">
-                              <span className="truck-spec-badge">{truck.truckType}</span>
-                            </div>
-                          </div>
-                          <span className={`fleet-status ${ownedTruckSort === "deliveries" ? "highlight-metric" : ""}`}>
-                            {truck.completedTrips} trip{truck.completedTrips === 1 ? "" : "s"}
-                          </span>
-                        </div>
-                        <dl>
-                          <div className={`truck-card-revenue truck-card-metric ${ownedTruckSort === "revenue" ? "highlight-active-sort" : ""}`}>
-                            <dt>Revenue</dt>
-                            <dd>{formatPeso(truck.totalEarnings)}</dd>
-                            {truck.pendingEarnings > 0 ? (
-                              <span
-                                className="truck-card-pending-revenue"
-                                title={`${formatPeso(truck.pendingEarnings)} pending (unresolved expenses)`}
-                                style={{
-                                  display: "block",
-                                  fontSize: "11px",
-                                  color: "var(--color-accent, #d97706)",
-                                  marginTop: "2px",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                + {formatPeso(truck.pendingEarnings)} pending
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className={`truck-card-metric ${ownedTruckSort === "expenses" ? "highlight-active-sort" : ""}`}>
-                            <dt>Expenses</dt>
-                            <dd>{formatPeso(truck.totalExpenses)}</dd>
-                          </div>
-                          <div className={`truck-card-metric ${ownedTruckSort === "netProfit" ? "highlight-active-sort" : ""}`}>
-                            <dt>Net Profit</dt>
-                            <dd>{formatPeso(truck.netProfit)}</dd>
-                          </div>
-                          <div className={`truck-card-metric ${ownedTruckSort === "margin" ? "highlight-active-sort" : ""}`}>
-                            <dt>Profit Margin</dt>
-                            <dd>{formatPercent(truck.marginPercent)}</dd>
-                          </div>
-                        </dl>
-                        <span className="fleet-card-detail-link">View details <b>›</b></span>
-                      </div>
-                    </Link>
-
-                    {actor.role === "admin" && (
-                      <div
-                        className="table-row-actions"
-                        style={{
-                          position: "absolute",
-                          bottom: "16px",
-                          right: "18px",
-                          zIndex: 20,
-                        }}
+                      <Link
+                        className="fleet-card-link"
+                        href={`/truck-profitability/${truck.plateNumber}`}
+                        title={`View ${truck.plateNumber} details`}
                       >
-                        <button
-                          type="button"
-                          className="row-action-more-btn"
-                          aria-label={`More actions for ${truck.plateNumber}`}
-                          title={`More actions for ${truck.plateNumber}`}
-                          aria-haspopup="menu"
-                          aria-expanded={openOwnedActionPlate === truck.plateNumber}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setOwnedActionOpensAbove(true);
-                            setOpenOwnedActionPlate((curr) =>
-                              curr === truck.plateNumber ? null : truck.plateNumber,
-                            );
+                        <div className="truck-card-photo-wrap" style={{ overflow: "hidden", borderRadius: "23px 23px 0 0" }}>
+                          <TruckPhoto plateNumber={truck.plateNumber} />
+                          <span className={`truck-capability-pill ${isRefrigerated ? "refrigerated" : "ambient"}`}>
+                            {isRefrigerated ? "Cold" : "Dry"}
+                          </span>
+                          {isPerformanceSort && (
+                            <span className="truck-rank-badge">
+                              #{index + 1}
+                            </span>
+                          )}
+                        </div>
+                        <div className="fleet-card-body">
+                          <div className="fleet-card-title">
+                            <div>
+                              <h2>{truck.plateNumber}</h2>
+                              <div className="truck-type-meta-row">
+                                <span className="truck-spec-badge">{truck.truckType}</span>
+                              </div>
+                            </div>
+                            <span className={`fleet-status ${ownedTruckSort === "deliveries" ? "highlight-metric" : ""}`}>
+                              {truck.completedTrips} trip{truck.completedTrips === 1 ? "" : "s"}
+                            </span>
+                          </div>
+                          <dl>
+                            <div className={`truck-card-revenue truck-card-metric ${ownedTruckSort === "revenue" ? "highlight-active-sort" : ""}`}>
+                              <dt>Revenue</dt>
+                              <dd>{formatPeso(truck.totalEarnings)}</dd>
+                              {truck.pendingEarnings > 0 ? (
+                                <span
+                                  className="truck-card-pending-revenue"
+                                  title={`${formatPeso(truck.pendingEarnings)} pending (unresolved expenses)`}
+                                  style={{
+                                    display: "block",
+                                    fontSize: "11px",
+                                    color: "var(--color-accent, #d97706)",
+                                    marginTop: "2px",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  + {formatPeso(truck.pendingEarnings)}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className={`truck-card-metric ${ownedTruckSort === "expenses" ? "highlight-active-sort" : ""}`}>
+                              <dt>Expenses</dt>
+                              <dd>{formatPeso(truck.totalExpenses)}</dd>
+                            </div>
+                            <div className={`truck-card-metric ${ownedTruckSort === "netProfit" ? "highlight-active-sort" : ""}`}>
+                              <dt>Net Profit</dt>
+                              <dd>{formatPeso(truck.netProfit)}</dd>
+                            </div>
+                            <div className={`truck-card-metric ${ownedTruckSort === "margin" ? "highlight-active-sort" : ""}`}>
+                              <dt>Profit Margin</dt>
+                              <dd>{formatPercent(truck.marginPercent)}</dd>
+                            </div>
+                          </dl>
+                          <span className="fleet-card-detail-link">View details <b>›</b></span>
+                        </div>
+                      </Link>
+
+                      {actor.role === "admin" && (
+                        <div
+                          className="table-row-actions"
+                          style={{
+                            position: "absolute",
+                            bottom: "16px",
+                            right: "18px",
+                            zIndex: 20,
                           }}
                         >
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                            <circle cx="8" cy="3" r="1.5" />
-                            <circle cx="8" cy="8" r="1.5" />
-                            <circle cx="8" cy="13" r="1.5" />
-                          </svg>
-                        </button>
-
-                        {openOwnedActionPlate === truck.plateNumber ? (
-                          <div
-                            className={`row-action-menu${ownedActionOpensAbove ? " opens-above" : ""}`}
-                            role="menu"
-                            aria-label={`Actions for ${truck.plateNumber}`}
+                          <button
+                            type="button"
+                            className="row-action-more-btn"
+                            aria-label={`More actions for ${truck.plateNumber}`}
+                            title={`More actions for ${truck.plateNumber}`}
+                            aria-haspopup="menu"
+                            aria-expanded={openOwnedActionPlate === truck.plateNumber}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
+                              setOwnedActionOpensAbove(true);
+                              setOpenOwnedActionPlate((curr) =>
+                                curr === truck.plateNumber ? null : truck.plateNumber,
+                              );
                             }}
                           >
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={() =>
-                                openEditTruckModal({
-                                  plateNumber: truck.plateNumber,
-                                  truckType: truck.truckType,
-                                  storageCapability: capability,
-                                  ownershipType: "Owned",
-                                })
-                              }
-                            >
-                              Edit Truck
-                            </button>
-                            <div className="row-action-menu-divider" role="separator" />
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="row-action-menu-danger"
-                              onClick={() => {
-                                setOpenOwnedActionPlate(null);
-                                setTruckToDelete({
-                                  plateNumber: truck.plateNumber,
-                                  truckType: truck.truckType,
-                                });
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                              <circle cx="8" cy="3" r="1.5" />
+                              <circle cx="8" cy="8" r="1.5" />
+                              <circle cx="8" cy="13" r="1.5" />
+                            </svg>
+                          </button>
+
+                          {openOwnedActionPlate === truck.plateNumber ? (
+                            <div
+                              className={`row-action-menu${ownedActionOpensAbove ? " opens-above" : ""}`}
+                              role="menu"
+                              aria-label={`Actions for ${truck.plateNumber}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
                               }}
                             >
-                              Delete Truck
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() =>
+                                  openEditTruckModal({
+                                    plateNumber: truck.plateNumber,
+                                    truckType: truck.truckType,
+                                    storageCapability: capability,
+                                    ownershipType: "Owned",
+                                  })
+                                }
+                              >
+                                Edit Truck
+                              </button>
+                              <div className="row-action-menu-divider" role="separator" />
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="row-action-menu-danger"
+                                onClick={() => {
+                                  setOpenOwnedActionPlate(null);
+                                  setTruckToDelete({
+                                    plateNumber: truck.plateNumber,
+                                    truckType: truck.truckType,
+                                  });
+                                }}
+                              >
+                                Delete Truck
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {ownedPageCount > 1 && (
+                <TablePagination
+                  page={ownedPage}
+                  pageCount={ownedPageCount}
+                  totalItems={filteredOwnedTrucks.length}
+                  pageSize={OWNED_PAGE_SIZE}
+                  onPageChange={setOwnedPage}
+                  itemLabel="owned trucks"
+                  itemCountInPage={paginatedOwnedTrucks.length}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <div className="records-card owned-trucks-table-card" style={{ padding: 0, overflow: "hidden", marginTop: "12px" }}>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <SortableTableHeader label="Plate Number" sortKey="plate" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
+                        <SortableTableHeader label="Vehicle Size" sortKey="truckType" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
+                        <th>Classification</th>
+                        <SortableTableHeader label="Trips" sortKey="deliveries" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
+                        <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
+                        <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
+                        <SortableTableHeader label="Net Profit" sortKey="netProfit" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
+                        <SortableTableHeader label="Margin" sortKey="margin" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
+                        {actor.role === "admin" && (
+                          <th style={{ width: "48px", textAlign: "right" }}>
+                            <span className="sr-only">Actions</span>
+                          </th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedOwnedTrucks.map((truck, truckIndex) => {
+                        const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
+                        const isRefrigerated = capability === "Refrigerated";
+
+                        return (
+                          <tr
+                            key={truck.plateNumber}
+                            style={{
+                              position: "relative",
+                              zIndex: openOwnedActionPlate === truck.plateNumber ? 150 : undefined,
+                            }}
+                          >
+                            <td>
+                              <Link
+                                href={`/truck-profitability/${encodeURIComponent(truck.plateNumber)}`}
+                                className="truck-table-plate-link"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "10px",
+                                  textDecoration: "none",
+                                  color: "inherit",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: "36px",
+                                    height: "26px",
+                                    borderRadius: "6px",
+                                    overflow: "hidden",
+                                    flexShrink: 0,
+                                    border: "1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.3))",
+                                    background: "var(--color-surface-subtle)",
+                                  }}
+                                >
+                                  <TruckPhoto plateNumber={truck.plateNumber} />
+                                </div>
+                                <strong className="truck-code">{truck.plateNumber}</strong>
+                              </Link>
+                            </td>
+                            <td><span className="truck-table-spec">{truck.truckType}</span></td>
+                            <td>
+                              <span
+                                className={`truck-capability-pill ${isRefrigerated ? "refrigerated" : "ambient"}`}
+                                style={{ fontSize: "11px", padding: "2px 8px" }}
+                              >
+                                {isRefrigerated ? "Cold" : "Dry"}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="fleet-status">
+                                {truck.completedTrips} trip{truck.completedTrips === 1 ? "" : "s"}
+                              </span>
+                            </td>
+                            <td>
+                              <div>
+                                <strong>{formatPeso(truck.totalEarnings)}</strong>
+                                {truck.pendingEarnings > 0 ? (
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      fontSize: "11px",
+                                      color: "var(--color-accent, #d97706)",
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    + {formatPeso(truck.pendingEarnings)}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td>{formatPeso(truck.totalExpenses)}</td>
+                            <td>
+                              <strong style={{ color: truck.netProfit >= 0 ? "var(--color-success, #10b981)" : "var(--color-danger, #ef4444)" }}>
+                                {formatPeso(truck.netProfit)}
+                              </strong>
+                            </td>
+                            <td>{formatPercent(truck.marginPercent)}</td>
+                            {actor.role === "admin" && (
+                              <td style={{ textAlign: "right" }}>
+                                <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
+                                  <button
+                                    type="button"
+                                    className="row-action-more-btn"
+                                    aria-label={`More actions for ${truck.plateNumber}`}
+                                    title={`More actions for ${truck.plateNumber}`}
+                                    aria-haspopup="menu"
+                                    aria-expanded={openOwnedActionPlate === truck.plateNumber}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      const spaceBelow = window.innerHeight - rect.bottom;
+                                      const isNearBottom =
+                                        spaceBelow < 200 ||
+                                        truckIndex >= paginatedOwnedTrucks.length - 2;
+                                      setOwnedActionOpensAbove(isNearBottom);
+                                      setOpenOwnedActionPlate((curr) =>
+                                        curr === truck.plateNumber ? null : truck.plateNumber,
+                                      );
+                                    }}
+                                  >
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                      <circle cx="8" cy="3" r="1.5" />
+                                      <circle cx="8" cy="8" r="1.5" />
+                                      <circle cx="8" cy="13" r="1.5" />
+                                    </svg>
+                                  </button>
+
+                                  {openOwnedActionPlate === truck.plateNumber ? (
+                                    <div
+                                      className={`row-action-menu${ownedActionOpensAbove ? " opens-above" : ""}`}
+                                      role="menu"
+                                      aria-label={`Actions for ${truck.plateNumber}`}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={() => {
+                                          setOpenOwnedActionPlate(null);
+                                          openEditTruckModal({
+                                            plateNumber: truck.plateNumber,
+                                            truckType: truck.truckType,
+                                            storageCapability: capability,
+                                            ownershipType: "Owned",
+                                          });
+                                        }}
+                                      >
+                                        Edit Truck
+                                      </button>
+                                      <div className="row-action-menu-divider" role="separator" />
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="row-action-menu-danger"
+                                        onClick={() => {
+                                          setOpenOwnedActionPlate(null);
+                                          setTruckToDelete({
+                                            plateNumber: truck.plateNumber,
+                                            truckType: truck.truckType,
+                                          });
+                                        }}
+                                      >
+                                        Delete Truck
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {ownedPageCount > 1 && (
+                <TablePagination
+                  page={ownedPage}
+                  pageCount={ownedPageCount}
+                  totalItems={filteredOwnedTrucks.length}
+                  pageSize={OWNED_PAGE_SIZE}
+                  onPageChange={setOwnedPage}
+                  itemLabel="owned trucks"
+                  itemCountInPage={paginatedOwnedTrucks.length}
+                />
+              )}
+            </>
           )}
         </section>
 
@@ -1827,18 +2184,20 @@ export default function TruckProfitabilityPage() {
         </section>
       </div>
 
-      {isAddTruckOpen && (
-        <div
-          className="routex-dialog-layer"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="add-truck-dialog-title"
-        >
-          <div
-            className="routex-dialog-backdrop"
-            onClick={() => !submitting && setIsAddTruckOpen(false)}
-          />
-          <div className="routex-dialog add-truck-dialog">
+      {isAddTruckOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-truck-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => !submitting && setIsAddTruckOpen(false)}
+              />
+              <div className="routex-dialog add-truck-dialog">
             <header className="routex-dialog-header">
               <div>
                 <h2 id="add-truck-dialog-title">Add Truck</h2>
@@ -2037,21 +2396,24 @@ export default function TruckProfitabilityPage() {
               </footer>
             </form>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      ) : null}
 
-      {editingTruck && (
-        <div
-          className="routex-dialog-layer"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-truck-dialog-title"
-        >
-          <div
-            className="routex-dialog-backdrop"
-            onClick={() => !editSubmitting && setEditingTruck(null)}
-          />
-          <div className="routex-dialog add-truck-dialog">
+      {editingTruck && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-truck-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => !editSubmitting && setEditingTruck(null)}
+              />
+              <div className="routex-dialog add-truck-dialog">
             <header className="routex-dialog-header">
               <div>
                 <h2 id="edit-truck-dialog-title">Edit Truck</h2>
@@ -2250,8 +2612,9 @@ export default function TruckProfitabilityPage() {
               </footer>
             </form>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      ) : null}
 
       {truckToDelete && typeof document !== "undefined"
         ? createPortal(
@@ -2362,18 +2725,20 @@ export default function TruckProfitabilityPage() {
           )
         : null}
 
-      {isAddCrewOpen && (
-        <div
-          className="routex-dialog-layer"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="add-crew-dialog-title"
-        >
-          <div
-            className="routex-dialog-backdrop"
-            onClick={() => !crewSubmitting && setIsAddCrewOpen(false)}
-          />
-          <div className="routex-dialog" style={{ width: "min(100%, 480px)" }}>
+      {isAddCrewOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-crew-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => !crewSubmitting && setIsAddCrewOpen(false)}
+              />
+              <div className="routex-dialog" style={{ width: "min(100%, 480px)" }}>
             <header className="routex-dialog-header">
               <div>
                 <h2 id="add-crew-dialog-title">Add Crew Member</h2>
@@ -2487,21 +2852,24 @@ export default function TruckProfitabilityPage() {
               </footer>
             </form>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      ) : null}
 
-      {editingCrewMember && (
-        <div
-          className="routex-dialog-layer"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-crew-dialog-title"
-        >
-          <div
-            className="routex-dialog-backdrop"
-            onClick={() => !editCrewSubmitting && setEditingCrewMember(null)}
-          />
-          <div className="routex-dialog" style={{ width: "min(100%, 480px)" }}>
+      {editingCrewMember && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-crew-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => !editCrewSubmitting && setEditingCrewMember(null)}
+              />
+              <div className="routex-dialog" style={{ width: "min(100%, 480px)" }}>
             <header className="routex-dialog-header">
               <div>
                 <h2 id="edit-crew-dialog-title">Edit Crew Member</h2>
@@ -2614,8 +2982,9 @@ export default function TruckProfitabilityPage() {
               </footer>
             </form>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      ) : null}
 
       {crewToDelete && typeof document !== "undefined"
         ? createPortal(

@@ -1,40 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { TruckTemperature } from "@/features/deliveries/delivery-domain";
-
-type ParsedImportRow = {
-  id: string;
-  waybillNumber: string;
-  deliveryDate: string;
-  clientName: string;
-  plateNumber: string;
-  truckTemperature: TruckTemperature;
-  origin: string;
-  distanceKm: number;
-  fuelRate: number;
-  deliveryRate: number;
-  dieselExpenses: number | null;
-  tollGateExpenses: number | null;
-  driverDailyRate: number | null;
-  driverAllowance: number | null;
-  helperDailyRate: number | null;
-  helperAllowance: number | null;
-  otherExpenses: number | null;
-  dropoffs: {
-    storeName: string;
-    destinationArea: string;
-    entryFee: number | null;
-  }[];
-  isValid: boolean;
-  validationIssue?: string;
-};
-
-const SAMPLE_CSV_DATA = `Delivery Date,Waybill Number,Client Name,Truck Plate,Temperature,Origin,Distance Km,Fuel Rate,Delivery Rate,Diesel,Tolls,Driver Rate,Driver Allowance,Helper Rate,Helper Allowance,Store Name,Destination Area,Entry Fee
-2026-11-01,WB-2611-9001,Landers,NGS 4281,-18°C,Marilao Depot,85,85.5,23000,3800,950,950,300,700,200,Landers Balintawak,Quezon City,150
-2026-11-01,WB-2611-9002,Manila Comisario Central Inc. (MCCI),NFO 8324,4°C,FTI Taguig Hub,110,84.0,26500,4200,1200,1000,350,750,250,MCCI Alabang Center,Muntinlupa,0
-2026-11-02,WB-2611-9003,Vanguard,CBC 5519,20°C,North Harbor Terminal,65,86.5,19500,2900,450,900,250,650,200,Vanguard Pasig Hub,Pasig City,100`;
+import {
+  generateImportErrorReport,
+  generateSampleCsv,
+  parseDeliveryImport,
+  validateStagedRow,
+  type ImportParseResult,
+  type StagedDeliveryRow,
+} from "@/features/deliveries/delivery-import-parser";
+import {
+  readBrowserPreviewDeliveries,
+  upsertBrowserPreviewDelivery,
+} from "@/features/deliveries/browser-preview-deliveries";
+import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 
 const DELIVERY_TEMPERATURES: readonly TruckTemperature[] = [
   "-20°C",
@@ -45,47 +26,11 @@ const DELIVERY_TEMPERATURES: readonly TruckTemperature[] = [
   "20°C",
 ];
 
-type ImportIconName = "arrow" | "check" | "download" | "sample" | "spreadsheet" | "warning";
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-function ImportIcon({ name, className = "" }: { name: ImportIconName; className?: string }) {
-  return (
-    <svg
-      className={`import-vector-icon ${className}`.trim()}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      {name === "download" ? (
-        <>
-          <path d="M12 3v11" />
-          <path d="m8 10 4 4 4-4" />
-          <path d="M5 18h14v3H5z" />
-        </>
-      ) : name === "sample" ? (
-        <>
-          <rect x="4" y="4" width="16" height="16" rx="2" />
-          <path d="M8 9h8M8 13h5M8 17h7" />
-        </>
-      ) : name === "spreadsheet" ? (
-        <>
-          <path d="M6 3h9l4 4v14H6z" />
-          <path d="M15 3v5h4M9 12h7M9 16h7M12 10v8" />
-        </>
-      ) : name === "check" ? (
-        <path d="m5 12 4 4L19 6" />
-      ) : name === "warning" ? (
-        <>
-          <path d="M12 3 2.8 20h18.4z" />
-          <path d="M12 9v5M12 17.5v.1" />
-        </>
-      ) : (
-        <>
-          <path d="M5 12h14" />
-          <path d="m14 7 5 5-5 5" />
-        </>
-      )}
-    </svg>
-  );
-}
+type ImportStep = 1 | 2 | 3 | 4;
+
+type FilterTab = "all" | "ready" | "attention" | "duplicate";
 
 export function DeliveryExcelImportClient({
   actorRoleLabel: _actorRoleLabel,
@@ -94,141 +39,129 @@ export function DeliveryExcelImportClient({
   actorRoleLabel: string;
   actorFullName: string;
 }) {
-  const [rows, setRows] = useState<ParsedImportRow[]>([]);
-  const [batchName, setBatchName] = useState(`DTR-Batch-${new Date().toISOString().slice(0, 10)}`);
+  const [step, setStep] = useState<ImportStep>(1);
+  const [batchName, setBatchName] = useState(() => `DTR-Batch-${new Date().toISOString().slice(0, 10)}`);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [rawText, setRawText] = useState<string>("");
+  const [stagedRows, setStagedRows] = useState<StagedDeliveryRow[]>([]);
+  const [parseSummary, setParseSummary] = useState<Omit<ImportParseResult, "rows"> | null>(null);
+  const [existingWaybills, setExistingWaybills] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<FilterTab>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{
+    batchName: string;
     committedCount: number;
-    duplicateCount: number;
     committedWaybills: string[];
+    duplicateCount: number;
     duplicateWaybills: string[];
     errors: { waybill: string; reason: string }[];
   } | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  function parseCsvContent(text: string) {
-    setErrorMessage(null);
-    setImportResult(null);
+  const searchInputId = useId();
 
-    const lines = text
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    if (lines.length < 2) {
-      setErrorMessage("Spreadsheet must contain a header row and at least one data row.");
-      return;
+  // Load existing waybills from browser preview and server
+  useEffect(() => {
+    const waybills = new Set<string>();
+    try {
+      const browserItems = readBrowserPreviewDeliveries();
+      for (const item of browserItems) {
+        if (item.waybillNumber) waybills.add(item.waybillNumber.trim().toUpperCase());
+      }
+    } catch {
+      // Ignore localStorage read errors
     }
 
-    const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
-    const dateIdx = header.findIndex((h) => h.includes("date"));
-    const wbIdx = header.findIndex((h) => h.includes("waybill"));
-    const clientIdx = header.findIndex((h) => h.includes("client"));
-    const plateIdx = header.findIndex((h) => h.includes("plate") || h.includes("truck"));
-    const temperatureIdx = header.findIndex((h) => h.includes("temperature") || h === "temp");
-    const rateIdx = header.findIndex((h) => h.includes("rate") || h.includes("revenue") || h.includes("earnings"));
-    const dieselIdx = header.findIndex((h) => h.includes("diesel"));
-    const tollIdx = header.findIndex((h) => h.includes("toll"));
-    const storeIdx = header.findIndex((h) => h.includes("store"));
-    const areaIdx = header.findIndex((h) => h.includes("area") || h.includes("destination"));
-    const feeIdx = header.findIndex((h) => h.includes("entry") || h.includes("fee"));
-
-    const parsed: ParsedImportRow[] = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(",").map((c) => c.trim().replace(/^["']|["']$/g, ""));
-      if (cols.length < 4) continue;
-
-      const waybillNumber = wbIdx >= 0 ? cols[wbIdx] : `WB-${Date.now().toString().slice(-6)}`;
-      const deliveryDate = dateIdx >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(cols[dateIdx]) ? cols[dateIdx] : new Date().toISOString().slice(0, 10);
-      const clientName = clientIdx >= 0 && cols[clientIdx] ? cols[clientIdx] : "Landers";
-      const plateNumber = plateIdx >= 0 && cols[plateIdx] ? cols[plateIdx] : "NGS 4281";
-      const rawTemperature = temperatureIdx >= 0 ? cols[temperatureIdx].trim() : "";
-      const match = rawTemperature.match(/^(-?\d+(?:\.\d+)?)/);
-      const truckTemperature: TruckTemperature = match
-        ? (`${match[1]}°C` as TruckTemperature)
-        : "-18°C";
-      const deliveryRate = rateIdx >= 0 ? Number(cols[rateIdx]) || 20000 : 20000;
-      const dieselExpenses = dieselIdx >= 0 && cols[dieselIdx] ? Number(cols[dieselIdx]) || null : 3500;
-      const tollGateExpenses = tollIdx >= 0 && cols[tollIdx] ? Number(cols[tollIdx]) || null : 800;
-      const storeName = storeIdx >= 0 && cols[storeIdx] ? cols[storeIdx] : "Store Stop 1";
-      const destinationArea = areaIdx >= 0 && cols[areaIdx] ? cols[areaIdx] : "Metro Manila";
-      const entryFee = feeIdx >= 0 && cols[feeIdx] ? Number(cols[feeIdx]) || null : 0;
-
-      const isDateValid = Boolean(deliveryDate && deliveryDate >= "2024-01-01");
-      const isValid = Boolean(waybillNumber && isDateValid && clientName && plateNumber && deliveryRate > 0);
-      const validationIssue = !waybillNumber
-        ? "Waybill number required"
-        : !isDateValid
-          ? "Date prior to company start (2024)"
-          : deliveryRate <= 0
-            ? "Delivery revenue must be positive"
-            : undefined;
-
-      parsed.push({
-        id: `row-${i}-${Date.now().toString(36)}`,
-        waybillNumber,
-        deliveryDate,
-        clientName,
-        plateNumber,
-        truckTemperature,
-        origin: "Main Hub",
-        distanceKm: 75,
-        fuelRate: 85.0,
-        deliveryRate,
-        dieselExpenses,
-        tollGateExpenses,
-        driverDailyRate: 950,
-        driverAllowance: 300,
-        helperDailyRate: 700,
-        helperAllowance: 200,
-        otherExpenses: 0,
-        dropoffs: [
-          {
-            storeName,
-            destinationArea,
-            entryFee,
-          },
-        ],
-        isValid,
-        validationIssue,
+    fetch("/api/deliveries?pageSize=1000")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.items)) {
+          for (const item of data.items) {
+            if (item.waybillNumber) waybills.add(item.waybillNumber.trim().toUpperCase());
+          }
+        }
+        setExistingWaybills(waybills);
+      })
+      .catch(() => {
+        setExistingWaybills(waybills);
       });
-    }
+  }, []);
 
-    if (parsed.length === 0) {
-      setErrorMessage("No valid delivery rows could be extracted from this spreadsheet.");
-      return;
-    }
+  // Process text into parsed rows
+  function processFileText(content: string, name: string) {
+    setErrorMessage(null);
+    setFileName(name);
+    setRawText(content);
 
-    setRows(parsed);
+    try {
+      const result = parseDeliveryImport(content, existingWaybills);
+      if (result.errors.length > 0 && result.rows.length === 0) {
+        setErrorMessage(result.errors.join(". "));
+        return;
+      }
+      if (result.rows.length === 0) {
+        setErrorMessage("No valid delivery trip records could be found in the uploaded file.");
+        return;
+      }
+
+      setStagedRows(result.rows);
+      setParseSummary({
+        totalRawRows: result.totalRawRows,
+        totalGroupedDeliveries: result.totalGroupedDeliveries,
+        readyCount: result.readyCount,
+        attentionCount: result.attentionCount,
+        duplicateCount: result.duplicateCount,
+        errors: result.errors,
+      });
+      setStep(2);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Failed to parse file.");
+    }
   }
 
-  function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  function handleFileSelected(file: File) {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setErrorMessage("File exceeds the maximum allowed size of 10MB.");
+      return;
+    }
 
-    setBatchName(file.name.replace(/\.[^/.]+$/, ""));
+    const cleanBaseName = file.name.replace(/\.[^/.]+$/, "");
+    setBatchName(`DTR-${cleanBaseName}`);
 
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result;
       if (typeof text === "string") {
-        parseCsvContent(text);
+        processFileText(text, file.name);
       }
     };
     reader.onerror = () => {
-      setErrorMessage("Failed to read the selected file.");
+      setErrorMessage("Unable to read the uploaded file.");
     };
     reader.readAsText(file);
   }
 
+  function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) handleFileSelected(file);
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    if (file) handleFileSelected(file);
+  }
+
   function loadSampleData() {
-    setBatchName("Sample-DTR-Import-2026");
-    parseCsvContent(SAMPLE_CSV_DATA);
+    const sample = generateSampleCsv();
+    setBatchName(`DTR-Sample-Batch-${new Date().toISOString().slice(0, 10)}`);
+    processFileText(sample, "sample_daily_trip_report.csv");
   }
 
   function downloadCsvTemplate() {
-    const blob = new Blob([SAMPLE_CSV_DATA], { type: "text/csv;charset=utf-8;" });
+    const template = generateSampleCsv();
+    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -236,37 +169,108 @@ export function DeliveryExcelImportClient({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
-  function updateRowField(id: string, field: keyof ParsedImportRow, value: unknown) {
-    setRows((current) =>
-      current.map((row) => {
+  function downloadErrorReport() {
+    if (!importResult) return;
+    const csv = generateImportErrorReport(stagedRows, importResult);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `${batchName}-import-report.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function updateRowField<K extends keyof StagedDeliveryRow>(
+    id: string,
+    field: K,
+    value: StagedDeliveryRow[K],
+  ) {
+    setStagedRows((current) => {
+      const updated = current.map((row) => {
         if (row.id !== id) return row;
-        const updated = { ...row, [field]: value };
-        const isDateValid = Boolean(updated.deliveryDate && updated.deliveryDate >= "2024-01-01");
-        updated.isValid = Boolean(
-          updated.waybillNumber &&
-          isDateValid &&
-          updated.clientName &&
-          updated.plateNumber &&
-          updated.deliveryRate > 0
-        );
-        updated.validationIssue = !updated.waybillNumber
-          ? "Waybill number required"
-          : !isDateValid
-            ? "Date prior to company start (2024)"
-            : updated.deliveryRate <= 0
-              ? "Delivery revenue must be positive"
-              : undefined;
-        return updated;
-      })
-    );
+        const modified = { ...row, [field]: value };
+        // Recalculate status and issues
+        const { status, issues } = validateStagedRow(modified, existingWaybills);
+        return { ...modified, status, issues };
+      });
+
+      // Update summary counts
+      const ready = updated.filter((r) => r.status === "ready").length;
+      const attention = updated.filter((r) => r.status === "needs_attention").length;
+      const dupes = updated.filter((r) => r.status === "duplicate").length;
+
+      setParseSummary((prev) =>
+        prev
+          ? {
+              ...prev,
+              readyCount: ready,
+              attentionCount: attention,
+              duplicateCount: dupes,
+            }
+          : null,
+      );
+
+      return updated;
+    });
   }
 
-  async function commitImportBatch() {
-    const validRows = rows.filter((r) => r.isValid);
-    if (validRows.length === 0) {
-      setErrorMessage("There are no valid rows to import.");
+  function removeStagedRow(id: string) {
+    setStagedRows((current) => {
+      const next = current.filter((r) => r.id !== id);
+      const ready = next.filter((r) => r.status === "ready").length;
+      const attention = next.filter((r) => r.status === "needs_attention").length;
+      const dupes = next.filter((r) => r.status === "duplicate").length;
+
+      setParseSummary((prev) =>
+        prev
+          ? {
+              ...prev,
+              totalGroupedDeliveries: next.length,
+              readyCount: ready,
+              attentionCount: attention,
+              duplicateCount: dupes,
+            }
+          : null,
+      );
+
+      return next;
+    });
+  }
+
+  // Filtered rows for Step 2
+  const visibleRows = useMemo(() => {
+    return stagedRows.filter((r) => {
+      if (activeTab === "ready" && r.status !== "ready") return false;
+      if (activeTab === "attention" && r.status !== "needs_attention") return false;
+      if (activeTab === "duplicate" && r.status !== "duplicate") return false;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesWb = r.waybillNumber.toLowerCase().includes(q);
+        const matchesClient = r.clientName.toLowerCase().includes(q);
+        const matchesPlate = r.plateNumber.toLowerCase().includes(q);
+        const matchesStore = r.dropoffs.some((d) => d.storeName.toLowerCase().includes(q));
+        return matchesWb || matchesClient || matchesPlate || matchesStore;
+      }
+
+      return true;
+    });
+  }, [stagedRows, activeTab, searchQuery]);
+
+  const readyCount = stagedRows.filter((r) => r.status === "ready").length;
+  const attentionCount = stagedRows.filter((r) => r.status === "needs_attention").length;
+  const duplicateCount = stagedRows.filter((r) => r.status === "duplicate").length;
+
+  async function executeCommit() {
+    const readyRows = stagedRows.filter((r) => r.status === "ready");
+    if (readyRows.length === 0) {
+      setErrorMessage("No ready rows are available for import.");
       return;
     }
 
@@ -277,30 +281,33 @@ export function DeliveryExcelImportClient({
       const payload = {
         batchName,
         idempotencyKey: crypto.randomUUID(),
-        rows: validRows.map((r) => ({
+        rows: readyRows.map((r) => ({
           waybillNumber: r.waybillNumber,
           deliveryDate: r.deliveryDate,
           clientName: r.clientName,
           plateNumber: r.plateNumber,
           truckTemperature: r.truckTemperature,
-          origin: r.origin,
-          distanceKm: r.distanceKm,
-          fuelRate: r.fuelRate,
+          origin: r.origin || "Central Depot",
+          distanceKm: r.distanceKm || 50,
+          fuelRate: r.fuelRate || 85,
           deliveryRate: r.deliveryRate,
           dieselExpenses: r.dieselExpenses,
           dieselExpensesStatus: r.dieselExpenses != null ? "confirmed" : "unknown",
           tollGateExpenses: r.tollGateExpenses,
           tollGateExpensesStatus: r.tollGateExpenses != null ? "confirmed" : "not_applicable",
+          tollGateBreakdown: r.tollGateBreakdown || "",
           driverDailyRate: r.driverDailyRate,
-          driverDailyRateStatus: "confirmed",
+          driverDailyRateStatus: r.driverDailyRate != null ? "confirmed" : "unknown",
           driverAllowance: r.driverAllowance,
-          driverAllowanceStatus: "confirmed",
+          driverAllowanceStatus: r.driverAllowance != null ? "confirmed" : "unknown",
+          driverName: r.driverName,
           helperDailyRate: r.helperDailyRate,
-          helperDailyRateStatus: "confirmed",
+          helperDailyRateStatus: r.helperDailyRate != null ? "confirmed" : "unknown",
           helperAllowance: r.helperAllowance,
-          helperAllowanceStatus: "confirmed",
+          helperAllowanceStatus: r.helperAllowance != null ? "confirmed" : "unknown",
+          helperName: r.helperName,
           otherExpenses: r.otherExpenses,
-          otherExpensesStatus: "confirmed",
+          otherExpensesStatus: r.otherExpenses != null ? "confirmed" : "not_applicable",
           dropoffs: r.dropoffs.map((d) => ({
             storeName: d.storeName,
             destinationArea: d.destinationArea,
@@ -319,12 +326,14 @@ export function DeliveryExcelImportClient({
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         ok?: boolean;
         message?: string;
+        batchName?: string;
         committedCount?: number;
-        duplicateCount?: number;
         committedWaybills?: string[];
+        committedRecords?: DeliveryLedgerItem[];
+        duplicateCount?: number;
         duplicateWaybills?: string[];
         errors?: { waybill: string; reason: string }[];
       };
@@ -333,14 +342,23 @@ export function DeliveryExcelImportClient({
         throw new Error(data.message ?? "Batch import failed.");
       }
 
+      // Synchronize client preview cache so /deliveries immediately reflects new records
+      if (Array.isArray(data.committedRecords)) {
+        for (const record of data.committedRecords) {
+          upsertBrowserPreviewDelivery(record);
+        }
+      }
+
       setImportResult({
+        batchName: data.batchName ?? batchName,
         committedCount: data.committedCount ?? 0,
-        duplicateCount: data.duplicateCount ?? 0,
         committedWaybills: data.committedWaybills ?? [],
+        duplicateCount: data.duplicateCount ?? 0,
         duplicateWaybills: data.duplicateWaybills ?? [],
         errors: data.errors ?? [],
       });
-      setRows([]);
+
+      setStep(4);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Failed to commit import batch.");
     } finally {
@@ -348,114 +366,284 @@ export function DeliveryExcelImportClient({
     }
   }
 
-  const validCount = rows.filter((r) => r.isValid).length;
-  const issueCount = rows.length - validCount;
+  function resetImportFlow() {
+    setStep(1);
+    setFileName(null);
+    setRawText("");
+    setStagedRows([]);
+    setParseSummary(null);
+    setErrorMessage(null);
+    setImportResult(null);
+    setActiveTab("all");
+    setSearchQuery("");
+  }
 
   return (
     <>
+      {/* Workflow Step Indicator */}
+      <nav aria-label="Import Workflow Steps" style={{ marginBottom: "20px" }}>
+        <ol
+          style={{
+            display: "flex",
+            gap: "12px",
+            listStyle: "none",
+            padding: 0,
+            margin: 0,
+            fontSize: "13px",
+            color: "var(--muted)",
+          }}
+        >
+          <li style={{ fontWeight: step === 1 ? 600 : 400, color: step === 1 ? "var(--ink)" : undefined }}>
+            1. Select File
+          </li>
+          <li aria-hidden="true">›</li>
+          <li style={{ fontWeight: step === 2 ? 600 : 400, color: step === 2 ? "var(--ink)" : undefined }}>
+            2. Preview & Validate
+          </li>
+          <li aria-hidden="true">›</li>
+          <li style={{ fontWeight: step === 3 ? 600 : 400, color: step === 3 ? "var(--ink)" : undefined }}>
+            3. Confirm Batch
+          </li>
+          <li aria-hidden="true">›</li>
+          <li style={{ fontWeight: step === 4 ? 600 : 400, color: step === 4 ? "var(--ink)" : undefined }}>
+            4. Import Results
+          </li>
+        </ol>
+      </nav>
+
+      {/* Global Error Banner */}
       {errorMessage ? (
-        <section className="notice" role="alert">
-          <span className="notice-icon" aria-hidden="true">!</span>
+        <section className="notice" role="alert" style={{ marginBottom: "20px" }}>
+          <span className="notice-icon" aria-hidden="true">
+            !
+          </span>
           <div>
-            <strong>Import Error:</strong>
+            <strong>Import Notice:</strong>
             <span>{errorMessage}</span>
           </div>
-          <button type="button" aria-label="Dismiss message" title="Dismiss message" onClick={() => setErrorMessage(null)}>
+          <button
+            type="button"
+            aria-label="Dismiss message"
+            title="Dismiss message"
+            onClick={() => setErrorMessage(null)}
+          >
             ×
           </button>
         </section>
       ) : null}
 
-      {importResult ? (
-        <section className="notice" role="status" style={{ borderLeftColor: "#22c55e" }}>
-          <span className="notice-icon" aria-hidden="true" style={{ color: "#22c55e" }}>
-            <ImportIcon name="check" />
-          </span>
-          <div>
-            <strong>Import Batch Committed Successfully:</strong>
-            <span>
-              {importResult.committedCount} completed delivery records created.
-              {importResult.duplicateCount > 0
-                ? ` ${importResult.duplicateCount} duplicate waybill(s) skipped (${importResult.duplicateWaybills.join(", ")}).`
-                : ""}
-            </span>
-          </div>
-          <Link className="secondary-button" href="/deliveries" style={{ marginLeft: "auto" }}>
-            View Deliveries <ImportIcon name="arrow" />
-          </Link>
-        </section>
-      ) : null}
-
-      <section className="records-card" style={{ marginTop: "22px" }} aria-label="File Upload & Staging">
-        <div className="records-heading">
-          <div>
-            <h2>1. Upload Spreadsheet</h2>
-            <p>Upload a CSV or XLSX file.</p>
-          </div>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
-              <ImportIcon name="download" /> Download CSV Template
-            </button>
-            <button type="button" className="secondary-button" onClick={loadSampleData}>
-              <ImportIcon name="sample" /> Load Sample DTR Rows
-            </button>
-          </div>
-        </div>
-
-        <div style={{ padding: "20px 24px", borderTop: "1px solid var(--line)" }}>
-          <label
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "32px",
-              border: "2px dashed var(--line)",
-              borderRadius: "12px",
-              background: "var(--color-surface)",
-              cursor: "pointer",
-            }}
-          >
-            <ImportIcon name="spreadsheet" className="import-upload-icon" />
-            <strong style={{ fontSize: "14px", color: "var(--ink)" }}>Choose CSV or Daily Trip Report Spreadsheet</strong>
-            <small style={{ color: "var(--muted)", marginTop: "4px" }}>CSV, TSV, or spreadsheet exports</small>
-            <input
-              type="file"
-              accept=".csv,.txt,.tsv"
-              onChange={handleFileUpload}
-              style={{ display: "none" }}
-            />
-          </label>
-        </div>
-      </section>
-
-      {rows.length > 0 ? (
-        <section className="records-card" style={{ marginTop: "24px" }} aria-label="Staged Rows Review">
+      {/* STEP 1: Select File */}
+      {step === 1 ? (
+        <section className="records-card" aria-label="Select Import File">
           <div className="records-heading">
             <div>
-              <h2>2. Staged Review ({rows.length} trips parsed)</h2>
-              <p>Review parsed rows before committing.</p>
+              <h2>Select Daily Trip Report File</h2>
+              <p>Upload a CSV, TSV, or spreadsheet export containing completed delivery trips.</p>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span className="stat-meta positive import-status-label">
-                <ImportIcon name="check" /> {validCount} Ready
-              </span>
-              {issueCount > 0 ? (
-                <span className="stat-meta warning import-status-label">
-                  <ImportIcon name="warning" /> {issueCount} Need Review
-                </span>
-              ) : null}
-              <button
-                type="button"
-                className="primary-action-button"
-                disabled={importing || validCount === 0}
-                onClick={commitImportBatch}
-              >
-                {importing ? "Committing Batch…" : `Commit ${validCount} Valid Deliveries`}
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
+                Download CSV Template
+              </button>
+              <button type="button" className="secondary-button" onClick={loadSampleData}>
+                Load Sample DTR Rows
               </button>
             </div>
           </div>
 
+          <div style={{ padding: "24px", borderTop: "1px solid var(--line)" }}>
+            <div style={{ marginBottom: "20px", maxWidth: "480px" }}>
+              <label
+                htmlFor="import-batch-name"
+                style={{ display: "block", fontSize: "12px", color: "var(--muted)", marginBottom: "6px" }}
+              >
+                Batch Reference Name
+              </label>
+              <input
+                id="import-batch-name"
+                type="text"
+                className="base-input"
+                value={batchName}
+                onChange={(e) => setBatchName(e.target.value)}
+                placeholder="e.g. DTR-Batch-2026-11-01"
+                style={{ width: "100%" }}
+              />
+            </div>
+
+            <label
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px 24px",
+                border: "2px dashed var(--line)",
+                borderRadius: "12px",
+                background: "var(--color-surface)",
+                cursor: "pointer",
+                textAlign: "center",
+              }}
+            >
+              <svg
+                width="36"
+                height="36"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ color: "var(--muted)", marginBottom: "12px" }}
+                aria-hidden="true"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="12" y1="18" x2="12" y2="12" />
+                <line x1="9" y1="15" x2="12" y2="12" />
+                <line x1="15" y1="15" x2="12" y2="12" />
+              </svg>
+              <strong style={{ fontSize: "14px", color: "var(--ink)", marginBottom: "4px" }}>
+                Click to browse or drag and drop your spreadsheet
+              </strong>
+              <small style={{ color: "var(--muted)", fontSize: "12px" }}>
+                Supports standard CSV, TSV, and delimited text files up to 10MB.
+              </small>
+              <input
+                type="file"
+                accept=".csv,.tsv,.txt"
+                onChange={handleFileInputChange}
+                style={{ display: "none" }}
+              />
+            </label>
+
+            <div
+              style={{
+                marginTop: "24px",
+                padding: "16px 20px",
+                borderRadius: "8px",
+                background: "var(--color-surface)",
+                border: "1px solid var(--line)",
+                fontSize: "12px",
+                color: "var(--muted)",
+                lineHeight: "1.6",
+              }}
+            >
+              <strong style={{ display: "block", color: "var(--ink)", marginBottom: "6px" }}>
+                Import Requirements & Multi-Stop Grouping:
+              </strong>
+              <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                <li>Required columns: Waybill Number, Delivery Date (2024 or later), Client Name, Truck Plate, Temperature, Delivery Rate/Revenue, and at least one Store Stop.</li>
+                <li>Multiple stops for the same trip should repeat the same Waybill Number with different store stops. They will automatically be grouped into a single delivery.</li>
+                <li>Existing waybills in the system are safely detected to prevent duplicate record insertion.</li>
+                <li>Financial values and trip details are strictly validated; missing rates will not be silently replaced with dummy values.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* STEP 2: Preview & Validate */}
+      {step === 2 ? (
+        <section className="records-card" aria-label="Review and Validate Staged Deliveries">
+          <div className="records-heading">
+            <div>
+              <h2>2. Staged Deliveries ({stagedRows.length} trips parsed)</h2>
+              <p>
+                File: <strong>{fileName}</strong> — Correct any highlighted errors before proceeding.
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setStep(1)}
+              >
+                Replace File
+              </button>
+              <button
+                type="button"
+                className="primary-action-button"
+                disabled={readyCount === 0}
+                onClick={() => setStep(3)}
+              >
+                Proceed to Confirmation ({readyCount} Ready)
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="delivery-status-tabs" role="tablist" aria-label="Filter staged rows by validation status">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "all"}
+              className={`delivery-status-tab${activeTab === "all" ? " active" : ""}`}
+              onClick={() => setActiveTab("all")}
+            >
+              All Deliveries
+              <span className="tab-count-badge">{stagedRows.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "ready"}
+              className={`delivery-status-tab${activeTab === "ready" ? " active" : ""}`}
+              onClick={() => setActiveTab("ready")}
+            >
+              Ready to Import
+              <span className="tab-count-badge">{readyCount}</span>
+            </button>
+            {attentionCount > 0 ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "attention"}
+                className={`delivery-status-tab is-incomplete-tab${activeTab === "attention" ? " active" : ""}`}
+                onClick={() => setActiveTab("attention")}
+              >
+                Needs Attention
+                <span className="tab-count-badge">{attentionCount}</span>
+              </button>
+            ) : null}
+            {duplicateCount > 0 ? (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "duplicate"}
+                className={`delivery-status-tab${activeTab === "duplicate" ? " active" : ""}`}
+                onClick={() => setActiveTab("duplicate")}
+              >
+                Duplicates (Skip)
+                <span className="tab-count-badge">{duplicateCount}</span>
+              </button>
+            ) : null}
+          </div>
+
+          {/* Quick Search inside staged table */}
+          <div className="filters">
+            <div className="search-box">
+              <input
+                id={searchInputId}
+                type="search"
+                placeholder="Search waybill, client, plate, or stop…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            {searchQuery ? (
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ fontSize: "12px", padding: "6px 12px" }}
+                onClick={() => setSearchQuery("")}
+              >
+                Clear Search
+              </button>
+            ) : null}
+          </div>
+
+          {/* Staged Deliveries Table */}
           <div className="table-wrap">
             <table>
               <thead>
@@ -468,97 +656,531 @@ export function DeliveryExcelImportClient({
                   <th>Temp</th>
                   <th>Revenue</th>
                   <th>Diesel</th>
-                  <th>Highway Tolls</th>
-                  <th>Drop-offs</th>
+                  <th>Tolls</th>
+                  <th>Crew (Driver / Helper)</th>
+                  <th>Stops</th>
+                  <th style={{ width: "40px" }} aria-label="Row Actions" />
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <span className={`pod-status ${row.isValid ? "attached" : "missing"}`}>
-                        {row.isValid ? "Valid" : row.validationIssue ?? "Invalid"}
-                      </span>
-                    </td>
-                    <td>
-                      <input
-                        type="date"
-                        min="2024-01-01"
-                        value={row.deliveryDate}
-                        onChange={(e) => updateRowField(row.id, "deliveryDate", e.target.value)}
-                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px" }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={row.waybillNumber}
-                        onChange={(e) => updateRowField(row.id, "waybillNumber", e.target.value)}
-                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "130px" }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={row.clientName}
-                        onChange={(e) => updateRowField(row.id, "clientName", e.target.value)}
-                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "140px" }}
-                      />
-                    </td>
-                    <td className="truck-code">
-                      <input
-                        type="text"
-                        value={row.plateNumber}
-                        onChange={(e) => updateRowField(row.id, "plateNumber", e.target.value)}
-                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "100px" }}
-                      />
-                    </td>
-                    <td>
-                      <select
-                        value={row.truckTemperature}
-                        onChange={(e) => updateRowField(row.id, "truckTemperature", e.target.value as TruckTemperature)}
-                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "145px" }}
-                      >
-                        {DELIVERY_TEMPERATURES.map((temperature) => <option key={temperature} value={temperature}>{temperature}</option>)}
-                      </select>
-                    </td>
-                    <td className="money">
-                      <input
-                        type="number"
-                        value={row.deliveryRate}
-                        onChange={(e) => updateRowField(row.id, "deliveryRate", Number(e.target.value) || 0)}
-                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "90px" }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={row.dieselExpenses ?? ""}
-                        placeholder="0"
-                        onChange={(e) => updateRowField(row.id, "dieselExpenses", e.target.value ? Number(e.target.value) : null)}
-                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "80px" }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={row.tollGateExpenses ?? ""}
-                        placeholder="0"
-                        onChange={(e) => updateRowField(row.id, "tollGateExpenses", e.target.value ? Number(e.target.value) : null)}
-                        style={{ border: "1px solid var(--line)", padding: "4px 8px", borderRadius: "6px", fontSize: "12px", width: "80px" }}
-                      />
-                    </td>
-                    <td>
-                      {row.dropoffs.map((d) => d.storeName).join(", ")}
+                {visibleRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={12} style={{ textAlign: "center", padding: "32px", color: "var(--muted)" }}>
+                      No deliveries matching current filter.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  visibleRows.map((row) => (
+                    <tr
+                      key={row.id}
+                      style={{
+                        background:
+                          row.status === "needs_attention"
+                            ? "rgba(239, 68, 68, 0.04)"
+                            : row.status === "duplicate"
+                              ? "rgba(107, 114, 128, 0.04)"
+                              : undefined,
+                      }}
+                    >
+                      <td>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <span
+                            className={`pod-status ${
+                              row.status === "ready"
+                                ? "attached"
+                                : row.status === "duplicate"
+                                  ? "missing"
+                                  : "pending"
+                            }`}
+                            style={{ width: "fit-content" }}
+                          >
+                            {row.status === "ready"
+                              ? "Ready"
+                              : row.status === "duplicate"
+                                ? "Duplicate"
+                                : "Needs Attention"}
+                          </span>
+                          {row.issues.length > 0 ? (
+                            <small
+                              style={{
+                                color: "var(--color-critical, #dc2626)",
+                                fontSize: "11px",
+                                lineHeight: "1.2",
+                                marginTop: "2px",
+                              }}
+                            >
+                              {row.issues.map((i) => i.message).join(", ")}
+                            </small>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>
+                        <input
+                          type="date"
+                          min="2024-01-01"
+                          className="base-input"
+                          value={row.deliveryDate}
+                          onChange={(e) => updateRowField(row.id, "deliveryDate", e.target.value)}
+                          style={{ fontSize: "12px", padding: "4px 6px" }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="base-input"
+                          value={row.waybillNumber}
+                          onChange={(e) => updateRowField(row.id, "waybillNumber", e.target.value)}
+                          style={{
+                            fontSize: "12px",
+                            padding: "4px 6px",
+                            width: "120px",
+                            borderColor: !row.waybillNumber.trim() ? "var(--color-critical, #dc2626)" : undefined,
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="base-input"
+                          value={row.clientName}
+                          onChange={(e) => updateRowField(row.id, "clientName", e.target.value)}
+                          style={{
+                            fontSize: "12px",
+                            padding: "4px 6px",
+                            width: "130px",
+                            borderColor: !row.clientName.trim() ? "var(--color-critical, #dc2626)" : undefined,
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          className="base-input"
+                          value={row.plateNumber}
+                          onChange={(e) => updateRowField(row.id, "plateNumber", e.target.value)}
+                          style={{
+                            fontSize: "12px",
+                            padding: "4px 6px",
+                            width: "95px",
+                            borderColor: !row.plateNumber.trim() ? "var(--color-critical, #dc2626)" : undefined,
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="base-input"
+                          value={row.truckTemperature}
+                          onChange={(e) =>
+                            updateRowField(row.id, "truckTemperature", e.target.value as TruckTemperature)
+                          }
+                          style={{ fontSize: "12px", padding: "4px 6px" }}
+                        >
+                          {DELIVERY_TEMPERATURES.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          className="base-input"
+                          min="0"
+                          value={row.deliveryRate || ""}
+                          placeholder="0"
+                          onChange={(e) => updateRowField(row.id, "deliveryRate", Number(e.target.value) || 0)}
+                          style={{
+                            fontSize: "12px",
+                            padding: "4px 6px",
+                            width: "90px",
+                            borderColor: row.deliveryRate <= 0 ? "var(--color-critical, #dc2626)" : undefined,
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          className="base-input"
+                          min="0"
+                          value={row.dieselExpenses ?? ""}
+                          placeholder="Optional"
+                          onChange={(e) =>
+                            updateRowField(
+                              row.id,
+                              "dieselExpenses",
+                              e.target.value !== "" ? Number(e.target.value) : null,
+                            )
+                          }
+                          style={{ fontSize: "12px", padding: "4px 6px", width: "80px" }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          className="base-input"
+                          min="0"
+                          value={row.tollGateExpenses ?? ""}
+                          placeholder="Optional"
+                          onChange={(e) =>
+                            updateRowField(
+                              row.id,
+                              "tollGateExpenses",
+                              e.target.value !== "" ? Number(e.target.value) : null,
+                            )
+                          }
+                          style={{ fontSize: "12px", padding: "4px 6px", width: "80px" }}
+                        />
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <input
+                            type="text"
+                            className="base-input"
+                            value={row.driverName ?? ""}
+                            placeholder="Driver"
+                            onChange={(e) =>
+                              updateRowField(row.id, "driverName", e.target.value.trim() ? e.target.value : null)
+                            }
+                            style={{ fontSize: "11px", padding: "2px 6px", width: "110px" }}
+                          />
+                          <input
+                            type="text"
+                            className="base-input"
+                            value={row.helperName ?? ""}
+                            placeholder="Helper"
+                            onChange={(e) =>
+                              updateRowField(row.id, "helperName", e.target.value.trim() ? e.target.value : null)
+                            }
+                            style={{ fontSize: "11px", padding: "2px 6px", width: "110px" }}
+                          />
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: "12px", maxWidth: "200px" }}>
+                          <strong style={{ display: "block" }}>
+                            {row.dropoffs.length} {row.dropoffs.length === 1 ? "Stop" : "Stops"}
+                          </strong>
+                          <span style={{ color: "var(--muted)", fontSize: "11px" }}>
+                            {row.dropoffs.map((d) => d.storeName).join(", ")}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="row-action-btn"
+                          aria-label={`Remove row for waybill ${row.waybillNumber}`}
+                          title="Remove row"
+                          onClick={() => removeStagedRow(row.id)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--muted)",
+                            cursor: "pointer",
+                            padding: "4px",
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
+          </div>
+        </section>
+      ) : null}
+
+      {/* STEP 3: Confirm Batch */}
+      {step === 3 ? (
+        <section className="records-card" aria-label="Confirm Delivery Batch">
+          <div className="records-heading">
+            <div>
+              <h2>3. Confirm Batch Import</h2>
+              <p>Review the import summary before committing to RouteX records.</p>
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setStep(2)}
+                disabled={importing}
+              >
+                Back to Review
+              </button>
+              <button
+                type="button"
+                className="primary-action-button"
+                disabled={importing || readyCount === 0}
+                onClick={executeCommit}
+              >
+                {importing ? "Committing Batch…" : `Confirm & Commit ${readyCount} Deliveries`}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ padding: "24px", borderTop: "1px solid var(--line)" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div
+                style={{
+                  padding: "16px",
+                  borderRadius: "8px",
+                  background: "var(--color-surface)",
+                  border: "1px solid var(--line)",
+                }}
+              >
+                <div style={{ fontSize: "12px", color: "var(--muted)" }}>Batch Reference</div>
+                <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--ink)", marginTop: "4px" }}>
+                  {batchName}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: "16px",
+                  borderRadius: "8px",
+                  background: "var(--color-surface)",
+                  border: "1px solid var(--line)",
+                }}
+              >
+                <div style={{ fontSize: "12px", color: "var(--muted)" }}>Ready to Commit</div>
+                <div
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: 600,
+                    color: "var(--color-positive, #16a34a)",
+                    marginTop: "4px",
+                  }}
+                >
+                  {readyCount} trips
+                </div>
+              </div>
+
+              {duplicateCount > 0 ? (
+                <div
+                  style={{
+                    padding: "16px",
+                    borderRadius: "8px",
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--line)",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>Duplicates (Will be Skipped)</div>
+                  <div style={{ fontSize: "20px", fontWeight: 600, color: "var(--muted)", marginTop: "4px" }}>
+                    {duplicateCount} trips
+                  </div>
+                </div>
+              ) : null}
+
+              {attentionCount > 0 ? (
+                <div
+                  style={{
+                    padding: "16px",
+                    borderRadius: "8px",
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--line)",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>Needs Attention (Excluded)</div>
+                  <div
+                    style={{
+                      fontSize: "20px",
+                      fontWeight: 600,
+                      color: "var(--color-critical, #dc2626)",
+                      marginTop: "4px",
+                    }}
+                  >
+                    {attentionCount} trips
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div
+              style={{
+                padding: "16px 20px",
+                borderRadius: "8px",
+                background: "var(--color-surface)",
+                border: "1px solid var(--line)",
+                fontSize: "13px",
+                lineHeight: "1.6",
+                color: "var(--ink)",
+              }}
+            >
+              <strong style={{ display: "block", marginBottom: "6px" }}>Import Safety Guarantees:</strong>
+              <ul style={{ margin: 0, paddingLeft: "20px", color: "var(--muted)", fontSize: "12px" }}>
+                <li>Only rows marked as <strong>Ready</strong> will be committed to the database.</li>
+                <li>Duplicate waybills are never overwritten, protecting existing historical delivery trips.</li>
+                <li>All import events are written to the audit log under entity ID for this batch.</li>
+                <li>Created delivery records are immediately reflected across RouteX dashboards, ledgers, and profitability summaries.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* STEP 4: Import Results */}
+      {step === 4 && importResult ? (
+        <section className="records-card" aria-label="Import Batch Results">
+          <div className="records-heading">
+            <div>
+              <h2>Import Batch Completed</h2>
+              <p>Batch Reference: {importResult.batchName}</p>
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button type="button" className="secondary-button" onClick={resetImportFlow}>
+                Import Another Batch
+              </button>
+              <Link className="primary-action-button" href="/deliveries">
+                View in Deliveries →
+              </Link>
+            </div>
+          </div>
+
+          <div style={{ padding: "24px", borderTop: "1px solid var(--line)" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <div
+                style={{
+                  padding: "16px",
+                  borderRadius: "8px",
+                  background: "rgba(22, 163, 74, 0.06)",
+                  border: "1px solid rgba(22, 163, 74, 0.2)",
+                }}
+              >
+                <div style={{ fontSize: "12px", color: "var(--muted)" }}>Successfully Committed</div>
+                <div
+                  style={{
+                    fontSize: "22px",
+                    fontWeight: 600,
+                    color: "var(--color-positive, #16a34a)",
+                    marginTop: "4px",
+                  }}
+                >
+                  {importResult.committedCount} Deliveries
+                </div>
+              </div>
+
+              {importResult.duplicateCount > 0 ? (
+                <div
+                  style={{
+                    padding: "16px",
+                    borderRadius: "8px",
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--line)",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>Duplicate Waybills Skipped</div>
+                  <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)", marginTop: "4px" }}>
+                    {importResult.duplicateCount}
+                  </div>
+                </div>
+              ) : null}
+
+              {importResult.errors.length > 0 ? (
+                <div
+                  style={{
+                    padding: "16px",
+                    borderRadius: "8px",
+                    background: "rgba(220, 38, 38, 0.06)",
+                    border: "1px solid rgba(220, 38, 38, 0.2)",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>Failed Records</div>
+                  <div
+                    style={{
+                      fontSize: "22px",
+                      fontWeight: 600,
+                      color: "var(--color-critical, #dc2626)",
+                      marginTop: "4px",
+                    }}
+                  >
+                    {importResult.errors.length}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Committed Waybill Chips */}
+            {importResult.committedWaybills.length > 0 ? (
+              <div style={{ marginBottom: "24px" }}>
+                <strong style={{ display: "block", fontSize: "13px", marginBottom: "8px", color: "var(--ink)" }}>
+                  Committed Waybill Records:
+                </strong>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {importResult.committedWaybills.map((wb) => (
+                    <span
+                      key={wb}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        background: "var(--color-surface)",
+                        border: "1px solid var(--line)",
+                        fontSize: "12px",
+                        fontFamily: "monospace",
+                        color: "var(--ink)",
+                      }}
+                    >
+                      {wb}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Skipped / Duplicates */}
+            {importResult.duplicateWaybills.length > 0 ? (
+              <div style={{ marginBottom: "24px" }}>
+                <strong style={{ display: "block", fontSize: "13px", marginBottom: "8px", color: "var(--muted)" }}>
+                  Skipped Duplicates:
+                </strong>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {importResult.duplicateWaybills.map((wb) => (
+                    <span
+                      key={wb}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        background: "var(--color-surface)",
+                        border: "1px solid var(--line)",
+                        fontSize: "12px",
+                        fontFamily: "monospace",
+                        color: "var(--muted)",
+                      }}
+                    >
+                      {wb}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Error Report Download */}
+            {(importResult.duplicateCount > 0 || importResult.errors.length > 0) ? (
+              <div style={{ marginTop: "16px" }}>
+                <button type="button" className="secondary-button" onClick={downloadErrorReport}>
+                  Download Audit / Error Report (CSV)
+                </button>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
     </>
   );
 }
-

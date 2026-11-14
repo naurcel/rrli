@@ -1517,10 +1517,10 @@ export default function DashboardPage() {
                               type="button"
                               className="dashboard-attention-toggle"
                               aria-expanded={isExpanded}
-                              aria-label={`${isExpanded ? "Hide" : "Show"} missing details for ${delivery.waybillNumber}`}
+                              aria-label={`${isExpanded ? "Hide" : "Show"} missing items for ${delivery.waybillNumber}`}
                               onClick={(e) => toggleAttentionItem(delivery.id, e)}
                             >
-                              <span>{issues.length} {issues.length === 1 ? "missing detail" : "missing details"}</span>
+                              <span>{issues.length} missing</span>
                               <span className={`attention-chevron${isExpanded ? " open" : ""}`} aria-hidden="true">▾</span>
                             </button>
                           </div>
