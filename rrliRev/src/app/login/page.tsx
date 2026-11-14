@@ -387,7 +387,7 @@ export default function LoginPage() {
           <details className="login-role-access-menu">
             <summary aria-label="Open role verification accounts">
               <span>RBAC</span>
-              <svg className="login-dropdown-chevron" viewBox="0 0 20 20" aria-hidden="true">
+              <svg className="login-dropdown-chevron" width="14" height="14" viewBox="0 0 20 20" aria-hidden="true">
                 <path
                   d="M5.5 7.5L10 12l4.5-4.5"
                   fill="none"

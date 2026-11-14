@@ -97,6 +97,7 @@ export default function UserManagementPage() {
   const [auditSearch, setAuditSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("All Actions");
   const [entityFilter, setEntityFilter] = useState("All Entities");
+  const [selectedAuditEntry, setSelectedAuditEntry] = useState<AuditEntry | null>(null);
   const [userSort, setUserSort] = useState<{ key: string; direction: TableSortDirection }>({
     key: "name",
     direction: "asc",
@@ -216,6 +217,17 @@ export default function UserManagementPage() {
       document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
     };
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!selectedAuditEntry) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setSelectedAuditEntry(null);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedAuditEntry]);
 
   const filteredAuditEntries = useMemo(() => {
     const q = auditSearch.trim().toLowerCase();
@@ -762,8 +774,7 @@ export default function UserManagementPage() {
 
             {/* Provision Account Form */}
             <section
-              className="records-card"
-              style={{ marginTop: "22px", marginBottom: "22px" }}
+              className="records-card user-provision-card"
               aria-label="Provision new staff account"
             >
               <div className="records-heading">
@@ -773,25 +784,15 @@ export default function UserManagementPage() {
                 </div>
               </div>
 
-              <form
-                onSubmit={handleCreateUser}
-                style={{
-                  display: "grid",
-                  gap: "16px",
-                  padding: "0 23px 22px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                    gap: "12px",
-                    alignItems: "start",
-                  }}
-                >
-                  <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
-                    Full Name
+              <form onSubmit={handleCreateUser} className="user-provision-form">
+                {/* Row 1: Profile & Access */}
+                <div className="user-provision-row">
+                  <div className="user-form-field">
+                    <label htmlFor="provision-full-name" className="user-form-label">
+                      Full Name
+                    </label>
                     <input
+                      id="provision-full-name"
                       className="user-management-input"
                       type="text"
                       placeholder="e.g. Carlo Mendoza"
@@ -799,11 +800,14 @@ export default function UserManagementPage() {
                       onChange={(event) => setFullName(event.target.value)}
                       required
                     />
-                  </label>
+                  </div>
 
-                  <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
-                    Username
+                  <div className="user-form-field">
+                    <label htmlFor="provision-username" className="user-form-label">
+                      Username
+                    </label>
                     <input
+                      id="provision-username"
                       className="user-management-input"
                       type="text"
                       placeholder="e.g. cmendoza"
@@ -811,24 +815,31 @@ export default function UserManagementPage() {
                       onChange={(event) => setUsername(event.target.value.toLowerCase())}
                       required
                     />
-                    <small style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>
+                    <span className="user-form-hint">
                       3-30 letters, numbers, hyphens, dots, underscores (case-insensitive)
-                    </small>
-                  </label>
+                    </span>
+                  </div>
 
-                  <div style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
-                    <span>Assigned Role</span>
+                  <div className="user-form-field">
+                    <span className="user-form-label">Assigned Role</span>
                     <RoundedSelect
                       value={newRole}
                       options={ROLE_OPTIONS}
                       onChange={(val) => setNewRole(val as UserRole)}
                       ariaLabel="Select role for new user"
+                      className="is-form-select"
                     />
                   </div>
+                </div>
 
-                  <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
-                    Email Address
+                {/* Row 2: Contact Details */}
+                <div className="user-provision-row">
+                  <div className="user-form-field">
+                    <label htmlFor="provision-email" className="user-form-label">
+                      Email Address
+                    </label>
                     <input
+                      id="provision-email"
                       className="user-management-input"
                       type="email"
                       placeholder="e.g. carlo.mendoza@routex.local"
@@ -836,11 +847,14 @@ export default function UserManagementPage() {
                       onChange={(event) => setEmail(event.target.value)}
                       required
                     />
-                  </label>
+                  </div>
 
-                  <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
-                    Phone Number
+                  <div className="user-form-field">
+                    <label htmlFor="provision-phone" className="user-form-label">
+                      Phone Number
+                    </label>
                     <input
+                      id="provision-phone"
                       className="user-management-input"
                       type="tel"
                       placeholder="e.g. +63 917 123 4567"
@@ -848,20 +862,17 @@ export default function UserManagementPage() {
                       onChange={(event) => setPhoneNumber(event.target.value)}
                       required
                     />
-                  </label>
+                  </div>
                 </div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                    gap: "12px",
-                    alignItems: "start",
-                  }}
-                >
-                  <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
-                    Temporary Password
+                {/* Row 3: Temporary Credentials */}
+                <div className="user-provision-row">
+                  <div className="user-form-field">
+                    <label htmlFor="provision-temp-password" className="user-form-label">
+                      Temporary Password
+                    </label>
                     <input
+                      id="provision-temp-password"
                       className="user-management-input"
                       type="password"
                       placeholder="Enter temporary password"
@@ -869,11 +880,14 @@ export default function UserManagementPage() {
                       onChange={(event) => setTemporaryPassword(event.target.value)}
                       required
                     />
-                  </label>
+                  </div>
 
-                  <label style={{ display: "grid", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
-                    Confirm Temporary Password
+                  <div className="user-form-field">
+                    <label htmlFor="provision-confirm-temp-password" className="user-form-label">
+                      Confirm Temporary Password
+                    </label>
                     <input
+                      id="provision-confirm-temp-password"
                       className="user-management-input"
                       type="password"
                       placeholder="Re-enter temporary password"
@@ -881,36 +895,44 @@ export default function UserManagementPage() {
                       onChange={(event) => setConfirmTemporaryPassword(event.target.value)}
                       required
                     />
-                  </label>
+                  </div>
                 </div>
 
                 {temporaryPassword ? (
-                  <div style={{ maxWidth: "480px" }}>
+                  <div style={{ maxWidth: "660px" }}>
                     <PasswordCriteriaList password={temporaryPassword} />
                   </div>
                 ) : null}
 
-                <div
-                  style={{
-                    padding: "9px 13px",
-                    borderRadius: "8px",
-                    background: "rgba(217, 119, 6, 0.08)",
-                    border: "1px solid rgba(217, 119, 6, 0.2)",
-                    fontSize: "11px",
-                    color: "var(--color-text-secondary)",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  <strong>Note:</strong> Share this temporary password securely with the user. They will be required to set their permanent password on first sign-in.
+                <div className="user-provision-note">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ flexShrink: 0, marginTop: "2px", color: "var(--color-accent-deep)" }}
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  <div>
+                    <strong>Note:</strong> Share this temporary password securely with the user. They will be required to set their permanent password on first sign-in.
+                  </div>
                 </div>
 
-                <div>
+                <div className="user-provision-actions">
                   <button
                     type="submit"
                     className="primary-action-button"
                     disabled={isCreating}
                     title="Provision a new RouteX account with a temporary password"
-                    style={{ minHeight: "42px", minWidth: "160px" }}
+                    style={{ minHeight: "42px", minWidth: "165px" }}
                   >
                     {isCreating ? "Provisioning…" : "+ Provision Account"}
                   </button>
@@ -1274,15 +1296,6 @@ export default function UserManagementPage() {
                     onChange={setEntityFilter}
                     ariaLabel="Filter by entity"
                   />
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => void loadAuditEntries()}
-                    title="Refresh audit log"
-                    style={{ minHeight: "40px", fontSize: "12px" }}
-                  >
-                    Refresh
-                  </button>
                 </div>
               </div>
 
@@ -1305,7 +1318,7 @@ export default function UserManagementPage() {
                         <th style={{ width: "180px" }}>User</th>
                         <th style={{ width: "170px" }}>Action</th>
                         <th style={{ width: "140px" }}>Entity</th>
-                        <th>Details &amp; State Changes</th>
+                        <th>Details</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1341,7 +1354,18 @@ export default function UserManagementPage() {
                         </tr>
                       ) : (
                         paginatedAuditEntries.map((entry) => (
-                          <tr key={entry.id}>
+                          <tr
+                            key={entry.id}
+                            className="record-row audit-record-row"
+                            onClick={() => setSelectedAuditEntry(entry)}
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSelectedAuditEntry(entry);
+                              }
+                            }}
+                          >
                             <td>
                               <div className="audit-timestamp">
                                 <strong>
@@ -1379,7 +1403,22 @@ export default function UserManagementPage() {
                               </div>
                             </td>
                             <td>
-                              <AuditStateChanges summary={entry.summary} changes={entry.changes} />
+                              <div className="audit-simple-detail-cell">
+                                <span className="audit-simple-summary" title={entry.summary}>
+                                  {entry.summary}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="audit-view-pill"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedAuditEntry(entry);
+                                  }}
+                                  title="View full audit event and changes"
+                                >
+                                  View Details
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -1404,6 +1443,241 @@ export default function UserManagementPage() {
           </>
         )}
       </div>
+
+      {/* Audit Event Details Popup Modal */}
+      {selectedAuditEntry ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(15, 23, 21, 0.72)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="audit-detail-dialog-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedAuditEntry(null);
+          }}
+        >
+          <div
+            className="records-card"
+            style={{
+              width: "min(100%, 640px)",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--color-surface)",
+              boxShadow: "0 24px 64px rgba(15, 23, 21, 0.35)",
+              borderRadius: "16px",
+              overflow: "hidden",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                padding: "20px 24px 16px",
+                borderBottom: "1px solid var(--line)",
+                background: "var(--color-surface)",
+              }}
+            >
+              <div>
+                <h2 id="audit-detail-dialog-title" style={{ margin: 0, fontSize: "17px", letterSpacing: "-0.3px" }}>
+                  Audit Event Details
+                </h2>
+                <p style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--color-text-muted)" }}>
+                  {new Date(selectedAuditEntry.occurredAt).toLocaleDateString(undefined, {
+                    weekday: "short",
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}{" "}
+                  •{" "}
+                  {new Date(selectedAuditEntry.occurredAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAuditEntry(null)}
+                aria-label="Close dialog"
+                title="Close (Esc)"
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  fontSize: "22px",
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  color: "var(--color-text-muted)",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div
+              style={{
+                padding: "20px 24px",
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+              }}
+            >
+              {/* Event Metadata Cards */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: "10px",
+                  padding: "12px 14px",
+                  borderRadius: "10px",
+                  background: "var(--color-surface-subtle, rgba(0, 0, 0, 0.02))",
+                  border: "1px solid var(--line)",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      color: "var(--color-text-muted)",
+                      letterSpacing: "0.05em",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Action
+                  </div>
+                  <span className={`pod-status ${actionBadgeClass(selectedAuditEntry.action)}`}>
+                    {selectedAuditEntry.action.replaceAll(".", " ")}
+                  </span>
+                </div>
+
+                <div>
+                  <div
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      color: "var(--color-text-muted)",
+                      letterSpacing: "0.05em",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    User / Actor
+                  </div>
+                  <strong style={{ fontSize: "12px", color: "var(--color-text-primary)", wordBreak: "break-all" }}>
+                    {selectedAuditEntry.actorEmail}
+                  </strong>
+                </div>
+
+                <div>
+                  <div
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      color: "var(--color-text-muted)",
+                      letterSpacing: "0.05em",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Target Entity
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+                    <span style={{ fontWeight: 600 }}>{selectedAuditEntry.entityType}</span>
+                    <span style={{ color: "var(--color-text-muted)", margin: "0 4px" }}>:</span>
+                    <code style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                      {selectedAuditEntry.entityId}
+                    </code>
+                  </div>
+                </div>
+              </div>
+
+              {/* Event Summary */}
+              <div>
+                <div
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    color: "var(--color-text-muted)",
+                    letterSpacing: "0.05em",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Summary
+                </div>
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "10px",
+                    background: "var(--color-page, #f8fafc)",
+                    border: "1px solid var(--line)",
+                    fontSize: "12.5px",
+                    lineHeight: 1.5,
+                    color: "var(--color-text-primary)",
+                  }}
+                >
+                  {selectedAuditEntry.summary}
+                </div>
+              </div>
+
+              {/* State Changes & Transitions */}
+              <div>
+                <div
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    color: "var(--color-text-muted)",
+                    letterSpacing: "0.05em",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Detailed State Changes &amp; Data
+                </div>
+                <AuditStateChanges changes={selectedAuditEntry.changes} />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                padding: "12px 24px",
+                borderTop: "1px solid var(--line)",
+                background: "var(--color-surface)",
+              }}
+            >
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setSelectedAuditEntry(null)}
+                style={{ minHeight: "36px", minWidth: "90px", fontSize: "12px" }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Authorize Reset Modal */}
       {authorizingUser ? (

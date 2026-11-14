@@ -7,7 +7,7 @@ import {
 } from "@/features/audit/audit-formatters";
 
 type AuditStateChangesProps = {
-  summary: string;
+  summary?: string;
   changes?: Record<string, unknown> | null;
 };
 
@@ -19,7 +19,7 @@ export function AuditStateChanges({ summary, changes }: AuditStateChangesProps) 
 
   return (
     <div className="audit-detail-cell">
-      <div className="audit-detail-summary">{summary}</div>
+      {summary ? <div className="audit-detail-summary">{summary}</div> : null}
 
       {hasChanges ? (
         <div className="audit-state-changes-block">
@@ -60,7 +60,11 @@ export function AuditStateChanges({ summary, changes }: AuditStateChangesProps) 
             <pre>{JSON.stringify(changes, null, 2)}</pre>
           </details>
         </div>
-      ) : null}
+      ) : (
+        <div style={{ fontSize: "11.5px", color: "var(--color-text-muted)", fontStyle: "italic", padding: "4px 0" }}>
+          No additional state transitions or attribute diffs recorded for this event.
+        </div>
+      )}
     </div>
   );
 }
