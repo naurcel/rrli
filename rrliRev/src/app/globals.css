@@ -16842,5 +16842,98 @@ html[data-theme="dark"] .routex-footer {
   }
 
   .report-status-badge {
-    -webkit-print-color-adjus
-... [truncated for diff preview]
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    display: inline !important;
+    font-size: 9.5px !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    border: none !important;
+  }
+
+  /* Footer */
+  .report-document-footer {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 16px !important;
+    padding: 10px 24px !important;
+    border-top: 1px solid #e5e7eb !important;
+    color: #6b7280 !important;
+    font-size: 9px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+/* ==========================================================================
+   RouteX Table & Ledger Plain-Text Enforcement
+   Prevents pill-style badges, box backgrounds, borders, and status dots in tables
+   ========================================================================== */
+table .pod-status,
+table .margin-pill,
+table .access-pill,
+table .report-status-badge,
+table .routex-badge,
+table .dropoff-count-badge,
+table .recent-dropoff-pill,
+table .truck-capability-pill-small,
+table .settings-current-role-tag,
+table .audit-entity-id,
+table .audit-val-old,
+table .audit-val-new,
+table .audit-attribute-pill,
+.table-wrap .pod-status,
+.table-wrap .margin-pill,
+.table-wrap .access-pill,
+.table-wrap .report-status-badge,
+.table-wrap .routex-badge,
+.table-wrap .dropoff-count-badge,
+.table-wrap .recent-dropoff-pill,
+.table-wrap .truck-capability-pill-small,
+.table-wrap .settings-current-role-tag,
+.table-wrap .audit-entity-id,
+.table-wrap .audit-val-old,
+.table-wrap .audit-val-new,
+.table-wrap .audit-attribute-pill {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  box-shadow: none !important;
+}
+
+table .pod-status i,
+table .store-pin-dot,
+.table-wrap .pod-status i,
+.table-wrap .store-pin-dot {
+  display: none !important;
+}
+
+/* ==========================================================================
+   RouteX Understated Badges & Status Indicators
+   Aligns all status badges with the established minimal, non-uppercase,
+   restrained aesthetic (no harsh borders or shouting uppercase text).
+   ========================================================================== */
+.pod-status,
+.detail-status,
+.fleet-status,
+.access-pill,
+.late-recording-pill,
+.report-status-badge {
+  text-transform: none !important;
+  font-weight: 550 !important;
+  letter-spacing: normal !important;
+}
+
+.pod-status.attached,
+.detail-status.success {
+  border-color: rgba(16, 185, 129, 0.18) !important;
+}
+
+.pod-status.missing,
+.detail-status.warning {
+  border-color: rgba(245, 158, 11, 0.18) !important;
+}
