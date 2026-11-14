@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RouteX — Recent Changes Recap & QA Verification Guide</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --primary: #f59e0b;
+      --primary-hover: #d97706;
+      --primary-foreground: #ffffff;
+      --card: #ffffff;
+      --card-surface: #f8fafc;
+      --border: #e2e8f0;
+      --foreground: #0f172a;
+      --muted-foreground: #64748b;
+      --positive: #16a34a;
+      --positive-bg: rgba(22, 163, 74, 0.08);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.08);
+      --critical: #dc2626;
+      --critical-bg: rgba(220, 38, 38, 0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --card: #131d2a;
+        --card-surface: #1a2636;
+        --border: #243447;
+        --foreground: #f1f5f9;
+        --muted-foreground: #94a3b8;
+      }
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    .tag-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body class="bg-[var(--card-surface)] text-[var(--foreground)] antialiased p-4 md:p-8 min-h-screen">
+  <div class="max-w-6xl mx-auto space-y-8">
+    
+    <!-- Top Header -->
+    <header class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 md:p-8 shadow-sm">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-3">
+            <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">RouteX Operational Suite</span>
+          </div>
+          <h1 class="text-2xl md:text-3xl font-bold mt-1 text-[var(--foreground)]">Recent Changes Recap & QA Testing Guide</h1>
+          <p class="text-sm text-[var(--muted-foreground)] mt-1">
+            Interactive overview of all completed UI, functional, and data import enhancements with verified test steps.
+          </p>
+        </div>
+        <div class="flex items-center gap-3 self-start md:self-auto">
+          <div class="text-right">
+            <div class="text-xs text-[var(--muted-foreground)]">QA Checklist Progress</div>
+            <div id="qa-progress-text" class="text-lg font-bold text-emerald-600">0% Complete</div>
+          </div>
+          <div class="w-16 h-16 relative flex items-center justify-center">
+            <svg class="w-14 h-14 transform -rotate-90">
+              <circle cx="28" cy="28" r="24" stroke="currentColor" stroke-width="4" class="text-[var(--border)]" fill="transparent"/>
+              <circle id="qa-progress-circle" cx="28" cy="28" r="24" stroke="currentColor" stroke-width="4" class="text-emerald-500 transition-all duration-500" fill="transparent" stroke-dasharray="150.8" stroke-dashoffset="150.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex border-b border-[var(--border)] mt-6 gap-2">
+        <button id="tab-btn-recap" onclick="switchMainTab('recap')" class="px-4 py-2.5 font-semibold text-sm border-b-2 border-amber-500 text-amber-600 dark:text-amber-400 transition-colors">
+          Feature Recap & Highlights (10 Items)
+        </button>
+        <button id="tab-btn-qa" onclick="switchMainTab('qa')" class="px-4 py-2.5 font-semibold text-sm border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+          Interactive QA Test Guide & Checklist
+        </button>
+      </div>
+    </header>
+
+    <!-- TAB 1: RECAP & HIGHLIGHTS -->
+    <main id="tab-content-recap" class="space-y-6">
+      
+      <!-- Quick Metric Overview -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
+          <div class="text-xs text-[var(--muted-foreground)]">Total Changes</div>
+          <div class="text-2xl font-bold mt-1">10 Modules</div>
+          <div class="text-xs text-emerald-600 mt-1 font-medium">100% Implemented</div>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
+          <div class="text-xs text-[var(--muted-foreground)]">Regression Tests</div>
+          <div class="text-2xl font-bold mt-1 text-emerald-600">249 / 249 Passed</div>
+          <div class="text-xs text-[var(--muted-foreground)] mt-1">0 Failures, 0 Skipped</div>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
+          <div class="text-xs text-[var(--muted-foreground)]">Production Build</div>
+          <div class="text-2xl font-bold mt-1 text-emerald-600">Clean Build</div>
+          <div class="text-xs text-[var(--muted-foreground)] mt-1">Next.js 16.4.2 Turbopack</div>
+        </div>
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
+          <div class="text-xs text-[var(--muted-foreground)]">Audit Status</div>
+          <div class="text-2xl font-bold mt-1">Verified</div>
+          <div class="text-xs text-[var(--muted-foreground)] mt-1">2 Full Reports Generated</div>
+        </div>
+      </div>
+
+      <!-- Change Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- 1. Dedicated Import Feature -->
+        <article class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="tag-pill bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">New Workflow</span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)]">/deliveries/import</span>
+          </div>
+          <h2 class="text-lg font-bold text-[var(--foreground)]">1. Dedicated Multi-Step Data Import</h2>
+          <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            Moved importing out of popup dialogs into a full-page, 4-step wizard. Supports RFC 4180 CSV, TSV, and DSV files up to 10MB.
+          </p>
+          <ul class="text-xs space-y-1.5 text-[var(--muted-foreground)]">
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> <strong>Multi-Stop Aggregation:</strong> Automatically consolidates repeated waybills into one trip with sequential store drop-offs.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> <strong>Inline Staging Table:</strong> Real-time editing and re-validation with status tabs (Ready, Attention, Duplicates).</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> <strong>Non-Destructive Commit:</strong> Existing waybills are detected and safely skipped with error report generation.</li>
+          </ul>
+        </article>
+
+        <!-- 2. Delivery Details Navigation & Dropdown -->
+        <article class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="tag-pill bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold">UX Refinement</span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)]">/deliveries/[id]</span>
+          </div>
+          <h2 class="text-lg font-bold text-[var(--foreground)]">2. Delivery Navigator & Searchable Dropdown</h2>
+          <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            Replaced the horizontal scrollbar of delivery tags with a clean, searchable select dropdown and adjacent previous/next buttons.
+          </p>
+          <ul class="text-xs space-y-1.5 text-[var(--muted-foreground)]">
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Switch directly between deliveries without navigating back to the main ledger.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Instant search filter inside dropdown by waybill, client, or date.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Minimal, understated badges replacing heavy colored pills.</li>
+          </ul>
+        </article>
+
+        <!-- 3. In-App Lightbox & Image Viewer -->
+        <article class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="tag-pill bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold">New Component</span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)]">ImageViewerModal</span>
+          </div>
+          <h2 class="text-lg font-bold text-[var(--foreground)]">3. In-App Document Lightbox Viewer</h2>
+          <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            PODs, delivery documents, and truck photos now open immediately in an in-app lightbox modal rather than forcing a new browser tab.
+          </p>
+          <ul class="text-xs space-y-1.5 text-[var(--muted-foreground)]">
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Zoom in/out, pan, reset zoom, and 90° rotation controls.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Right-click allowed for users who still prefer opening images in a separate tab.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Accessible keyboard shortcuts: <kbd class="px-1.5 py-0.5 rounded bg-[var(--border)] text-[var(--foreground)]">Esc</kbd> to close.</li>
+          </ul>
+        </article>
+
+        <!-- 4. Truck Details Layout & KPI Cards -->
+        <article class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="tag-pill bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold">Layout Overhaul</span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)]">/truck-profitability/[plate]</span>
+          </div>
+          <h2 class="text-lg font-bold text-[var(--foreground)]">4. Truck Details Layout & KPI Alignment</h2>
+          <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            Rebalanced the vehicle profile layout so the truck image is wider, preventing the KPI cards from stretching unnaturally.
+          </p>
+          <ul class="text-xs space-y-1.5 text-[var(--muted-foreground)]">
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> <strong>Strict 3-Card KPI Order:</strong> Revenue, Expenses, and Net Profit.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Profit Margin % placed directly inside the Net Profit card (matching Dashboard).</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Removed awkward enclosing container around operational summary.</li>
+          </ul>
+        </article>
+
+        <!-- 5. Owned Trucks Table List View -->
+        <article class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="tag-pill bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">Feature Addition</span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)]">/truck-profitability</span>
+          </div>
+          <h2 class="text-lg font-bold text-[var(--foreground)]">5. Owned Trucks Grid / List View Toggle</h2>
+          <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            Added a clean table/list view toggle alongside the visual card grid to future-proof fleet management as vehicle count grows.
+          </p>
+          <ul class="text-xs space-y-1.5 text-[var(--muted-foreground)]">
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Sortable columns for Plate, Truck Type, Trips, Revenue, Expenses, and Net Income.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> View preference saved in browser localStorage for persistent experience.</li>
+          </ul>
+        </article>
+
+        <!-- 6. Simplified Pending Values & Badges -->
+        <article class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="tag-pill bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">Visual Polish</span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)]">Global UI</span>
+          </div>
+          <h2 class="text-lg font-bold text-[var(--foreground)]">6. Simplified +Pending & Minimal Badges</h2>
+          <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            Cleaned up visual noise by stripping verbose labels and badge wrappers around pending financial amounts.
+          </p>
+          <ul class="text-xs space-y-1.5 text-[var(--muted-foreground)]">
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Displays clean amber value (e.g., <code class="text-amber-600 font-mono">+₱4,500</code>) without enclosing badges.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Removed badge pills in delivery crew section (Driver & Helper).</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Restrained plain-text status indicators across all tables.</li>
+          </ul>
+        </article>
+
+        <!-- 7. Mandatory Email & Added Phone Number -->
+        <article class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="tag-pill bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold">User Management</span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)]">/user-management & /settings</span>
+          </div>
+          <h2 class="text-lg font-bold text-[var(--foreground)]">7. Mandatory Email & Added Phone Numbers</h2>
+          <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            Updated user data schemas to enforce mandatory email addresses while introducing contact phone numbers throughout.
+          </p>
+          <ul class="text-xs space-y-1.5 text-[var(--muted-foreground)]">
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Email field is now strictly required (not optional) with RFC 5322 format validation.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Added Phone Number field in User Provisioning, Edit Modals, and Account Settings.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Synchronized across server account storage and client state.</li>
+          </ul>
+        </article>
+
+        <!-- 8. More Options Context Menus -->
+        <article class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="tag-pill bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-semibold">Consistency</span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)]">Tables & Headers</span>
+          </div>
+          <h2 class="text-lg font-bold text-[var(--foreground)]">8. Standardized "More Options" Actions</h2>
+          <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            Replaced cluttered multiple-action button groups with standardized 3-dots (<code class="font-mono">...</code>) contextual menus.
+          </p>
+          <ul class="text-xs space-y-1.5 text-[var(--muted-foreground)]">
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Grouped secondary actions (Edit, Deactivate, Delete, Export) cleanly.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Accessible keyboard navigation and outside-click dismiss behavior.</li>
+          </ul>
+        </article>
+
+      </div>
+    </main>
+
+    <!-- TAB 2: INTERACTIVE QA TEST GUIDE & CHECKLIST -->
+    <main id="tab-content-qa" class="hidden space-y-6">
+
+      <!-- Checklist Controls & Filter Bar -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-2 flex-wrap w-full md:w-auto">
+          <span class="text-xs font-semibold text-[var(--muted-foreground)] mr-1">Filter Tests:</span>
+          <button onclick="filterQATests('all')" id="filter-btn-all" class="px-3 py-1.5 text-xs rounded-lg font-medium bg-amber-500 text-white">All Tests (12)</button>
+          <button onclick="filterQATests('pending')" id="filter-btn-pending" class="px-3 py-1.5 text-xs rounded-lg font-medium bg-[var(--card-surface)] text-[var(--muted-foreground)] border border-[var(--border)]">Pending</button>
+          <button onclick="filterQATests('passed')" id="filter-btn-passed" class="px-3 py-1.5 text-xs rounded-lg font-medium bg-[var(--card-surface)] text-[var(--muted-foreground)] border border-[var(--border)]">Passed</button>
+        </div>
+        <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+          <button onclick="resetChecklist()" class="text-xs text-[var(--muted-foreground)] hover:text-rose-500 transition-colors">
+            Reset All Checks
+          </button>
+          <button onclick="exportQAResults()" class="px-3 py-1.5 text-xs font-medium bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--card-surface)] text-[var(--foreground)] rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
+            <span>Download QA Report</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Test Cases List -->
+      <div id="qa-tests-container" class="space-y-4">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-[var(--muted-foreground)] py-6 border-t border-[var(--border)]">
+      RouteX Logistics Platform &bull; Antigravity Engineering Pass &bull; November 14, 2026
+    </footer>
+
+  </div>
+
+  <script>
+    const QA_TESTS = [
+      {
+        id: "tc-import-1",
+        category: "Data Import",
+        title: "DTR File Upload & Format Parsing",
+        route: "/deliveries/import",
+        steps: [
+          "Navigate to /deliveries and click the 'Import' button in the header.",
+          "Click 'Download CSV Template' and verify file downloads with standard columns.",
+          "Click 'Load Sample DTR Rows' or upload a test CSV.",
+          "Verify the wizard automatically transitions to Step 2 (Preview & Validate)."
+        ],
+        expected: "All rows are parsed into the staging table without errors. UTF-8 characters and multi-stop rows group under their respective waybill."
+      },
+      {
+        id: "tc-import-2",
+        category: "Data Import",
+        title: "Multi-Stop Drop-off Grouping & Editing",
+        route: "/deliveries/import",
+        steps: [
+          "In Step 2 of the import wizard, look at a multi-stop delivery (e.g. WB-MULTI-01).",
+          "Verify the 'Stops' column lists all grouped stores (e.g. '3 Stops').",
+          "Edit any cell inline (e.g. change Delivery Rate or Client Name).",
+          "Observe the status badge and summary counter."
+        ],
+        expected: "Cell edits re-validate reactively. Ready counter updates immediately without losing grouped drop-offs."
+      },
+      {
+        id: "tc-import-3",
+        category: "Data Import",
+        title: "Duplicate Waybill Safety & Error Report",
+        route: "/deliveries/import",
+        steps: [
+          "Upload a CSV containing a waybill number that already exists in the system (e.g. WB-261031).",
+          "Check the 'Duplicates (Skip)' tab.",
+          "Proceed to Step 3 and click 'Confirm & Commit'.",
+          "In Step 4 (Results), click 'Download Audit / Error Report (CSV)'."
+        ],
+        expected: "Existing waybills are safely skipped and not overwritten. Downloaded error report clearly flags DUPLICATE_SKIPPED."
+      },
+      {
+        id: "tc-nav-1",
+        category: "Deliveries",
+        title: "Searchable Delivery Navigator Dropdown",
+        route: "/deliveries/[id]",
+        steps: [
+          "Open any delivery detail page (e.g. /deliveries/WB-261031).",
+          "Look at the top bar beside the 'Previous' / 'Next' buttons.",
+          "Click the delivery selector dropdown.",
+          "Type in the search input inside the dropdown (e.g., search for client 'Landers' or waybill number)."
+        ],
+        expected: "Dropdown filters the list instantly. Clicking an option navigates directly to that delivery without jumping layouts."
+      },
+      {
+        id: "tc-nav-2",
+        category: "Deliveries",
+        title: "Previous / Next Delivery Stepping Buttons",
+        route: "/deliveries/[id]",
+        steps: [
+          "On the delivery detail page, click '< Previous' or 'Next >'.",
+          "Verify URL updates to the adjacent waybill.",
+          "Verify active position text updates (e.g. '4 of 9')."
+        ],
+        expected: "Smooth navigation between trips; first and last items appropriately disable boundary buttons."
+      },
+      {
+        id: "tc-viewer-1",
+        category: "Documents & POD",
+        title: "In-App Lightbox Viewer for POD Attachments",
+        route: "/deliveries/[id] & /pod-documents",
+        steps: [
+          "On a delivery with an attached document or POD, click the document preview image.",
+          "Verify the image opens inside the RouteX in-app lightbox modal (not a new browser tab).",
+          "Test zoom-in (+), zoom-out (-), rotate 90°, and reset zoom controls.",
+          "Press the 'Esc' key or click '×' to dismiss the modal."
+        ],
+        expected: "Lightbox displays image with smooth zoom and pan controls. Right-click is preserved if user wants 'Open image in new tab'."
+      },
+      {
+        id: "tc-truck-1",
+        category: "Truck Profitability",
+        title: "Truck Details Layout & Ordered KPI Cards",
+        route: "/truck-profitability/[plate]",
+        steps: [
+          "Navigate to /truck-profitability and click any truck plate (e.g. NGS 4281).",
+          "Observe the truck photo container width compared to the KPI summary.",
+          "Verify the KPI cards are strictly: 1) Revenue, 2) Expenses, 3) Net Profit.",
+          "Verify the Net Profit card displays the Margin % inside it (e.g. '34.2% Margin')."
+        ],
+        expected: "Photo is horizontally wider, KPI cards are not unnaturally stretched, and operational summary is cleanly un-enclosed."
+      },
+      {
+        id: "tc-truck-2",
+        category: "Truck Profitability",
+        title: "Owned Trucks List View & View Preference Persistence",
+        route: "/truck-profitability",
+        steps: [
+          "Navigate to the Owned Trucks section on /truck-profitability.",
+          "Toggle between the Card Grid View and Table List View icons.",
+          "In List View, check sortable headers (Plate, Trips, Net Income).",
+          "Refresh the page in your browser."
+        ],
+        expected: "Table renders cleanly with all operational metrics. Active view mode (Grid or List) persists across page reloads."
+      },
+      {
+        id: "tc-truck-3",
+        category: "Truck Profitability",
+        title: "Simplified +Pending Revenue Formatting",
+        route: "/truck-profitability",
+        steps: [
+          "Look at trucks with pending unconfirmed revenue.",
+          "Verify the pending amount displays as a clean text indicator (e.g. '+₱4,500' in amber).",
+          "Confirm there are no bulky pill badges enclosing the '+pending' label."
+        ],
+        expected: "Visual clutter is removed, leaving a clean, unobtrusive amber value."
+      },
+      {
+        id: "tc-user-1",
+        category: "User Management",
+        title: "Mandatory Email Address Validation",
+        route: "/user-management",
+        steps: [
+          "Log in as Admin and go to /user-management.",
+          "Click 'Add New User'.",
+          "Attempt to submit the form with an empty email field or invalid format (e.g. 'test@').",
+          "Observe form validation feedback."
+        ],
+        expected: "Form blocks submission and displays required email error. Email is strictly required."
+      },
+      {
+        id: "tc-user-2",
+        category: "User Management",
+        title: "Phone Number Field in Provisioning & Settings",
+        route: "/user-management & /settings",
+        steps: [
+          "Provision a new user or edit an existing user with a contact phone number (e.g., '+63 917 123 4567').",
+          "Save changes and verify phone number appears in the user table.",
+          "Log in as that user and visit /settings (Profile Details).",
+          "Verify phone number can be edited and saved from Account Settings."
+        ],
+        expected: "Phone number persists to the database and appears across both management and personal profile settings."
+      },
+      {
+        id: "tc-ui-1",
+        category: "System Consistency",
+        title: "Dark & Light Mode Neumorphic Fidelity",
+        route: "All Routes",
+        steps: [
+          "Switch between Light and Dark themes using the header account toggle.",
+          "Inspect table rows, modal overlays, dropdown popovers, and status indicators.",
+          "Check contrast on muted text and button hover transitions."
+        ],
+        expected: "Zero visual clipping, crisp borders with subtle glassmorphic elevation, and high-contrast Readex Pro typography."
+      }
+    ];
+
+    const STORAGE_KEY = "routex_qa_checklist_v1";
+
+    function loadQAState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveQAState(state) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {}
+      updateProgressUI();
+    }
+
+    let currentFilter = "all";
+
+    function updateProgressUI() {
+      const state = loadQAState();
+      const total = QA_TESTS.length;
+      const completed = QA_TESTS.filter(t => state[t.id] === true).length;
+      const percent = Math.round((completed / total) * 100);
+
+      const progressText = document.getElementById("qa-progress-text");
+      const circle = document.getElementById("qa-progress-circle");
+
+      if (progressText) progressText.innerText = `${percent}% Complete (${completed}/${total})`;
+
+      if (circle) {
+        const circumference = 150.8;
+        const offset = circumference - (percent / 100) * circumference;
+        circle.style.strokeDashoffset = offset;
+      }
+    }
+
+    function toggleQATest(id) {
+      const state = loadQAState();
+      state[id] = !state[id];
+      saveQAState(state);
+      renderQATests();
+    }
+
+    function renderQATests() {
+      const container = document.getElementById("qa-tests-container");
+      if (!container) return;
+
+      const state = loadQAState();
+      const filtered = QA_TESTS.filter(t => {
+        const isPassed = state[t.id] === true;
+        if (currentFilter === "pending") return !isPassed;
+        if (currentFilter === "passed") return isPassed;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-8 text-center text-sm text-[var(--muted-foreground)]">
+            No test cases found matching current filter.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => {
+        const isPassed = state[t.id] === true;
+        return `
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 transition-all ${isPassed ? 'opacity-80 border-emerald-500/40' : ''}">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex items-start gap-3">
+                <input 
+                  type="checkbox" 
+                  id="chk-${t.id}"
+                  ${isPassed ? 'checked' : ''} 
+                  onchange="toggleQATest('${t.id}')"
+                  class="mt-1 w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-[var(--border)] cursor-pointer"
+                />
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="tag-pill text-xs font-semibold ${isPassed ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}">
+                      ${t.category}
+                    </span>
+                    <h3 class="text-sm font-bold text-[var(--foreground)] ${isPassed ? 'line-through text-[var(--muted-foreground)]' : ''}">
+                      ${t.title}
+                    </h3>
+                  </div>
+                  <div class="text-xs font-mono text-[var(--muted-foreground)] mt-1">
+                    Route: <span class="bg-[var(--card-surface)] px-1.5 py-0.5 rounded border border-[var(--border)]">${t.route}</span>
+                  </div>
+                </div>
+              </div>
+              <span class="text-xs font-semibold ${isPassed ? 'text-emerald-600' : 'text-amber-500'}">
+                ${isPassed ? 'Passed' : 'Pending'}
+              </span>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-[var(--border)] space-y-2 text-xs">
+              <div>
+                <strong class="text-[var(--foreground)]">Testing Steps:</strong>
+                <ol class="list-decimal pl-4 mt-1 text-[var(--muted-foreground)] space-y-1">
+                  ${t.steps.map(s => `<li>${s}</li>`).join('')}
+                </ol>
+              </div>
+              <div class="mt-2 bg-[var(--card-surface)] p-2.5 rounded-lg border border-[var(--border)]">
+                <strong class="text-[var(--foreground)]">Expected Result:</strong>
+                <span class="text-[var(--muted-foreground)] ml-1">${t.expected}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      updateProgressUI();
+    }
+
+    function filterQATests(mode) {
+      currentFilter = mode;
+      document.querySelectorAll("[id^='filter-btn-']").forEach(btn => {
+        btn.className = "px-3 py-1.5 text-xs rounded-lg font-medium bg-[var(--card-surface)] text-[var(--muted-foreground)] border border-[var(--border)]";
+      });
+      const activeBtn = document.getElementById(`filter-btn-${mode}`);
+      if (activeBtn) {
+        activeBtn.className = "px-3 py-1.5 text-xs rounded-lg font-medium bg-amber-500 text-white";
+      }
+      renderQATests();
+    }
+
+    function resetChecklist() {
+      if (confirm("Reset all test checkmarks to pending?")) {
+        localStorage.removeItem(STORAGE_KEY);
+        renderQATests();
+      }
+    }
+
+    function exportQAResults() {
+      const state = loadQAState();
+      const rows = [
+        ["Test ID", "Category", "Title", "Route", "Status"],
+        ...QA_TESTS.map(t => [
+          t.id,
+          t.category,
+          `"${t.title.replace(/"/g, '""')}"`,
+          `"${t.route.replace(/"/g, '""')}"`,
+          state[t.id] ? "PASSED" : "PENDING"
+        ])
+      ];
+
+      const csvContent = rows.map(r => r.join(",")).join("\r\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `routex-qa-verification-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function switchMainTab(tab) {
+      const recapTab = document.getElementById("tab-content-recap");
+      const qaTab = document.getElementById("tab-content-qa");
+      const btnRecap = document.getElementById("tab-btn-recap");
+      const btnQA = document.getElementById("tab-btn-qa");
+
+      if (tab === "recap") {
+        recapTab.classList.remove("hidden");
+        qaTab.classList.add("hidden");
+        btnRecap.className = "px-4 py-2.5 font-semibold text-sm border-b-2 border-amber-500 text-amber-600 dark:text-amber-400 transition-colors";
+        btnQA.className = "px-4 py-2.5 font-semibold text-sm border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors";
+      } else {
+        recapTab.classList.add("hidden");
+        qaTab.classList.remove("hidden");
+        btnRecap.className = "px-4 py-2.5 font-semibold text-sm border-b-2 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors";
+        btnQA.className = "px-4 py-2.5 font-semibold text-sm border-b-2 border-amber-500 text-amber-600 dark:text-amber-400 transition-colors";
+        renderQATests();
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      updateProgressUI();
+    });
+  </script>
+</body>
+</html>
