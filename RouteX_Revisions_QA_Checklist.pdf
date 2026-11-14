@@ -1,0 +1,181 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R] /Count 2 >>
+endobj
+4 0 obj
+<< /Length 7631 >>
+stream
+BT /F2 8.5 Tf 0.71 0.33 0.04 rg 42.00 797.89 Td (REDEEMED ROUTE LOGISTICS INC. - ROUTEX) Tj ET
+BT /F2 16 Tf 0.06 0.09 0.16 rg 42.00 781.89 Td (Revisions Summary & QA Testing Checklist) Tj ET
+BT /F1 8.5 Tf 0.39 0.45 0.55 rg 388.28 783.89 Td (237/237 Tests Passing | TypeScript Clean) Tj ET
+0.85 0.47 0.02 RG 1.5 w 42.00 771.89 m 553.28 771.89 l S
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 755.89 Td (1. Dashboard Refinements & Graph Increments \(/dashboard\)) Tj ET
+BT /F1 7.8 Tf 0.4 0.45 0.55 rg 42.00 743.89 Td (Files: dashboard/page.tsx, dashboard-kpi.ts, date-range-utils.ts, globals.css) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 730.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 730.39 Td (Top Client Card Vertical Centering & Dynamic Sizing: Wrapped the client name in a flex-centered .stat-client-body) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 718.39 Td (container so it sits vertically centered between TOP CLIENT and the revenue/trips subtitle. Added 5 dynamic) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 706.39 Td (font-size tiers \(34px down to 13px\) based on total text length and longest word length so any client name fits) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 694.39 Td (without overflowing.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 680.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 680.39 Td (Revenue Over Time Graph & Comparison Series: Renamed the comparison view to 'All' with clear 3-series labeling) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 668.39 Td (\(Revenue, Expenses, Profit\).) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 654.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 654.39 Td (Graph Time Increments: Updated X-axis buckets by active preset: This Week = Mon to Sun, This Month = Per Week) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 642.39 Td (\(Wk 1-Wk 5\), This Year = Per Month \(Jan-Dec\).) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 628.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 628.39 Td (This Year Filter & Recent Deliveries: Fixed This Year preset date bounds \(Jan 1 through today\) and tightened) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 616.39 Td (whitespace in the Recent Deliveries table.) Tj ET
+1 0.984 0.92 rg 0.96 0.62 0.04 RG 0.75 w 42.00 515.39 511.28 91.00 re B
+0.96 0.62 0.04 rg 42.00 515.39 3.00 91.00 re f
+BT /F2 8 Tf 0.57 0.25 0.05 rg 52.00 595.39 Td (QA CHECKLIST TO TEST:) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 584.39 Td ([ ] Switch date filter between This Week, This Month, This Year, and All Time; verify X-axis labels match Mon-Sun, Per) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 572.89 Td (Week, and Per Month.) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 559.89 Td ([ ] Verify Top Client name is vertically centered in the card and scales cleanly for short, multi-word, and tied client) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 548.39 Td (names.) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 535.39 Td ([ ] Toggle the 'All' metric tab on the Revenue Over Time graph and verify Revenue, Expenses, and Profit bars/lines align) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 523.89 Td (with the legend.) Tj ET
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 499.39 Td (2. Design Preferences \(Sidebar & Topbar Profile Dropdown\)) Tj ET
+BT /F1 7.8 Tf 0.4 0.45 0.55 rg 42.00 487.39 Td (Files: account-control.tsx, design-preferences.ts, layout.tsx, globals.css) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 473.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 473.89 Td (Profile Dropdown Submenu: Added 'Design Preferences' inside the profile dropdown right next to Account) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 461.89 Td (Settings and Dark Mode.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 447.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 447.89 Td (Font Size: Small, Default, Large \(scales interface typography across pages, tables, forms, and navigation\).) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 433.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 433.89 Td (Compactness: Comfortable vs. Compact \(adjusts table row padding, card spacing, and form density\).) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 419.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 419.89 Td (Reduce Motion: Off vs. On \(disables non-essential animations and respects OS reduced-motion preferences\).) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 405.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 405.89 Td (Per-Account Persistence & Reset: Stored per user ID in localStorage, restored on load in both Light and Dark) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 393.89 Td (mode, with a Reset to Default action.) Tj ET
+1 0.984 0.92 rg 0.96 0.62 0.04 RG 0.75 w 42.00 317.89 511.28 66.00 re B
+0.96 0.62 0.04 rg 42.00 317.89 3.00 66.00 re f
+BT /F2 8 Tf 0.57 0.25 0.05 rg 52.00 372.89 Td (QA CHECKLIST TO TEST:) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 361.89 Td ([ ] Open profile dropdown -> click Design Preferences -> test Small / Default / Large font size and Comfortable /) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 350.39 Td (Compact density.) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 337.39 Td ([ ] Toggle Reduce Motion and Dark Mode; reload the page to verify preferences persist for your user account, then click) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 325.89 Td (Reset to Default.) Tj ET
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 301.89 Td (3. Record Delivery UI Cleanup & Input Validation \(/deliveries/new\)) Tj ET
+BT /F1 7.8 Tf 0.4 0.45 0.55 rg 42.00 289.89 Td (Files: deliveries/new/page.tsx, edit-delivery-modal.tsx, delivery-input-utils.ts, rounded-select.tsx) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 276.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 276.39 Td (UI & Spacing Refinements: Removed redundant explanatory banners and duplicate headings; tightened form grid) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 264.39 Td (spacing and financial summary sidebar alignment.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 250.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 250.39 Td (Numeric/Currency Fields \(Delivery Rate, Diesel, Tolls, Allowances, Daily Rates, Other Expenses, Store Entry) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 238.39 Td (Fees, Distance, Fuel Rate\): strictly block letters and invalid symbols \(e, +, -\), allowing only digits and a single) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 226.39 Td (decimal point.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 212.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 212.39 Td (Person / Crew Name Fields \(Driver, Helpers, Contact Person\): strip numeric digits so numbers cannot be typed) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 200.39 Td (into person names.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 186.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 186.39 Td (Waybill & Document Reference Fields: normalize to uppercase alphanumeric characters and hyphens.) Tj ET
+1 0.984 0.92 rg 0.96 0.62 0.04 RG 0.75 w 42.00 110.39 511.28 66.00 re B
+0.96 0.62 0.04 rg 42.00 110.39 3.00 66.00 re f
+BT /F2 8 Tf 0.57 0.25 0.05 rg 52.00 165.39 Td (QA CHECKLIST TO TEST:) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 154.39 Td ([ ] On /deliveries/new and in the Edit Delivery modal, attempt to type letters into any Peso amount, distance, or entry) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 142.89 Td (fee field \(should be blocked\).) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 129.89 Td ([ ] Choose custom Driver/Helper name in the dropdown and attempt to type numbers into the person name field \(should) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 118.39 Td (be blocked\).) Tj ET
+BT /F1 8 Tf 0.58 0.64 0.72 rg 42 24 Td (RouteX Revisions & QA Testing Checklist  |  Page 1 of 2) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 7359 >>
+stream
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 797.89 Td (4. Clean Data-Only Delivery Preview & Removal of Confirmation Prompts \(/deliveries\)) Tj ET
+BT /F1 7.8 Tf 0.4 0.45 0.55 rg 42.00 785.89 Td (Files: deliveries/new/page.tsx, deliveries/page.tsx, deliveries/[id]/page.tsx, confirm-delivery-deletion-dialog.tsx,) Tj ET
+BT /F1 7.8 Tf 0.4 0.45 0.55 rg 42.00 775.39 Td (delivery-financial-breakdown.tsx, delivery-dropoff-timeline.tsx, record-detail-drawer.tsx) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 761.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 761.89 Td (Data-Only Preview Delivery \(/deliveries/new\): Clicking 'Preview delivery' displays a clean summary of the) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 749.89 Td (inputted data across 01 Trip details, 02 Store drop-offs, 03 Rate & expenses, and 04 Documents with 'Back to) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 737.89 Td (edit' and 'Record delivery' buttons-without any 'Confirmed Financials' badges or confirmation clutter.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 723.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 723.89 Td (Entry Fee Field Simplification: Removed the 'Confirm PHP 0' prompt button on store entry fees; typing 0 or an) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 711.89 Td (amount records it directly.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 697.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 697.89 Td (Simplified Deletion Modal: Removed the mandatory deletion reason dropdown and notes requirement when deleting) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 685.89 Td (a delivery.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 671.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 671.89 Td (Terminology Cleanup: Removed 'Confirmed / Unconfirmed / Pending Confirmation' wording and badges across) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 659.89 Td (delivery views.) Tj ET
+1 0.984 0.92 rg 0.96 0.62 0.04 RG 0.75 w 42.00 572.39 511.28 77.50 re B
+0.96 0.62 0.04 rg 42.00 572.39 3.00 77.50 re f
+BT /F2 8 Tf 0.57 0.25 0.05 rg 52.00 638.89 Td (QA CHECKLIST TO TEST:) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 627.89 Td ([ ] On /deliveries/new, fill out a delivery and click 'Preview delivery' to verify it previews only the inputted data \(Trip) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 616.39 Td (details, Store drop-offs, Rate & expenses, and Documents\) with 'Back to edit' and 'Record delivery' actions and no) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 604.89 Td ('Confirmed Financials' badges.) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 591.89 Td ([ ] Inspect a delivery at /deliveries/[id] and in the quick-view drawer to verify no 'Confirmed / Unconfirmed' prompts) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 580.39 Td (or badges appear.) Tj ET
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 556.39 Td (5. Plain Text Instead of Pill Badges in All Tables & Ledgers) Tj ET
+BT /F1 7.8 Tf 0.4 0.45 0.55 rg 42.00 544.39 Td (Files: deliveries/page.tsx, dashboard/page.tsx, pod-documents/page.tsx, truck-profitability/page.tsx, user-management/page.tsx,) Tj ET
+BT /F1 7.8 Tf 0.4 0.45 0.55 rg 42.00 533.89 Td (audit-state-changes.tsx, reports/page.tsx, report-customizer-modal.tsx, settings/page.tsx, delivery-import-client.tsx, globals.css) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 520.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 520.39 Td (Removed all pill backgrounds, borders, border-radii, padding, and status dots inside every <table> and .table-wrap) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 508.39 Td (ledger across RouteX:) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 494.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 494.39 Td (Deliveries & Dashboard Tables: Drop-offs store count \('2 stores', '2 drop-offs'\) and Net Profit margin) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 482.39 Td (percentage render as plain text.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 468.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 468.39 Td (POD Documents, Excel Import & Subcontracted Trucks Tables: 'Attached' / 'Missing', 'Valid' / 'Invalid', and 'Cold' /) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 456.39 Td ('Dry' render as plain text.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 442.39 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 442.39 Td (User Management, Audit Trail, Reports & Settings Tables: Staff status columns, Audit Action/Entity/State) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 430.39 Td (Changes, Report status cells, Customizer Data Type, and Settings Role Permissions \('\(Your Role\)' and Access) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 418.39 Td (Level\) render as plain text.) Tj ET
+1 0.984 0.92 rg 0.96 0.62 0.04 RG 0.75 w 42.00 367.39 511.28 41.00 re B
+0.96 0.62 0.04 rg 42.00 367.39 3.00 41.00 re f
+BT /F2 8 Tf 0.57 0.25 0.05 rg 52.00 397.39 Td (QA CHECKLIST TO TEST:) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 386.39 Td ([ ] Check tables in Deliveries, Dashboard, POD Documents, Trucks, Reports, Settings, and User Management in both) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 374.89 Td (Light and Dark mode to confirm no pill boxes or dots appear inside table cells.) Tj ET
+BT /F2 11 Tf 0.06 0.09 0.16 rg 42.00 351.39 Td (6. Trucks Terminology \('Crew'\) & Reports Printing + Date Filter) Tj ET
+BT /F1 7.8 Tf 0.4 0.45 0.55 rg 42.00 339.39 Td (Files: truck-profitability/page.tsx, truck-profitability/[plate]/page.tsx, reports/page.tsx, globals.css) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 325.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 325.89 Td (Trucks Module \('Crew'\): Renamed 'Drivers and Helpers' to 'Crew' across the Trucks page, action buttons \('+ Add) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 313.89 Td (Crew'\), and truck detail pages, and shortened verbose tooltips on truck cards.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 299.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 299.89 Td (Reports In-Page Date Filter: Moved the date range filter out of the topbar and placed it directly inside the) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 287.89 Td (Reports toolbar \(.report-tabs-bar\) right next to the report format tabs.) Tj ET
+BT /F2 9 Tf 0.85 0.47 0.02 rg 46.00 273.89 Td (-) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 273.89 Td (Reports Print / PDF Layout Fix \(@media print\): Released scroll/overflow containers so multi-page reports never) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 261.89 Td (clip, hid all navigation/buttons in print, rendered all report rows \(not just the current pagination page\), and) Tj ET
+BT /F1 9 Tf 0.2 0.25 0.33 rg 56.00 249.89 Td (preserved the 2-column visual breakdown charts and summary KPIs.) Tj ET
+1 0.984 0.92 rg 0.96 0.62 0.04 RG 0.75 w 42.00 185.39 511.28 54.50 re B
+0.96 0.62 0.04 rg 42.00 185.39 3.00 54.50 re f
+BT /F2 8 Tf 0.57 0.25 0.05 rg 52.00 228.89 Td (QA CHECKLIST TO TEST:) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 217.89 Td ([ ] Visit /truck-profitability and verify 'Crew' labels and concise tooltips on Owned and Subcontracted trucks.) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 52.00 204.89 Td ([ ] Visit /reports, change the date range using the in-page date filter next to the report tabs, and press Print \(Ctrl+P\)) Tj ET
+BT /F1 8.5 Tf 0.47 0.21 0.06 rg 66.00 193.39 Td (to verify the print preview matches the report preview across all pages.) Tj ET
+BT /F1 8 Tf 0.58 0.64 0.72 rg 42 24 Td (RouteX Revisions & QA Testing Checklist  |  Page 2 of 2) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Type /Catalog /Pages 3 0 R >>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000009 00000 n 
+0000000079 00000 n 
+0000000154 00000 n 
+0000000217 00000 n 
+0000007900 00000 n 
+0000008042 00000 n 
+0000015453 00000 n 
+0000015595 00000 n 
+trailer
+<< /Size 9 /Root 8 0 R >>
+startxref
+15644
+%%EOF
