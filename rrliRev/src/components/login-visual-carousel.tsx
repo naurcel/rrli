@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 const LOGIN_SLIDES = [
-  { id: 1, src: "/branding/login-slides/slide-1.jpg", alt: "RouteX logistics flow - Neon Aura" },
-  { id: 2, src: "/branding/login-slides/slide-2.jpg", alt: "RouteX logistics flow - Frost Ether" },
-  { id: 3, src: "/branding/login-slides/slide-3.jpg", alt: "RouteX logistics flow - Violet Silk" },
-  { id: 4, src: "/branding/login-slides/slide-4.jpg", alt: "RouteX logistics flow - Cyber Wave" },
-  { id: 5, src: "/branding/login-slides/slide-5.jpg", alt: "RouteX logistics flow - Aqua Ripple" },
-  { id: 6, src: "/branding/login-slides/slide-6.jpg", alt: "RouteX logistics flow - Solar Beam" },
-  { id: 7, src: "/branding/login-slides/slide-7.jpg", alt: "RouteX logistics flow - Crimson Grain" },
+  { id: 1, src: "/branding/login-slides/slide-1.gif", alt: "RouteX logistics flow - Pink Glow by Erica Anderson" },
+  { id: 2, src: "/branding/login-slides/slide-2.gif", alt: "RouteX logistics flow - Shatter Wave by Erica Anderson" },
+  { id: 3, src: "/branding/login-slides/slide-3.gif", alt: "RouteX logistics flow - Glitch Pink by Erica Anderson" },
+  { id: 4, src: "/branding/login-slides/slide-4.gif", alt: "RouteX logistics flow - Ambient Ether by Erica Anderson" },
+  { id: 5, src: "/branding/login-slides/slide-5.gif", alt: "RouteX logistics flow - Cyber Ripple by Erica Anderson" },
+  { id: 6, src: "/branding/login-slides/slide-6.gif", alt: "RouteX logistics flow - Glow Red Alert by Erica Anderson" },
+  { id: 7, src: "/branding/login-slides/slide-7.gif", alt: "RouteX logistics flow - Liquid Silk by Erica Anderson" },
 ] as const;
 
 export function LoginVisualCarousel() {
@@ -23,6 +23,15 @@ export function LoginVisualCarousel() {
   const goToNextSlide = useCallback(() => {
     setActiveSlide((prev) => (prev === LOGIN_SLIDES.length - 1 ? 0 : prev + 1));
   }, []);
+
+  // Continuous auto-play motion loop (advances slides like an animated loop, pauses on hover)
+  useEffect(() => {
+    if (hoverSide !== null) return;
+    const interval = setInterval(() => {
+      setActiveSlide((prev) => (prev === LOGIN_SLIDES.length - 1 ? 0 : prev + 1));
+    }, 3800);
+    return () => clearInterval(interval);
+  }, [hoverSide]);
 
   // Keyboard navigation when user is on the page
   useEffect(() => {
