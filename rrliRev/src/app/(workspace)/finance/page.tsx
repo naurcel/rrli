@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmExpenseDeletionDialog } from "@/components/confirm-expense-deletion-dialog";
 import { EditCompanyExpenseModal } from "@/components/edit-company-expense-modal";
+import { ViewCompanyExpenseModal } from "@/components/view-company-expense-modal";
 import {
   formatDateRange,
   GlobalDateRangePicker,
@@ -65,7 +66,8 @@ export default function FinancePage() {
   const [sortDirection, setSortDirection] = useState<TableSortDirection>("desc");
   const [page, setPage] = useState(1);
 
-  // Edit & Delete dialog states
+  // View, Edit & Delete dialog states
+  const [viewingExpense, setViewingExpense] = useState<CompanyExpense | null>(null);
   const [openActionExpenseId, setOpenActionExpenseId] = useState<string | null>(null);
   const [actionMenuOpensAbove, setActionMenuOpensAbove] = useState(false);
   const [editingExpense, setEditingExpense] = useState<CompanyExpense | null>(null);
@@ -692,21 +694,30 @@ export default function FinancePage() {
                       onReset={handleResetSort}
                       className="money"
                     />
-                    {canManage ? (
-                      <th style={{ width: "48px", textAlign: "right" }}>
-                        <span className="sr-only">Actions</span>
-                      </th>
-                    ) : null}
+                    <th style={{ width: canManage ? "48px" : "64px", textAlign: "right" }}>
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedExpenses.map((exp, expIndex) => (
                     <tr
                       key={exp.id}
+                      className="clickable-table-row"
+                      tabIndex={0}
+                      onClick={() => setViewingExpense(exp)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setViewingExpense(exp);
+                        }
+                      }}
                       style={{
                         position: "relative",
                         zIndex: openActionExpenseId === exp.id ? 150 : undefined,
+                        cursor: "pointer",
                       }}
+                      title="Click to view full expense details"
                     >
                       <td className="cell-date">{exp.expenseDate}</td>
                       <td>
@@ -720,7 +731,7 @@ export default function FinancePage() {
                         <strong>{formatPeso(exp.amount)}</strong>
                       </td>
                       {canManage ? (
-                        <td style={{ textAlign: "right" }}>
+                        <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
                           <div
                             className="table-row-actions"
                             style={{ position: "relative", display: "inline-block" }}
@@ -770,6 +781,20 @@ export default function FinancePage() {
                                   role="menuitem"
                                   onClick={() => {
                                     setOpenActionExpenseId(null);
+                                    setViewingExpense(exp);
+                                  }}
+                                >
+                                  View Details
+                                </button>
+                                <div
+                                  className="row-action-menu-divider"
+                                  role="separator"
+                                />
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setOpenActionExpenseId(null);
                                     setEditingExpense(exp);
                                   }}
                                 >
@@ -795,7 +820,19 @@ export default function FinancePage() {
                             ) : null}
                           </div>
                         </td>
-                      ) : null}
+                      ) : (
+                        <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            style={{ minHeight: "26px", padding: "0 8px", fontSize: "11px", fontWeight: 600 }}
+                            onClick={() => setViewingExpense(exp)}
+                            title="View full expense details"
+                          >
+                            View
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -818,7 +855,7 @@ export default function FinancePage() {
                         )}
                       </strong>
                     </td>
-                    {canManage ? <td /> : null}
+                    <td />
                   </tr>
                 </tfoot>
               </table>
@@ -979,6 +1016,21 @@ export default function FinancePage() {
             document.body,
           )
         : null}
+
+      {/* View Expense Modal */}
+      <ViewCompanyExpenseModal
+        expense={viewingExpense}
+        canManage={canManage}
+        onClose={() => setViewingExpense(null)}
+        onEdit={(exp) => {
+          setViewingExpense(null);
+          setEditingExpense(exp);
+        }}
+        onDelete={(exp) => {
+          setViewingExpense(null);
+          setDeletingExpense(exp);
+        }}
+      />
 
       {/* Edit Modal */}
       <EditCompanyExpenseModal

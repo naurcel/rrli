@@ -66,6 +66,8 @@ export function LoginVisualCarousel() {
           key={slide.id}
           src={slide.src}
           alt={slide.alt}
+          loading={index === 0 ? "eager" : "lazy"}
+          decoding="async"
           aria-hidden={index !== activeSlide}
           className={`login-visual-media ${index === activeSlide ? "is-active" : "is-inactive"}`}
         />

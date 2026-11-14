@@ -3,6 +3,9 @@ import test from "node:test";
 
 import {
   canImportAndReviewExcel,
+  canManageCompanyExpenses,
+  canManageReportTemplates,
+  canManageTrucks,
   canManageUsers,
   canMutateDeliveryRecords,
   canVerifyPodDocuments,
@@ -78,5 +81,27 @@ test("exposes User Management navigation item only to Admin", () => {
       `${role} should not see /user-management in navigation`,
     );
   }
+});
+
+test("enforces exact company expense permissions (finance:manage)", () => {
+  assert.equal(canManageCompanyExpenses("admin"), true, "admin can manage company expenses");
+  assert.equal(canManageCompanyExpenses("finance"), true, "finance can manage company expenses");
+  assert.equal(canManageCompanyExpenses("operations"), false, "operations cannot manage company expenses");
+  assert.equal(canManageCompanyExpenses("hr"), false, "hr cannot manage company expenses");
+  assert.equal(canManageCompanyExpenses("secretary"), false, "secretary cannot manage company expenses");
+  assert.equal(canManageCompanyExpenses("customer_representative"), false, "customer_representative cannot manage company expenses");
+});
+
+test("enforces truck and report template permissions", () => {
+  assert.equal(canManageTrucks("admin"), true);
+  assert.equal(canManageTrucks("operations"), true);
+  assert.equal(canManageTrucks("finance"), false);
+  assert.equal(canManageTrucks("hr"), false);
+  assert.equal(canManageTrucks("secretary"), false);
+  assert.equal(canManageTrucks("customer_representative"), false);
+
+  assert.equal(canManageReportTemplates("admin"), true);
+  assert.equal(canManageReportTemplates("operations"), false);
+  assert.equal(canManageReportTemplates("finance"), false);
 });
 

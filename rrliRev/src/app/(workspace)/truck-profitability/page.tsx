@@ -71,10 +71,12 @@ import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deli
 import { canManageTrucks } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
-type SubcontractedTruckSortKey = Extract<
-  keyof FleetTruck,
-  "plateNumber" | "truckType" | "provider" | "contactPerson"
->;
+type SubcontractedTruckSortKey =
+  | "plateNumber"
+  | "truckType"
+  | "classification"
+  | "provider"
+  | "contactPerson";
 
 export default function TruckProfitabilityPage() {
   const router = useRouter();
@@ -687,6 +689,57 @@ export default function TruckProfitabilityPage() {
     }
 
     return merged.sort((left, right) => {
+      if (ownedViewMode === "list") {
+        const mult = ownedListSort.direction === "asc" ? 1 : -1;
+        switch (ownedListSort.key) {
+          case "plate":
+          case "plateNumber":
+            return left.plateNumber.localeCompare(right.plateNumber) * mult;
+          case "truckType":
+            return String(left.truckType).localeCompare(String(right.truckType)) * mult;
+          case "classification": {
+            const leftCap = getTruckStorageCapability(left.plateNumber, left.storageCapability) === "Refrigerated" ? "Cold" : "Dry";
+            const rightCap = getTruckStorageCapability(right.plateNumber, right.storageCapability) === "Refrigerated" ? "Cold" : "Dry";
+            const diff = leftCap.localeCompare(rightCap);
+            if (diff !== 0) return diff * mult;
+            return left.plateNumber.localeCompare(right.plateNumber);
+          }
+          case "deliveries":
+          case "completedTrips": {
+            const diff = left.completedTrips - right.completedTrips;
+            if (diff !== 0) return diff * mult;
+            return left.plateNumber.localeCompare(right.plateNumber);
+          }
+          case "revenue":
+          case "totalEarnings": {
+            const diff = left.totalEarnings - right.totalEarnings;
+            if (diff !== 0) return diff * mult;
+            return left.plateNumber.localeCompare(right.plateNumber);
+          }
+          case "expenses":
+          case "totalExpenses": {
+            const diff = left.totalExpenses - right.totalExpenses;
+            if (diff !== 0) return diff * mult;
+            return left.plateNumber.localeCompare(right.plateNumber);
+          }
+          case "netProfit": {
+            const diff = left.netProfit - right.netProfit;
+            if (diff !== 0) return diff * mult;
+            return left.plateNumber.localeCompare(right.plateNumber);
+          }
+          case "margin":
+          case "marginPercent": {
+            const leftMargin = left.marginPercent ?? Number.NEGATIVE_INFINITY;
+            const rightMargin = right.marginPercent ?? Number.NEGATIVE_INFINITY;
+            const diff = leftMargin - rightMargin;
+            if (diff !== 0) return diff * mult;
+            return left.plateNumber.localeCompare(right.plateNumber);
+          }
+          default:
+            return left.plateNumber.localeCompare(right.plateNumber) * mult;
+        }
+      }
+
       switch (ownedTruckSort) {
         case "revenue": {
           const diff = right.totalEarnings - left.totalEarnings;
@@ -722,7 +775,7 @@ export default function TruckProfitabilityPage() {
           return left.plateNumber.localeCompare(right.plateNumber);
       }
     });
-  }, [allOwnedTrucks, deletedPlates, ownedTruckSort, truckSummaries]);
+  }, [allOwnedTrucks, deletedPlates, ownedTruckSort, truckSummaries, ownedViewMode, ownedListSort]);
 
   const filteredOwnedTrucks = useMemo(() => {
     const cleanSearch = plateSearch.trim().toLowerCase().replace(/\s+/g, "");
@@ -767,17 +820,42 @@ export default function TruckProfitabilityPage() {
   const sortedSubcontractedTrucks = useMemo(() => {
     const direction = subcontractedSort.direction === "asc" ? 1 : -1;
 
-    return [...allSubcontractedTrucks].sort((left, right) =>
-      String(left[subcontractedSort.key] ?? "").localeCompare(
-        String(right[subcontractedSort.key] ?? ""),
-      ) * direction,
-    );
+    return [...allSubcontractedTrucks].sort((left, right) => {
+      if (subcontractedSort.key === "classification") {
+        const leftCap = getTruckStorageCapability(left.plateNumber, left.storageCapability) === "Refrigerated" ? "Cold" : "Dry";
+        const rightCap = getTruckStorageCapability(right.plateNumber, right.storageCapability) === "Refrigerated" ? "Cold" : "Dry";
+        const diff = leftCap.localeCompare(rightCap);
+        if (diff !== 0) return diff * direction;
+        return left.plateNumber.localeCompare(right.plateNumber);
+      }
+      return (
+        String(left[subcontractedSort.key as keyof FleetTruck] ?? "").localeCompare(
+          String(right[subcontractedSort.key as keyof FleetTruck] ?? ""),
+        ) * direction
+      );
+    });
   }, [allSubcontractedTrucks, subcontractedSort]);
 
   const filteredSubcontractedTrucks = useMemo(() => {
-    if (!plateSearch.trim()) return sortedSubcontractedTrucks;
+    let result = sortedSubcontractedTrucks;
+    if (classificationFilter !== "all") {
+      result = result.filter((truck) => {
+        const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
+        if (
+          (classificationFilter === "cold" || classificationFilter === "refrigerated") &&
+          capability !== "Refrigerated"
+        ) {
+          return false;
+        }
+        if (classificationFilter === "dry" && capability !== "Dry") {
+          return false;
+        }
+        return true;
+      });
+    }
+    if (!plateSearch.trim()) return result;
     const clean = plateSearch.trim().toLowerCase().replace(/\s+/g, "");
-    return sortedSubcontractedTrucks.filter(
+    return result.filter(
       (t) =>
         t.plateNumber.toLowerCase().includes(plateSearch.trim().toLowerCase()) ||
         t.plateNumber.replace(/\s+/g, "").toLowerCase().includes(clean) ||
@@ -785,7 +863,7 @@ export default function TruckProfitabilityPage() {
         (t.contactPerson &&
           t.contactPerson.toLowerCase().includes(plateSearch.trim().toLowerCase())),
     );
-  }, [plateSearch, sortedSubcontractedTrucks]);
+  }, [classificationFilter, plateSearch, sortedSubcontractedTrucks]);
 
   const [ownedPage, setOwnedPage] = useState(1);
   const OWNED_PAGE_SIZE = 10;
@@ -1637,7 +1715,7 @@ export default function TruckProfitabilityPage() {
                       <tr>
                         <SortableTableHeader label="Plate Number" sortKey="plate" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         <SortableTableHeader label="Vehicle Size" sortKey="truckType" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
-                        <th>Classification</th>
+                        <SortableTableHeader label="Classification" sortKey="classification" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         <SortableTableHeader label="Trips" sortKey="deliveries" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
@@ -1658,20 +1736,21 @@ export default function TruckProfitabilityPage() {
                         return (
                           <tr
                             key={truck.plateNumber}
+                            className="clickable-table-row"
+                            onClick={() => router.push(`/truck-profitability/${encodeURIComponent(truck.plateNumber)}`)}
                             style={{
                               position: "relative",
+                              cursor: "pointer",
                               zIndex: openOwnedActionPlate === truck.plateNumber ? 150 : undefined,
                             }}
                           >
                             <td>
-                              <Link
-                                href={`/truck-profitability/${encodeURIComponent(truck.plateNumber)}`}
+                              <div
                                 className="truck-table-plate-link"
                                 style={{
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "10px",
-                                  textDecoration: "none",
                                   color: "inherit",
                                 }}
                               >
@@ -1689,13 +1768,12 @@ export default function TruckProfitabilityPage() {
                                   <TruckPhoto plateNumber={truck.plateNumber} />
                                 </div>
                                 <strong className="truck-code">{truck.plateNumber}</strong>
-                              </Link>
+                              </div>
                             </td>
                             <td><span className="truck-table-spec">{truck.truckType}</span></td>
                             <td>
                               <span
-                                className={`truck-capability-pill ${isRefrigerated ? "refrigerated" : "ambient"}`}
-                                style={{ fontSize: "11px", padding: "2px 8px" }}
+                                className={`truck-table-classification-badge ${isRefrigerated ? "cold" : "dry"}`}
                               >
                                 {isRefrigerated ? "Cold" : "Dry"}
                               </span>
@@ -1730,7 +1808,7 @@ export default function TruckProfitabilityPage() {
                             </td>
                             <td>{formatPercent(truck.marginPercent)}</td>
                             {actor.role === "admin" && (
-                              <td style={{ textAlign: "right" }}>
+                              <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
                                 <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
                                   <button
                                     type="button"
@@ -1844,7 +1922,7 @@ export default function TruckProfitabilityPage() {
                 <tr>
                   <SortableTableHeader label="Plate Number" sortKey="plateNumber" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Vehicle Size" sortKey="truckType" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
-                  <th>Classification</th>
+                  <SortableTableHeader label="Classification" sortKey="classification" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Provider" sortKey="provider" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Contact Person" sortKey="contactPerson" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   {actor.role === "admin" && (
@@ -1881,7 +1959,9 @@ export default function TruckProfitabilityPage() {
                       <td><strong className="truck-code">{truck.plateNumber}</strong></td>
                       <td><span className="truck-table-spec">{truck.truckType}</span></td>
                       <td>
-                        <span className="crew-role-text">
+                        <span
+                          className={`truck-table-classification-badge ${isRefrigerated ? "cold" : "dry"}`}
+                        >
                           {isRefrigerated ? "Cold" : "Dry"}
                         </span>
                       </td>

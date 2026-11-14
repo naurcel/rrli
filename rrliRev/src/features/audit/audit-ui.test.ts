@@ -3,6 +3,9 @@ import test from "node:test";
 
 import {
   extractStateChanges,
+  formatAuditActionLabel,
+  formatAuditActor,
+  formatAuditEntityLabel,
   formatAuditValue,
   getActionVisuals,
 } from "./audit-formatters.ts";
@@ -94,4 +97,32 @@ test("getActionVisuals assigns informative visual tones to audit events", () => 
   assert.equal(getActionVisuals("user.password_changed").className, "security");
   assert.equal(getActionVisuals("user.recovery_authorized").className, "security");
   assert.equal(getActionVisuals("user.username_changed_by_admin").className, "security");
+});
+
+test("formatAuditActionLabel converts code terms to clean human-readable titles", () => {
+  assert.equal(formatAuditActionLabel("delivery.financials_corrected"), "Financial Correction");
+  assert.equal(formatAuditActionLabel("delivery.financials_finalized"), "Financials Finalized");
+  assert.equal(formatAuditActionLabel("delivery.created"), "Delivery Recorded");
+  assert.equal(formatAuditActionLabel("delivery.batch_imported"), "Excel Batch Import");
+  assert.equal(formatAuditActionLabel("document.uploaded"), "Document Uploaded");
+  assert.equal(formatAuditActionLabel("user.created"), "User Provisioned");
+  assert.equal(formatAuditActionLabel("user.password_changed"), "Password Changed");
+  assert.equal(formatAuditActionLabel("user.recovery_authorized"), "Reset Window Authorized");
+});
+
+test("formatAuditEntityLabel converts entity codes to friendly business category labels", () => {
+  assert.equal(formatAuditEntityLabel("delivery"), "Deliveries");
+  assert.equal(formatAuditEntityLabel("truck"), "Fleet Trucks");
+  assert.equal(formatAuditEntityLabel("user"), "Staff Accounts");
+  assert.equal(formatAuditEntityLabel("import_batch"), "Import Batches");
+  assert.equal(formatAuditEntityLabel("system"), "System Settings");
+});
+
+test("formatAuditActor extracts clean usernames with @ prefix instead of raw emails", () => {
+  assert.equal(formatAuditActor("operations@routex.local"), "@operations");
+  assert.equal(formatAuditActor("admin@routex.local"), "@admin");
+  assert.equal(formatAuditActor("finance"), "@finance");
+  assert.equal(formatAuditActor("@suchi"), "@suchi");
+  assert.equal(formatAuditActor(null), "@system");
+  assert.equal(formatAuditActor(undefined), "@system");
 });

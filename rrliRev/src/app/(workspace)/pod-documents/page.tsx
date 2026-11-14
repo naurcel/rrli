@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
+  GlobalDateRangePicker,
   isDateInRange,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
@@ -346,12 +347,15 @@ export default function PodDocumentsPage() {
             <div>
               <h2>Drop-off Documents</h2>
             </div>
-            <RoundedSelect
-              value={filterStatus}
-              options={["All Drop-offs", "POD Attached", "Missing POD"]}
-              onChange={setFilterStatus}
-              ariaLabel="Filter drop-offs by document status"
-            />
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+              <GlobalDateRangePicker />
+              <RoundedSelect
+                value={filterStatus}
+                options={["All Drop-offs", "POD Attached", "Missing POD"]}
+                onChange={setFilterStatus}
+                ariaLabel="Filter drop-offs by document status"
+              />
+            </div>
           </div>
 
           {loadError ? (

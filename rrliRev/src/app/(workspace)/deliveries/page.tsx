@@ -22,6 +22,7 @@ import {
   AggregateExpenseBreakdown,
   DeliveryFinancialBreakdown,
 } from "@/components/delivery-financial-breakdown";
+import { ViewTripExpensesModal } from "@/components/view-trip-expenses-modal";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { RoundedSelect } from "@/components/rounded-select";
 import type {
@@ -198,6 +199,7 @@ export default function DeliveriesPage() {
   const [financialActionMessage, setFinancialActionMessage] = useState<string | null>(null);
   const [openActionDeliveryId, setOpenActionDeliveryId] = useState<string | null>(null);
   const [actionOpensAbove, setActionOpensAbove] = useState(false);
+  const [viewingTripExpenses, setViewingTripExpenses] = useState<DeliveryLedgerItem | null>(null);
 
   useEffect(() => {
     if (!openActionDeliveryId) return;
@@ -763,13 +765,8 @@ export default function DeliveriesPage() {
     }
 
     if (requestedId && handledEditLink.current !== requestedId) {
-      const requestedTrip =
-        deliveries.find((trip) => trip.id === requestedId) ??
-        readBrowserPreviewDeliveries().find((trip) => trip.id === requestedId);
-      if (requestedTrip) {
-        handledEditLink.current = requestedId;
-        openCorrectionModal(requestedTrip);
-      }
+      handledEditLink.current = requestedId;
+      router.push(`/deliveries/${encodeURIComponent(requestedId)}/edit`);
     } else if (createdId && handledEditLink.current !== createdId) {
       handledEditLink.current = createdId;
       router.push(`/deliveries/${encodeURIComponent(createdId)}`);
@@ -1569,7 +1566,15 @@ export default function DeliveriesPage() {
                       </td>
                       <td className="cell-distance">{trip.distanceKm} km</td>
                       <td className="money cell-delivery-rate">{formatPeso(trip.deliveryRate)}</td>
-                      <td className="cell-expenses">
+                      <td
+                        className="cell-expenses is-clickable"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setViewingTripExpenses(trip);
+                        }}
+                        title="Click to view trip expenses breakdown popup"
+                        style={{ cursor: "pointer" }}
+                      >
                         {isFinanciallyIncomplete || trip.totalExpenses == null ? (
                           <span
                             className="profit-amount warning"
@@ -1578,7 +1583,9 @@ export default function DeliveriesPage() {
                             Incomplete
                           </span>
                         ) : (
-                          formatPeso(trip.totalExpenses)
+                          <span className="expenses-clickable-amount" style={{ textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: "3px" }}>
+                            {formatPeso(trip.totalExpenses)}
+                          </span>
                         )}
                       </td>
                       <td className="money cell-net-income">
@@ -1649,16 +1656,26 @@ export default function DeliveriesPage() {
                               >
                                 View Details
                               </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setOpenActionDeliveryId(null);
+                                  setViewingTripExpenses(trip);
+                                }}
+                              >
+                                View Expenses
+                              </button>
                               {canWrite && (
                                 <button
                                   type="button"
                                   role="menuitem"
                                   onClick={() => {
                                     setOpenActionDeliveryId(null);
-                                    openCorrectionModal(trip);
+                                    router.push(`/deliveries/${encodeURIComponent(trip.id)}/edit`);
                                   }}
                                 >
-                                  Edit Financials
+                                  Edit Delivery
                                 </button>
                               )}
                               {actor.role === "admin" && (
@@ -1701,6 +1718,16 @@ export default function DeliveriesPage() {
           />
         </section>
       </div>
+
+      {/* Trip Expenses Popup Modal */}
+      <ViewTripExpensesModal
+        trip={viewingTripExpenses}
+        onClose={() => setViewingTripExpenses(null)}
+        onViewDelivery={(t) => {
+          setViewingTripExpenses(null);
+          navigateToDelivery(t);
+        }}
+      />
 
       <RecordDetailDrawer
         open={Boolean(activeKpi && activeKpiMeta)}

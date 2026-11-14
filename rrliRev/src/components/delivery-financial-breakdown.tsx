@@ -324,34 +324,6 @@ export function ExpenseDonutPieChart({
 
       {/* Legend & Breakdown Items */}
       <div className="breakdown-legend-container">
-        {!isComplete ? (
-          <div className="breakdown-incomplete-notice">
-            <span className="notice-icon" aria-hidden="true">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#d97706"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ flexShrink: 0 }}
-              >
-                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </span>
-            <div>
-              <p className="notice-title">Expense distribution incomplete</p>
-              <p className="notice-body">
-                {unknownItems.length} incomplete expense{unknownItems.length === 1 ? "" : "s"} ({unknownItems.join(", ")}).
-              </p>
-            </div>
-          </div>
-        ) : null}
-
         <ul className="breakdown-legend-list" role="list">
           {slices.map((slice) => {
             const arc = arcs.find((a) => a.slice.id === slice.id);
@@ -565,35 +537,6 @@ export function DeliveryFinancialBreakdown({
 
   return (
     <div className="delivery-breakdown-wrapper">
-      {/* 1. Incomplete Alert Banner if any unknown expense exists */}
-      {!model.isFinanciallyComplete ? (
-        <div className="breakdown-alert-incomplete" role="alert">
-          <span className="alert-icon" aria-hidden="true">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#d97706"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ flexShrink: 0 }}
-            >
-              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </span>
-          <div className="alert-text">
-            <strong>Incomplete Financial Record</strong>
-            <p>
-              Incomplete expenses: {model.unknownList.join(", ")}.
-            </p>
-          </div>
-        </div>
-      ) : null}
-
       {/* 2. Hero Summary Metrics Bar (Prominent Monetary Figures Across Full Width) */}
       <div className="breakdown-hero-metrics">
         {/* Revenue */}

@@ -12,7 +12,6 @@ import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-brea
 import { DeliveryNavigator } from "@/components/delivery-navigator";
 import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
-import { EditDeliveryModal } from "@/components/edit-delivery-modal";
 import { useGlobalDateRange } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import {
@@ -76,12 +75,21 @@ function DeliveryDetailsPageContent({
   const { deliveries: allDeliveries, loading: deliveriesLoading } = usePersistedDeliveries(range, { allPages: true });
 
   const [delivery, setDelivery] = useState<DeliveryLedgerItem | null>(null);
-  const [editingTrip, setEditingTrip] = useState<DeliveryLedgerItem | null>(null);
   const [deliveryToDelete, setDeliveryToDelete] = useState<DeliveryLedgerItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("updated") === "1" || params.get("updated") === "true") {
+        setFeedbackMessage("Delivery updated successfully.");
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!isActionMenuOpen) return;
@@ -235,18 +243,11 @@ function DeliveryDetailsPageContent({
     upsertBrowserPreviewDelivery(updatedTrip);
   }
 
-  function handleSaveSuccess(updatedTrip: DeliveryLedgerItem, message: string) {
-    setDelivery(updatedTrip);
-    setEditingTrip(null);
-    setFeedbackMessage(message);
-    upsertBrowserPreviewDelivery(updatedTrip);
-  }
-
   // Not Found State
   if (!deliveriesLoading && !delivery) {
     return (
       <>
-        <OperationalTopbar contextLabel="Deliveries / Record Not Found" />
+        <OperationalTopbar contextLabel="Deliveries / Record Not Found" showDateFilter={false} />
         <div className="content-wrap delivery-detail-page">
           <div className="delivery-detail-not-found records-card">
             <div className="not-found-icon">🔍</div>
@@ -267,7 +268,7 @@ function DeliveryDetailsPageContent({
   if (!delivery) {
     return (
       <>
-        <OperationalTopbar contextLabel="Deliveries / Loading" />
+        <OperationalTopbar contextLabel="Deliveries / Loading" showDateFilter={false} />
         <div className="content-wrap delivery-detail-page">
           <div className="loading-state">Loading delivery record…</div>
         </div>
@@ -281,7 +282,7 @@ function DeliveryDetailsPageContent({
 
   return (
     <>
-      <OperationalTopbar contextLabel={`Deliveries / Waybill #${delivery.waybillNumber}`} />
+      <OperationalTopbar contextLabel={`Deliveries / Waybill #${delivery.waybillNumber}`} showDateFilter={false} />
 
       <div className="content-wrap delivery-detail-page">
         {/* Top Control Bar: Back Link + Compact Delivery Navigator */}
@@ -408,7 +409,7 @@ function DeliveryDetailsPageContent({
                     role="menuitem"
                     onClick={() => {
                       setIsActionMenuOpen(false);
-                      setEditingTrip(delivery);
+                      router.push(`/deliveries/${encodeURIComponent(delivery.id)}/edit`);
                     }}
                   >
                     Edit Delivery
@@ -518,26 +519,6 @@ function DeliveryDetailsPageContent({
                   </strong>
                 </div>
               </div>
-
-              {isIncomplete && delivery.financialIntegrityIssues.length > 0 ? (
-                <div className="delivery-integrity-alert" style={{ marginTop: "14px" }}>
-                  <strong>Incomplete Expenses:</strong>
-                  <ul>
-                    {delivery.financialIntegrityIssues.map((issue, idx) => (
-                      <li key={idx}>{issue}</li>
-                    ))}
-                  </ul>
-                  {canWrite ? (
-                    <button
-                      type="button"
-                      className="inline-resolve-link"
-                      onClick={() => setEditingTrip(delivery)}
-                    >
-                      Click here to edit and complete expenses →
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
             </section>
 
             {/* Assigned Vehicle */}
@@ -569,15 +550,6 @@ function DeliveryDetailsPageContent({
           </div>
         </div>
       </div>
-
-      {/* Edit Delivery Modal */}
-      {editingTrip ? (
-        <EditDeliveryModal
-          delivery={editingTrip}
-          onClose={() => setEditingTrip(null)}
-          onSaved={handleSaveSuccess}
-        />
-      ) : null}
 
       {/* Audited Deletion Dialog */}
       <ConfirmDeliveryDeletionDialog

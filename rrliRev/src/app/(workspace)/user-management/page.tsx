@@ -10,7 +10,14 @@ import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { AuditStateChanges } from "@/components/audit-state-changes";
-import { getActionVisuals } from "@/features/audit/audit-formatters";
+import {
+  AUDIT_ACTION_HUMAN_LABELS,
+  AUDIT_ENTITY_HUMAN_LABELS,
+  formatAuditActionLabel,
+  formatAuditActor,
+  formatAuditEntityLabel,
+  getActionVisuals,
+} from "@/features/audit/audit-formatters";
 import {
   evaluatePasswordCriteria,
   validateUsernameFormat,
@@ -50,6 +57,34 @@ type AuditEntry = {
   summary: string;
   changes?: Record<string, unknown>;
 };
+
+const AUDIT_ACTION_FILTER_OPTIONS = [
+  { value: "all", label: "All Actions" },
+  { value: "delivery.created", label: "Delivery Recorded" },
+  { value: "delivery.financials_finalized", label: "Financials Finalized" },
+  { value: "delivery.financials_corrected", label: "Financial Correction" },
+  { value: "delivery.batch_imported", label: "Excel Batch Import" },
+  { value: "document.uploaded", label: "Document Uploaded" },
+  { value: "truck.created", label: "Truck Registered" },
+  { value: "truck.updated", label: "Truck Updated" },
+  { value: "user.created", label: "User Provisioned" },
+  { value: "user.status_changed", label: "Status Updated" },
+  { value: "user.role_changed", label: "Role Updated" },
+  { value: "user.username_changed", label: "Username Changed" },
+  { value: "user.username_changed_by_admin", label: "Username Changed (Admin)" },
+  { value: "user.password_changed", label: "Password Changed" },
+  { value: "user.password_recovered", label: "Password Recovered" },
+  { value: "user.recovery_authorized", label: "Reset Window Authorized" },
+];
+
+const AUDIT_ENTITY_FILTER_OPTIONS = [
+  { value: "all", label: "All Entities" },
+  { value: "delivery", label: "Deliveries" },
+  { value: "truck", label: "Fleet Trucks" },
+  { value: "user", label: "Staff Accounts" },
+  { value: "import_batch", label: "Import Batches" },
+  { value: "system", label: "System Settings" },
+];
 
 const ROLE_OPTIONS = USER_ROLES.map((role) => ({
   value: role,
@@ -95,8 +130,8 @@ export default function UserManagementPage() {
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [auditSearch, setAuditSearch] = useState("");
-  const [actionFilter, setActionFilter] = useState("All Actions");
-  const [entityFilter, setEntityFilter] = useState("All Entities");
+  const [actionFilter, setActionFilter] = useState("all");
+  const [entityFilter, setEntityFilter] = useState("all");
   const [selectedAuditEntry, setSelectedAuditEntry] = useState<AuditEntry | null>(null);
   const [userSort, setUserSort] = useState<{ key: string; direction: TableSortDirection }>({
     key: "name",
@@ -742,9 +777,9 @@ export default function UserManagementPage() {
             aria-selected={activeTab === "audit"}
             className={`ui-tooltip ${activeTab === "audit" ? "active" : ""}`}
             onClick={() => setActiveTab("audit")}
-            data-tooltip="Inspect administrative action and security audit logs"
+            data-tooltip="Inspect operational changes and system audit trail"
           >
-            Audit Log
+            Audit Trail
           </button>
         </div>
 
@@ -785,144 +820,162 @@ export default function UserManagementPage() {
               </div>
 
               <form onSubmit={handleCreateUser} className="user-provision-form">
-                {/* Row 1: Profile & Access */}
-                <div className="user-provision-row">
-                  <div className="user-form-field">
-                    <label htmlFor="provision-full-name" className="user-form-label">
-                      Full Name
-                    </label>
-                    <input
-                      id="provision-full-name"
-                      className="user-management-input"
-                      type="text"
-                      placeholder="e.g. Carlo Mendoza"
-                      value={fullName}
-                      onChange={(event) => setFullName(event.target.value)}
-                      required
-                    />
+                {/* Group 1: Staff Profile & Role */}
+                <div className="user-provision-group">
+                  <div className="user-provision-group-header">
+                    <span className="user-provision-group-tag">01</span>
+                    <h3 className="user-provision-group-title">Staff Profile &amp; Role</h3>
                   </div>
+                  <div className="user-provision-grid-3">
+                    <div className="user-form-field">
+                      <label htmlFor="provision-full-name" className="user-form-label">
+                        Full Name
+                      </label>
+                      <input
+                        id="provision-full-name"
+                        className="user-management-input"
+                        type="text"
+                        placeholder="e.g. Carlo Mendoza"
+                        value={fullName}
+                        onChange={(event) => setFullName(event.target.value)}
+                        required
+                      />
+                    </div>
 
-                  <div className="user-form-field">
-                    <label htmlFor="provision-username" className="user-form-label">
-                      Username
-                    </label>
-                    <input
-                      id="provision-username"
-                      className="user-management-input"
-                      type="text"
-                      placeholder="e.g. cmendoza"
-                      value={username}
-                      onChange={(event) => setUsername(event.target.value.toLowerCase())}
-                      required
-                    />
-                    <span className="user-form-hint">
-                      3-30 letters, numbers, hyphens, dots, underscores (case-insensitive)
-                    </span>
-                  </div>
+                    <div className="user-form-field">
+                      <label htmlFor="provision-username" className="user-form-label">
+                        Username
+                      </label>
+                      <input
+                        id="provision-username"
+                        className="user-management-input"
+                        type="text"
+                        placeholder="e.g. cmendoza"
+                        value={username}
+                        onChange={(event) => setUsername(event.target.value.toLowerCase())}
+                        required
+                      />
+                      <span className="user-form-hint">
+                        3-30 letters, numbers, hyphens, dots, underscores (case-insensitive)
+                      </span>
+                    </div>
 
-                  <div className="user-form-field">
-                    <span className="user-form-label">Assigned Role</span>
-                    <RoundedSelect
-                      value={newRole}
-                      options={ROLE_OPTIONS}
-                      onChange={(val) => setNewRole(val as UserRole)}
-                      ariaLabel="Select role for new user"
-                      className="is-form-select"
-                    />
-                  </div>
-                </div>
-
-                {/* Row 2: Contact Details */}
-                <div className="user-provision-row">
-                  <div className="user-form-field">
-                    <label htmlFor="provision-email" className="user-form-label">
-                      Email Address
-                    </label>
-                    <input
-                      id="provision-email"
-                      className="user-management-input"
-                      type="email"
-                      placeholder="e.g. carlo.mendoza@routex.local"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="user-form-field">
-                    <label htmlFor="provision-phone" className="user-form-label">
-                      Phone Number
-                    </label>
-                    <input
-                      id="provision-phone"
-                      className="user-management-input"
-                      type="tel"
-                      placeholder="e.g. +63 917 123 4567"
-                      value={phoneNumber}
-                      onChange={(event) => setPhoneNumber(event.target.value)}
-                      required
-                    />
+                    <div className="user-form-field">
+                      <span className="user-form-label">Assigned Role</span>
+                      <RoundedSelect
+                        value={newRole}
+                        options={ROLE_OPTIONS}
+                        onChange={(val) => setNewRole(val as UserRole)}
+                        ariaLabel="Select role for new user"
+                        className="is-form-select"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* Row 3: Temporary Credentials */}
-                <div className="user-provision-row">
-                  <div className="user-form-field">
-                    <label htmlFor="provision-temp-password" className="user-form-label">
-                      Temporary Password
-                    </label>
-                    <input
-                      id="provision-temp-password"
-                      className="user-management-input"
-                      type="password"
-                      placeholder="Enter temporary password"
-                      value={temporaryPassword}
-                      onChange={(event) => setTemporaryPassword(event.target.value)}
-                      required
-                    />
+                {/* Group 2: Contact Information */}
+                <div className="user-provision-group">
+                  <div className="user-provision-group-header">
+                    <span className="user-provision-group-tag">02</span>
+                    <h3 className="user-provision-group-title">Contact Information</h3>
                   </div>
+                  <div className="user-provision-grid-2">
+                    <div className="user-form-field">
+                      <label htmlFor="provision-email" className="user-form-label">
+                        Email Address
+                      </label>
+                      <input
+                        id="provision-email"
+                        className="user-management-input"
+                        type="email"
+                        placeholder="e.g. carlo.mendoza@routex.local"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        required
+                      />
+                    </div>
 
-                  <div className="user-form-field">
-                    <label htmlFor="provision-confirm-temp-password" className="user-form-label">
-                      Confirm Temporary Password
-                    </label>
-                    <input
-                      id="provision-confirm-temp-password"
-                      className="user-management-input"
-                      type="password"
-                      placeholder="Re-enter temporary password"
-                      value={confirmTemporaryPassword}
-                      onChange={(event) => setConfirmTemporaryPassword(event.target.value)}
-                      required
-                    />
+                    <div className="user-form-field">
+                      <label htmlFor="provision-phone" className="user-form-label">
+                        Phone Number
+                      </label>
+                      <input
+                        id="provision-phone"
+                        className="user-management-input"
+                        type="tel"
+                        placeholder="e.g. +63 917 123 4567"
+                        value={phoneNumber}
+                        onChange={(event) => setPhoneNumber(event.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {temporaryPassword ? (
-                  <div style={{ maxWidth: "660px" }}>
-                    <PasswordCriteriaList password={temporaryPassword} />
+                {/* Group 3: Credentials & Access */}
+                <div className="user-provision-group">
+                  <div className="user-provision-group-header">
+                    <span className="user-provision-group-tag">03</span>
+                    <h3 className="user-provision-group-title">Initial Credentials &amp; Access</h3>
                   </div>
-                ) : null}
+                  <div className="user-provision-grid-2">
+                    <div className="user-form-field">
+                      <label htmlFor="provision-temp-password" className="user-form-label">
+                        Temporary Password
+                      </label>
+                      <input
+                        id="provision-temp-password"
+                        className="user-management-input"
+                        type="password"
+                        placeholder="Enter temporary password"
+                        value={temporaryPassword}
+                        onChange={(event) => setTemporaryPassword(event.target.value)}
+                        required
+                      />
+                    </div>
 
-                <div className="user-provision-note">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{ flexShrink: 0, marginTop: "2px", color: "var(--color-accent-deep)" }}
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  <div>
-                    <strong>Note:</strong> Share this temporary password securely with the user. They will be required to set their permanent password on first sign-in.
+                    <div className="user-form-field">
+                      <label htmlFor="provision-confirm-temp-password" className="user-form-label">
+                        Confirm Temporary Password
+                      </label>
+                      <input
+                        id="provision-confirm-temp-password"
+                        className="user-management-input"
+                        type="password"
+                        placeholder="Re-enter temporary password"
+                        value={confirmTemporaryPassword}
+                        onChange={(event) => setConfirmTemporaryPassword(event.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {temporaryPassword ? (
+                    <div className="user-provision-criteria">
+                      <PasswordCriteriaList password={temporaryPassword} />
+                    </div>
+                  ) : null}
+
+                  <div className="user-provision-note">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ flexShrink: 0, marginTop: "2px", color: "var(--color-accent-deep)" }}
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <div>
+                      <strong>Note:</strong> Share this temporary password securely with the user. They will be required to set their permanent password on first sign-in.
+                    </div>
                   </div>
                 </div>
 
@@ -932,7 +985,7 @@ export default function UserManagementPage() {
                     className="primary-action-button"
                     disabled={isCreating}
                     title="Provision a new RouteX account with a temporary password"
-                    style={{ minHeight: "42px", minWidth: "165px" }}
+                    style={{ minHeight: "40px", minWidth: "165px" }}
                   >
                     {isCreating ? "Provisioning…" : "+ Provision Account"}
                   </button>
@@ -1246,53 +1299,76 @@ export default function UserManagementPage() {
               className={`records-card audit-log-card${auditLoading ? " is-loading" : ""}`}
               aria-label="RouteX audit log"
             >
-              <div className="records-heading" style={{ flexWrap: "wrap", gap: "12px" }}>
+              <div className="records-heading">
                 <div>
                   <h2>Audit Trail</h2>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              </div>
+
+              <div
+                className="audit-filters-bar"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  flexWrap: "nowrap",
+                  width: "100%",
+                  marginBottom: "16px",
+                }}
+              >
+                <div
+                  className="search-box"
+                  style={{
+                    flex: "1 1 240px",
+                    minWidth: "180px",
+                    maxWidth: "460px",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    style={{ flexShrink: 0, marginLeft: "12px", color: "var(--color-text-muted)" }}
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
                   <input
                     className="audit-log-search"
                     type="search"
                     value={auditSearch}
                     onChange={(event) => setAuditSearch(event.target.value)}
                     placeholder="Search user, action, waybill, or details…"
+                    aria-label="Search audit trail"
                     style={{
-                      minWidth: "240px",
+                      border: "none",
+                      outline: "none",
+                      background: "transparent",
+                      boxShadow: "none",
+                      width: "100%",
                     }}
                   />
+                </div>
+                <div style={{ flexShrink: 0 }}>
                   <RoundedSelect
                     value={actionFilter}
-                    options={[
-                      "All Actions",
-                      "delivery.created",
-                      "delivery.financials_finalized",
-                      "delivery.financials_corrected",
-                      "delivery.batch_imported",
-                      "document.uploaded",
-                      "truck.created",
-                      "user.created",
-                      "user.status_changed",
-                      "user.role_changed",
-                      "user.username_changed",
-                      "user.username_changed_by_admin",
-                      "user.password_changed",
-                      "user.password_recovered",
-                      "user.recovery_authorized",
-                    ]}
+                    options={AUDIT_ACTION_FILTER_OPTIONS}
                     onChange={setActionFilter}
                     ariaLabel="Filter by action"
                   />
+                </div>
+                <div style={{ flexShrink: 0 }}>
                   <RoundedSelect
                     value={entityFilter}
-                    options={[
-                      "All Entities",
-                      "delivery",
-                      "truck",
-                      "user",
-                      "import_batch",
-                      "system",
-                    ]}
+                    options={AUDIT_ENTITY_FILTER_OPTIONS}
                     onChange={setEntityFilter}
                     ariaLabel="Filter by entity"
                   />
@@ -1335,15 +1411,15 @@ export default function UserManagementPage() {
                             <div style={{ display: "grid", gap: "6px", placeItems: "center" }}>
                               <strong>No audit events match your search criteria.</strong>
                               <span>Try modifying your search query or reset action and entity filters.</span>
-                              {(auditSearch || actionFilter !== "All Actions" || entityFilter !== "All Entities") ? (
+                              {(auditSearch || actionFilter !== "all" || entityFilter !== "all") ? (
                                 <button
                                   type="button"
                                   className="secondary-button"
                                   style={{ marginTop: "8px", fontSize: "11px", padding: "4px 10px" }}
                                   onClick={() => {
                                     setAuditSearch("");
-                                    setActionFilter("All Actions");
-                                    setEntityFilter("All Entities");
+                                    setActionFilter("all");
+                                    setEntityFilter("all");
                                   }}
                                 >
                                   Reset Filters
@@ -1353,75 +1429,72 @@ export default function UserManagementPage() {
                           </td>
                         </tr>
                       ) : (
-                        paginatedAuditEntries.map((entry) => (
-                          <tr
-                            key={entry.id}
-                            className="record-row audit-record-row"
-                            onClick={() => setSelectedAuditEntry(entry)}
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                setSelectedAuditEntry(entry);
-                              }
-                            }}
-                          >
-                            <td>
-                              <div className="audit-timestamp">
-                                <strong>
-                                  {new Date(entry.occurredAt).toLocaleDateString(undefined, {
-                                    year: "numeric",
-                                    month: "short",
-                                    day: "numeric",
-                                  })}
-                                </strong>
-                                <small>
-                                  {new Date(entry.occurredAt).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    second: "2-digit",
-                                  })}
-                                </small>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="audit-user-cell">
-                                <strong>{entry.actorEmail}</strong>
-                              </div>
-                            </td>
-                            <td>
-                              <span className={`pod-status ${actionBadgeClass(entry.action)}`}>
-                                {entry.action.replaceAll(".", " ")}
-                              </span>
-                            </td>
-                            <td>
-                              <div className="audit-entity-cell">
-                                <span className="audit-entity-type">{entry.entityType}</span>
-                                <span className="audit-entity-id" title={entry.entityId}>
-                                  {entry.entityId}
+                        paginatedAuditEntries.map((entry) => {
+                          const visuals = getActionVisuals(entry.action);
+                          const actorUsername = formatAuditActor(entry.actorEmail);
+                          const entityLabel = formatAuditEntityLabel(entry.entityType);
+
+                          return (
+                            <tr
+                              key={entry.id}
+                              className="record-row audit-record-row"
+                              onClick={() => setSelectedAuditEntry(entry)}
+                              tabIndex={0}
+                              role="button"
+                              aria-label={`View audit event: ${visuals.badgeLabel} by ${actorUsername}`}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  setSelectedAuditEntry(entry);
+                                }
+                              }}
+                            >
+                              <td>
+                                <div className="audit-timestamp">
+                                  <strong>
+                                    {new Date(entry.occurredAt).toLocaleDateString(undefined, {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric",
+                                    })}
+                                  </strong>
+                                  <small>
+                                    {new Date(entry.occurredAt).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      second: "2-digit",
+                                    })}
+                                  </small>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="audit-user-cell">
+                                  <strong className="audit-username">{actorUsername}</strong>
+                                </div>
+                              </td>
+                              <td>
+                                <span className={`pod-status ${visuals.className}`}>
+                                  {visuals.badgeLabel}
                                 </span>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="audit-simple-detail-cell">
-                                <span className="audit-simple-summary" title={entry.summary}>
-                                  {entry.summary}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="audit-view-pill"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedAuditEntry(entry);
-                                  }}
-                                  title="View full audit event and changes"
-                                >
-                                  View Details
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
+                              </td>
+                              <td>
+                                <div className="audit-entity-cell">
+                                  <span className="audit-entity-type">{entityLabel}</span>
+                                  <span className="audit-entity-id" title={entry.entityId}>
+                                    {entry.entityId}
+                                  </span>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="audit-simple-detail-cell">
+                                  <span className="audit-simple-summary" title={entry.summary}>
+                                    {entry.summary}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -1563,8 +1636,8 @@ export default function UserManagementPage() {
                   >
                     Action
                   </div>
-                  <span className={`pod-status ${actionBadgeClass(selectedAuditEntry.action)}`}>
-                    {selectedAuditEntry.action.replaceAll(".", " ")}
+                  <span className={`pod-status ${getActionVisuals(selectedAuditEntry.action).className}`}>
+                    {getActionVisuals(selectedAuditEntry.action).badgeLabel}
                   </span>
                 </div>
 
@@ -1582,7 +1655,7 @@ export default function UserManagementPage() {
                     User / Actor
                   </div>
                   <strong style={{ fontSize: "12px", color: "var(--color-text-primary)", wordBreak: "break-all" }}>
-                    {selectedAuditEntry.actorEmail}
+                    {formatAuditActor(selectedAuditEntry.actorEmail)}
                   </strong>
                 </div>
 
@@ -1600,7 +1673,7 @@ export default function UserManagementPage() {
                     Target Entity
                   </div>
                   <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
-                    <span style={{ fontWeight: 600 }}>{selectedAuditEntry.entityType}</span>
+                    <span style={{ fontWeight: 600 }}>{formatAuditEntityLabel(selectedAuditEntry.entityType)}</span>
                     <span style={{ color: "var(--color-text-muted)", margin: "0 4px" }}>:</span>
                     <code style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
                       {selectedAuditEntry.entityId}

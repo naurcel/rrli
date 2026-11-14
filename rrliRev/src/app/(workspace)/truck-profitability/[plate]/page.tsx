@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
   formatDateRange,
+  GlobalDateRangePicker,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
@@ -583,6 +584,7 @@ export default function TruckProfilePage({
                 <div>
                   <h2>Delivery History</h2>
                 </div>
+                <GlobalDateRangePicker />
               </div>
               {sortedTruckTrips.length === 0 ? (
                 <div

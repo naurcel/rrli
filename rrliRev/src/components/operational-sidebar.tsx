@@ -84,6 +84,12 @@ export function OperationalSidebar() {
           {navigation.management.map(renderNavigationItem)}
         </nav>
       )}
+
+      {/* Radiating rays animated gradient in the bottom of the expanded sidebar */}
+      <div className="sidebar-radiating-rays" aria-hidden="true">
+        <div className="sidebar-rays-beam" />
+        <div className="sidebar-rays-glow" />
+      </div>
     </aside>
   );
 }

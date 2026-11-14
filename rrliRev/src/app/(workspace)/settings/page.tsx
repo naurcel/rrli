@@ -18,7 +18,18 @@ import {
   PREDEFINED_SECURITY_QUESTIONS,
   validateUsernameFormat,
 } from "@/lib/auth/password-policy";
-import { ROLE_METADATA, USER_ROLES } from "@/lib/auth/rbac";
+import {
+  canImportAndReviewExcel,
+  canManageCompanyExpenses,
+  canManageDocuments,
+  canManageTrucks,
+  canManageUsers,
+  canMutateDeliveryRecords,
+  hasPermission,
+  ROLE_METADATA,
+  USER_ROLES,
+  type UserRole,
+} from "@/lib/auth/rbac";
 
 const SECURITY_QUESTION_OPTIONS: readonly SelectOption[] = [
   ...PREDEFINED_SECURITY_QUESTIONS.map((q) => ({
@@ -552,9 +563,6 @@ export default function SettingsPage() {
                     minLength={3}
                     maxLength={30}
                   />
-                  <small className="settings-field-hint">
-                    3–30 characters.
-                  </small>
                 </div>
               </div>
 
@@ -610,9 +618,6 @@ export default function SettingsPage() {
                     onChange={(e) => setContactEmail(e.target.value)}
                     className="settings-input"
                   />
-                  <small className="settings-field-hint">
-                    Used for notifications, audit trail, and account recovery.
-                  </small>
                 </div>
 
                 <div className="settings-form-field">
@@ -625,9 +630,6 @@ export default function SettingsPage() {
                     onChange={(e) => setContactPhone(e.target.value)}
                     className="settings-input"
                   />
-                  <small className="settings-field-hint">
-                    Primary contact number for urgent operational and security dispatch.
-                  </small>
                 </div>
               </div>
 
@@ -876,7 +878,26 @@ export default function SettingsPage() {
           <section className="records-card settings-card-section" aria-label="Role Permissions">
             <div className="settings-section-header">
               <h2>Role Permissions</h2>
-              <p>System privileges across RouteX roles.</p>
+              <p>System privileges and operational authority across RouteX roles.</p>
+            </div>
+
+            <div
+              className="settings-role-current-summary"
+              style={{
+                margin: "14px 0 18px",
+                padding: "12px 16px",
+                borderRadius: "10px",
+                background: "var(--color-surface-subtle, rgba(241, 245, 249, 0.6))",
+                border: "1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.2))",
+                fontSize: "13px",
+                lineHeight: 1.5,
+                color: "var(--color-text-secondary)",
+              }}
+            >
+              <strong style={{ color: "var(--color-text-primary)" }}>
+                Active Session Role ({ROLE_METADATA[actor.role].label}):
+              </strong>{" "}
+              {ROLE_METADATA[actor.role].summary}
             </div>
 
             <div className="table-wrap">
@@ -885,17 +906,18 @@ export default function SettingsPage() {
                   <tr>
                     <th>Role</th>
                     <th>Access Level</th>
+                    <th>Finance &amp; Expenses</th>
                     <th>Deliveries &amp; Drop-offs</th>
                     <th>Excel Import &amp; Review</th>
+                    <th>Fleet &amp; Profitability</th>
                     <th>POD &amp; Documents</th>
+                    <th>Reports &amp; Analytics</th>
                     <th>User Management</th>
                   </tr>
                 </thead>
                 <tbody>
                   {USER_ROLES.map((roleKey) => {
                     const meta = ROLE_METADATA[roleKey];
-                    const canWrite = meta.accessLevel !== "view_only";
-                    const isAdmin = meta.accessLevel === "admin";
                     const isCurrentRole = actor.role === roleKey;
                     return (
                       <tr key={roleKey} className={isCurrentRole ? "settings-current-role-row" : undefined}>
@@ -908,10 +930,13 @@ export default function SettingsPage() {
                             {meta.accessLevelLabel}
                           </span>
                         </td>
-                        <td>{canWrite ? "Create, Edit & View" : "View-Only"}</td>
-                        <td>{canWrite ? "Upload, Review & Confirm" : "No Access"}</td>
-                        <td>{canWrite ? "Upload & Manage" : "View-Only"}</td>
-                        <td>{isAdmin ? "Full Admin Control" : "Restricted"}</td>
+                        <td>{renderFinanceCell(roleKey)}</td>
+                        <td>{renderDeliveriesCell(roleKey)}</td>
+                        <td>{renderImportCell(roleKey)}</td>
+                        <td>{renderTrucksCell(roleKey)}</td>
+                        <td>{renderPodCell(roleKey)}</td>
+                        <td>{renderReportsCell(roleKey)}</td>
+                        <td>{renderUsersCell(roleKey)}</td>
                       </tr>
                     );
                   })}
@@ -923,4 +948,65 @@ export default function SettingsPage() {
       </div>
     </>
   );
+}
+
+function renderFinanceCell(role: UserRole) {
+  if (role === "admin") {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Control (Create, Edit &amp; Delete)</strong>;
+  }
+  if (canManageCompanyExpenses(role)) {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Create, Edit &amp; Manage (Finance Page)</strong>;
+  }
+  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
+}
+
+function renderDeliveriesCell(role: UserRole) {
+  if (role === "admin") {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Control (No 3-Day Limit)</strong>;
+  }
+  if (canMutateDeliveryRecords(role)) {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Create, Edit &amp; View (3-Day Window)</strong>;
+  }
+  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
+}
+
+function renderImportCell(role: UserRole) {
+  if (canImportAndReviewExcel(role)) {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Upload, Review &amp; Confirm</strong>;
+  }
+  return <span style={{ color: "var(--color-text-muted)" }}>No Access</span>;
+}
+
+function renderTrucksCell(role: UserRole) {
+  if (role === "admin") {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Control (Trucks, Crew &amp; Delete)</strong>;
+  }
+  if (canManageTrucks(role)) {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Register Trucks &amp; Crew</strong>;
+  }
+  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
+}
+
+function renderPodCell(role: UserRole) {
+  if (canManageDocuments(role)) {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Upload &amp; Manage</strong>;
+  }
+  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
+}
+
+function renderReportsCell(role: UserRole) {
+  if (hasPermission(role, "reports:manage_templates")) {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>View, Export &amp; Custom Templates</strong>;
+  }
+  if (hasPermission(role, "reports:export")) {
+    return <span style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>View &amp; Export</span>;
+  }
+  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
+}
+
+function renderUsersCell(role: UserRole) {
+  if (canManageUsers(role)) {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Admin Control</strong>;
+  }
+  return <span style={{ color: "var(--color-text-muted)" }}>Restricted</span>;
 }

@@ -746,6 +746,7 @@ export default function ReportsPage() {
             </p>
           </div>
           <div className="report-actions">
+            <GlobalDateRangePicker />
             {isAdmin && (
               <>
                 <button

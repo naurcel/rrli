@@ -92,7 +92,7 @@ function todayKey(): string {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 }
 
-export default function NewCompletedDeliveryPage() {
+export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliveryId }: { editDeliveryId?: string } = {}) {
   const router = useRouter();
   const actor = useAuthenticatedActor();
   const isAdmin = actor.role === "admin";
@@ -110,6 +110,92 @@ export default function NewCompletedDeliveryPage() {
   const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
   const [truckTemperature, setTruckTemperature] = useState("");
   const [dropoffs, setDropoffs] = useState<DropoffDraft[]>([initialDropoff]);
+  const [resolvedEditId, setResolvedEditId] = useState<string | undefined>(propEditDeliveryId);
+  const isEditMode = Boolean(resolvedEditId);
+  const [editReason, setEditReason] = useState("Updated delivery details and expenses.");
+  const [draggedStopIndex, setDraggedStopIndex] = useState<number | null>(null);
+
+  const [existingDelivery, setExistingDelivery] = useState<DeliveryLedgerItem | null>(null);
+
+  useEffect(() => {
+    if (propEditDeliveryId) {
+      setResolvedEditId(propEditDeliveryId);
+    } else if (typeof window !== "undefined") {
+      const q = new URLSearchParams(window.location.search).get("edit");
+      if (q) setResolvedEditId(q);
+    }
+  }, [propEditDeliveryId]);
+
+  useEffect(() => {
+    if (!resolvedEditId) return;
+
+    function applyDelivery(del: DeliveryLedgerItem) {
+      setExistingDelivery(del);
+      setValues({
+        waybillNumber: del.waybillNumber ?? "",
+        deliveryDate: del.deliveryDate ? del.deliveryDate.substring(0, 10) : todayKey(),
+        origin: del.origin ?? "",
+        distanceKm: del.distanceKm != null ? String(del.distanceKm) : "",
+        fuelRate: del.fuelRate != null ? String(del.fuelRate) : "",
+        deliveryRate: del.deliveryRate != null ? String(del.deliveryRate) : "",
+        additionalCharges: (del as unknown as Record<string, unknown>).additionalCharges != null ? String((del as unknown as Record<string, unknown>).additionalCharges) : "",
+        dieselExpenses: del.expenses.dieselExpenses != null ? String(del.expenses.dieselExpenses) : "",
+        tollGateExpenses: del.expenses.tollGateExpenses != null ? String(del.expenses.tollGateExpenses) : "",
+        tollGateBreakdown: "",
+        driverAllowance: del.expenses.driverAllowance != null ? String(del.expenses.driverAllowance) : "",
+        driverDailyRate: del.expenses.driverDailyRate != null ? String(del.expenses.driverDailyRate) : "",
+        helperAllowance: del.expenses.helperAllowance != null ? String(del.expenses.helperAllowance) : "",
+        helperDailyRate: del.expenses.helperDailyRate != null ? String(del.expenses.helperDailyRate) : "",
+        helper2Allowance: (del.expenses as unknown as Record<string, unknown>).helper2Allowance != null ? String((del.expenses as unknown as Record<string, unknown>).helper2Allowance) : "",
+        helper2DailyRate: (del.expenses as unknown as Record<string, unknown>).helper2DailyRate != null ? String((del.expenses as unknown as Record<string, unknown>).helper2DailyRate) : "",
+        otherExpenses: del.expenses.otherExpenses != null ? String(del.expenses.otherExpenses) : "",
+      });
+      setClientName(del.clientName ?? "");
+      setPlateNumber(del.plateNumber ?? "");
+      setTruckTemperature(del.truckTemperature ? String(del.truckTemperature).replace("°C", "") : "");
+      setDriverName(del.driverName ?? "");
+
+      const hasH2 = Boolean((del.expenses as unknown as Record<string, unknown>).helper2DailyRate != null || (del as unknown as Record<string, unknown>).helper2Name);
+      setHasSecondHelper(hasH2);
+      setHelper1Name(del.helperName ?? "");
+      setHelper2Name((del as unknown as Record<string, unknown>).helper2Name ? String((del as unknown as Record<string, unknown>).helper2Name) : "");
+
+      if (del.expenseStates) {
+        setExpenseStatuses((prev) => ({
+          ...prev,
+          ...del.expenseStates,
+        }));
+      }
+
+      if (del.dropoffs && del.dropoffs.length > 0) {
+        setDropoffs(
+          del.dropoffs.map((d) => ({
+            id: d.id,
+            storeName: d.storeName,
+            destinationArea: d.destinationArea,
+            entryFee: d.entryFee != null ? String(d.entryFee) : "",
+            entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
+          }))
+        );
+      }
+    }
+
+    const local = readBrowserPreviewDeliveries().find((d) => d.id === resolvedEditId);
+    if (local) {
+      applyDelivery(local);
+      return;
+    }
+
+    fetch("/api/deliveries?page=1&pageSize=50")
+      .then((res) => res.json())
+      .then((data) => {
+        const found = data.deliveries?.find((d: DeliveryLedgerItem) => d.id === resolvedEditId);
+        if (found) {
+          applyDelivery(found);
+        }
+      })
+      .catch((err) => console.error("Error loading delivery for edit:", err));
+  }, [resolvedEditId]);
 
   // Delivery crew state with support for up to 2 helpers
   const [hasSecondHelper, setHasSecondHelper] = useState(false);
@@ -134,7 +220,7 @@ export default function NewCompletedDeliveryPage() {
     deliveryDate: todayKey(),
     origin: "",
     distanceKm: "",
-    fuelRate: "85.00",
+    fuelRate: "",
     deliveryRate: "",
     additionalCharges: "",
     dieselExpenses: "",
@@ -358,6 +444,17 @@ export default function NewCompletedDeliveryPage() {
     setValues((current) => ({ ...current, [name]: value }));
   }
 
+  function moveDropoff(index: number, direction: "up" | "down") {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= dropoffs.length) return;
+    setDropoffs((current) => {
+      const next = [...current];
+      const [moved] = next.splice(index, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  }
+
   function updateDropoff(id: string, field: keyof Omit<DropoffDraft, "id">, value: string) {
     setDropoffs((current) =>
       current.map((dropoff) => (dropoff.id === id ? { ...dropoff, [field]: value } : dropoff)),
@@ -505,6 +602,121 @@ export default function NewCompletedDeliveryPage() {
     setSubmitting(true);
     const payload = buildPayload();
 
+    if (isEditMode && resolvedEditId) {
+      try {
+        const response = await fetch("/api/deliveries", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-actor-role": actor.role,
+            "x-actor-username": actor.username,
+          },
+          body: JSON.stringify({
+            action: "correct_financials",
+            deliveryId: resolvedEditId,
+            expectedVersion: existingDelivery?.version ?? 1,
+            idempotencyKey: crypto.randomUUID(),
+            reason: editReason.trim() || "Updated delivery details and expenses.",
+            changes: {
+              deliveryRate: payload.deliveryRate,
+              driverName: payload.driverName || null,
+              helperName: payload.helperName || null,
+              expenses: {
+                dieselExpenses: payload.dieselExpenses,
+                tollGateExpenses: payload.tollGateExpenses,
+                tollGateBreakdown: existingDelivery?.expenses?.tollGateBreakdown ?? "",
+                entryFees: financialReview.entryFees,
+                driverAllowance: payload.driverAllowance,
+                driverDailyRate: payload.driverDailyRate,
+                helperAllowance: payload.helperAllowance,
+                helperDailyRate: payload.helperDailyRate,
+                otherExpenses: payload.otherExpenses,
+              },
+              expenseStates: {
+                dieselExpenses: payload.dieselExpensesStatus,
+                tollGateExpenses: payload.tollGateExpensesStatus,
+                entryFees: "confirmed" as ExpenseResolutionStatus,
+                driverAllowance: payload.driverAllowanceStatus,
+                driverDailyRate: payload.driverDailyRateStatus,
+                helperAllowance: payload.helperAllowanceStatus,
+                helperDailyRate: payload.helperDailyRateStatus,
+                otherExpenses: payload.otherExpensesStatus,
+              },
+              dropoffs: payload.dropoffs,
+              financialState: financialReview.totalExpenses != null ? "finalized" : "incomplete",
+            },
+            fallbackRecord: existingDelivery,
+          }),
+        });
+        const result = (await response.json().catch(() => ({}))) as {
+          ok?: boolean;
+          message?: string;
+        };
+        if (!response.ok || !result.ok) {
+          throw new Error(result.message ?? "Unable to update delivery record.");
+        }
+        if (existingDelivery) {
+          const updatedTrip: DeliveryLedgerItem = {
+            ...existingDelivery,
+            waybillNumber: payload.waybillNumber,
+            deliveryDate: payload.deliveryDate,
+            origin: payload.origin,
+            distanceKm: payload.distanceKm ?? 0,
+            fuelRate: payload.fuelRate ?? 0,
+            deliveryRate: payload.deliveryRate,
+            clientName: payload.clientName,
+            plateNumber: payload.plateNumber,
+            driverName: payload.driverName,
+            helperName: payload.helperName,
+            truckTemperature: `${Number(truckTemperature) || 0}°C` as `${number}°C`,
+            expenses: {
+              dieselExpenses: payload.dieselExpenses,
+              tollGateExpenses: payload.tollGateExpenses,
+              tollGateBreakdown: existingDelivery.expenses.tollGateBreakdown ?? "",
+              entryFees: financialReview.entryFees,
+              driverAllowance: payload.driverAllowance,
+              driverDailyRate: payload.driverDailyRate,
+              helperAllowance: payload.helperAllowance,
+              helperDailyRate: payload.helperDailyRate,
+              otherExpenses: payload.otherExpenses,
+            },
+            expenseStates: {
+              dieselExpenses: payload.dieselExpensesStatus,
+              tollGateExpenses: payload.tollGateExpensesStatus,
+              entryFees: "confirmed",
+              driverAllowance: payload.driverAllowanceStatus,
+              driverDailyRate: payload.driverDailyRateStatus,
+              helperAllowance: payload.helperAllowanceStatus,
+              helperDailyRate: payload.helperDailyRateStatus,
+              otherExpenses: payload.otherExpensesStatus,
+            },
+            totalExpenses: financialReview.totalExpenses,
+            netIncome: financialReview.netIncome,
+            dropoffs: payload.dropoffs.map((d, i) => ({
+              id: existingDelivery.dropoffs[i]?.id ?? crypto.randomUUID(),
+              sequence: i + 1,
+              storeName: d.storeName,
+              destinationArea: d.destinationArea,
+              entryFee: d.entryFee,
+              entryFeeStatus: d.entryFeeStatus,
+              podSubmitted: d.podSubmitted,
+              supportingDocsComplete: d.supportingDocsComplete,
+              documentRef: d.documentRef,
+            })),
+            version: (existingDelivery.version ?? 1) + 1,
+          };
+          upsertBrowserPreviewDelivery(updatedTrip);
+        }
+        router.push(`/deliveries/${encodeURIComponent(resolvedEditId)}?updated=1`);
+        return;
+      } catch (error) {
+        setSubmitError(error instanceof Error ? error.message : "Unable to update delivery record.");
+        setSubmitting(false);
+        setPreviewing(false);
+        return;
+      }
+    }
+
     try {
       const response = await fetch("/api/deliveries", {
         method: "POST",
@@ -539,7 +751,13 @@ export default function NewCompletedDeliveryPage() {
   return (
     <>
       <OperationalTopbar
-        contextLabel={previewing ? `Preview / Waybill #${values.waybillNumber || "DRAFT"}` : "Record Completed Delivery"}
+        contextLabel={
+          previewing
+            ? `Preview / Waybill #${values.waybillNumber || "DRAFT"}`
+            : isEditMode
+              ? `Edit Delivery / Waybill #${values.waybillNumber || ""}`
+              : "Record Completed Delivery"
+        }
         showDateFilter={false}
       />
       <div className="content-wrap delivery-entry-page">
@@ -645,53 +863,73 @@ export default function NewCompletedDeliveryPage() {
 
             <section className="delivery-form-section">
               <FormHeading number="03" title="Rate & expenses" />
-              <div className="detail-meta-grid">
-                <div className="detail-meta-item">
-                  <span className="meta-label">Delivery rate</span>
-                  <strong className="meta-value">{formatPeso(numberValue(values.deliveryRate) ?? 0)}</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Additional charges</span>
-                  <strong className="meta-value">{formatPeso(numberValue(values.additionalCharges) ?? 0)}</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Diesel fuel</span>
-                  <strong className="meta-value">{formatPeso(numberValue(values.dieselExpenses) ?? 0)}</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Highway tolls</span>
-                  <strong className="meta-value">{formatPeso(numberValue(values.tollGateExpenses) ?? 0)}</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Store entry fees</span>
-                  <strong className="meta-value">{formatPeso(financialReview.entryFees ?? 0)}</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Other expenses</span>
-                  <strong className="meta-value">{formatPeso(numberValue(values.otherExpenses) ?? 0)}</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Driver ({driverName || "—"})</span>
-                  <strong className="meta-value">
-                    {formatPeso(numberValue(values.driverDailyRate) ?? 0)} rate · {formatPeso(numberValue(values.driverAllowance) ?? 0)} allowance
-                  </strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">
-                    {hasSecondHelper ? `Helper 1 (${helper1Name || "—"})` : `Helper (${helper1Name || "—"})`}
-                  </span>
-                  <strong className="meta-value">
-                    {formatPeso(numberValue(values.helperDailyRate) ?? 0)} rate · {formatPeso(numberValue(values.helperAllowance) ?? 0)} allowance
-                  </strong>
-                </div>
-                {hasSecondHelper ? (
-                  <div className="detail-meta-item">
-                    <span className="meta-label">Helper 2 ({helper2Name || "—"})</span>
-                    <strong className="meta-value">
-                      {formatPeso(numberValue(values.helper2DailyRate) ?? 0)} rate · {formatPeso(numberValue(values.helper2Allowance) ?? 0)} allowance
-                    </strong>
+              <div className="review-meta-groups">
+                {/* Revenue & Billing Rates */}
+                <div className="review-meta-group">
+                  <div className="review-group-title">Revenue & Billing</div>
+                  <div className="detail-meta-grid detail-meta-grid-2">
+                    <div className="detail-meta-item">
+                      <span className="meta-label">Delivery rate</span>
+                      <strong className="meta-value">{formatPeso(numberValue(values.deliveryRate) ?? 0)}</strong>
+                    </div>
+                    <div className="detail-meta-item">
+                      <span className="meta-label">Additional charges</span>
+                      <strong className="meta-value">{formatPeso(numberValue(values.additionalCharges) ?? 0)}</strong>
+                    </div>
                   </div>
-                ) : null}
+                </div>
+
+                {/* Direct Trip Expenses */}
+                <div className="review-meta-group">
+                  <div className="review-group-title">Trip Expenses</div>
+                  <div className="detail-meta-grid detail-meta-grid-4">
+                    <div className="detail-meta-item">
+                      <span className="meta-label">Diesel fuel</span>
+                      <strong className="meta-value">{formatPeso(numberValue(values.dieselExpenses) ?? 0)}</strong>
+                    </div>
+                    <div className="detail-meta-item">
+                      <span className="meta-label">Highway tolls</span>
+                      <strong className="meta-value">{formatPeso(numberValue(values.tollGateExpenses) ?? 0)}</strong>
+                    </div>
+                    <div className="detail-meta-item">
+                      <span className="meta-label">Store entry fees</span>
+                      <strong className="meta-value">{formatPeso(financialReview.entryFees ?? 0)}</strong>
+                    </div>
+                    <div className="detail-meta-item">
+                      <span className="meta-label">Other expenses</span>
+                      <strong className="meta-value">{formatPeso(numberValue(values.otherExpenses) ?? 0)}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Crew Compensation in One Row */}
+                <div className="review-meta-group">
+                  <div className="review-group-title">Crew Compensation</div>
+                  <div className={`detail-meta-grid ${hasSecondHelper ? "detail-meta-grid-3" : "detail-meta-grid-2"}`}>
+                    <div className="detail-meta-item">
+                      <span className="meta-label">Driver ({driverName || "—"})</span>
+                      <strong className="meta-value">
+                        {formatPeso(numberValue(values.driverDailyRate) ?? 0)} rate · {formatPeso(numberValue(values.driverAllowance) ?? 0)} allowance
+                      </strong>
+                    </div>
+                    <div className="detail-meta-item">
+                      <span className="meta-label">
+                        {hasSecondHelper ? `Helper 1 (${helper1Name || "—"})` : `Helper (${helper1Name || "—"})`}
+                      </span>
+                      <strong className="meta-value">
+                        {formatPeso(numberValue(values.helperDailyRate) ?? 0)} rate · {formatPeso(numberValue(values.helperAllowance) ?? 0)} allowance
+                      </strong>
+                    </div>
+                    {hasSecondHelper ? (
+                      <div className="detail-meta-item">
+                        <span className="meta-label">Helper 2 ({helper2Name || "—"})</span>
+                        <strong className="meta-value">
+                          {formatPeso(numberValue(values.helper2DailyRate) ?? 0)} rate · {formatPeso(numberValue(values.helper2Allowance) ?? 0)} allowance
+                        </strong>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
 
               <div className="delivery-financial-review" aria-label="Financial review">
@@ -728,7 +966,7 @@ export default function NewCompletedDeliveryPage() {
                 onClick={() => void recordDelivery()}
                 disabled={submitting}
               >
-                {submitting ? "Recording…" : "Record delivery"}
+                {submitting ? (isEditMode ? "Saving…" : "Recording…") : isEditMode ? "Save Changes" : "Record delivery"}
               </button>
             </div>
           </div>
@@ -737,10 +975,17 @@ export default function NewCompletedDeliveryPage() {
         <>
       <header className="page-intro">
         <div>
-          <Link className="back-link" href="/deliveries">← Back to deliveries</Link>
-          <h1>Record delivery</h1>
+          <Link
+            className="back-link"
+            href={isEditMode && resolvedEditId ? `/deliveries/${encodeURIComponent(resolvedEditId)}` : "/deliveries"}
+          >
+            {isEditMode ? "← Back to delivery" : "← Back to deliveries"}
+          </Link>
+          <h1>{isEditMode ? "Edit delivery" : "Record delivery"}</h1>
           <p className="subtitle">
-            Complete trip details, store drop-offs, financials, and supporting documents.
+            {isEditMode
+              ? "Update trip details, store drop-offs, crew compensation, and expenses."
+              : "Complete trip details, store drop-offs, financials, and supporting documents."}
           </p>
         </div>
       </header>
@@ -841,7 +1086,7 @@ export default function NewCompletedDeliveryPage() {
                     value={values.fuelRate}
                     onKeyDown={handlePositiveDecimalKeyDown}
                     onChange={(event) => updateValue("fuelRate", sanitizePositiveDecimalInput(event.target.value, 2))}
-                    placeholder="85.00"
+                    placeholder="e.g. 85.00"
                   />
                 </span>
               </label>
@@ -876,20 +1121,84 @@ export default function NewCompletedDeliveryPage() {
           <FormHeading number="02" title="Drop-offs" />
           <div className="dropoff-editor">
             {dropoffs.map((dropoff, index) => (
-              <div key={dropoff.id} className="dropoff-row">
+              <div
+                key={dropoff.id}
+                className={`dropoff-row ${draggedStopIndex === index ? "is-dragging" : ""}`}
+                draggable
+                onDragStart={() => setDraggedStopIndex(index)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                }}
+                onDrop={() => {
+                  if (draggedStopIndex === null || draggedStopIndex === index) return;
+                  setDropoffs((current) => {
+                    const next = [...current];
+                    const [moved] = next.splice(draggedStopIndex, 1);
+                    next.splice(index, 0, moved);
+                    return next;
+                  });
+                  setDraggedStopIndex(null);
+                }}
+                onDragEnd={() => setDraggedStopIndex(null)}
+              >
                 <div className="dropoff-row-header">
-                  <span className="dropoff-row-title">{getStopLabel(index)}</span>
-                  {dropoffs.length > 1 ? (
+                  <div className="dropoff-title-wrap">
+                    <span
+                      className="dropoff-drag-handle"
+                      title="Drag to reorder stop"
+                      aria-hidden="true"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                        <circle cx="5" cy="4" r="1.5" />
+                        <circle cx="11" cy="4" r="1.5" />
+                        <circle cx="5" cy="8" r="1.5" />
+                        <circle cx="11" cy="8" r="1.5" />
+                        <circle cx="5" cy="12" r="1.5" />
+                        <circle cx="11" cy="12" r="1.5" />
+                      </svg>
+                    </span>
+                    <span className="dropoff-row-title">{getStopLabel(index)}</span>
+                  </div>
+                  <div className="dropoff-row-actions">
                     <button
                       type="button"
-                      className="dropoff-remove"
-                      onClick={() => setDropoffs((current) => current.filter((item) => item.id !== dropoff.id))}
-                      aria-label={`Remove ${getStopLabel(index)}`}
-                      title={`Remove ${getStopLabel(index)}`}
+                      className="dropoff-move-btn"
+                      disabled={index === 0}
+                      onClick={() => moveDropoff(index, "up")}
+                      aria-label={`Move ${getStopLabel(index)} up`}
+                      title="Move up"
                     >
-                      × Remove
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="13 10 8 5 3 10" />
+                      </svg>
                     </button>
-                  ) : null}
+                    <button
+                      type="button"
+                      className="dropoff-move-btn"
+                      disabled={index === dropoffs.length - 1}
+                      onClick={() => moveDropoff(index, "down")}
+                      aria-label={`Move ${getStopLabel(index)} down`}
+                      title="Move down"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 8 11 13 6" />
+                      </svg>
+                    </button>
+                    {dropoffs.length > 1 ? (
+                      <button
+                        type="button"
+                        className="dropoff-remove-btn"
+                        onClick={() => setDropoffs((current) => current.filter((item) => item.id !== dropoff.id))}
+                        aria-label={`Remove ${getStopLabel(index)}`}
+                        title="Remove stop"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="4" y1="4" x2="12" y2="12" />
+                          <line x1="12" y1="4" x2="4" y2="12" />
+                        </svg>
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="dropoff-fields">
                   <label className="dropoff-field">
@@ -1043,27 +1352,11 @@ export default function NewCompletedDeliveryPage() {
             <div className="crew-expense-groups wide">
               <div className="crew-expense-header-bar">
                 <h4 className="crew-section-subtitle">Crew Compensation</h4>
-                {!hasSecondHelper ? (
-                  <button
-                    type="button"
-                    className="secondary-button add-second-helper-btn"
-                    title="Add a second helper to this delivery crew"
-                    onClick={() => {
-                      setHasSecondHelper(true);
-                      setExpenseStatuses((cur) => ({
-                        ...cur,
-                        helper2DailyRate: "confirmed",
-                        helper2Allowance: "confirmed",
-                      }));
-                    }}
-                  >
-                    + Add helper
-                  </button>
-                ) : (
+                {hasSecondHelper ? (
                   <span className="crew-max-badge" title="Maximum 2 helpers">
                     2 Helpers (Max)
                   </span>
-                )}
+                ) : null}
               </div>
 
               <div className="crew-cards-grid">
@@ -1277,7 +1570,38 @@ export default function NewCompletedDeliveryPage() {
                       </div>
                     </div>
                   </section>
-                ) : null}
+                ) : (
+                  <div className="crew-add-helper-slot">
+                    <button
+                      type="button"
+                      className="crew-add-helper-card-btn"
+                      onClick={() => {
+                        setHasSecondHelper(true);
+                        setExpenseStatuses((cur) => ({
+                          ...cur,
+                          helper2DailyRate: "confirmed",
+                          helper2Allowance: "confirmed",
+                        }));
+                      }}
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      <span style={{ fontSize: "13px", fontWeight: 600 }}>+ Add Helper</span>
+                      <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Support up to 2 helpers</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1311,9 +1635,14 @@ export default function NewCompletedDeliveryPage() {
         </section>
 
         <div className="delivery-form-actions">
-          <Link className="secondary-button" href="/deliveries">Cancel</Link>
+          <Link
+            className="secondary-button"
+            href={isEditMode && resolvedEditId ? `/deliveries/${encodeURIComponent(resolvedEditId)}` : "/deliveries"}
+          >
+            Cancel
+          </Link>
           <button className="primary-action-button" type="submit" disabled={submitting || referencesLoading || noReferences}>
-            Preview delivery
+            {isEditMode ? "Review changes" : "Preview delivery"}
           </button>
         </div>
         {noReferences ? <p className="delivery-reference-warning">At least one client and truck required.</p> : null}

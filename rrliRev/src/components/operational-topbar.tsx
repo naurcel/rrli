@@ -5,7 +5,7 @@ import { GlobalDateRangePicker } from "@/components/global-date-range-picker";
 
 export function OperationalTopbar({
   contextLabel: _contextLabel,
-  showDateFilter = true,
+  showDateFilter = false,
 }: {
   contextLabel?: string;
   showDateFilter?: boolean;

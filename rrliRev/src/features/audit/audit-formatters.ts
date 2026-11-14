@@ -233,6 +233,64 @@ export function extractStateChanges(changes?: Record<string, unknown> | null): P
 }
 
 /**
+ * Human-friendly labels for audit actions to eliminate raw code terms.
+ */
+export const AUDIT_ACTION_HUMAN_LABELS: Record<string, string> = {
+  "all": "All Actions",
+  "delivery.created": "Delivery Recorded",
+  "delivery.financials_finalized": "Financials Finalized",
+  "delivery.financials_corrected": "Financial Correction",
+  "delivery.batch_imported": "Excel Batch Import",
+  "document.uploaded": "Document Uploaded",
+  "truck.created": "Truck Registered",
+  "truck.updated": "Truck Updated",
+  "user.created": "User Provisioned",
+  "user.status_changed": "Status Updated",
+  "user.role_changed": "Role Updated",
+  "user.username_changed": "Username Changed",
+  "user.username_changed_by_admin": "Username Changed (Admin)",
+  "user.password_changed": "Password Changed",
+  "user.password_recovered": "Password Recovered",
+  "user.recovery_authorized": "Reset Window Authorized",
+};
+
+/**
+ * Human-friendly labels for audit entity types.
+ */
+export const AUDIT_ENTITY_HUMAN_LABELS: Record<string, string> = {
+  "all": "All Entities",
+  "delivery": "Deliveries",
+  "truck": "Fleet Trucks",
+  "user": "Staff Accounts",
+  "import_batch": "Import Batches",
+  "system": "System Settings",
+};
+
+export function formatAuditActionLabel(action: string): string {
+  if (AUDIT_ACTION_HUMAN_LABELS[action]) return AUDIT_ACTION_HUMAN_LABELS[action];
+  return action
+    .replace(/^([a-z]+)\./i, "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function formatAuditEntityLabel(entityType: string): string {
+  const norm = entityType.toLowerCase();
+  if (AUDIT_ENTITY_HUMAN_LABELS[norm]) {
+    return AUDIT_ENTITY_HUMAN_LABELS[norm];
+  }
+  return norm.charAt(0).toUpperCase() + norm.slice(1);
+}
+
+export function formatAuditActor(emailOrUsername?: string | null): string {
+  if (!emailOrUsername) return "@system";
+  const cleaned = emailOrUsername.trim();
+  const withoutLeadingAt = cleaned.startsWith("@") ? cleaned.slice(1) : cleaned;
+  const username = withoutLeadingAt.includes("@") ? withoutLeadingAt.split("@")[0] : withoutLeadingAt;
+  return `@${username || "system"}`;
+}
+
+/**
  * Returns consistent tone and icon representation for audit actions.
  */
 export function getActionVisuals(action: string): {
@@ -241,17 +299,18 @@ export function getActionVisuals(action: string): {
   category: "create" | "update" | "delete" | "security" | "finalize";
 } {
   const norm = action.toLowerCase();
+  const label = formatAuditActionLabel(action);
   if (norm.includes("created") || norm.includes("bootstrap") || norm.includes("batch_imported")) {
-    return { className: "attached", badgeLabel: action.replaceAll(".", " "), category: "create" };
+    return { className: "attached", badgeLabel: label, category: "create" };
   }
   if (norm.includes("finalized")) {
-    return { className: "info", badgeLabel: action.replaceAll(".", " "), category: "finalize" };
+    return { className: "info", badgeLabel: label, category: "finalize" };
   }
   if (norm.includes("deleted")) {
-    return { className: "warning", badgeLabel: action.replaceAll(".", " "), category: "delete" };
+    return { className: "warning", badgeLabel: label, category: "delete" };
   }
   if (norm.includes("corrected") || norm.includes("updated") || norm.includes("status_changed")) {
-    return { className: "attention", badgeLabel: action.replaceAll(".", " "), category: "update" };
+    return { className: "attention", badgeLabel: label, category: "update" };
   }
   if (
     norm.includes("password") ||
@@ -259,7 +318,7 @@ export function getActionVisuals(action: string): {
     norm.includes("security") ||
     norm.includes("username_changed")
   ) {
-    return { className: "security", badgeLabel: action.replaceAll(".", " "), category: "security" };
+    return { className: "security", badgeLabel: label, category: "security" };
   }
-  return { className: "neutral", badgeLabel: action.replaceAll(".", " "), category: "update" };
+  return { className: "neutral", badgeLabel: label, category: "update" };
 }

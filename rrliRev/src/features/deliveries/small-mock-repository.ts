@@ -469,6 +469,31 @@ export function correctSmallMockDelivery(input: {
   }
 
   const rec = delivery.record;
+  if (typeof input.changes.waybillNumber === "string" && input.changes.waybillNumber.trim()) {
+    rec.waybillNumber = input.changes.waybillNumber.trim();
+  }
+  if (typeof input.changes.deliveryDate === "string" && input.changes.deliveryDate.trim()) {
+    rec.deliveryDate = input.changes.deliveryDate.trim();
+  }
+  if (typeof input.changes.clientName === "string" && input.changes.clientName.trim()) {
+    rec.clientName = input.changes.clientName.trim();
+    delivery.scenario = `Delivery for ${rec.clientName}`;
+  }
+  if (typeof input.changes.plateNumber === "string" && input.changes.plateNumber.trim()) {
+    rec.plateNumber = input.changes.plateNumber.trim().toUpperCase();
+  }
+  if (typeof input.changes.origin === "string") {
+    rec.origin = input.changes.origin.trim();
+  }
+  if (typeof input.changes.distanceKm === "number") {
+    rec.distanceKm = input.changes.distanceKm;
+  }
+  if (typeof input.changes.fuelRate === "number") {
+    rec.fuelRate = input.changes.fuelRate;
+  }
+  if (typeof input.changes.truckTemperature === "number") {
+    rec.truckTemperature = `${input.changes.truckTemperature}°C` as `${number}°C`;
+  }
   if (typeof input.changes.deliveryRate === "number") {
     rec.deliveryRate = input.changes.deliveryRate;
   }

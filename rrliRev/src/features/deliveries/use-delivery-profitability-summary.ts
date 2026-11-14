@@ -68,11 +68,22 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
       .finally(() => setLoading(false));
     void load();
     const reload = () => { if (!controller.signal.aborted) void load(); };
+    const onStorage = (event: StorageEvent) => {
+      if (controller.signal.aborted) return;
+      if (
+        !event.key ||
+        event.key === "routex.global-date-range.v1" ||
+        event.key.startsWith("routex:delivery") ||
+        event.key.includes("deliveries")
+      ) {
+        void load();
+      }
+    };
     window.addEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
-    window.addEventListener("storage", reload);
+    window.addEventListener("storage", onStorage);
     return () => {
       window.removeEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
-      window.removeEventListener("storage", reload);
+      window.removeEventListener("storage", onStorage);
       controller.abort();
     };
   }, [end, start]);
