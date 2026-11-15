@@ -1,21 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-
-// Form workflows and focused data-entry pages where a footer would cause distraction or interference
-const EXCLUDED_WORKFLOW_PATHS = new Set([
-  "/deliveries/new",
-  "/deliveries/import",
-]);
-
 export function RouteXFooter() {
-  const pathname = usePathname();
-  const normalizedPath = pathname ? pathname.replace(/\/$/, "") : "";
-
-  if (normalizedPath && EXCLUDED_WORKFLOW_PATHS.has(normalizedPath)) {
-    return null;
-  }
-
   return (
     <footer className="routex-footer" aria-label="RouteX Application Footer">
       <div className="routex-footer-content">

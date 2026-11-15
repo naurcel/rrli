@@ -974,7 +974,7 @@ export default function DashboardPage() {
   }, [deliverySort, filteredDeliveries]);
 
   const recentDeliveries = useMemo(() => {
-    return sortedDeliveries.slice(0, 5);
+    return sortedDeliveries.slice(0, 8);
   }, [sortedDeliveries]);
 
   const rangeKey = `${range.startDate?.getTime() ?? "all"}-${range.endDate?.getTime() ?? "all"}`;
@@ -1433,10 +1433,11 @@ export default function DashboardPage() {
                               type="button"
                               className="dashboard-attention-toggle"
                               aria-expanded={isExpanded}
-                              aria-label={`${isExpanded ? "Hide" : "Show"} missing items for ${delivery.waybillNumber}`}
+                              aria-label={`${isExpanded ? "Hide" : "Show"} ${issues.length} missing item${issues.length === 1 ? "" : "s"} for ${delivery.waybillNumber}`}
+                              title={`${issues.length} missing item${issues.length === 1 ? "" : "s"}`}
                               onClick={(e) => toggleAttentionItem(delivery.id, e)}
                             >
-                              <span>{issues.length} missing</span>
+                              <span>{issues.length}</span>
                               <span className={`attention-chevron${isExpanded ? " open" : ""}`} aria-hidden="true">▾</span>
                             </button>
                           </div>
