@@ -563,18 +563,18 @@ button.stat-card.is-active .kpi-click-pill {
   transition: opacity .24s ease, transform .38s cubic-bezier(.22, 1, .36, 1);
 }
 .sidebar-brand-space::before {
-  background-image: url("/branding/routex-logo-dblue.png?v=2");
+  background-image: url("/branding/redeemed-route-emblem.png");
   background-size: contain;
-  background-position: left center;
+  background-position: center;
   opacity: 1;
   transform: scale(1);
 }
 .sidebar-brand-space::after {
-  background-image: url("/branding/routex-symbol-dblue.png");
+  background-image: url("/branding/redeemed-route-emblem.png");
   background-size: contain;
-  background-position: left center;
+  background-position: center;
   opacity: 0;
-  transform: scale(.82);
+  transform: scale(.85);
 }
 .sidebar-collapse-toggle {
   position: static;
@@ -4353,11 +4353,9 @@ html[data-theme="dark"] .login-note.error {
 }
 
 /* Dark mode sidebar logo swap */
-html[data-theme="dark"] .sidebar-brand-space::before {
-  background-image: url("/branding/routex-logo-white.png");
-}
+html[data-theme="dark"] .sidebar-brand-space::before,
 html[data-theme="dark"] .sidebar-brand-space::after {
-  background-image: url("/branding/routex-symbol-white.png");
+  background-image: url("/branding/redeemed-route-emblem.png");
 }
 
 /* Role & Access Badges + Multi-Store Drop-off Pills */
@@ -6177,10 +6175,10 @@ html[data-theme="dark"] .sidebar.collapsed.collapsed-hovered {
 }
 
 .sidebar:not(.collapsed) .sidebar-brand-space {
-  flex: 0 0 112px;
-  width: 112px;
-  height: 68px;
-  margin: 0;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
 }
 
 .sidebar:not(.collapsed) .sidebar-brand-space::before {
@@ -6189,7 +6187,7 @@ html[data-theme="dark"] .sidebar.collapsed.collapsed-hovered {
 
 .sidebar:not(.collapsed) .sidebar-collapse-toggle {
   position: absolute;
-  right: 2px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
 }
@@ -6217,9 +6215,9 @@ html[data-theme="dark"] .sidebar.collapsed.collapsed-hovered {
 
 .sidebar.collapsed .sidebar-brand-space {
   position: relative;
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
   margin: 0;
   transition: transform .28s var(--motion-ease-spring);
 }
@@ -16902,8 +16900,5 @@ html[data-theme="dark"] .profile-dropdown-logout:hover {
   gap: 2px;
 }
 
-.profile-prefs-sublabel {
-  font-size: 10px;
-  line-height: 1.35;
-  color: var(--color-text-muted);
-}
+.profile-prefs-su
+... [truncated for diff preview]
