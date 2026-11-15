@@ -5,7 +5,6 @@ import { useRef, useState } from "react";
 import {
   derivePodVerificationStatus,
   type DeliveryStoreDropoff,
-  type DeliveryTripRecord,
 } from "@/features/deliveries/delivery-domain";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
@@ -14,7 +13,6 @@ import {
 } from "@/features/deliveries/browser-preview-deliveries";
 import {
   generateMockPodSvgReceipt,
-  openDocumentInNewTab,
 } from "@/features/deliveries/pod-utils";
 import { ImageViewerModal } from "@/components/image-viewer-modal";
 
@@ -248,7 +246,7 @@ export function DeliveryPodDocuments({
                       className="pod-pending-attach-pill"
                       disabled={isUploading}
                       onClick={() => triggerAttach(stop.id)}
-                      title="Click to select and attach POD document"
+                      title="Attach POD"
                     >
                       <svg
                         width="13"
@@ -388,7 +386,7 @@ export function DeliveryPodDocuments({
                 type="button"
                 className="delivery-supporting-doc-pill clickable"
                 onClick={() => handleViewSupportingDocument(docName)}
-                title={`Click to view document: ${docName}`}
+                title={`View ${docName}`}
               >
                 <svg
                   width="13"
@@ -414,7 +412,7 @@ export function DeliveryPodDocuments({
             ))}
           </div>
         ) : (
-          <p className="delivery-supporting-docs-empty-text" title="No general documents (e.g. fuel receipts, toll tickets, gate passes) attached yet">
+          <p className="delivery-supporting-docs-empty-text">
             No supporting documents attached yet. Click <strong>Edit delivery</strong> below to add receiving slips or files.
           </p>
         )}

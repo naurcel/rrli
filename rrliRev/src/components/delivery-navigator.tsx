@@ -7,7 +7,7 @@ import { isDeliveryFinanciallyComplete, isDeliveryIncomplete } from "@/features/
 export type DeliveryNavigatorProps = {
   currentDeliveryId: string;
   deliveries: readonly DeliveryLedgerItem[];
-  onNavigate: (deliveryId: string) => void;
+  onNavigate: (deliveryId: string, direction?: "next" | "prev" | "jump") => void;
 };
 
 export function DeliveryNavigator({
@@ -91,9 +91,9 @@ export function DeliveryNavigator({
         type="button"
         className="delivery-nav-arrow-btn"
         disabled={!hasPrev}
-        onClick={() => hasPrev && onNavigate(deliveries[currentIndex - 1].id)}
+        onClick={() => hasPrev && onNavigate(deliveries[currentIndex - 1].id, "prev")}
         aria-label="Previous delivery"
-        title={hasPrev ? `Previous: #${deliveries[currentIndex - 1].waybillNumber} (${deliveries[currentIndex - 1].clientName})` : "No previous delivery in list"}
+        title={hasPrev ? `Previous: #${deliveries[currentIndex - 1].waybillNumber}` : undefined}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <polyline points="15 18 9 12 15 6" />
@@ -109,7 +109,7 @@ export function DeliveryNavigator({
           onClick={() => setIsOpen((prev) => !prev)}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
-          title="Jump to another delivery"
+          title="Jump to delivery"
         >
           <span className="delivery-nav-trigger-waybill">
             #{currentTrip?.waybillNumber ?? "Deliveries"}
@@ -185,7 +185,7 @@ export function DeliveryNavigator({
                       className={`delivery-nav-item ${isSelected ? "is-active" : ""}`}
                       onClick={() => {
                         setIsOpen(false);
-                        onNavigate(trip.id);
+                        onNavigate(trip.id, "jump");
                       }}
                     >
                       <div className="delivery-nav-item-primary">
@@ -217,9 +217,9 @@ export function DeliveryNavigator({
         type="button"
         className="delivery-nav-arrow-btn"
         disabled={!hasNext}
-        onClick={() => hasNext && onNavigate(deliveries[currentIndex + 1].id)}
+        onClick={() => hasNext && onNavigate(deliveries[currentIndex + 1].id, "next")}
         aria-label="Next delivery"
-        title={hasNext ? `Next: #${deliveries[currentIndex + 1].waybillNumber} (${deliveries[currentIndex + 1].clientName})` : "No next delivery in list"}
+        title={hasNext ? `Next: #${deliveries[currentIndex + 1].waybillNumber}` : undefined}
       >
         <span className="delivery-nav-btn-text">Next</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

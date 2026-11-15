@@ -270,7 +270,7 @@ export async function createCompanyExpense(
     try {
       const supabase = await getSupabaseClient();
       if (supabase) {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from("company_expenses")
           .insert({
             id: newExpense.id,

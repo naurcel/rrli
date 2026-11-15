@@ -112,7 +112,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
   const [dropoffs, setDropoffs] = useState<DropoffDraft[]>([initialDropoff]);
   const [resolvedEditId, setResolvedEditId] = useState<string | undefined>(propEditDeliveryId);
   const isEditMode = Boolean(resolvedEditId);
-  const [editReason, setEditReason] = useState("Updated delivery details and expenses.");
+  const editReason = "Updated delivery details and expenses.";
   const [draggedStopIndex, setDraggedStopIndex] = useState<number | null>(null);
 
   const [existingDelivery, setExistingDelivery] = useState<DeliveryLedgerItem | null>(null);
@@ -1145,7 +1145,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                   <div className="dropoff-title-wrap">
                     <span
                       className="dropoff-drag-handle"
-                      title="Drag to reorder stop"
+                      title="Reorder stop"
                       aria-hidden="true"
                     >
                       <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -1522,7 +1522,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                           updateValue("helper2Allowance", "");
                           setHelper2Name("");
                         }}
-                        title="Remove second helper"
+                        title="Remove helper"
                       >
                         × Remove
                       </button>
@@ -1699,15 +1699,14 @@ function DeliveryFilePreview({
           </div>
           <div className="delivery-file-preview-copy">
             <span>{kind === "pod" ? "POD" : "Supporting"}</span>
-            <strong title={file.name}>{file.name}</strong>
+            <strong>{file.name}</strong>
           </div>
           <a
-            className="delivery-file-view-action ui-tooltip"
+            className="delivery-file-view-action"
             href={url}
             target="_blank"
             rel="noreferrer"
             aria-label={`View ${file.name}`}
-            data-tooltip="View file"
             title="View file"
           >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">

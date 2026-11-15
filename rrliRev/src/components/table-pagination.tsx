@@ -78,7 +78,7 @@ export function TablePagination({
           onClick={() => onPageChange(Math.max(1, page - 1))}
           className="pagination-btn pagination-prev"
           aria-label="Previous page"
-          title="Go to previous page"
+          title="Previous page"
         >
           <svg
             width="14"
@@ -108,7 +108,7 @@ export function TablePagination({
             disabled={loading || safePageCount <= 1}
             className="pagination-page-input no-spin-stepper"
             aria-label="Current page number"
-            title="Type page number and press Enter to jump"
+            title="Jump to page"
           />
           <span>of {safePageCount}</span>
         </div>
@@ -119,7 +119,7 @@ export function TablePagination({
           onClick={() => onPageChange(Math.min(safePageCount, page + 1))}
           className="pagination-btn pagination-next"
           aria-label="Next page"
-          title="Go to next page"
+          title="Next page"
         >
           <svg
             width="14"

@@ -118,7 +118,7 @@ export function RecordDetailDrawer({
             {statusLabel ? (
               <span
                 className={`detail-status ${statusTone}`}
-                title={statusLabel === "Incomplete" ? "Trip financials contain incomplete expenses" : "Delivery completed"}
+                title={statusLabel === "Incomplete" ? "Incomplete expenses" : undefined}
               >
                 {statusLabel}
               </span>
@@ -128,7 +128,7 @@ export function RecordDetailDrawer({
               type="button"
               className="record-detail-close"
               aria-label="Close details"
-              title="Close details (Esc)"
+              title="Close (Esc)"
               onClick={onClose}
             >
               ×

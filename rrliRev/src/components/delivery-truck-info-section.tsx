@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { TruckPhoto } from "@/components/truck-photo";
 import {
   getFleetTrucks,
-  getTruckClassificationLabel,
   getTruckStorageCapability,
   type TruckOwnership,
 } from "@/features/deliveries/truck-registry";
@@ -15,7 +14,7 @@ export function DeliveryTruckInfoSection({
   truckType,
   truckTemperature,
   truckOwnership,
-  rateBasis,
+  rateBasis: _rateBasis,
 }: {
   plateNumber: string;
   truckType: TruckType;
@@ -33,7 +32,6 @@ export function DeliveryTruckInfoSection({
     plateNumber,
     truckMeta?.storageCapability,
   );
-  const classificationLabel = getTruckClassificationLabel(truckType, storageCapability);
   const provider = truckMeta?.provider;
 
   return (
@@ -53,14 +51,12 @@ export function DeliveryTruckInfoSection({
             <span className="delivery-truck-plate-badge">{plateNumber}</span>
             <span
               className={`detail-status ${truckOwnership === "Owned" ? "success" : "warning"}`}
-              title={`Ownership: ${truckOwnership}`}
             >
               {truckOwnership}
             </span>
           </div>
           <span
             className={`truck-capability-pill ${storageCapability === "Refrigerated" ? "reefer" : "dry"}`}
-            title={`Classification: ${storageCapability === "Refrigerated" ? "Cold" : "Dry"}`}
           >
             {storageCapability === "Refrigerated" ? "Cold" : "Dry"}
           </span>
@@ -69,7 +65,7 @@ export function DeliveryTruckInfoSection({
         <div className="delivery-truck-details-grid">
           <div>
             <span>Classification</span>
-            <strong title={classificationLabel}>{storageCapability === "Refrigerated" ? "Cold" : "Dry"}</strong>
+            <strong>{storageCapability === "Refrigerated" ? "Cold" : "Dry"}</strong>
           </div>
           <div>
             <span>Vehicle Size</span>

@@ -8,7 +8,6 @@ import {
   TRUCK_PERFORMANCE_FILTER_OPTIONS,
   getOwnedTrucks,
   getSubcontractedTrucks,
-  type TruckClassificationFilterKey,
 } from "./truck-registry.ts";
 
 describe("Truck Management and Filtering Improvements", () => {

@@ -10,7 +10,6 @@ import {
   updateFleetCrewMember,
   deleteFleetCrewMember,
   type FleetCrewMember,
-  type FleetDriver,
 } from "@/features/deliveries/driver-registry";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";

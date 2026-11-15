@@ -133,7 +133,7 @@ export function TruckPhoto({
           className="truck-photo-img"
           onClick={() => setIsViewerOpen(true)}
           style={{ cursor: "pointer" }}
-          title="Click to view photo in popup"
+          title="View photo"
         />
       ) : (
         <div
@@ -162,7 +162,7 @@ export function TruckPhoto({
       {editable ? (
         <>
           <details className="truck-photo-options" ref={menuRef}>
-            <summary aria-label="Truck photo options" title="Truck photo options">
+            <summary aria-label="Truck photo options" title="Photo options">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="5" cy="12" r="1.5" />
                 <circle cx="12" cy="12" r="1.5" />

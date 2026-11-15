@@ -22,7 +22,6 @@ import {
 import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
 import {
   handlePositiveDecimalKeyDown,
-  sanitizePersonNameInput,
   sanitizePositiveDecimalInput,
 } from "@/features/deliveries/delivery-input-utils";
 import { formatPeso } from "@/lib/format";
@@ -319,11 +318,21 @@ export function EditDeliveryModal({
       "helperDailyRate",
       "otherExpenses",
     ] as const;
+    const expenseIssueLabels: Record<typeof expenseKeys[number], string> = {
+      dieselExpenses: "Fuel receipt",
+      tollGateExpenses: "Toll receipts",
+      entryFees: "Store entry fee",
+      driverAllowance: "Driver allowance",
+      driverDailyRate: "Driver rate",
+      helperAllowance: "Helper allowance",
+      helperDailyRate: "Helper rate",
+      otherExpenses: "Other expenses",
+    };
     const financialIntegrityIssues = expenseKeys.flatMap((key) => {
       const status = updatedStates[key];
-      if (status === "unknown") return [`${key} is unresolved.`];
+      if (status === "unknown") return [`Pending ${expenseIssueLabels[key].toLowerCase()}`];
       if (status === "confirmed" && updatedExpenses[key] == null) {
-        return [`${key} has no amount entered.`];
+        return [`Missing ${expenseIssueLabels[key].toLowerCase()} amount`];
       }
       return [];
     });
@@ -429,7 +438,7 @@ export function EditDeliveryModal({
             className="routex-dialog-close"
             onClick={handleClose}
             aria-label="Close correction modal"
-            title="Close dialog (Esc)"
+            title="Close (Esc)"
           >
             ×
           </button>
@@ -493,7 +502,7 @@ export function EditDeliveryModal({
                           type="button"
                           className="dropoff-remove"
                           onClick={() => removeDropoff(index)}
-                          title="Remove this drop-off stop"
+                          title="Remove stop"
                         >
                           × Remove
                         </button>
@@ -545,7 +554,6 @@ export function EditDeliveryModal({
                 <button
                   type="button"
                   className="button-tertiary add-dropoff"
-                  title="Add a new store drop-off point to this route"
                   onClick={addDropoff}
                 >
                   + Add Store Drop-off
@@ -718,7 +726,7 @@ export function EditDeliveryModal({
                           color: "var(--color-danger, #ef4444)",
                           fontWeight: "bold",
                         }}
-                        title="Remove existing document"
+                        title="Remove document"
                       >
                         ×
                       </button>
@@ -843,7 +851,7 @@ export function DialogExpenseField({
           className={`peso-input-wrap ${status !== "confirmed" ? "is-disabled" : ""}`}
           onClick={handleWrapperClick}
           style={status !== "confirmed" ? { cursor: "pointer" } : undefined}
-          title={status !== "confirmed" ? "Click to enter amount" : undefined}
+          title={status !== "confirmed" ? "Enter amount" : undefined}
         >
           {status === "confirmed" ? <span className="peso-prefix" aria-hidden="true">₱</span> : null}
           <input

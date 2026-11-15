@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { sortDeliveryLedgerItems } from "./delivery-sort.ts";
 import { listSmallMockDeliveryRecords } from "./small-mock-repository.ts";
 import type { DeliveryLedgerItem } from "./server/delivery-repository.ts";
-import { getDeliveryIncompleteIssues, isDeliveryFinanciallyComplete, isDeliveryIncomplete } from "./delivery-domain.ts";
+import { isDeliveryFinanciallyComplete, isDeliveryIncomplete } from "./delivery-domain.ts";
 
 const baseMock = listSmallMockDeliveryRecords().items[0];
 

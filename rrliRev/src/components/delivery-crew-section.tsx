@@ -30,7 +30,7 @@ export function DeliveryCrewSection({
         </div>
 
         {drivers.length === 0 ? (
-          <div className="crew-empty-card" title="No driver recorded for this delivery run">
+          <div className="crew-empty-card">
             <span className="crew-empty-text">No driver recorded for this delivery</span>
           </div>
         ) : (
@@ -63,7 +63,7 @@ export function DeliveryCrewSection({
         </div>
 
         {helpers.length === 0 ? (
-          <div className="crew-empty-card" title="Solo driver run — no helper assigned for this delivery">
+          <div className="crew-empty-card">
             <span className="crew-empty-text">No helper assigned for this delivery</span>
           </div>
         ) : (

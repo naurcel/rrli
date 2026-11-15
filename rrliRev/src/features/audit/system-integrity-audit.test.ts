@@ -3,12 +3,7 @@ import assert from "node:assert/strict";
 
 // Auth & RBAC
 import {
-  USER_ROLES,
-  ACCESS_LEVELS,
   hasPermission,
-  canMutateDeliveryRecords,
-  canImportAndReviewExcel,
-  canManageDocuments,
   getAuthorizedNavigationForRole,
   type UserRole,
 } from "../../lib/auth/rbac.ts";
@@ -22,35 +17,23 @@ import {
 } from "../../lib/auth/password-policy.ts";
 import {
   verifyServerAccountCredentials,
-  listServerAccountProfiles,
   findServerAccountById,
   findServerAccountByUsername,
   createServerAccountProfile,
   updateServerAccountProfile,
   deleteServerAccount,
-  authorizeServerAccountReset,
-  getServerAccountRecoveryState,
   verifyServerAccountSecurityAnswer,
-  resetServerAccountPasswordWithToken,
-  updateServerAccountPassword,
-  updateServerAccountUsername,
 } from "../../lib/auth/server-account-store.ts";
 
 // Delivery Domain & Repository
 import {
   buildDeliveryTripRecord,
-  calculateTripExpenseTotal,
-  calculateProfitMargin,
   derivePodVerificationStatus,
   summarizeTruckProfitability,
-  type DeliveryTripRecord,
 } from "../deliveries/delivery-domain.ts";
 import {
-  getAllMockDeliveries,
   listSmallMockDeliveryRecords,
   correctSmallMockDelivery,
-  finalizeSmallMockDelivery,
-  deleteSmallMockDelivery,
   deletedDeliveryIds,
 } from "../deliveries/small-mock-repository.ts";
 import { parseDeliveryListQuery } from "../deliveries/delivery-query.ts";
@@ -61,15 +44,12 @@ import {
   registerFleetTruck,
   deleteFleetTruck,
   deletedTruckPlateNumbers,
-  OWNED_TRUCKS,
-  SUBCONTRACTED_TRUCKS,
 } from "../deliveries/truck-registry.ts";
 import {
   getFleetCrew,
   getFleetDrivers,
   registerFleetCrewMember,
   registerFleetDriver,
-  setFleetCrewActive,
 } from "../deliveries/driver-registry.ts";
 
 // Reports Engine
@@ -536,6 +516,7 @@ test("FULL AUDIT TEST: Repository CRUD, Filtering, and Deletion Governance", asy
     assert.equal(reg.ok, true);
 
     const afterReg = getFleetTrucks();
+    assert.equal(afterReg.length, initialTrucks.length + 1);
     assert.ok(afterReg.some((t) => t.plateNumber === newPlate));
 
     // Delete truck

@@ -3,7 +3,10 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
-import type { DeliveryTripRecord } from "@/features/deliveries/delivery-domain";
+import {
+  type DeliveryTripRecord,
+  formatFinancialIntegrityIssue,
+} from "@/features/deliveries/delivery-domain";
 import { formatPeso } from "@/lib/format";
 
 export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTripRecord>({
@@ -86,7 +89,7 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
             type="button"
             className="routex-dialog-close"
             aria-label="Close trip expenses details"
-            title="Close dialog (Esc)"
+            title="Close (Esc)"
             onClick={onClose}
           >
             ×
@@ -163,7 +166,7 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
                 color: "var(--color-text-secondary)",
               }}
             >
-              <strong>Incomplete expenses:</strong> {trip.financialIntegrityIssues.join(", ")}.
+              <strong>Incomplete expenses:</strong> {trip.financialIntegrityIssues.map(formatFinancialIntegrityIssue).join(", ")}.
             </div>
           )}
 

@@ -127,6 +127,45 @@ export function createConfirmedExpenseStates(): TripExpenseStates {
  * Missing items: missing POD, unknown expenses, unconfirmed amounts, missing revenue, unresolved entry fees, missing driver.
  * Supporting documents (supportingDocsComplete, supportingDocuments) are NOT required for completeness.
  */
+export const HUMAN_FRIENDLY_EXPENSE_ISSUES: Record<string, string> = {
+  dieselExpenses: "Pending fuel receipt",
+  tollGateExpenses: "Pending toll receipts",
+  entryFees: "Pending store entry fee",
+  driverAllowance: "Pending driver allowance",
+  driverDailyRate: "Pending driver rate",
+  helperAllowance: "Pending helper allowance",
+  helperDailyRate: "Pending helper rate",
+  otherExpenses: "Pending other expenses",
+};
+
+export function formatFinancialIntegrityIssue(raw: string): string {
+  const camelMatch = raw.match(
+    /^(dieselExpenses|tollGateExpenses|entryFees|driverAllowance|driverDailyRate|helperAllowance|helperDailyRate|otherExpenses)\s+(.*)$/i,
+  );
+  if (camelMatch) {
+    const key = camelMatch[1] as keyof typeof HUMAN_FRIENDLY_EXPENSE_ISSUES;
+    const rest = camelMatch[2].toLowerCase();
+    const friendlyName = HUMAN_FRIENDLY_EXPENSE_ISSUES[key] || "Trip expense";
+    if (rest.includes("unresolved") || rest.includes("unknown")) {
+      return friendlyName;
+    }
+    if (rest.includes("no amount") || rest.includes("missing")) {
+      const nounMap: Record<string, string> = {
+        dieselExpenses: "fuel receipt",
+        tollGateExpenses: "toll receipts",
+        entryFees: "store entry fee",
+        driverAllowance: "driver allowance",
+        driverDailyRate: "driver rate",
+        helperAllowance: "helper allowance",
+        helperDailyRate: "helper rate",
+        otherExpenses: "other expenses",
+      };
+      return `Missing ${nounMap[key] ?? "expense"} amount`;
+    }
+  }
+  return raw;
+}
+
 export function getDeliveryIncompleteIssues(delivery: DeliveryTripRecord): string[] {
   const issues: string[] = [];
 
@@ -139,49 +178,42 @@ export function getDeliveryIncompleteIssues(delivery: DeliveryTripRecord): strin
       const conciseName = primaryStore.length > 0 && primaryStore.length <= 14 ? primaryStore : "";
       issues.push(conciseName ? `Missing POD: ${conciseName}` : "Missing POD");
     } else {
-      issues.push(`Missing POD (${missingPods.length} drop-offs)`);
+      issues.push(`Missing PODs (${missingPods.length})`);
     }
   }
 
-  // 2. Unknown or unconfirmed expenses
-  const unknownExpenseLabels: Record<string, string> = {
-    dieselExpenses: "Diesel fuel",
-    tollGateExpenses: "Highway tolls",
-    entryFees: "Store entry fees",
-    driverAllowance: "Driver allowance",
-    driverDailyRate: "Driver daily rate",
-    helperAllowance: "Helper allowance",
-    helperDailyRate: "Helper daily rate",
-    otherExpenses: "Other expenses",
-  };
-  const unknownExpenses = Object.entries(delivery.expenseStates ?? {})
+  // 2. Pending or unconfirmed expenses
+  const unknownKeys = Object.entries(delivery.expenseStates ?? {})
     .filter(([_, status]) => status === "unknown")
-    .map(([key]) => unknownExpenseLabels[key] ?? key);
+    .map(([key]) => key);
 
-  if (unknownExpenses.length > 0) {
-    if (unknownExpenses.length === 1) {
-      issues.push(`Unknown: ${unknownExpenses[0]}`);
+  if (unknownKeys.length > 0) {
+    if (unknownKeys.length <= 2) {
+      for (const key of unknownKeys) {
+        issues.push(HUMAN_FRIENDLY_EXPENSE_ISSUES[key] ?? `Pending ${key}`);
+      }
     } else {
-      issues.push(`Unknown expenses (${unknownExpenses.length})`);
+      issues.push(`Pending expenses (${unknownKeys.length})`);
     }
   }
 
-  // 3. Unresolved store entry fees
+  // 3. Pending store entry fees
   const unknownEntryFees = (delivery.dropoffs ?? []).filter((d) => d.entryFeeStatus === "unknown");
-  if (unknownEntryFees.length > 0 && !unknownExpenses.some((e) => e.toLowerCase().includes("entry fee"))) {
-    issues.push(unknownEntryFees.length === 1 ? "Unresolved entry fee" : `Unresolved entry fees (${unknownEntryFees.length})`);
+  if (unknownEntryFees.length > 0 && !unknownKeys.includes("entryFees")) {
+    issues.push(unknownEntryFees.length === 1 ? "Pending store entry fee" : `Pending store entry fees (${unknownEntryFees.length})`);
   }
 
-  // 4. Missing agreed delivery revenue
+  // 4. Missing agreed delivery rate
   if (delivery.deliveryRate == null || delivery.deliveryRate <= 0) {
-    issues.push("Missing delivery revenue");
+    issues.push("Missing delivery rate");
   }
 
-  // 5. Explicit financial integrity issues
+  // 5. Explicit financial integrity issues (sanitized into clean operational text)
   if (delivery.financialIntegrityIssues && delivery.financialIntegrityIssues.length > 0) {
-    for (const issue of delivery.financialIntegrityIssues) {
-      if (!issues.includes(issue)) {
-        issues.push(issue);
+    for (const rawIssue of delivery.financialIntegrityIssues) {
+      const clean = formatFinancialIntegrityIssue(rawIssue);
+      if (!issues.includes(clean)) {
+        issues.push(clean);
       }
     }
   }
@@ -189,7 +221,7 @@ export function getDeliveryIncompleteIssues(delivery: DeliveryTripRecord): strin
   // 6. Missing core operational personnel (driver)
   const dName = (delivery as unknown as { driverName?: string | null }).driverName;
   if (dName !== undefined && (!dName || dName.trim() === "")) {
-    issues.push("Missing assigned driver");
+    issues.push("No driver assigned");
   }
 
   return issues;

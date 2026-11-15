@@ -10,19 +10,15 @@ import {
   GlobalDateRangePicker,
   toDateKey,
   useGlobalDateRange,
-  type DateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import {
-  type DeliveryTripRecord,
   getDeliveryIncompleteIssues,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
 } from "@/features/deliveries/delivery-domain";
-import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
-  calculateNiceYAxis,
   calculateNiceYRange,
   calculateTopClient,
   buildFinancialTimeSeries,
@@ -33,8 +29,6 @@ import {
   type PersistedTruckSummary,
 } from "@/features/deliveries/use-delivery-profitability-summary";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
-import { upsertBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
-import { deleteDeliveryRecord } from "@/features/deliveries/delivery-deletion-client";
 import {
   readBrowserPreviewExpenses,
   ROUTEX_COMPANY_EXPENSES_CHANGED,
@@ -44,7 +38,6 @@ import {
   type CompanyExpense,
 } from "@/features/finance/company-expense-domain";
 import {
-  canManageDocuments,
   canMutateDeliveryRecords,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
@@ -102,88 +95,18 @@ function getTimeOfDayGreeting(date: Date = new Date()): string {
   return "Good evening";
 }
 
-type MissingDetailIssue = {
-  label: string;
-  tooltip?: string;
-};
-
-function getDeliveryMissingDetails(delivery: DeliveryTripRecord): MissingDetailIssue[] {
-  const issues: MissingDetailIssue[] = [];
-
-  const unknownExpenseLabels: Record<string, string> = {
-    dieselExpenses: "Diesel Fuel",
-    tollGateExpenses: "Highway Tolls",
-    entryFees: "Store Entry Fees",
-    driverAllowance: "Driver allowance",
-    driverDailyRate: "Driver rate",
-    helperAllowance: "Helper allowance",
-    helperDailyRate: "Helper rate",
-    otherExpenses: "Other expenses",
-  };
-  const unknownExpenses = Object.entries(delivery.expenseStates)
-    .filter(([_, status]) => status === "unknown")
-    .map(([key]) => unknownExpenseLabels[key] ?? key);
-
-  if (unknownExpenses.length > 0) {
-    if (unknownExpenses.length === 1) {
-      issues.push({
-        label: `Unknown: ${unknownExpenses[0]}`,
-        tooltip: `Expense needing confirmation: ${unknownExpenses[0]}`,
-      });
-    } else {
-      issues.push({
-        label: `Unknown expenses (${unknownExpenses.length})`,
-        tooltip: `Expenses needing confirmation: ${unknownExpenses.join(", ")}`,
-      });
-    }
-  }
-
-  if (delivery.deliveryRate == null || delivery.deliveryRate <= 0) {
-    issues.push({
-      label: "Missing revenue",
-      tooltip: "Agreed revenue has not been specified",
-    });
-  }
-
-  const missingPods = delivery.dropoffs.filter((d) => !d.podSubmitted);
-  if (missingPods.length > 0) {
-    if (missingPods.length === 1) {
-      const fullStoreName = missingPods[0].storeName.trim();
-      const primaryStore = fullStoreName.split(/\s*[-–—@/(]\s*/)[0].trim();
-      const conciseName = primaryStore.length > 0 && primaryStore.length <= 14 ? primaryStore : "";
-      issues.push({
-        label: conciseName ? `Missing POD: ${conciseName}` : "Missing POD",
-        tooltip: `Missing POD: ${fullStoreName}`,
-      });
-    } else {
-      issues.push({
-        label: `Missing POD (${missingPods.length})`,
-        tooltip: `Missing PODs for: ${missingPods.map((d) => d.storeName).join(", ")}`,
-      });
-    }
-  }
-
-  const unknownEntryFees = delivery.dropoffs.filter((d) => d.entryFeeStatus === "unknown");
-  if (unknownEntryFees.length > 0) {
-    issues.push({
-      label: unknownEntryFees.length === 1 ? "Unresolved entry fee" : `Unresolved entry fees (${unknownEntryFees.length})`,
-      tooltip: `Unresolved entry fees across ${unknownEntryFees.length} stop${unknownEntryFees.length > 1 ? "s" : ""}`,
-    });
-  }
-
-  if (delivery.financialIntegrityIssues?.length > 0 && unknownExpenses.length === 0) {
-    delivery.financialIntegrityIssues.forEach((issue) => {
-      const cleanIssue = issue.length > 24 ? `${issue.slice(0, 22)}…` : issue;
-      issues.push({ label: cleanIssue, tooltip: issue });
-    });
-  } else if (delivery.financialState === "incomplete" && issues.length === 0) {
-    issues.push({
-      label: "Incomplete financials",
-      tooltip: "Trip financials are not fully finalized",
-    });
-  }
-
-  return issues;
+function getAttentionIssueTooltip(label: string): string {
+  if (label.startsWith("Missing POD")) return "Proof of delivery document required";
+  if (label === "Pending fuel receipt") return "Fuel expense receipt pending";
+  if (label === "Pending toll receipts") return "Highway toll receipts pending";
+  if (label.startsWith("Pending store entry fee")) return "Store entry fee receipt pending";
+  if (label === "Pending driver rate") return "Driver daily wage pending";
+  if (label === "Pending driver allowance") return "Driver trip allowance pending";
+  if (label === "Pending helper rate") return "Helper daily wage pending";
+  if (label === "Pending helper allowance") return "Helper trip allowance pending";
+  if (label === "Missing delivery rate") return "Agreed billing rate pending";
+  if (label === "No driver assigned") return "Primary driver not yet assigned";
+  return label;
 }
 
 function buildSmoothPath(
@@ -954,8 +877,6 @@ function DashboardFinancialChart({
   );
 }
 
-const RevenueChart = DashboardFinancialChart;
-
 export default function DashboardPage() {
   const router = useRouter();
   const actor = useAuthenticatedActor();
@@ -1019,7 +940,10 @@ export default function DashboardPage() {
         const issues = getDeliveryIncompleteIssues(delivery);
         return {
           delivery,
-          issues: issues.map((label) => ({ label, tooltip: label })),
+          issues: issues.map((label) => ({
+            label,
+            tooltip: getAttentionIssueTooltip(label),
+          })),
         };
       })
       .filter((item) => item.issues.length > 0);
@@ -1133,8 +1057,6 @@ export default function DashboardPage() {
                 className="secondary-button page-intro-action"
                 href="/deliveries/import"
                 aria-label="Import an Excel trip report"
-                data-tooltip="Import an Excel trip report"
-                title="Import an Excel trip report"
               >
                 Import
               </Link>
@@ -1142,8 +1064,6 @@ export default function DashboardPage() {
                 className="primary-action-button page-intro-action"
                 href="/deliveries/new"
                 aria-label="Record a completed delivery and its trip details"
-                data-tooltip="Record a completed delivery and its trip details"
-                title="Record a completed delivery and its trip details"
               >
                 Record delivery
               </Link>
@@ -1203,9 +1123,8 @@ export default function DashboardPage() {
           >
             {/* 1. Revenue */}
             <Link
-              className="stat-card stat-card-link ui-tooltip"
+              className="stat-card stat-card-link"
               href="/deliveries"
-              data-tooltip="View revenue and delivery records"
             >
               <span className="stat-label">REVENUE</span>
               <strong>{formatPeso(totals.earnings)}</strong>
@@ -1220,9 +1139,8 @@ export default function DashboardPage() {
 
             {/* 2. Expenses */}
             <Link
-              className="stat-card stat-card-link ui-tooltip"
+              className="stat-card stat-card-link"
               href="/finance"
-              data-tooltip="View itemized delivery and company expenses"
             >
               <span className="stat-label">EXPENSES</span>
               <strong>{formatPeso(totals.deliveryExpenses + totals.companyExpenses)}</strong>
@@ -1237,9 +1155,8 @@ export default function DashboardPage() {
 
             {/* 3. Profit */}
             <Link
-              className="stat-card stat-card-link ui-tooltip"
+              className="stat-card stat-card-link"
               href="/finance"
-              data-tooltip="View profit and financial breakdowns"
             >
               <span className="stat-label">PROFIT</span>
               <strong className={totals.companyNetProfit >= 0 ? undefined : "warning"}>
@@ -1291,7 +1208,7 @@ export default function DashboardPage() {
                 >
                   <span className="stat-label">TOP CLIENT</span>
                   <div className="stat-client-body">
-                    <strong className={`stat-client-name ${clientSizeClass}`} title={topClientData.name}>
+                    <strong className={`stat-client-name ${clientSizeClass}`}>
                       {topClientData.name}
                     </strong>
                   </div>
@@ -1356,7 +1273,7 @@ export default function DashboardPage() {
                           <small>{formatDashboardDate(trip.deliveryDate)}</small>
                         </td>
                         <td>
-                          <span className="recent-client-name" title={trip.clientName}>
+                          <span className="recent-client-name">
                             {trip.clientName}
                           </span>
                         </td>
@@ -1381,7 +1298,7 @@ export default function DashboardPage() {
                           {isFinanciallyIncomplete || trip.netIncome == null ? (
                             <span
                               className="profit-amount warning"
-                              title="Net profit calculation requires all trip expenses to be recorded"
+                              title="Pending expenses"
                             >
                               Incomplete
                             </span>
@@ -1422,7 +1339,7 @@ export default function DashboardPage() {
               </div>
               <ol className="top-truck-list">
                 {truckRankings.length === 0 ? (
-                  <li className="top-truck-empty" title="Rankings require confirmed expenses">
+                  <li className="top-truck-empty">
                     No finalized truck records in this range.
                   </li>
                 ) : null}
@@ -1431,7 +1348,7 @@ export default function DashboardPage() {
                     <Link
                       className="top-truck-link"
                       href={`/truck-profitability/${truck.plate_number}`}
-                      title={`View ${truck.plate_number} details`}
+                      title={`View ${truck.plate_number}`}
                     >
                       <span className="truck-rank">{idx + 1}</span>
                       <div>
@@ -1474,7 +1391,6 @@ export default function DashboardPage() {
                         setExpandedAttentionIds(new Set(deliveriesWithMissingDetails.map((d) => d.delivery.id)));
                       }
                     }}
-                    title="Toggle expand all missing details"
                   >
                     {expandedAttentionIds.size === deliveriesWithMissingDetails.length ? "Collapse all" : "Expand all"}
                   </button>
@@ -1561,7 +1477,6 @@ export default function DashboardPage() {
               ) : (
                 <div
                   className="dashboard-attention-empty"
-                  title="All delivery waybills have confirmed expenses and attached POD documents"
                 >
                   <span aria-hidden="true">✓</span>
                   <div>

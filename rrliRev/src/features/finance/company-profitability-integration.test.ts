@@ -4,7 +4,6 @@ import { describe, it } from "node:test";
 import {
   calculateCompanyProfitability,
   validateCompanyExpenseInput,
-  type CompanyExpense,
 } from "./company-expense-domain.ts";
 import {
   createCompanyExpense,
@@ -16,12 +15,10 @@ import {
 import { canManageCompanyExpenses, type UserRole } from "../../lib/auth/rbac.ts";
 import {
   processReport,
-  generateReportRows,
 } from "../reports/report-engine.ts";
 import {
   DEFAULT_REVENUE_TEMPLATE,
   DEFAULT_PROFITABILITY_TEMPLATE,
-  DEFAULT_TRIP_LEDGER_TEMPLATE,
 } from "../reports/report-template-types.ts";
 import { buildDeliveryTripRecord } from "../deliveries/delivery-domain.ts";
 import type { DeliveryTripRecord } from "../deliveries/delivery-domain.ts";
@@ -264,13 +261,13 @@ describe("RouteX: Company Profitability & Expense Ledger Integration", () => {
 
   it("enforces RBAC permissions for company expenses", () => {
     // Admin can view and manage (can do EVERYTHING)
-    assert.equal(canManageCompanyExpenses("admin"), true);
+    assert.equal(canManageCompanyExpenses(mockActorAdmin.role), true);
 
     // Finance can manage whatever is on the finance page
-    assert.equal(canManageCompanyExpenses("finance"), true);
+    assert.equal(canManageCompanyExpenses(mockActorFinance.role), true);
 
     // Operations is view-only for company expenses
-    assert.equal(canManageCompanyExpenses("operations"), false);
+    assert.equal(canManageCompanyExpenses(mockActorOperations.role), false);
 
     // The rest of the roles CANNOT manage company expenses
     const viewOnlyRoles: UserRole[] = ["hr", "secretary", "customer_representative"];

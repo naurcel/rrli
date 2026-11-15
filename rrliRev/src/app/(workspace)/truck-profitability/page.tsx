@@ -52,9 +52,7 @@ import {
 } from "@/features/deliveries/delivery-domain";
 import {
   getFleetCrew,
-  getFleetDrivers,
   type FleetCrewMember,
-  type FleetDriver,
 } from "@/features/deliveries/driver-registry";
 import {
   getTruckStorageCapability,
@@ -167,11 +165,6 @@ export default function TruckProfitabilityPage() {
   const [openCrewActionId, setOpenCrewActionId] = useState<string | null>(null);
   const [crewActionOpensAbove, setCrewActionOpensAbove] = useState(false);
   const [crewStatusPendingId, setCrewStatusPendingId] = useState<string | null>(null);
-  const [openOwnedActionPlate, setOpenOwnedActionPlate] = useState<string | null>(null);
-  const [ownedActionOpensAbove, setOwnedActionOpensAbove] = useState(false);
-  const [openSubcontractedActionPlate, setOpenSubcontractedActionPlate] = useState<string | null>(null);
-  const [subcontractedActionOpensAbove, setSubcontractedActionOpensAbove] = useState(false);
-
   // Editing Truck state
   const [editingTruck, setEditingTruck] = useState<FleetTruck | null>(null);
   const [editPlateNumber, setEditPlateNumber] = useState("");
@@ -198,17 +191,13 @@ export default function TruckProfitabilityPage() {
   const [isDeletingCrew, setIsDeletingCrew] = useState(false);
 
   useEffect(() => {
-    if (!openCrewActionId && !openOwnedActionPlate && !openSubcontractedActionPlate) return;
+    if (!openCrewActionId) return;
     function handleClickOutside() {
       setOpenCrewActionId(null);
-      setOpenOwnedActionPlate(null);
-      setOpenSubcontractedActionPlate(null);
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setOpenCrewActionId(null);
-        setOpenOwnedActionPlate(null);
-        setOpenSubcontractedActionPlate(null);
       }
     }
     document.addEventListener("click", handleClickOutside);
@@ -217,7 +206,7 @@ export default function TruckProfitabilityPage() {
       document.removeEventListener("click", handleClickOutside);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [openCrewActionId, openOwnedActionPlate, openSubcontractedActionPlate]);
+  }, [openCrewActionId]);
 
   const hasActiveModal = Boolean(
     isAddTruckOpen ||
@@ -1002,8 +991,6 @@ export default function TruckProfitabilityPage() {
     provider?: string | null;
     contactPerson?: string | null;
   }) {
-    setOpenOwnedActionPlate(null);
-    setOpenSubcontractedActionPlate(null);
     setEditTruckError(null);
 
     const fullRecord =
@@ -1095,7 +1082,11 @@ export default function TruckProfitabilityPage() {
 
       const oldKey = storageKey(editingTruck.plateNumber);
       const newKey = storageKey(updatedTruck.plateNumber);
-      if (oldKey !== newKey && !editTruckPhotoFile && typeof window !== "undefined") {
+      if (!editTruckPhotoPreview && !editTruckPhotoFile && typeof window !== "undefined") {
+        window.localStorage.removeItem(oldKey);
+        window.localStorage.removeItem(newKey);
+        window.dispatchEvent(new Event(TRUCK_PHOTO_EVENT));
+      } else if (oldKey !== newKey && !editTruckPhotoFile && typeof window !== "undefined") {
         const existingPhoto = window.localStorage.getItem(oldKey);
         if (existingPhoto) {
           window.localStorage.setItem(newKey, existingPhoto);
@@ -1245,8 +1236,6 @@ export default function TruckProfitabilityPage() {
               <button
                 type="button"
                 className="secondary-button page-intro-action"
-                data-tooltip="Add crew member"
-                title="Add crew member"
                 onClick={() => {
                   setCrewFormError(null);
                   setCrewFullName("");
@@ -1260,8 +1249,6 @@ export default function TruckProfitabilityPage() {
               <button
                 type="button"
                 className="primary-action-button page-intro-action"
-                data-tooltip="Add truck"
-                title="Add truck"
                 onClick={() => {
                   setFormError(null);
                   setIsAddTruckOpen(true);
@@ -1287,7 +1274,7 @@ export default function TruckProfitabilityPage() {
             <button
               type="button"
               aria-label="Dismiss notice"
-              title="Dismiss notice"
+              title="Dismiss"
               onClick={() => setFeedback(null)}
             >
               ×
@@ -1378,7 +1365,6 @@ export default function TruckProfitabilityPage() {
                   type="search"
                   placeholder="Search by plate number…"
                   aria-label="Filter trucks by plate number"
-                  title="Search plate"
                   value={plateSearch}
                   onChange={(e) => setPlateSearch(e.target.value)}
                 />
@@ -1544,8 +1530,6 @@ export default function TruckProfitabilityPage() {
                       key={truck.plateNumber}
                       style={{
                         position: "relative",
-                        overflow: openOwnedActionPlate === truck.plateNumber ? "visible" : undefined,
-                        zIndex: openOwnedActionPlate === truck.plateNumber ? 150 : undefined,
                       }}
                     >
                       <Link
@@ -1613,80 +1597,63 @@ export default function TruckProfitabilityPage() {
                         </div>
                       </Link>
 
-                      {actor.role === "admin" && (
+                      {canAdd && (
                         <div
-                          className="table-row-actions"
+                          className="truck-card-actions"
                           style={{
                             position: "absolute",
                             bottom: "16px",
                             right: "18px",
                             zIndex: 20,
                           }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
                         >
                           <button
                             type="button"
-                            className="row-action-more-btn"
-                            aria-label={`More actions for ${truck.plateNumber}`}
-                            title={`More actions for ${truck.plateNumber}`}
-                            aria-haspopup="menu"
-                            aria-expanded={openOwnedActionPlate === truck.plateNumber}
+                            className="truck-action-icon-btn"
+                            aria-label={`Edit truck ${truck.plateNumber}`}
+                            title="Edit truck"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              setOwnedActionOpensAbove(true);
-                              setOpenOwnedActionPlate((curr) =>
-                                curr === truck.plateNumber ? null : truck.plateNumber,
-                              );
+                              openEditTruckModal({
+                                plateNumber: truck.plateNumber,
+                                truckType: truck.truckType,
+                                storageCapability: capability,
+                                ownershipType: "Owned",
+                              });
                             }}
                           >
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                              <circle cx="8" cy="3" r="1.5" />
-                              <circle cx="8" cy="8" r="1.5" />
-                              <circle cx="8" cy="13" r="1.5" />
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                             </svg>
                           </button>
-
-                          {openOwnedActionPlate === truck.plateNumber ? (
-                            <div
-                              className={`row-action-menu${ownedActionOpensAbove ? " opens-above" : ""}`}
-                              role="menu"
-                              aria-label={`Actions for ${truck.plateNumber}`}
+                          {actor.role === "admin" && (
+                            <button
+                              type="button"
+                              className="truck-action-icon-btn danger"
+                              aria-label={`Delete truck ${truck.plateNumber}`}
+                              title="Delete truck"
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                setTruckToDelete({
+                                  plateNumber: truck.plateNumber,
+                                  truckType: truck.truckType,
+                                });
                               }}
                             >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() =>
-                                  openEditTruckModal({
-                                    plateNumber: truck.plateNumber,
-                                    truckType: truck.truckType,
-                                    storageCapability: capability,
-                                    ownershipType: "Owned",
-                                  })
-                                }
-                              >
-                                Edit Truck
-                              </button>
-                              <div className="row-action-menu-divider" role="separator" />
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="row-action-menu-danger"
-                                onClick={() => {
-                                  setOpenOwnedActionPlate(null);
-                                  setTruckToDelete({
-                                    plateNumber: truck.plateNumber,
-                                    truckType: truck.truckType,
-                                  });
-                                }}
-                              >
-                                Delete Truck
-                              </button>
-                            </div>
-                          ) : null}
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1721,15 +1688,15 @@ export default function TruckProfitabilityPage() {
                         <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         <SortableTableHeader label="Net Profit" sortKey="netProfit" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         <SortableTableHeader label="Margin" sortKey="margin" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
-                        {actor.role === "admin" && (
-                          <th style={{ width: "48px", textAlign: "right" }}>
+                        {canAdd && (
+                          <th style={{ width: actor.role === "admin" ? "76px" : "44px", textAlign: "right" }}>
                             <span className="sr-only">Actions</span>
                           </th>
                         )}
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedOwnedTrucks.map((truck, truckIndex) => {
+                      {paginatedOwnedTrucks.map((truck) => {
                         const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
                         const isRefrigerated = capability === "Refrigerated";
 
@@ -1741,43 +1708,13 @@ export default function TruckProfitabilityPage() {
                             style={{
                               position: "relative",
                               cursor: "pointer",
-                              zIndex: openOwnedActionPlate === truck.plateNumber ? 150 : undefined,
                             }}
                           >
                             <td>
-                              <div
-                                className="truck-table-plate-link"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "10px",
-                                  color: "inherit",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    width: "36px",
-                                    height: "26px",
-                                    borderRadius: "6px",
-                                    overflow: "hidden",
-                                    flexShrink: 0,
-                                    border: "1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.3))",
-                                    background: "var(--color-surface-subtle)",
-                                  }}
-                                >
-                                  <TruckPhoto plateNumber={truck.plateNumber} />
-                                </div>
-                                <strong className="truck-code">{truck.plateNumber}</strong>
-                              </div>
+                              <strong className="truck-code">{truck.plateNumber}</strong>
                             </td>
                             <td><span className="truck-table-spec">{truck.truckType}</span></td>
-                            <td>
-                              <span
-                                className={`truck-table-classification-badge ${isRefrigerated ? "cold" : "dry"}`}
-                              >
-                                {isRefrigerated ? "Cold" : "Dry"}
-                              </span>
-                            </td>
+                            <td>{isRefrigerated ? "Cold" : "Dry"}</td>
                             <td>
                               <span className="fleet-status">
                                 {truck.completedTrips} trip{truck.completedTrips === 1 ? "" : "s"}
@@ -1807,78 +1744,50 @@ export default function TruckProfitabilityPage() {
                               </strong>
                             </td>
                             <td>{formatPercent(truck.marginPercent)}</td>
-                            {actor.role === "admin" && (
-                              <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
-                                <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
+                            {canAdd && (
+                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                                <div className="truck-row-actions">
                                   <button
                                     type="button"
-                                    className="row-action-more-btn"
-                                    aria-label={`More actions for ${truck.plateNumber}`}
-                                    title={`More actions for ${truck.plateNumber}`}
-                                    aria-haspopup="menu"
-                                    aria-expanded={openOwnedActionPlate === truck.plateNumber}
+                                    className="truck-action-icon-btn"
+                                    aria-label={`Edit truck ${truck.plateNumber}`}
+                                    title="Edit truck"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      const rect = e.currentTarget.getBoundingClientRect();
-                                      const spaceBelow = window.innerHeight - rect.bottom;
-                                      const isNearBottom =
-                                        spaceBelow < 200 ||
-                                        truckIndex >= paginatedOwnedTrucks.length - 2;
-                                      setOwnedActionOpensAbove(isNearBottom);
-                                      setOpenOwnedActionPlate((curr) =>
-                                        curr === truck.plateNumber ? null : truck.plateNumber,
-                                      );
+                                      openEditTruckModal({
+                                        plateNumber: truck.plateNumber,
+                                        truckType: truck.truckType,
+                                        storageCapability: capability,
+                                        ownershipType: "Owned",
+                                      });
                                     }}
                                   >
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                                      <circle cx="8" cy="3" r="1.5" />
-                                      <circle cx="8" cy="8" r="1.5" />
-                                      <circle cx="8" cy="13" r="1.5" />
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                                     </svg>
                                   </button>
-
-                                  {openOwnedActionPlate === truck.plateNumber ? (
-                                    <div
-                                      className={`row-action-menu${ownedActionOpensAbove ? " opens-above" : ""}`}
-                                      role="menu"
-                                      aria-label={`Actions for ${truck.plateNumber}`}
+                                  {actor.role === "admin" && (
+                                    <button
+                                      type="button"
+                                      className="truck-action-icon-btn danger"
+                                      aria-label={`Delete truck ${truck.plateNumber}`}
+                                      title="Delete truck"
                                       onClick={(e) => {
-                                        e.preventDefault();
                                         e.stopPropagation();
+                                        setTruckToDelete({
+                                          plateNumber: truck.plateNumber,
+                                          truckType: truck.truckType,
+                                        });
                                       }}
                                     >
-                                      <button
-                                        type="button"
-                                        role="menuitem"
-                                        onClick={() => {
-                                          setOpenOwnedActionPlate(null);
-                                          openEditTruckModal({
-                                            plateNumber: truck.plateNumber,
-                                            truckType: truck.truckType,
-                                            storageCapability: capability,
-                                            ownershipType: "Owned",
-                                          });
-                                        }}
-                                      >
-                                        Edit Truck
-                                      </button>
-                                      <div className="row-action-menu-divider" role="separator" />
-                                      <button
-                                        type="button"
-                                        role="menuitem"
-                                        className="row-action-menu-danger"
-                                        onClick={() => {
-                                          setOpenOwnedActionPlate(null);
-                                          setTruckToDelete({
-                                            plateNumber: truck.plateNumber,
-                                            truckType: truck.truckType,
-                                          });
-                                        }}
-                                      >
-                                        Delete Truck
-                                      </button>
-                                    </div>
-                                  ) : null}
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <polyline points="3 6 5 6 21 6" />
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                        <line x1="10" y1="11" x2="10" y2="17" />
+                                        <line x1="14" y1="11" x2="14" y2="17" />
+                                      </svg>
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             )}
@@ -1925,8 +1834,8 @@ export default function TruckProfitabilityPage() {
                   <SortableTableHeader label="Classification" sortKey="classification" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Provider" sortKey="provider" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Contact Person" sortKey="contactPerson" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
-                  {actor.role === "admin" && (
-                    <th style={{ width: "48px", textAlign: "right" }}>
+                  {canAdd && (
+                    <th style={{ width: actor.role === "admin" ? "76px" : "44px", textAlign: "right" }}>
                       <span className="sr-only">Actions</span>
                     </th>
                   )}
@@ -1936,7 +1845,7 @@ export default function TruckProfitabilityPage() {
                 {paginatedSubcontractedTrucks.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={actor.role === "admin" ? 6 : 5}
+                      colSpan={canAdd ? 6 : 5}
                       style={{ textAlign: "center", padding: "24px", color: "var(--color-text-muted)" }}
                       title="No subcontracted trucks"
                     >
@@ -1944,7 +1853,7 @@ export default function TruckProfitabilityPage() {
                     </td>
                   </tr>
                 ) : (
-                  paginatedSubcontractedTrucks.map((truck, truckIndex) => {
+                  paginatedSubcontractedTrucks.map((truck) => {
                   const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
                   const isRefrigerated = capability === "Refrigerated";
 
@@ -1953,78 +1862,59 @@ export default function TruckProfitabilityPage() {
                       key={truck.plateNumber}
                       style={{
                         position: "relative",
-                        zIndex: openSubcontractedActionPlate === truck.plateNumber ? 150 : undefined,
                       }}
                     >
                       <td><strong className="truck-code">{truck.plateNumber}</strong></td>
                       <td><span className="truck-table-spec">{truck.truckType}</span></td>
-                      <td>
-                        <span
-                          className={`truck-table-classification-badge ${isRefrigerated ? "cold" : "dry"}`}
-                        >
-                          {isRefrigerated ? "Cold" : "Dry"}
-                        </span>
-                      </td>
+                      <td>{isRefrigerated ? "Cold" : "Dry"}</td>
                       <td>{truck.provider}</td>
                       <td>{truck.contactPerson}</td>
-                      {actor.role === "admin" && (
-                        <td style={{ textAlign: "right" }}>
-                          <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
+                      {canAdd && (
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                          <div className="truck-row-actions">
                             <button
                               type="button"
-                              className="row-action-more-btn"
-                              aria-label={`More actions for ${truck.plateNumber}`}
-                              title={`More actions for ${truck.plateNumber}`}
-                              aria-haspopup="menu"
-                              aria-expanded={openSubcontractedActionPlate === truck.plateNumber}
+                              className="truck-action-icon-btn"
+                              aria-label={`Edit truck ${truck.plateNumber}`}
+                              title="Edit truck"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                const spaceBelow = window.innerHeight - rect.bottom;
-                                const isNearBottom =
-                                  spaceBelow < 200 ||
-                                  truckIndex >= paginatedSubcontractedTrucks.length - 2;
-                                setSubcontractedActionOpensAbove(isNearBottom);
-                                setOpenSubcontractedActionPlate((curr) =>
-                                  curr === truck.plateNumber ? null : truck.plateNumber,
-                                );
+                                openEditTruckModal({
+                                  plateNumber: truck.plateNumber,
+                                  truckType: truck.truckType,
+                                  storageCapability: capability,
+                                  ownershipType: "Subcontracted",
+                                  provider: truck.provider,
+                                  contactPerson: truck.contactPerson,
+                                });
                               }}
                             >
-                              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                                <circle cx="8" cy="3" r="1.5" />
-                                <circle cx="8" cy="8" r="1.5" />
-                                <circle cx="8" cy="13" r="1.5" />
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                               </svg>
                             </button>
-
-                            {openSubcontractedActionPlate === truck.plateNumber ? (
-                              <div
-                                className={`row-action-menu${subcontractedActionOpensAbove ? " opens-above" : ""}`}
-                                role="menu"
-                                aria-label={`Actions for ${truck.plateNumber}`}
-                                onClick={(e) => e.stopPropagation()}
+                            {actor.role === "admin" && (
+                              <button
+                                type="button"
+                                className="truck-action-icon-btn danger"
+                                aria-label={`Delete truck ${truck.plateNumber}`}
+                                title="Delete truck"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTruckToDelete({
+                                    plateNumber: truck.plateNumber,
+                                    truckType: truck.truckType,
+                                  });
+                                }}
                               >
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => openEditTruckModal(truck)}
-                                >
-                                  Edit Truck
-                                </button>
-                                <div className="row-action-menu-divider" role="separator" />
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="row-action-menu-danger"
-                                  onClick={() => {
-                                    setOpenSubcontractedActionPlate(null);
-                                    setTruckToDelete({ plateNumber: truck.plateNumber, truckType: truck.truckType });
-                                  }}
-                                >
-                                  Delete Truck
-                                </button>
-                              </div>
-                            ) : null}
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  <line x1="10" y1="11" x2="10" y2="17" />
+                                  <line x1="14" y1="11" x2="14" y2="17" />
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         </td>
                       )}
@@ -2079,7 +1969,6 @@ export default function TruckProfitabilityPage() {
                   role="tab"
                   aria-selected={crewRoleFilter === "Driver"}
                   className={`crew-role-tab ${crewRoleFilter === "Driver" ? "active" : ""}`}
-                  title="Drivers only"
                   onClick={() => setCrewRoleFilter("Driver")}
                 >
                   Drivers ({driverCount})
@@ -2089,7 +1978,6 @@ export default function TruckProfitabilityPage() {
                   role="tab"
                   aria-selected={crewRoleFilter === "Helper"}
                   className={`crew-role-tab ${crewRoleFilter === "Helper" ? "active" : ""}`}
-                  title="Helpers only"
                   onClick={() => setCrewRoleFilter("Helper")}
                 >
                   Helpers ({helperCount})
@@ -2099,10 +1987,8 @@ export default function TruckProfitabilityPage() {
               {canAdd && (
                 <button
                   type="button"
-                  className="secondary-button ui-tooltip"
+                  className="secondary-button"
                   style={{ padding: "6px 12px", fontSize: "12px" }}
-                  data-tooltip="Add crew member"
-                  title="Add crew member"
                   onClick={() => {
                     setCrewFormError(null);
                     setCrewFullName("");
@@ -2168,7 +2054,7 @@ export default function TruckProfitabilityPage() {
                             type="button"
                             className="row-action-more-btn"
                             aria-label={`More actions for ${member.fullName}`}
-                            title={`More actions for ${member.fullName}`}
+                            title="More actions"
                             aria-haspopup="menu"
                             aria-expanded={openCrewActionId === member.id}
                             disabled={crewStatusPendingId === member.id}
@@ -2286,7 +2172,7 @@ export default function TruckProfitabilityPage() {
                 type="button"
                 className="routex-dialog-close"
                 aria-label="Close dialog"
-                title="Close dialog (Esc)"
+                title="Close (Esc)"
                 disabled={submitting}
                 onClick={() => setIsAddTruckOpen(false)}
               >
@@ -2306,6 +2192,92 @@ export default function TruckProfitabilityPage() {
                   </div>
                 )}
 
+                {/* Centered, enlarged truck photo uploader at top */}
+                <div className="truck-dialog-photo-upload-wrap">
+                  <label
+                    htmlFor="new-truck-photo"
+                    className={`truck-dialog-photo-card ${truckPhotoPreview ? "has-photo" : "empty"}`}
+                    title={truckPhotoPreview ? "Change photo" : "Select photo"}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        document.getElementById("new-truck-photo")?.click();
+                      }
+                    }}
+                  >
+                    {truckPhotoPreview ? (
+                      <>
+                        <img src={truckPhotoPreview} alt="Selected truck preview" className="truck-dialog-photo-img" />
+                        <span className="truck-dialog-photo-change-badge">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                            <circle cx="12" cy="13" r="4"/>
+                          </svg>
+                          Change Photo
+                        </span>
+                      </>
+                    ) : (
+                      <div className="truck-dialog-photo-empty-content">
+                        <div className="truck-dialog-photo-icon-wrap">
+                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="1" y="3" width="15" height="13" rx="1.5" />
+                            <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
+                            <circle cx="5.5" cy="18.5" r="2.5" />
+                            <circle cx="18.5" cy="18.5" r="2.5" />
+                          </svg>
+                        </div>
+                        <span className="truck-dialog-photo-label">Upload Truck Picture</span>
+                        <span className="truck-dialog-photo-subtext">Optional · PNG, JPG up to 10MB</span>
+                      </div>
+                    )}
+                  </label>
+
+                  <input
+                    id="new-truck-photo"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    tabIndex={-1}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      if (!file) return;
+                      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+                        setFormError("Choose an image file smaller than 10 MB.");
+                        event.target.value = "";
+                        return;
+                      }
+                      setFormError(null);
+                      setTruckPhotoFile(file);
+                      const reader = new FileReader();
+                      reader.onload = () => setTruckPhotoPreview(String(reader.result));
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+
+                  {truckPhotoPreview && (
+                    <button
+                      type="button"
+                      className="truck-dialog-photo-remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTruckPhotoFile(null);
+                        setTruckPhotoPreview(null);
+                        const input = document.getElementById("new-truck-photo") as HTMLInputElement | null;
+                        if (input) input.value = "";
+                      }}
+                      title="Remove photo"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+
+                {/* Truck detail fields placed below the photo */}
                 <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div className="routex-dialog-field">
                     <label htmlFor="new-truck-plate" style={{ fontWeight: 600, fontSize: "12px" }}>
@@ -2423,36 +2395,6 @@ export default function TruckProfitabilityPage() {
                     </div>
                   </div>
                 )}
-
-                <div className="truck-create-photo-field">
-                  <div className="truck-create-photo-preview">
-                    {truckPhotoPreview ? <img src={truckPhotoPreview} alt="Selected truck preview" /> : <span>No photo</span>}
-                  </div>
-                  <div className="routex-dialog-field">
-                    <label htmlFor="new-truck-photo" style={{ fontWeight: 600, fontSize: "12px" }}>
-                      Truck Picture (Optional)
-                    </label>
-                    <input
-                      id="new-truck-photo"
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0] ?? null;
-                        if (!file) return;
-                        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
-                          setFormError("Choose an image file smaller than 10 MB.");
-                          event.target.value = "";
-                          return;
-                        }
-                        setFormError(null);
-                        setTruckPhotoFile(file);
-                        const reader = new FileReader();
-                        reader.onload = () => setTruckPhotoPreview(String(reader.result));
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                  </div>
-                </div>
               </div>
 
               <footer className="routex-dialog-footer">
@@ -2460,7 +2402,6 @@ export default function TruckProfitabilityPage() {
                   type="button"
                   className="secondary-button"
                   disabled={submitting}
-                  title="Cancel adding truck and close dialog"
                   onClick={() => setIsAddTruckOpen(false)}
                 >
                   Cancel
@@ -2469,7 +2410,6 @@ export default function TruckProfitabilityPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={submitting}
-                  title="Save and register this truck in the fleet"
                 >
                   {submitting ? "Adding Truck..." : "Add Truck"}
                 </button>
@@ -2502,7 +2442,7 @@ export default function TruckProfitabilityPage() {
                 type="button"
                 className="routex-dialog-close"
                 aria-label="Close dialog"
-                title="Close dialog (Esc)"
+                title="Close (Esc)"
                 disabled={editSubmitting}
                 onClick={() => setEditingTruck(null)}
               >
@@ -2522,6 +2462,92 @@ export default function TruckProfitabilityPage() {
                   </div>
                 )}
 
+                {/* Centered, enlarged truck photo uploader at top */}
+                <div className="truck-dialog-photo-upload-wrap">
+                  <label
+                    htmlFor="edit-truck-photo"
+                    className={`truck-dialog-photo-card ${editTruckPhotoPreview ? "has-photo" : "empty"}`}
+                    title={editTruckPhotoPreview ? "Change photo" : "Select photo"}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        document.getElementById("edit-truck-photo")?.click();
+                      }
+                    }}
+                  >
+                    {editTruckPhotoPreview ? (
+                      <>
+                        <img src={editTruckPhotoPreview} alt="Selected truck preview" className="truck-dialog-photo-img" />
+                        <span className="truck-dialog-photo-change-badge">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                            <circle cx="12" cy="13" r="4"/>
+                          </svg>
+                          Change Photo
+                        </span>
+                      </>
+                    ) : (
+                      <div className="truck-dialog-photo-empty-content">
+                        <div className="truck-dialog-photo-icon-wrap">
+                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="1" y="3" width="15" height="13" rx="1.5" />
+                            <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
+                            <circle cx="5.5" cy="18.5" r="2.5" />
+                            <circle cx="18.5" cy="18.5" r="2.5" />
+                          </svg>
+                        </div>
+                        <span className="truck-dialog-photo-label">Upload Truck Picture</span>
+                        <span className="truck-dialog-photo-subtext">Optional · PNG, JPG up to 10MB</span>
+                      </div>
+                    )}
+                  </label>
+
+                  <input
+                    id="edit-truck-photo"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    tabIndex={-1}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      if (!file) return;
+                      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+                        setEditTruckError("Choose an image file smaller than 10 MB.");
+                        event.target.value = "";
+                        return;
+                      }
+                      setEditTruckError(null);
+                      setEditTruckPhotoFile(file);
+                      const reader = new FileReader();
+                      reader.onload = () => setEditTruckPhotoPreview(String(reader.result));
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+
+                  {editTruckPhotoPreview && (
+                    <button
+                      type="button"
+                      className="truck-dialog-photo-remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditTruckPhotoFile(null);
+                        setEditTruckPhotoPreview(null);
+                        const input = document.getElementById("edit-truck-photo") as HTMLInputElement | null;
+                        if (input) input.value = "";
+                      }}
+                      title="Remove photo"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+
+                {/* Truck detail fields placed below the photo */}
                 <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div className="routex-dialog-field">
                     <label htmlFor="edit-truck-plate" style={{ fontWeight: 600, fontSize: "12px" }}>
@@ -2639,36 +2665,6 @@ export default function TruckProfitabilityPage() {
                     </div>
                   </div>
                 )}
-
-                <div className="truck-create-photo-field">
-                  <div className="truck-create-photo-preview">
-                    {editTruckPhotoPreview ? <img src={editTruckPhotoPreview} alt="Selected truck preview" /> : <span>No photo</span>}
-                  </div>
-                  <div className="routex-dialog-field">
-                    <label htmlFor="edit-truck-photo" style={{ fontWeight: 600, fontSize: "12px" }}>
-                      Truck Picture (Optional)
-                    </label>
-                    <input
-                      id="edit-truck-photo"
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0] ?? null;
-                        if (!file) return;
-                        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
-                          setEditTruckError("Choose an image file smaller than 10 MB.");
-                          event.target.value = "";
-                          return;
-                        }
-                        setEditTruckError(null);
-                        setEditTruckPhotoFile(file);
-                        const reader = new FileReader();
-                        reader.onload = () => setEditTruckPhotoPreview(String(reader.result));
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                  </div>
-                </div>
               </div>
 
               <footer className="routex-dialog-footer">
@@ -2676,7 +2672,6 @@ export default function TruckProfitabilityPage() {
                   type="button"
                   className="secondary-button"
                   disabled={editSubmitting}
-                  title="Cancel editing truck and close dialog"
                   onClick={() => setEditingTruck(null)}
                 >
                   Cancel
@@ -2685,7 +2680,6 @@ export default function TruckProfitabilityPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={editSubmitting}
-                  title="Save truck changes"
                 >
                   {editSubmitting ? "Saving Changes..." : "Save Changes"}
                 </button>
@@ -2720,7 +2714,7 @@ export default function TruckProfitabilityPage() {
                     type="button"
                     className="routex-dialog-close"
                     aria-label="Close confirmation dialog"
-                    title="Close confirmation dialog (Esc)"
+                    title="Close (Esc)"
                     disabled={isDeletingTruck}
                     onClick={() => setTruckToDelete(null)}
                   >
@@ -2776,7 +2770,6 @@ export default function TruckProfitabilityPage() {
                     className="secondary-button"
                     disabled={isDeletingTruck}
                     onClick={() => setTruckToDelete(null)}
-                    title="Cancel vehicle deletion and close dialog"
                     style={{ minHeight: "38px", padding: "0 16px", fontSize: "13px" }}
                   >
                     Cancel
@@ -2786,7 +2779,6 @@ export default function TruckProfitabilityPage() {
                     className="primary-action-button"
                     disabled={isDeletingTruck}
                     onClick={handleConfirmDeleteTruck}
-                    title="Permanently remove this vehicle from the fleet"
                     style={{
                       minHeight: "38px",
                       padding: "0 16px",
@@ -2827,7 +2819,7 @@ export default function TruckProfitabilityPage() {
                 type="button"
                 className="routex-dialog-close"
                 aria-label="Close dialog"
-                title="Close dialog (Esc)"
+                title="Close (Esc)"
                 disabled={crewSubmitting}
                 onClick={() => setIsAddCrewOpen(false)}
               >
@@ -2925,7 +2917,6 @@ export default function TruckProfitabilityPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={crewSubmitting || crewFullName.trim().length < 2}
-                  title={`Register this ${crewRole.toLowerCase()} in the fleet`}
                 >
                   {crewSubmitting ? `Adding ${crewRole}...` : `+ Add ${crewRole}`}
                 </button>
@@ -2958,7 +2949,7 @@ export default function TruckProfitabilityPage() {
                 type="button"
                 className="routex-dialog-close"
                 aria-label="Close dialog"
-                title="Close dialog (Esc)"
+                title="Close (Esc)"
                 disabled={editCrewSubmitting}
                 onClick={() => setEditingCrewMember(null)}
               >
@@ -3055,7 +3046,6 @@ export default function TruckProfitabilityPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={editCrewSubmitting || editCrewFullName.trim().length < 2}
-                  title="Save crew member changes"
                 >
                   {editCrewSubmitting ? "Saving Changes..." : "Save Changes"}
                 </button>
@@ -3090,7 +3080,7 @@ export default function TruckProfitabilityPage() {
                     type="button"
                     className="routex-dialog-close"
                     aria-label="Close confirmation dialog"
-                    title="Close confirmation dialog (Esc)"
+                    title="Close (Esc)"
                     disabled={isDeletingCrew}
                     onClick={() => setCrewToDelete(null)}
                   >

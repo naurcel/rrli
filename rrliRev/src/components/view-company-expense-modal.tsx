@@ -108,7 +108,7 @@ export function ViewCompanyExpenseModal({
             type="button"
             className="routex-dialog-close"
             aria-label="Close expense details"
-            title="Close dialog (Esc)"
+            title="Close (Esc)"
             onClick={onClose}
           >
             ×

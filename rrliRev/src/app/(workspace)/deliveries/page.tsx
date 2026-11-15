@@ -20,7 +20,6 @@ import { DeliveryFilterDropdown } from "@/components/delivery-filter-dropdown";
 import { TablePagination } from "@/components/table-pagination";
 import {
   AggregateExpenseBreakdown,
-  DeliveryFinancialBreakdown,
 } from "@/components/delivery-financial-breakdown";
 import { ViewTripExpensesModal } from "@/components/view-trip-expenses-modal";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
@@ -34,7 +33,6 @@ import {
   calculateProfitMargin,
   calculateTripExpenseTotal,
   derivePodVerificationStatus,
-  getDeliveryIncompleteIssues,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
 } from "@/features/deliveries/delivery-domain";
@@ -44,7 +42,6 @@ import type {
 } from "@/features/deliveries/server/delivery-repository";
 import {
   canImportAndReviewExcel,
-  canManageDocuments,
   canMutateDeliveryRecords,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
@@ -66,15 +63,6 @@ function toDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function formatExpenseResolution(
-  value: number | null,
-  state: ExpenseResolutionStatus,
-): string {
-  if (state === "unknown") return "Incomplete";
-  if (state === "not_applicable") return "Not applicable";
-  return formatPeso(value);
 }
 
 type CorrectionDropoffDraft = {
@@ -190,8 +178,6 @@ export default function DeliveriesPage() {
   const [sort, setSort] = useState("delivery_date:desc");
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "incomplete">("all");
   const [page, setPage] = useState(1);
-  const [pageCount, setPageCount] = useState(1);
-  const [total, setTotal] = useState(0);
   const [deliveryToDelete, setDeliveryToDelete] = useState<DeliveryLedgerItem | null>(null);
   const [isDeletingDelivery, setIsDeletingDelivery] = useState(false);
   const [deleteDeliveryError, setDeleteDeliveryError] = useState<string | null>(null);
@@ -302,60 +288,6 @@ export default function DeliveriesPage() {
     }, 0);
     return formatPeso(total);
   }, [correctionDropoffs]);
-
-  function openCorrectionModal(trip: DeliveryLedgerItem) {
-    setCorrectingTrip(trip);
-    setCorrectionReason("");
-    setCorrectionDeliveryRate(trip.deliveryRate != null ? String(trip.deliveryRate) : "");
-    setCorrectionDriverName(trip.driverName ?? "");
-    setCorrectionHelperName(trip.helperName ?? "");
-    setCorrectionExistingSupportingDocs(trip.supportingDocuments ? [...trip.supportingDocuments] : []);
-    setCorrectionSupportingFiles([]);
-    setCorrectionExpenses({
-      dieselExpenses: trip.expenses.dieselExpenses != null ? String(trip.expenses.dieselExpenses) : "",
-      tollGateExpenses: trip.expenses.tollGateExpenses != null ? String(trip.expenses.tollGateExpenses) : "",
-      driverAllowance: trip.expenses.driverAllowance != null ? String(trip.expenses.driverAllowance) : "",
-      driverDailyRate: trip.expenses.driverDailyRate != null ? String(trip.expenses.driverDailyRate) : "",
-      helperAllowance: trip.expenses.helperAllowance != null ? String(trip.expenses.helperAllowance) : "",
-      helperDailyRate: trip.expenses.helperDailyRate != null ? String(trip.expenses.helperDailyRate) : "",
-      otherExpenses: trip.expenses.otherExpenses != null ? String(trip.expenses.otherExpenses) : "",
-    });
-    setCorrectionStatuses({
-      dieselExpenses: trip.expenseStates.dieselExpenses,
-      tollGateExpenses: trip.expenseStates.tollGateExpenses,
-      driverAllowance: trip.expenseStates.driverAllowance,
-      driverDailyRate: trip.expenseStates.driverDailyRate,
-      helperAllowance: trip.expenseStates.helperAllowance,
-      helperDailyRate: trip.expenseStates.helperDailyRate,
-      otherExpenses: trip.expenseStates.otherExpenses,
-    });
-    const dropoffsDraft: CorrectionDropoffDraft[] = (trip.dropoffs && trip.dropoffs.length > 0)
-      ? trip.dropoffs.map((d) => ({
-          id: d.id || crypto.randomUUID(),
-          storeName: d.storeName,
-          destinationArea: d.destinationArea,
-          entryFee: d.entryFee != null ? String(d.entryFee) : "",
-          entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
-          podSubmitted: Boolean(d.podSubmitted),
-          supportingDocsComplete: Boolean(d.supportingDocsComplete),
-          documentRef: d.documentRef ?? "",
-        }))
-      : [
-          {
-            id: crypto.randomUUID(),
-            storeName: "",
-            destinationArea: "",
-            entryFee: "",
-            entryFeeStatus: "not_applicable",
-            podSubmitted: false,
-            supportingDocsComplete: false,
-            documentRef: "",
-          },
-        ];
-    setCorrectionDropoffs(dropoffsDraft);
-    setCorrectionSubmitting(false);
-    setCorrectionError(null);
-  }
 
   function closeCorrectionModal() {
     if (correctionSubmitting) return;
@@ -597,7 +529,6 @@ export default function DeliveriesPage() {
     try {
       await deleteDeliveryRecord(deliveryToDelete.id);
       setDeliveries((prev) => prev.filter((d) => d.id !== deliveryToDelete.id));
-      setTotal((current) => Math.max(0, current - 1));
       setFinancialActionMessage(`Delivery record "${deliveryToDelete.waybillNumber}" was successfully deleted.`);
       setDeliveryToDelete(null);
     } catch (error) {
@@ -654,8 +585,6 @@ export default function DeliveriesPage() {
           const localIds = new Set(local.map((item) => item.id));
           const combined = [...local, ...remote.filter((item) => !localIds.has(item.id))];
           setDeliveries(sortDeliveryLedgerItems(combined, sortField, direction as TableSortDirection));
-          setTotal(combined.length);
-          setPageCount(Math.max(1, Math.ceil(combined.length / 10)));
           const remoteClients = data.filters?.clients ?? [];
           const existingClientIds = new Set(remoteClients.map((c) => c.id));
           const extraPreviewClients: DeliveryFilterOption[] = [];
@@ -1157,8 +1086,6 @@ export default function DeliveriesPage() {
                 className="secondary-button page-intro-action"
                 href="/deliveries/import"
                 aria-label="Import an Excel trip report"
-                data-tooltip="Import an Excel trip report"
-                title="Import an Excel trip report"
               >
                 Import
               </Link>
@@ -1168,8 +1095,6 @@ export default function DeliveriesPage() {
                 className="primary-action-button page-intro-action"
                 href="/deliveries/new"
                 aria-label="Record a completed delivery and its trip details"
-                data-tooltip="Record a completed delivery and its trip details"
-                title="Record a completed delivery and its trip details"
               >
                 Record delivery
               </Link>
@@ -1472,7 +1397,7 @@ export default function DeliveriesPage() {
               <span>Applying the active client, date, truck, and document filters.</span>
             </div>
           ) : filteredDeliveries.length === 0 ? (
-            <div className="empty-state" title="No delivery records match the current filter criteria or date range">
+            <div className="empty-state">
               <strong>No deliveries match the active filters</strong>
               <span>
                 Try clearing the waybill search or selecting All Clients / All Trucks.
@@ -1572,13 +1497,13 @@ export default function DeliveriesPage() {
                           e.stopPropagation();
                           setViewingTripExpenses(trip);
                         }}
-                        title="Click to view trip expenses breakdown popup"
+                        title="View expenses"
                         style={{ cursor: "pointer" }}
                       >
                         {isFinanciallyIncomplete || trip.totalExpenses == null ? (
                           <span
                             className="profit-amount warning"
-                            title={`Trip expenses incomplete: ${trip.financialIntegrityIssues.join(", ") || "Incomplete trip expenses"}`}
+                            title="Incomplete expenses"
                           >
                             Incomplete
                           </span>
@@ -1593,7 +1518,7 @@ export default function DeliveriesPage() {
                           {isFinanciallyIncomplete || trip.netIncome == null ? (
                             <span
                               className="profit-amount warning"
-                              title="Net profit calculation requires all trip expenses to be recorded"
+                              title="Pending expenses"
                             >
                               Incomplete
                             </span>
@@ -1605,7 +1530,6 @@ export default function DeliveriesPage() {
                               {trip.marginPercent !== null ? (
                                 <span
                                   className={`margin-pill ${trip.marginPercent >= 20 ? "good" : trip.marginPercent >= 0 ? "mod" : "low"}`}
-                                  title={`Profit margin: ${formatPercent(trip.marginPercent)}`}
                                 >
                                   {formatPercent(trip.marginPercent)}
                                 </span>
@@ -1753,7 +1677,7 @@ export default function DeliveriesPage() {
                 className="routex-dialog-close"
                 onClick={closeCorrectionModal}
                 aria-label="Close correction modal"
-                title="Close dialog (Esc)"
+                title="Close (Esc)"
               >
                 ×
               </button>
@@ -1820,7 +1744,7 @@ export default function DeliveriesPage() {
                               type="button"
                               className="dropoff-remove"
                               onClick={() => removeCorrectionDropoff(index)}
-                              title="Remove this drop-off stop"
+                              title="Remove stop"
                             >
                               × Remove
                             </button>
@@ -1872,7 +1796,6 @@ export default function DeliveriesPage() {
                     <button
                       type="button"
                       className="button-tertiary add-dropoff"
-                      title="Add a new store drop-off point to this route"
                       onClick={addCorrectionDropoff}
                     >
                       + Add Store Drop-off
@@ -2268,7 +2191,7 @@ function DialogExpenseField({
           className={`peso-input-wrap ${status !== "confirmed" ? "is-disabled" : ""}`}
           onClick={handleWrapperClick}
           style={status !== "confirmed" ? { cursor: "pointer" } : undefined}
-          title={status !== "confirmed" ? "Click to enter amount" : undefined}
+          title={status !== "confirmed" ? "Enter amount" : undefined}
         >
           {status === "confirmed" ? <span className="peso-prefix" aria-hidden="true">₱</span> : null}
           <input

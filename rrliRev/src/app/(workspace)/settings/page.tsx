@@ -489,7 +489,7 @@ export default function SettingsPage() {
 
           {/* Profile Photo Actions */}
           <div className="settings-hero-actions">
-            <label className="secondary-button settings-photo-btn" title="Upload a JPG, PNG, or WebP photo (max 5MB)">
+            <label className="secondary-button settings-photo-btn">
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
@@ -506,7 +506,7 @@ export default function SettingsPage() {
                 className="settings-photo-remove-btn"
                 onClick={handleRemovePhoto}
                 disabled={photoUploading}
-                title="Remove profile picture"
+                title="Remove photo"
               >
                 Remove
               </button>
@@ -584,7 +584,6 @@ export default function SettingsPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={usernameSubmitting}
-                  title="Save your new username"
                   style={{ minHeight: "42px", padding: "0 22px" }}
                 >
                   {usernameSubmitting ? "Updating…" : "Save Username"}
@@ -651,7 +650,6 @@ export default function SettingsPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={contactSubmitting}
-                  title="Save your email and phone number"
                   style={{ minHeight: "42px", padding: "0 22px" }}
                 >
                   {contactSubmitting ? "Updating…" : "Save Contact Info"}
@@ -724,7 +722,6 @@ export default function SettingsPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={passwordSubmitting}
-                  title="Update your account password"
                   style={{ minHeight: "42px", padding: "0 22px" }}
                 >
                   {passwordSubmitting ? "Updating…" : "Update Password"}
@@ -828,7 +825,6 @@ export default function SettingsPage() {
                   type="submit"
                   className="primary-action-button"
                   disabled={securitySubmitting}
-                  title="Save your password recovery security question and answer"
                   style={{ minHeight: "42px", padding: "0 22px" }}
                 >
                   {securitySubmitting ? "Saving…" : "Save Security Question"}
@@ -995,11 +991,8 @@ function renderPodCell(role: UserRole) {
 }
 
 function renderReportsCell(role: UserRole) {
-  if (hasPermission(role, "reports:manage_templates")) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>View, Export &amp; Custom Templates</strong>;
-  }
   if (hasPermission(role, "reports:export")) {
-    return <span style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>View &amp; Export</span>;
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>View &amp; Export (CSV)</strong>;
   }
   return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
 }

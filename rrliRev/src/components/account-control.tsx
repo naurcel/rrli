@@ -294,7 +294,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
                   type="button"
                   className="profile-prefs-reset-btn"
                   onClick={handleResetPreferences}
-                  title="Reset all preferences to defaults"
+                  title="Reset to defaults"
                 >
                   Reset
                 </button>

@@ -56,7 +56,7 @@ export function ConfirmDeliveryDeletionDialog({
             type="button"
             className="routex-dialog-close"
             aria-label="Close dialog"
-            title="Close dialog (Esc)"
+            title="Close (Esc)"
             disabled={pending}
             onClick={onCancel}
           >
@@ -79,8 +79,8 @@ export function ConfirmDeliveryDeletionDialog({
         </div>
 
         <footer className="routex-dialog-footer" style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-          <button type="button" className="secondary-button" disabled={pending} onClick={onCancel} title="Cancel deletion and close dialog">Cancel</button>
-          <button type="button" className="danger-confirm-button" disabled={pending} onClick={onConfirm} title="Permanently delete this delivery record">
+          <button type="button" className="secondary-button" disabled={pending} onClick={onCancel}>Cancel</button>
+          <button type="button" className="danger-confirm-button" disabled={pending} onClick={onConfirm}>
             {pending ? "Deleting…" : "Delete"}
           </button>
         </footer>

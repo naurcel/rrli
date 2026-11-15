@@ -19,7 +19,7 @@ export function DeliveryDropoffTimeline({
   dropoffs: readonly DeliveryStoreDropoff[];
 }) {
   if (!dropoffs || dropoffs.length === 0) {
-    return <p className="drawer-dropoff-empty" title="This delivery has no store drop-off destinations recorded">No drop-offs recorded for this delivery.</p>;
+    return <p className="drawer-dropoff-empty">No drop-offs recorded for this delivery.</p>;
   }
 
   return (
@@ -42,7 +42,7 @@ export function DeliveryDropoffTimeline({
               <div className="drawer-dropoff-card-header">
                 <span className="drawer-dropoff-stop-tag">Store Drop-off #{stopNumber}</span>
                 {stop.podSubmitted ? (
-                  <span className="drawer-dropoff-doc-pill has-doc" title="Proof of delivery document attached">
+                  <span className="drawer-dropoff-doc-pill has-doc">
                     <svg
                       width="11"
                       height="11"
@@ -59,7 +59,7 @@ export function DeliveryDropoffTimeline({
                     POD attached
                   </span>
                 ) : (
-                  <span className="drawer-dropoff-doc-pill no-doc" title="Missing POD: Receiving document with store stamp has not been uploaded yet">
+                  <span className="drawer-dropoff-doc-pill no-doc">
                     <svg
                       width="11"
                       height="11"
@@ -89,18 +89,7 @@ export function DeliveryDropoffTimeline({
 
               <div className="drawer-dropoff-footer">
                 <span className="drawer-dropoff-fee-label">Entry fee:</span>
-                <span
-                  className="drawer-dropoff-fee-val"
-                  title={
-                    stop.entryFeeStatus === "not_applicable"
-                      ? "Not applicable: No entry fee charged for this store location"
-                      : stop.entryFeeStatus === "unknown"
-                      ? "Entry fee amount not yet recorded"
-                      : stop.entryFee === 0 || stop.entryFee == null
-                      ? "No entry fee incurred at this store"
-                      : `Entry fee: ₱${Number(stop.entryFee).toLocaleString("en-PH")}`
-                  }
-                >
+                <span className="drawer-dropoff-fee-val">
                   {entryFee}
                 </span>
               </div>

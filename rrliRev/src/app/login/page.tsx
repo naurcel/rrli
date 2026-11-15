@@ -426,7 +426,7 @@ export default function LoginPage() {
           className="theme-toggle"
           type="button"
           aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          title={isDark ? "Light mode" : "Dark mode"}
           onClick={toggleTheme}
         >
           {isDark ? "\u2600" : "\u25D0"}
@@ -439,12 +439,8 @@ export default function LoginPage() {
         <div className="login-form-wrap">
           <img
             className="login-logo"
-            src={
-              isDark
-                ? "/branding/routex-logo-white.png"
-                : "/branding/routex-logo-dblue.png"
-            }
-            alt="RouteX"
+            src="/branding/redeemed-route-emblem.png"
+            alt="Redeemed Route Logistics Inc."
           />
           <h2 id="sign-in-title">
             {viewMode === "login" ? "Log in" : "Password Recovery"}

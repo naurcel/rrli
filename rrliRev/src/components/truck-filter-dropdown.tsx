@@ -86,13 +86,12 @@ export function TruckFilterDropdown({
     >
       <button
         type="button"
-        className={`delivery-filter-trigger ui-tooltip${activeCount > 0 ? " has-active-filters" : ""}`}
+        className={`delivery-filter-trigger${activeCount > 0 ? " has-active-filters" : ""}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={dropdownId}
         aria-label={activeCount > 0 ? `Filter trucks (${activeCount} active)` : "Filter trucks"}
-        data-tooltip={activeCount > 0 ? `Filter trucks (${activeCount} active)` : "Filter trucks"}
-        title={activeCount > 0 ? `Filter trucks (${activeCount} active)` : "Filter trucks"}
+        title={activeCount > 0 ? `Filter trucks (${activeCount})` : "Filter trucks"}
         onClick={() => setOpen((prev) => !prev)}
       >
         <span className="filter-trigger-icon" aria-hidden="true">

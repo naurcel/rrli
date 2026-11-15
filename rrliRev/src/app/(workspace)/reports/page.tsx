@@ -14,7 +14,6 @@ import {
   type DateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
-import { ReportCustomizerModal } from "@/components/report-customizer-modal";
 import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import {
@@ -28,14 +27,8 @@ import {
   processReport,
 } from "@/features/reports/report-engine";
 import {
-  deleteClientReportTemplate,
-  loadClientReportTemplates,
-  saveClientReportTemplate,
-} from "@/features/reports/report-template-store";
-import {
   BUILTIN_REPORT_TEMPLATES,
   DEFAULT_REVENUE_TEMPLATE,
-  type ReportTemplate,
 } from "@/features/reports/report-template-types";
 import {
   CompanyExpense,
@@ -45,31 +38,25 @@ import {
   readBrowserPreviewExpenses,
   ROUTEX_COMPANY_EXPENSES_CHANGED,
 } from "@/features/finance/browser-preview-expenses";
-import { canManageReportTemplates } from "@/lib/auth/rbac";
+import { canExportReports } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
 export default function ReportsPage() {
   const actor = useAuthenticatedActor();
-  const isAdmin = canManageReportTemplates(actor.role);
   const { range } = useGlobalDateRange();
 
-  // Template collection state
-  const [templates, setTemplates] = useState<ReportTemplate[]>(() => [
-    ...BUILTIN_REPORT_TEMPLATES,
-  ]);
   const [activeTemplateId, setActiveTemplateId] = useState<string>("default-revenue");
 
   // Daily trip report fixed-date state (defaults to today's date YYYY-MM-DD)
   const [dailyDate, setDailyDate] = useState<string>(() => toDateKey(new Date()));
 
-  // Find active template
+  // Find active template from standard built-in formats
   const activeTemplate = useMemo(() => {
     return (
-      templates.find((t) => t.id === activeTemplateId) ||
       BUILTIN_REPORT_TEMPLATES.find((t) => t.id === activeTemplateId) ||
       DEFAULT_REVENUE_TEMPLATE
     );
-  }, [templates, activeTemplateId]);
+  }, [activeTemplateId]);
 
   const isDailyTripReport = activeTemplate.id === "default-daily-trip";
 
@@ -85,40 +72,11 @@ export default function ReportsPage() {
 
   const { deliveries: filteredDeliveries, loading, error } = usePersistedDeliveries(effectiveRange);
 
-  // Customizer modal state
-  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
-  const [customizerTargetTemplate, setCustomizerTargetTemplate] = useState<ReportTemplate>(
-    DEFAULT_REVENUE_TEMPLATE,
-  );
-  const [feedbackNotice, setFeedbackNotice] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-
   // Table sorting
   const [reportSort, setReportSort] = useState<{ key: string; direction: TableSortDirection }>({
     key: "revenue",
     direction: "desc",
   });
-
-  // Load saved templates from localStorage & server API
-  useEffect(() => {
-    const localTemplates = loadClientReportTemplates();
-    if (localTemplates.length > 0) {
-      setTemplates(localTemplates);
-    }
-
-    fetch("/api/reports/templates")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.ok && Array.isArray(data.templates)) {
-          setTemplates(data.templates);
-        }
-      })
-      .catch(() => {
-        // Fallback to local storage
-      });
-  }, []);
 
   // Company expenses state for overall profitability reporting
   const [companyExpenses, setCompanyExpenses] = useState<CompanyExpense[]>([]);
@@ -634,102 +592,6 @@ export default function ReportsPage() {
     setReportSort({ key, direction });
   }
 
-  // Open customizer modal
-  function handleOpenCustomizer(targetTemplate: ReportTemplate, asNew: boolean) {
-    if (asNew) {
-      const cloned: ReportTemplate = {
-        ...targetTemplate,
-        id: "",
-        name: `${targetTemplate.name} (Custom Layout)`,
-        isDefault: false,
-        layout: {
-          ...targetTemplate.layout,
-          title: `${targetTemplate.layout.title} (Custom)`,
-        },
-      };
-      setCustomizerTargetTemplate(cloned);
-    } else {
-      setCustomizerTargetTemplate(targetTemplate);
-    }
-    setIsCustomizerOpen(true);
-  }
-
-  // Save template from customizer modal
-  async function handleSaveTemplate(templateToSave: ReportTemplate, isNew: boolean) {
-    try {
-      const response = await fetch("/api/reports/templates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...templateToSave,
-          id: isNew ? undefined : templateToSave.id,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.message || "Failed to save template layout.");
-      }
-
-      const savedTemplate = data.template as ReportTemplate;
-      saveClientReportTemplate(savedTemplate);
-
-      setTemplates((prev) => {
-        const filtered = prev.filter((t) => t.id !== savedTemplate.id);
-        return [...filtered, savedTemplate];
-      });
-
-      setActiveTemplateId(savedTemplate.id);
-      setFeedbackNotice({
-        type: "success",
-        message: `Report layout "${savedTemplate.name}" has been saved.`,
-      });
-      setTimeout(() => setFeedbackNotice(null), 5000);
-    } catch (err) {
-      setFeedbackNotice({
-        type: "error",
-        message: err instanceof Error ? err.message : "Error saving report layout.",
-      });
-      throw err;
-    }
-  }
-
-  // Delete custom template
-  async function handleDeleteTemplate(id: string) {
-    try {
-      const response = await fetch(`/api/reports/templates?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.message || "Failed to delete template.");
-      }
-
-      deleteClientReportTemplate(id);
-
-      setTemplates((prev) => prev.filter((t) => t.id !== id));
-      setActiveTemplateId("default-revenue");
-      setIsCustomizerOpen(false);
-      setFeedbackNotice({
-        type: "success",
-        message: "Custom report layout was deleted.",
-      });
-      setTimeout(() => setFeedbackNotice(null), 5000);
-    } catch (err) {
-      setFeedbackNotice({
-        type: "error",
-        message: err instanceof Error ? err.message : "Error deleting report layout.",
-      });
-      throw err;
-    }
-  }
-
-  // Filter custom templates for selector
-  const customTemplates = useMemo(() => {
-    return templates.filter((t) => !t.isDefault);
-  }, [templates]);
-
   return (
     <>
       <OperationalTopbar
@@ -747,85 +609,31 @@ export default function ReportsPage() {
           </div>
           <div className="report-actions">
             <GlobalDateRangePicker />
-            {isAdmin && (
-              <>
-                <button
-                  type="button"
-                  className="page-intro-action report-customize-action"
-                  aria-label="Customize current report layout (temporarily disabled)"
-                  data-tooltip="Customize report layout (temporarily disabled)"
-                  title="Feature temporarily disabled"
-                  disabled
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    style={{ flexShrink: 0 }}
-                  >
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                  </svg>
-                  {activeTemplate.isDefault ? "Customize" : "Edit Layout"}
-                </button>
-                <button
-                  type="button"
-                  className="page-intro-action report-new-action"
-                  aria-label="Create new report format (temporarily disabled)"
-                  data-tooltip="Create new report format (temporarily disabled)"
-                  title="Feature temporarily disabled"
-                  disabled
-                >
-                  <span aria-hidden="true">+</span> New Format
-                </button>
-              </>
+            {canExportReports(actor.role) && (
+              <button
+                type="button"
+                className="page-intro-action report-export-action"
+                aria-label="Export report to Excel CSV"
+                onClick={() =>
+                  downloadReportCsvFile(
+                    processedReport,
+                    formatDateRange(effectiveRange),
+                  )
+                }
+              >
+                <span aria-hidden="true">↓</span> Export CSV
+              </button>
             )}
             <button
               type="button"
-              className="page-intro-action report-export-action"
-              aria-label="Export report to Excel CSV (temporarily disabled)"
-              data-tooltip="Export report to Excel CSV (temporarily disabled)"
-              title="Feature temporarily disabled"
-              disabled
-            >
-              <span aria-hidden="true">↓</span> Export CSV
-            </button>
-            <button
-              type="button"
               className="report-print-button page-intro-action"
-              aria-label="Print the report or save it as a PDF"
-              data-tooltip="Print report or save as PDF"
-              title="Print the report or save it as a PDF"
+              aria-label="Print report"
               onClick={() => window.print()}
             >
               Print
             </button>
           </div>
         </header>
-
-        {feedbackNotice && (
-          <section
-            className={`notice ${feedbackNotice.type === "success" ? "notice-success" : "notice-alert"}`}
-            role="status"
-            style={{ marginBottom: "16px" }}
-          >
-            <span className="notice-icon" aria-hidden="true">
-              {feedbackNotice.type === "success" ? "✓" : "!"}
-            </span>
-            <div>
-              <strong>
-                {feedbackNotice.type === "success" ? "Report Format Updated:" : "Action Failed:"}
-              </strong>
-              <span>{feedbackNotice.message}</span>
-            </div>
-          </section>
-        )}
 
         {error ? (
           <section className="notice" role="alert">
@@ -866,31 +674,6 @@ export default function ReportsPage() {
             </div>
 
             <div className="report-tabs-bar-controls">
-              {/* Custom Saved Formats Selector */}
-              {customTemplates.length > 0 && (
-                <div className="report-custom-selector">
-                  <label htmlFor="custom-format-dropdown">
-                    Custom Formats:
-                  </label>
-                  <select
-                    id="custom-format-dropdown"
-                    value={activeTemplate.isDefault ? "" : activeTemplate.id}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        setActiveTemplateId(e.target.value);
-                      }
-                    }}
-                  >
-                    <option value="">— Select Saved Layout ({customTemplates.length}) —</option>
-                    {customTemplates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               <GlobalDateRangePicker />
             </div>
           </div>
@@ -924,7 +707,6 @@ export default function ReportsPage() {
                   min="2024-01-01"
                   className="daily-date-input"
                   aria-label="Select report date"
-                  title="Select date for daily trip report (from 2024)"
                   value={dailyDate}
                   onChange={(e) => {
                     if (e.target.value) {
@@ -956,34 +738,6 @@ export default function ReportsPage() {
               <span className="daily-trip-notice">
                 Fixed to {formatShortDate(parseDateValue(dailyDate))} (Single-day report)
               </span>
-            </div>
-          )}
-
-          {/* Active Template Metadata Pill */}
-          {!activeTemplate.isDefault && (
-            <div className="report-custom-banner">
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontWeight: 700, color: "var(--color-accent)" }}>Custom Layout Active:</span>
-                <span style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>{activeTemplate.name}</span>
-                <span style={{ color: "var(--color-text-muted)" }}>— {activeTemplate.description}</span>
-              </div>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => handleOpenCustomizer(activeTemplate, false)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "var(--color-accent)",
-                    fontWeight: 700,
-                    fontSize: "11px",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                  }}
-                >
-                  Edit Format Settings
-                </button>
-              )}
             </div>
           )}
 
@@ -1296,7 +1050,6 @@ export default function ReportsPage() {
               {processedReport.rows.length === 0 ? (
                 <div
                   className="empty-state report-empty-state"
-                  title={isDailyTripReport ? "No delivery trips recorded for the selected single day" : "No operational records found within the selected date range"}
                 >
                   <strong>
                     {isDailyTripReport
@@ -1319,20 +1072,6 @@ export default function ReportsPage() {
           </article>
         </div>
       </div>
-
-      {/* Report Layout Customizer Modal */}
-      {isCustomizerOpen && (
-        <ReportCustomizerModal
-          isOpen={isCustomizerOpen}
-          onClose={() => setIsCustomizerOpen(false)}
-          currentTemplate={customizerTargetTemplate}
-          onSaveTemplate={handleSaveTemplate}
-          onDeleteTemplate={
-            customizerTargetTemplate.isDefault ? undefined : handleDeleteTemplate
-          }
-          sampleDeliveries={filteredDeliveries}
-        />
-      )}
     </>
   );
 }

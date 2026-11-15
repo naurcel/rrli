@@ -75,7 +75,7 @@ export function ConfirmExpenseDeletionDialog({
             type="button"
             className="routex-dialog-close"
             aria-label="Close confirmation dialog"
-            title="Close confirmation dialog (Esc)"
+            title="Close (Esc)"
             disabled={pending}
             onClick={onCancel}
           >
@@ -134,7 +134,6 @@ export function ConfirmExpenseDeletionDialog({
             className="secondary-button"
             disabled={pending}
             onClick={onCancel}
-            title="Cancel deletion and close dialog"
           >
             Cancel
           </button>
@@ -143,7 +142,6 @@ export function ConfirmExpenseDeletionDialog({
             className="danger-confirm-button"
             disabled={pending}
             onClick={() => onConfirm(reason)}
-            title="Permanently delete this company expense"
           >
             {pending ? "Deleting…" : "Delete"}
           </button>

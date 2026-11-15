@@ -65,7 +65,7 @@ export function OperationalSidebar() {
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-          title={collapsed ? "Expand navigation" : "Collapse navigation"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           tabIndex={collapsed && !headerHovered ? -1 : 0}
         >
           <Icon>{collapsed ? "›" : "‹"}</Icon>

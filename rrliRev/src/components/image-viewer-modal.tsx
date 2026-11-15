@@ -73,7 +73,7 @@ export function ImageViewerModal({
               type="button"
               className="image-viewer-close-btn"
               onClick={onClose}
-              title="Close image preview (Escape)"
+              title="Close (Esc)"
               aria-label="Close image preview"
             >
               <svg
@@ -100,7 +100,6 @@ export function ImageViewerModal({
               src={imageUrl}
               alt={title}
               className="image-viewer-img"
-              title="Right-click to copy or open image in new tab"
             />
           ) : (
             <iframe
@@ -122,7 +121,6 @@ export function ImageViewerModal({
               className="secondary-button"
               style={{ padding: "4px 10px", fontSize: "11.5px", display: "inline-flex", alignItems: "center", gap: "5px" }}
               onClick={() => void triggerDocumentDownload(imageUrl, filename || "document.pdf")}
-              title="Download file to device"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />

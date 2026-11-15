@@ -228,6 +228,10 @@ export function canManageReportTemplates(role: UserRole): boolean {
   return hasPermission(role, "reports:manage_templates");
 }
 
+export function canExportReports(role: UserRole): boolean {
+  return hasPermission(role, "reports:export");
+}
+
 export function canManageCompanyExpenses(role: UserRole): boolean {
   return hasPermission(role, "finance:manage");
 }

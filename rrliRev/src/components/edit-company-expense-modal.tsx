@@ -108,7 +108,7 @@ export function EditCompanyExpenseModal({
             type="button"
             className="routex-dialog-close"
             aria-label="Close edit modal"
-            title="Close dialog (Esc)"
+            title="Close (Esc)"
             disabled={pending}
             onClick={onClose}
           >
@@ -199,7 +199,6 @@ export function EditCompanyExpenseModal({
               className="secondary-button"
               disabled={pending}
               onClick={onClose}
-              title="Discard changes and close modal"
             >
               Cancel
             </button>
@@ -207,7 +206,6 @@ export function EditCompanyExpenseModal({
               type="submit"
               className="primary-action-button"
               disabled={pending}
-              title="Save updated company expense"
             >
               {pending ? "Saving…" : "Save Changes"}
             </button>

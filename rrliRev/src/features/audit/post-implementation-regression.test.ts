@@ -8,8 +8,6 @@ import {
   validateDeliveryDateWindow,
 } from "../deliveries/delivery-recording-policy.ts";
 import {
-  formatDateRange,
-  isDateInRange,
   presetRange,
   toDateKey,
 } from "../../components/date-range-utils.ts";
@@ -18,10 +16,6 @@ import {
   BASE_HELPERS,
   getFleetCrew,
 } from "../deliveries/driver-registry.ts";
-import {
-  buildDeliveryTripRecord,
-  derivePodVerificationStatus,
-} from "../deliveries/delivery-domain.ts";
 import {
   correctSmallMockDelivery,
   getAllMockDeliveries,
@@ -184,6 +178,7 @@ test("POST-REGRESSION: Helper and Driver roles are properly populated and differ
 test("POST-REGRESSION: Late delivery submission auto-evaluates without popup blocking", () => {
   const reference = new Date("2026-11-05T03:00:00.000Z");
   const window = getDeliveryDateWindow(reference);
+  assert.equal(window.max, "2026-11-05");
 
   // Today is on time
   const todayPolicy = validateDeliveryDateWindow("2026-11-05", reference, "operations");

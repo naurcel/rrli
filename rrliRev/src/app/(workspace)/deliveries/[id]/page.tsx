@@ -218,10 +218,76 @@ function DeliveryDetailsPageContent({
   const ledgerQueryString = searchParams.toString();
   const backToLedgerHref = `/deliveries${ledgerQueryString ? `?${ledgerQueryString}` : ""}`;
 
-  function handleNavigateToDelivery(targetId: string) {
+  const [switchDirection, setSwitchDirection] = useState<"next" | "prev" | "jump">("jump");
+
+  function handleNavigateToDelivery(targetId: string, explicitDirection?: "next" | "prev" | "jump") {
+    let dir = explicitDirection;
+    if (!dir) {
+      const currentIdx = navigatorDeliveries.findIndex(
+        (d) => d.id === delivery?.id || d.waybillNumber === delivery?.id,
+      );
+      const targetIdx = navigatorDeliveries.findIndex(
+        (d) => d.id === targetId || d.waybillNumber === targetId,
+      );
+      if (currentIdx !== -1 && targetIdx !== -1) {
+        dir = targetIdx > currentIdx ? "next" : targetIdx < currentIdx ? "prev" : "jump";
+      } else {
+        dir = "jump";
+      }
+    }
+    setSwitchDirection(dir);
+
+    // Immediate reactive switch so the animation triggers smoothly without lag
+    const nextDelivery =
+      navigatorDeliveries.find((d) => d.id === targetId || d.waybillNumber === targetId) ??
+      allDeliveries.find((d) => d.id === targetId || d.waybillNumber === targetId);
+
+    if (nextDelivery) {
+      setDelivery(nextDelivery);
+    }
+
     const query = searchParams.toString();
-    router.push(`/deliveries/${encodeURIComponent(targetId)}${query ? `?${query}` : ""}`);
+    router.push(`/deliveries/${encodeURIComponent(targetId)}${query ? `?${query}` : ""}`, { scroll: false });
   }
+
+  // Keyboard navigation for switching deliveries: Left/Right arrows and [/]
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (deliveryToDelete || isActionMenuOpen) {
+        return;
+      }
+
+      const currentIndex = navigatorDeliveries.findIndex(
+        (d) => d.id === delivery?.id || d.waybillNumber === delivery?.id,
+      );
+      if (currentIndex === -1) return;
+
+      if ((e.key === "ArrowLeft" || e.key === "[") && currentIndex > 0) {
+        e.preventDefault();
+        handleNavigateToDelivery(navigatorDeliveries[currentIndex - 1].id, "prev");
+      } else if (
+        (e.key === "ArrowRight" || e.key === "]") &&
+        currentIndex < navigatorDeliveries.length - 1
+      ) {
+        e.preventDefault();
+        handleNavigateToDelivery(navigatorDeliveries[currentIndex + 1].id, "next");
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [delivery?.id, delivery?.waybillNumber, deliveryToDelete, isActionMenuOpen, navigatorDeliveries]);
 
   async function handleConfirmDelete() {
     if (!deliveryToDelete || isDeleting) return;
@@ -290,7 +356,6 @@ function DeliveryDetailsPageContent({
           <Link
             href={backToLedgerHref}
             className="delivery-back-link"
-            title="Return to the deliveries ledger while preserving search and filters"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="19" y1="12" x2="5" y2="12" />
@@ -308,7 +373,12 @@ function DeliveryDetailsPageContent({
           ) : null}
         </div>
 
-        {/* Feedback Alert Banner */}
+        {/* Animated Delivery Details Container */}
+        <div
+          key={delivery.id}
+          className={`delivery-detail-animated-content is-${switchDirection}`}
+        >
+          {/* Feedback Alert Banner */}
         {feedbackMessage ? (
           <div className="notice" role="status" style={{ marginBottom: "18px" }}>
             <span className="notice-icon" aria-hidden="true">✓</span>
@@ -332,7 +402,7 @@ function DeliveryDetailsPageContent({
               <span className="waybill-tag">WAYBILL #{delivery.waybillNumber}</span>
               <span className="delivery-date-tag">Date: {delivery.deliveryDate}</span>
               {delivery.recordingDelayed ? (
-                <span className="late-recording-pill" title="Recorded past the standard 3-day operational window">
+                <span className="late-recording-pill" title="Recorded past 3-day window">
                   Late Recording
                 </span>
               ) : null}
@@ -344,9 +414,9 @@ function DeliveryDetailsPageContent({
               <span
                 className={`simple-hero-badge ${isComplete ? "positive" : "warning"}`}
                 title={
-                  isComplete
-                    ? "Delivery record complete"
-                    : `Incomplete financials: ${delivery.financialIntegrityIssues.join(", ") || "incomplete expenses"}`
+                  !isComplete
+                    ? `Incomplete: ${delivery.financialIntegrityIssues.join(", ") || "incomplete expenses"}`
+                    : undefined
                 }
               >
                 <span className="simple-badge-dot" />
@@ -357,7 +427,6 @@ function DeliveryDetailsPageContent({
 
               <span
                 className={`simple-hero-badge ${delivery.podStatus === "Verified" ? "positive" : "warning"}`}
-                title={delivery.podStatus === "Verified" ? "Proof of delivery attached for all stops" : "Missing POD on one or more stops"}
               >
                 {delivery.podStatus === "Verified" ? "POD Attached" : "Missing POD"}
               </span>
@@ -548,6 +617,7 @@ function DeliveryDetailsPageContent({
               />
             </section>
           </div>
+        </div>
         </div>
       </div>
 

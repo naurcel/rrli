@@ -14,7 +14,7 @@ import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
 import { ImageViewerModal } from "@/components/image-viewer-modal";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
-import { isImageDocument, openDocumentInNewTab, triggerDocumentDownload } from "@/features/deliveries/pod-utils";
+import { isImageDocument, triggerDocumentDownload } from "@/features/deliveries/pod-utils";
 import { derivePodVerificationStatus } from "@/features/deliveries/delivery-domain";
 import { upsertBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
 import { canManageDocuments } from "@/lib/auth/rbac";
@@ -312,7 +312,7 @@ export default function PodDocumentsPage() {
             <button
               type="button"
               aria-label="Dismiss message"
-              title="Dismiss message"
+              title="Dismiss"
               onClick={() => setFeedback(null)}
             >
               ×
@@ -469,7 +469,7 @@ export default function PodDocumentsPage() {
                 className="routex-dialog-close"
                 onClick={() => !docSubmitting && setInspectingStop(null)}
                 aria-label="Close document dialog"
-                title="Close dialog (Esc)"
+                title="Close (Esc)"
               >
                 ×
               </button>
@@ -506,7 +506,7 @@ export default function PodDocumentsPage() {
                 <div
                   className="pod-empty-display"
                   role="status"
-                  title="Awaiting signed proof of delivery receipt upload for this store drop-off"
+                  title="Awaiting POD upload"
                 >
                   <div className="pod-empty-icon" aria-hidden="true">
                     <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -552,7 +552,7 @@ export default function PodDocumentsPage() {
                           })
                         }
                         style={{ cursor: "pointer" }}
-                        title="Click to view full photo in popup"
+                        title="View photo"
                       />
                     ) : (
                       <iframe
@@ -565,7 +565,7 @@ export default function PodDocumentsPage() {
                       <button
                         type="button"
                         className="secondary-button"
-                        title="View proof of delivery in popup"
+                        title="View POD"
                         style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
                         onClick={() =>
                           setFullscreenImage({
@@ -595,7 +595,7 @@ export default function PodDocumentsPage() {
                       <button
                         type="button"
                         className="secondary-button"
-                        title="Download proof of delivery document to local disk"
+                        title="Download POD"
                         style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                         onClick={() => void triggerDocumentDownload(docDetail.downloadUrl!, docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf")}
                       >
@@ -651,7 +651,6 @@ export default function PodDocumentsPage() {
               <button
                 type="button"
                 className="secondary-button"
-                title="Close document viewer dialog"
                 disabled={docSubmitting}
                 onClick={() => setInspectingStop(null)}
               >
@@ -664,7 +663,6 @@ export default function PodDocumentsPage() {
                   className="primary-action-button"
                   disabled={docSubmitting}
                   onClick={handleUploadDocument}
-                  title="Upload or replace the proof of delivery document"
                 >
                   {docSubmitting ? "Uploading…" : "Upload Document"}
                 </button>

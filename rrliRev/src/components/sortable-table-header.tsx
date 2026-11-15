@@ -53,8 +53,8 @@ export function SortableTableHeader({
 
   const sortTooltip = active
     ? direction === defaultDirection
-      ? `Sorted by ${label} (${direction === "asc" ? "ascending" : "descending"}). Click to reverse.`
-      : `Sorted by ${label} (${direction === "asc" ? "ascending" : "descending"}). Click to reset sort.`
+      ? (direction === "asc" ? "Sort descending" : "Sort ascending")
+      : "Reset sort"
     : `Sort by ${label}`;
 
   return (

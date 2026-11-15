@@ -331,7 +331,6 @@ export function GlobalDateRangePicker() {
         className={`global-date-filter${range.startDate || range.endDate ? " has-active" : ""}`}
         type="button"
         aria-label={`Date range: ${label}`}
-        title={`Filter workspace by date: ${label}`}
         aria-haspopup="dialog"
         aria-controls={dialogId}
         aria-expanded={open}
@@ -435,7 +434,7 @@ export function GlobalDateRangePicker() {
                   aria-live="polite"
                   style={{ cursor: "pointer" }}
                   onClick={() => setViewMode("months")}
-                  title="Click to select month"
+                  title="Select month"
                 >
                   {monthNames[month.getMonth()]} {month.getFullYear()}
                 </strong>
@@ -454,7 +453,7 @@ export function GlobalDateRangePicker() {
                 className="date-picker-month-mode-toggle"
                 type="button"
                 aria-label="Choose month and year"
-                title="Choose month and year"
+                title="Select month and year"
                 onClick={() => setViewMode("months")}
               />
               <div className="date-picker-weekdays" aria-hidden="true">

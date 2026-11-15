@@ -204,8 +204,8 @@ export function DeliveryFilterDropdown({
           }
           title={
             selectedClients.length > 0
-              ? `Filter by client: ${clientTriggerLabel} (${selectedClients.length} active)`
-              : "Filter deliveries by client"
+              ? `Filter: ${clientTriggerLabel}`
+              : "Filter clients"
           }
           onClick={() => {
             setClientOpen((prev) => !prev);
@@ -233,7 +233,6 @@ export function DeliveryFilterDropdown({
                   <button
                     type="button"
                     className="filter-popover-clear"
-                    title="Clear selected client filters"
                     onClick={() => onClientsChange([])}
                   >
                     Clear
@@ -279,7 +278,7 @@ export function DeliveryFilterDropdown({
                     className="search-clear-btn"
                     onClick={() => setClientSearch("")}
                     aria-label="Clear search"
-                    title="Clear client search query"
+                    title="Clear search"
                   >
                     ×
                   </button>
@@ -290,7 +289,7 @@ export function DeliveryFilterDropdown({
             <div className="filter-popover-body">
               <section className="filter-popover-section">
                 {visibleClients.length === 0 ? (
-                  <div className="filter-section-empty" title={`No client names match "${clientSearch}"`}>No clients match “{clientSearch}”</div>
+                  <div className="filter-section-empty">No clients match “{clientSearch}”</div>
                 ) : (
                   <div className="filter-options-list">
                     {visibleClients.map((client) => {
@@ -357,8 +356,8 @@ export function DeliveryFilterDropdown({
           }
           title={
             selectedTrucks.length > 0
-              ? `Filter by truck: ${truckTriggerLabel} (${selectedTrucks.length} active)`
-              : "Filter deliveries by truck"
+              ? `Filter: ${truckTriggerLabel}`
+              : "Filter trucks"
           }
           onClick={() => {
             setTruckOpen((prev) => !prev);
@@ -386,7 +385,6 @@ export function DeliveryFilterDropdown({
                   <button
                     type="button"
                     className="filter-popover-clear"
-                    title="Clear selected truck filters"
                     onClick={() => onTrucksChange([])}
                   >
                     Clear
@@ -440,7 +438,7 @@ export function DeliveryFilterDropdown({
                     className="search-clear-btn"
                     onClick={() => setTruckSearch("")}
                     aria-label="Clear search"
-                    title="Clear truck search query"
+                    title="Clear search"
                   >
                     ×
                   </button>
@@ -568,7 +566,7 @@ export function DeliveryFilterDropdown({
                 )}
 
                 {visibleOwnedTrucks.length === 0 && visibleSubcontractedTrucks.length === 0 && (
-                  <div className="filter-section-empty" title={`No plate numbers match "${truckSearch}"`}>No trucks match “{truckSearch}”</div>
+                  <div className="filter-section-empty">No trucks match “{truckSearch}”</div>
                 )}
               </section>
             </div>
@@ -597,7 +595,6 @@ export function DeliveryFilterDropdown({
           type="button"
           className="filter-clear-action-btn"
           onClick={handleClearAll}
-          title="Clear all active filters"
         >
           Clear filters
         </button>

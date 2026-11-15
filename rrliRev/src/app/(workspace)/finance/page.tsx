@@ -453,7 +453,6 @@ export default function FinancePage() {
                 type="button"
                 className="primary-action-button page-intro-action"
                 onClick={openRecordModal}
-                title="Record a company operating expense"
               >
                 + Record Expense
               </button>
@@ -546,7 +545,6 @@ export default function FinancePage() {
           <div className="filters" aria-label="Filter company expenses">
             <label
               className="search-box"
-              title="Search expenses by description, note, user, date, or amount"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -593,7 +591,6 @@ export default function FinancePage() {
                 type="button"
                 className="secondary-button filter-clear-action-btn"
                 onClick={clearFilters}
-                title="Reset all active filters"
               >
                 Clear Filters
               </button>
@@ -717,7 +714,6 @@ export default function FinancePage() {
                         zIndex: openActionExpenseId === exp.id ? 150 : undefined,
                         cursor: "pointer",
                       }}
-                      title="Click to view full expense details"
                     >
                       <td className="cell-date">{exp.expenseDate}</td>
                       <td>
@@ -901,7 +897,7 @@ export default function FinancePage() {
                     type="button"
                     className="routex-dialog-close"
                     aria-label="Close record expense modal"
-                    title="Close dialog (Esc)"
+                    title="Close (Esc)"
                     disabled={submitting}
                     onClick={closeRecordModal}
                   >

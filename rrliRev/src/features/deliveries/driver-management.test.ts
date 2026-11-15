@@ -15,8 +15,6 @@ import {
   deleteFleetCrewMember,
   resetDynamicFleetCrew,
   resetDynamicFleetDrivers,
-  type FleetCrewMember,
-  type FleetDriver,
 } from "./driver-registry.ts";
 import {
   correctSmallMockDelivery,

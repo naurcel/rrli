@@ -23,13 +23,10 @@ import {
   TruckPhoto,
 } from "@/components/truck-photo";
 import {
-  getDeliveryIncompleteIssues,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
   summarizeTruckProfitability,
-  type ExpenseResolutionStatus,
 } from "@/features/deliveries/delivery-domain";
-import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
   getFleetTrucks,
   getTruckStorageCapability,
@@ -42,9 +39,8 @@ import {
   readBrowserPreviewTrucks,
   updateBrowserPreviewTruck,
 } from "@/features/deliveries/browser-preview-trucks";
-import { upsertBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
-import { canManageDocuments, canManageTrucks } from "@/lib/auth/rbac";
+import { canManageTrucks } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
 export default function TruckProfilePage({
@@ -421,7 +417,7 @@ export default function TruckProfilePage({
       <OperationalTopbar contextLabel={`Truck ${normalizedPlate}`} />
 
       <div className="content-wrap fleet-detail-page truck-profile-page">
-        <Link className="back-link" href="/truck-profitability" title="Back to Trucks">
+        <Link className="back-link" href="/truck-profitability">
           ← Back to Trucks
         </Link>
 
@@ -643,7 +639,7 @@ export default function TruckProfilePage({
                               {isFinanciallyIncomplete || trip.totalExpenses == null ? (
                                 <span
                                   className="profit-amount warning"
-                                  title={`Incomplete expenses: ${trip.financialIntegrityIssues.join(", ") || "Pending confirmation"}`}
+                                  title="Incomplete expenses"
                                 >
                                   Incomplete
                                 </span>
@@ -655,7 +651,7 @@ export default function TruckProfilePage({
                               {isFinanciallyIncomplete || trip.netIncome == null ? (
                                 <span
                                   className="profit-amount warning"
-                                  title="Net profit deferred: pending expenses"
+                                  title="Pending expenses"
                                 >
                                   Incomplete
                                 </span>
@@ -768,7 +764,7 @@ export default function TruckProfilePage({
                     type="button"
                     className="routex-dialog-close"
                     aria-label="Close confirmation dialog"
-                    title="Close confirmation dialog (Esc)"
+                    title="Close (Esc)"
                     disabled={isDeleting}
                     onClick={() => setIsDeleteModalOpen(false)}
                   >
@@ -878,7 +874,7 @@ export default function TruckProfilePage({
                 type="button"
                 className="routex-dialog-close"
                 aria-label="Close dialog"
-                title="Close dialog (Esc)"
+                title="Close (Esc)"
                 disabled={editSubmitting}
                 onClick={() => setIsEditModalOpen(false)}
               >
@@ -1052,7 +1048,6 @@ export default function TruckProfilePage({
                   type="button"
                   className="secondary-button"
                   disabled={editSubmitting}
-                  title="Cancel editing truck and close dialog"
                   onClick={() => setIsEditModalOpen(false)}
                 >
                   Cancel
@@ -1061,7 +1056,6 @@ export default function TruckProfilePage({
                   type="submit"
                   className="primary-action-button"
                   disabled={editSubmitting}
-                  title="Save truck changes"
                 >
                   {editSubmitting ? "Saving Changes..." : "Save Changes"}
                 </button>

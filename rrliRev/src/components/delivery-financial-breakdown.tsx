@@ -29,7 +29,7 @@ export function ExpenseDonutPieChart({
   slices,
   totalExpenses,
   isComplete,
-  unknownItems = [],
+  unknownItems: _unknownItems = [],
   title = "Trip Expenses Distribution",
   centerLabel = "Total Expenses",
   valueFormatter = formatPeso,
@@ -348,7 +348,6 @@ export function ExpenseDonutPieChart({
                   <span
                     className="legend-item-name"
                     title={slice.label}
-                    data-tooltip={slice.label}
                   >
                     {slice.label}
                   </span>
@@ -542,10 +541,7 @@ export function DeliveryFinancialBreakdown({
         {/* Revenue */}
         <div className="hero-metric-card revenue-card">
           <span className="hero-metric-eyebrow">REVENUE</span>
-          <div
-            className="hero-metric-amount revenue-text"
-            title={model.grossRevenue != null ? `Delivery revenue: ${formatPeso(model.grossRevenue)} agreed customer billing` : "Revenue pending specification"}
-          >
+          <div className="hero-metric-amount revenue-text">
             {model.grossRevenue != null ? formatPeso(model.grossRevenue) : "₱0.00"}
           </div>
           <span className="hero-metric-sub">
@@ -558,11 +554,7 @@ export function DeliveryFinancialBreakdown({
           <span className="hero-metric-eyebrow">EXPENSES</span>
           <div
             className={`hero-metric-amount ${model.isFinanciallyComplete ? "expenses-text" : "warn-text"}`}
-            title={
-              model.isFinanciallyComplete
-                ? `Total trip expenses: ${formatPeso(model.totalExpenses)}`
-                : `Trip expenses incomplete: ${model.unknownList.join(", ")}`
-            }
+            title={model.isFinanciallyComplete ? "Total trip expenses" : "Incomplete expenses"}
           >
             {model.isFinanciallyComplete && model.totalExpenses != null
               ? formatPeso(model.totalExpenses)
@@ -586,8 +578,8 @@ export function DeliveryFinancialBreakdown({
             }`}
             title={
               model.isFinanciallyComplete && model.netIncome != null
-                ? `Net profit: ${formatPeso(model.netIncome)} (Delivery Revenue − Trip Expenses)`
-                : "Net profit calculation requires all trip expenses to be recorded"
+                ? "Net profit"
+                : "Pending expenses"
             }
           >
             {model.isFinanciallyComplete && model.netIncome != null
@@ -600,12 +592,11 @@ export function DeliveryFinancialBreakdown({
                 className={`margin-pill ${
                   model.marginPercent >= 15 ? "pill-success" : model.marginPercent >= 0 ? "pill-neutral" : "pill-warn"
                 }`}
-                title={`Profit margin: ${formatPercent(model.marginPercent)}`}
               >
                 {formatPercent(model.marginPercent)} Profit Margin
               </span>
             ) : (
-              <span className="margin-pill pill-warn" title="Profit margin deferred until expenses are resolved">
+              <span className="margin-pill pill-warn" title="Pending expenses">
                 Incomplete Profit Margin
               </span>
             )}
@@ -739,9 +730,9 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.dieselExpenses === "unknown" ? (
-                    <span className="badge-warn" title="Fuel receipt amount not yet recorded">Incomplete</span>
+                    <span className="badge-warn" title="Pending fuel receipt">Incomplete</span>
                   ) : trip.expenseStates.dieselExpenses === "not_applicable" ? (
-                    <span className="badge-neutral" title="Not applicable: Fuel cost not charged for this trip">Not applicable</span>
+                    <span className="badge-neutral">Not applicable</span>
                   ) : (
                     <span className="item-val-bold">{formatPeso(trip.expenses.dieselExpenses)}</span>
                   )}
@@ -761,9 +752,9 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.tollGateExpenses === "unknown" ? (
-                    <span className="badge-warn" title="Toll gate expenses not yet recorded">Incomplete</span>
+                    <span className="badge-warn" title="Pending toll receipts">Incomplete</span>
                   ) : trip.expenseStates.tollGateExpenses === "not_applicable" ? (
-                    <span className="badge-neutral" title="Not applicable: No highway toll routes used">Not applicable</span>
+                    <span className="badge-neutral">Not applicable</span>
                   ) : (
                     <span className="item-val-bold">{formatPeso(trip.expenses.tollGateExpenses)}</span>
                   )}
@@ -783,9 +774,9 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.entryFees === "unknown" ? (
-                    <span className="badge-warn" title="Store entry fees not yet recorded">Incomplete</span>
+                    <span className="badge-warn" title="Pending entry fees">Incomplete</span>
                   ) : trip.expenseStates.entryFees === "not_applicable" ? (
-                    <span className="badge-neutral" title="Not applicable: No store entry fees charged on this route">Not applicable</span>
+                    <span className="badge-neutral">Not applicable</span>
                   ) : (
                     <span className="item-val-bold">{formatPeso(trip.expenses.entryFees)}</span>
                   )}
@@ -803,9 +794,9 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.otherExpenses === "unknown" ? (
-                    <span className="badge-warn" title="Other expenses not yet recorded">Incomplete</span>
+                    <span className="badge-warn" title="Pending expenses">Incomplete</span>
                   ) : trip.expenseStates.otherExpenses === "not_applicable" ? (
-                    <span className="badge-neutral" title="Not applicable: No other incidentals incurred">Not applicable</span>
+                    <span className="badge-neutral">Not applicable</span>
                   ) : (
                     <span className="item-val-bold">{formatPeso(trip.expenses.otherExpenses)}</span>
                   )}
@@ -824,7 +815,7 @@ export function DeliveryFinancialBreakdown({
               {model.isCrewComplete && model.crewSubtotal != null ? (
                 <span className="group-subtotal">{formatPeso(model.crewSubtotal)}</span>
               ) : (
-                <span className="badge-warn" title="Crew compensation incomplete">Incomplete</span>
+                <span className="badge-warn" title="Incomplete crew expenses">Incomplete</span>
               )}
             </div>
 
@@ -841,9 +832,9 @@ export function DeliveryFinancialBreakdown({
                   </div>
                   <div className="item-value-box">
                     {!model.isDriverComplete ? (
-                      <span className="badge-warn" title="Driver wage or allowance not yet recorded">Incomplete</span>
+                      <span className="badge-warn" title="Pending driver wage">Incomplete</span>
                     ) : model.driverTotal === 0 && trip.expenseStates.driverDailyRate === "not_applicable" ? (
-                      <span className="badge-neutral" title="Not applicable: Driver compensation handled outside trip expenses">Not applicable</span>
+                      <span className="badge-neutral">Not applicable</span>
                     ) : (
                       <span className="item-val-bold">{formatPeso(model.driverTotal)}</span>
                     )}
@@ -854,16 +845,7 @@ export function DeliveryFinancialBreakdown({
                 <div className="crew-sub-pills">
                   <div className="crew-sub-pill">
                     <span className="sub-label">Daily Wage:</span>
-                    <span
-                      className="sub-val"
-                      title={
-                        trip.expenseStates.driverDailyRate === "unknown"
-                          ? "Driver daily wage not yet recorded"
-                          : trip.expenseStates.driverDailyRate === "not_applicable"
-                          ? "Not applicable"
-                          : undefined
-                      }
-                    >
+                    <span className="sub-val">
                       {trip.expenseStates.driverDailyRate === "unknown"
                         ? "Incomplete"
                         : trip.expenseStates.driverDailyRate === "not_applicable"
@@ -873,16 +855,7 @@ export function DeliveryFinancialBreakdown({
                   </div>
                   <div className="crew-sub-pill">
                     <span className="sub-label">Trip Allowance:</span>
-                    <span
-                      className="sub-val"
-                      title={
-                        trip.expenseStates.driverAllowance === "unknown"
-                          ? "Driver trip allowance not yet recorded"
-                          : trip.expenseStates.driverAllowance === "not_applicable"
-                          ? "Not applicable"
-                          : undefined
-                      }
-                    >
+                    <span className="sub-val">
                       {trip.expenseStates.driverAllowance === "unknown"
                         ? "Incomplete"
                         : trip.expenseStates.driverAllowance === "not_applicable"
@@ -900,14 +873,14 @@ export function DeliveryFinancialBreakdown({
                     <span className="item-color-indicator" style={{ backgroundColor: "#0d9488" }} />
                     <div>
                       <span className="item-name">Helper Compensation</span>
-                      {trip.helperName ? <span className="item-detail">{trip.helperName}</span> : <span className="item-detail" title="Solo driver run — no helper assigned">None assigned</span>}
+                      {trip.helperName ? <span className="item-detail">{trip.helperName}</span> : <span className="item-detail">None assigned</span>}
                     </div>
                   </div>
                   <div className="item-value-box">
                     {!model.isHelperComplete ? (
-                      <span className="badge-warn" title="Helper wage or allowance not yet recorded">Incomplete</span>
+                      <span className="badge-warn" title="Pending helper wage">Incomplete</span>
                     ) : model.helperTotal === 0 && trip.expenseStates.helperDailyRate === "not_applicable" ? (
-                      <span className="badge-neutral" title="Not applicable: No helper compensation for this delivery">Not applicable</span>
+                      <span className="badge-neutral">Not applicable</span>
                     ) : (
                       <span className="item-val-bold">{formatPeso(model.helperTotal)}</span>
                     )}
@@ -918,16 +891,7 @@ export function DeliveryFinancialBreakdown({
                 <div className="crew-sub-pills">
                   <div className="crew-sub-pill">
                     <span className="sub-label">Daily Wage:</span>
-                    <span
-                      className="sub-val"
-                      title={
-                        trip.expenseStates.helperDailyRate === "unknown"
-                          ? "Helper daily wage not yet recorded"
-                          : trip.expenseStates.helperDailyRate === "not_applicable"
-                          ? "Not applicable"
-                          : undefined
-                      }
-                    >
+                    <span className="sub-val">
                       {trip.expenseStates.helperDailyRate === "unknown"
                         ? "Incomplete"
                         : trip.expenseStates.helperDailyRate === "not_applicable"
@@ -937,16 +901,7 @@ export function DeliveryFinancialBreakdown({
                   </div>
                   <div className="crew-sub-pill">
                     <span className="sub-label">Trip Allowance:</span>
-                    <span
-                      className="sub-val"
-                      title={
-                        trip.expenseStates.helperAllowance === "unknown"
-                          ? "Helper trip allowance not yet recorded"
-                          : trip.expenseStates.helperAllowance === "not_applicable"
-                          ? "Not applicable"
-                          : undefined
-                      }
-                    >
+                    <span className="sub-val">
                       {trip.expenseStates.helperAllowance === "unknown"
                         ? "Incomplete"
                         : trip.expenseStates.helperAllowance === "not_applicable"

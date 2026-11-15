@@ -8,7 +8,6 @@ import {
   generateSampleCsv,
   parseDeliveryImport,
   validateStagedRow,
-  type ImportParseResult,
   type StagedDeliveryRow,
 } from "@/features/deliveries/delivery-import-parser";
 import {
@@ -42,9 +41,7 @@ export function DeliveryExcelImportClient({
   const [step, setStep] = useState<ImportStep>(1);
   const [batchName, setBatchName] = useState(() => `DTR-Batch-${new Date().toISOString().slice(0, 10)}`);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [rawText, setRawText] = useState<string>("");
   const [stagedRows, setStagedRows] = useState<StagedDeliveryRow[]>([]);
-  const [parseSummary, setParseSummary] = useState<Omit<ImportParseResult, "rows"> | null>(null);
   const [existingWaybills, setExistingWaybills] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -92,7 +89,6 @@ export function DeliveryExcelImportClient({
   function processFileText(content: string, name: string) {
     setErrorMessage(null);
     setFileName(name);
-    setRawText(content);
 
     try {
       const result = parseDeliveryImport(content, existingWaybills);
@@ -106,14 +102,6 @@ export function DeliveryExcelImportClient({
       }
 
       setStagedRows(result.rows);
-      setParseSummary({
-        totalRawRows: result.totalRawRows,
-        totalGroupedDeliveries: result.totalGroupedDeliveries,
-        readyCount: result.readyCount,
-        attentionCount: result.attentionCount,
-        duplicateCount: result.duplicateCount,
-        errors: result.errors,
-      });
       setStep(2);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Failed to parse file.");
@@ -200,22 +188,6 @@ export function DeliveryExcelImportClient({
         return { ...modified, status, issues };
       });
 
-      // Update summary counts
-      const ready = updated.filter((r) => r.status === "ready").length;
-      const attention = updated.filter((r) => r.status === "needs_attention").length;
-      const dupes = updated.filter((r) => r.status === "duplicate").length;
-
-      setParseSummary((prev) =>
-        prev
-          ? {
-              ...prev,
-              readyCount: ready,
-              attentionCount: attention,
-              duplicateCount: dupes,
-            }
-          : null,
-      );
-
       return updated;
     });
   }
@@ -223,22 +195,6 @@ export function DeliveryExcelImportClient({
   function removeStagedRow(id: string) {
     setStagedRows((current) => {
       const next = current.filter((r) => r.id !== id);
-      const ready = next.filter((r) => r.status === "ready").length;
-      const attention = next.filter((r) => r.status === "needs_attention").length;
-      const dupes = next.filter((r) => r.status === "duplicate").length;
-
-      setParseSummary((prev) =>
-        prev
-          ? {
-              ...prev,
-              totalGroupedDeliveries: next.length,
-              readyCount: ready,
-              attentionCount: attention,
-              duplicateCount: dupes,
-            }
-          : null,
-      );
-
       return next;
     });
   }
@@ -369,9 +325,7 @@ export function DeliveryExcelImportClient({
   function resetImportFlow() {
     setStep(1);
     setFileName(null);
-    setRawText("");
     setStagedRows([]);
-    setParseSummary(null);
     setErrorMessage(null);
     setImportResult(null);
     setActiveTab("all");
