@@ -767,8 +767,19 @@ html[data-theme="dark"] .sidebar.collapsed .nav-tooltip::after {
   opacity: 1;
   visibility: visible;
   transition: opacity 0.4s cubic-bezier(0.2, 0, 0, 1), visibility 0s 0s;
-  mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.6) 45%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.6) 45%, transparent 100%);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 55%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 55%, transparent 100%);
+  --crack-stop-1: #f59e0b;
+  --crack-stop-2: #fbbf24;
+  --crack-stop-3: #d97706;
+  --crack-stop-4: #b45309;
+}
+
+html[data-theme="dark"] .sidebar-radiating-rays {
+  --crack-stop-1: #fef08a;
+  --crack-stop-2: #fbbf24;
+  --crack-stop-3: #f59e0b;
+  --crack-stop-4: #d97706;
 }
 
 .sidebar.collapsed .sidebar-radiating-rays {
@@ -778,148 +789,161 @@ html[data-theme="dark"] .sidebar.collapsed .nav-tooltip::after {
   transition: opacity 0.25s ease, visibility 0s 0.25s;
 }
 
-/* Narrow flame-like light plume escaping upwards through the crack */
+/* Full-width crack fissures SVG spanning across the entire bottom baseline */
+.sidebar-cracks-svg {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.28));
+  animation: sidebarCracksPulse 12s ease-in-out infinite;
+}
+
+html[data-theme="dark"] .sidebar-cracks-svg {
+  opacity: 0.95;
+  filter: drop-shadow(0 0 7px rgba(251, 191, 36, 0.4));
+}
+
+.sidebar-crack-base {
+  opacity: 0.95;
+}
+
+.sidebar-crack-line {
+  opacity: 0.82;
+  transform-origin: 50% 100%;
+  animation: sidebarCrackFlicker 8s ease-in-out infinite;
+}
+
+.sidebar-crack-line.fissure-1 { animation-delay: 0s; }
+.sidebar-crack-line.fissure-2 { animation-delay: 1.4s; }
+.sidebar-crack-line.fissure-3 { animation-delay: 2.8s; }
+.sidebar-crack-line.fissure-4 { animation-delay: 4.2s; }
+.sidebar-crack-line.fissure-5 { animation-delay: 5.6s; }
+.sidebar-crack-line.fissure-6 { animation-delay: 7.0s; }
+
+/* Wide light field escaping upwards across the entire bottom baseline */
 .sidebar-rays-beam {
   position: absolute;
   bottom: 0;
-  left: 50%;
-  width: 64px;
+  left: 0;
+  right: 0;
+  width: 100%;
   height: 200px;
-  transform-origin: 50% 100%;
-  transform: translateX(-50%) translateY(0) scaleY(1) scaleX(1) rotate(0deg);
   background:
-    /* Bright core filament escaping the crack */
-    radial-gradient(
-      ellipse 30% 90% at 50% 100%,
-      rgba(251, 191, 36, 0.28) 0%,
-      rgba(245, 158, 11, 0.16) 35%,
-      transparent 75%
-    ),
-    /* Soft ambient flame body */
-    radial-gradient(
-      ellipse 50% 100% at 50% 100%,
-      rgba(245, 158, 11, 0.18) 0%,
-      rgba(217, 119, 6, 0.08) 55%,
-      transparent 85%
-    );
-  filter: blur(2px);
-  animation: sidebarFlameWaver 15s ease-in-out infinite;
+    radial-gradient(ellipse 26% 80% at 14% 100%, rgba(245, 158, 11, 0.16) 0%, transparent 68%),
+    radial-gradient(ellipse 30% 92% at 36% 100%, rgba(251, 191, 36, 0.22) 0%, transparent 72%),
+    radial-gradient(ellipse 32% 98% at 55% 100%, rgba(251, 191, 36, 0.25) 0%, transparent 76%),
+    radial-gradient(ellipse 28% 88% at 76% 100%, rgba(245, 158, 11, 0.20) 0%, transparent 70%),
+    radial-gradient(ellipse 26% 75% at 92% 100%, rgba(217, 119, 6, 0.15) 0%, transparent 64%);
+  filter: blur(4px);
+  animation: sidebarFlameWaver 14s ease-in-out infinite;
   will-change: transform, opacity;
+  z-index: 0;
 }
 
 html[data-theme="dark"] .sidebar-rays-beam {
   background:
-    radial-gradient(
-      ellipse 30% 90% at 50% 100%,
-      rgba(253, 224, 71, 0.36) 0%,
-      rgba(251, 191, 36, 0.22) 35%,
-      transparent 75%
-    ),
-    radial-gradient(
-      ellipse 50% 100% at 50% 100%,
-      rgba(251, 191, 36, 0.24) 0%,
-      rgba(245, 158, 11, 0.12) 55%,
-      transparent 85%
-    );
+    radial-gradient(ellipse 26% 80% at 14% 100%, rgba(251, 191, 36, 0.22) 0%, transparent 68%),
+    radial-gradient(ellipse 30% 92% at 36% 100%, rgba(253, 224, 71, 0.30) 0%, transparent 72%),
+    radial-gradient(ellipse 32% 98% at 55% 100%, rgba(253, 224, 71, 0.32) 0%, transparent 76%),
+    radial-gradient(ellipse 28% 88% at 76% 100%, rgba(251, 191, 36, 0.26) 0%, transparent 70%),
+    radial-gradient(ellipse 26% 75% at 92% 100%, rgba(245, 158, 11, 0.18) 0%, transparent 64%);
 }
 
-/* The crack fissure ground hearth glow */
+/* Continuous ground fissure hearth glow across the whole bottom */
 .sidebar-rays-glow {
   position: absolute;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 96px;
-  height: 32px;
-  background: radial-gradient(
-    ellipse 65% 100% at 50% 100%,
-    rgba(245, 158, 11, 0.35) 0%,
-    rgba(217, 119, 6, 0.15) 45%,
-    transparent 80%
-  );
-  filter: blur(3px);
-  animation: sidebarCrackBreathe 11s ease-in-out infinite;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 52px;
+  background:
+    linear-gradient(to top, rgba(245, 158, 11, 0.32) 0%, rgba(217, 119, 6, 0.14) 42%, transparent 100%),
+    radial-gradient(ellipse 100% 100% at 50% 100%, rgba(251, 191, 36, 0.35) 0%, transparent 80%);
+  filter: blur(2.5px);
+  animation: sidebarCrackBreathe 10s ease-in-out infinite;
   will-change: transform, opacity;
+  z-index: 0;
 }
 
 html[data-theme="dark"] .sidebar-rays-glow {
-  background: radial-gradient(
-    ellipse 65% 100% at 50% 100%,
-    rgba(251, 191, 36, 0.42) 0%,
-    rgba(245, 158, 11, 0.20) 45%,
-    transparent 80%
-  );
+  background:
+    linear-gradient(to top, rgba(251, 191, 36, 0.40) 0%, rgba(245, 158, 11, 0.18) 42%, transparent 100%),
+    radial-gradient(ellipse 100% 100% at 50% 100%, rgba(253, 224, 71, 0.45) 0%, transparent 80%);
+}
+
+@keyframes sidebarCracksPulse {
+  0%, 100% {
+    opacity: 0.85;
+    transform: scaleY(1.0);
+  }
+  50% {
+    opacity: 0.98;
+    transform: scaleY(1.04);
+  }
+}
+
+@keyframes sidebarCrackFlicker {
+  0%, 100% {
+    opacity: 0.80;
+    transform: rotate(0deg);
+  }
+  25% {
+    opacity: 0.94;
+    transform: rotate(0.4deg);
+  }
+  75% {
+    opacity: 0.74;
+    transform: rotate(-0.3deg);
+  }
 }
 
 @keyframes sidebarFlameWaver {
-  0% {
-    transform: translateX(-50%) translateY(0) scaleY(1.0) scaleX(1.0) rotate(0deg);
+  0%, 100% {
+    transform: translateY(0) scaleY(1.0);
     opacity: 0.82;
   }
-  14% {
-    transform: translateX(calc(-50% + 1.5px)) translateY(-6px) scaleY(1.07) scaleX(0.97) rotate(0.8deg);
+  25% {
+    transform: translateY(-4px) scaleY(1.04);
     opacity: 0.90;
   }
-  28% {
-    transform: translateX(calc(-50% + 0.5px)) translateY(-2px) scaleY(0.97) scaleX(1.02) rotate(0.1deg);
-    opacity: 0.76;
-  }
-  44% {
-    transform: translateX(calc(-50% - 2.5px)) translateY(-10px) scaleY(1.12) scaleX(0.95) rotate(-1.1deg);
-    opacity: 0.94;
-  }
-  58% {
-    transform: translateX(calc(-50% - 0.8px)) translateY(-4px) scaleY(1.01) scaleX(1.0) rotate(-0.3deg);
-    opacity: 0.80;
-  }
-  72% {
-    transform: translateX(calc(-50% + 1.8px)) translateY(-8px) scaleY(1.09) scaleX(0.96) rotate(0.6deg);
-    opacity: 0.88;
-  }
-  86% {
-    transform: translateX(calc(-50% - 0.5px)) translateY(-1px) scaleY(0.96) scaleX(1.02) rotate(-0.2deg);
+  50% {
+    transform: translateY(-2px) scaleY(0.98);
     opacity: 0.78;
   }
-  100% {
-    transform: translateX(-50%) translateY(0) scaleY(1.0) scaleX(1.0) rotate(0deg);
-    opacity: 0.82;
+  75% {
+    transform: translateY(-6px) scaleY(1.06);
+    opacity: 0.92;
   }
 }
 
 @keyframes sidebarCrackBreathe {
-  0% {
-    transform: translateX(-50%) scaleX(1.0) scaleY(1.0);
-    opacity: 0.70;
-  }
-  22% {
-    transform: translateX(calc(-50% + 1px)) scaleX(1.05) scaleY(0.96);
-    opacity: 0.82;
-  }
-  45% {
-    transform: translateX(-50%) scaleX(0.96) scaleY(1.06);
-    opacity: 0.65;
-  }
-  68% {
-    transform: translateX(calc(-50% - 1px)) scaleX(1.08) scaleY(0.94);
-    opacity: 0.86;
-  }
-  85% {
-    transform: translateX(-50%) scaleX(0.98) scaleY(1.02);
+  0%, 100% {
+    transform: scaleX(1.0) scaleY(1.0);
     opacity: 0.72;
   }
-  100% {
-    transform: translateX(-50%) scaleX(1.0) scaleY(1.0);
-    opacity: 0.70;
+  50% {
+    transform: scaleX(1.03) scaleY(1.05);
+    opacity: 0.88;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .sidebar-cracks-svg,
+  .sidebar-crack-line,
   .sidebar-rays-beam,
   .sidebar-rays-glow {
     animation: none !important;
   }
 }
 
+html[data-reduce-motion="true"] .sidebar-cracks-svg,
+html[data-reduce-motion="true"] .sidebar-crack-line,
 html[data-reduce-motion="true"] .sidebar-rays-beam,
 html[data-reduce-motion="true"] .sidebar-rays-glow {
   animation: none !important;

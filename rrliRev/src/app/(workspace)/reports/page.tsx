@@ -608,7 +608,6 @@ export default function ReportsPage() {
             </p>
           </div>
           <div className="report-actions">
-            <GlobalDateRangePicker />
             {canExportReports(actor.role) && (
               <button
                 type="button"
