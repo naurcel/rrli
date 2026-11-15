@@ -16891,5 +16891,5 @@ html[data-theme="dark"] .profile-segmented-btn.active {
 }
 
 html[data-theme="dark"] .profile-prefs-back-btn:hover {
-  backgroun
-... [truncated for diff preview]
+  background: #18191d;
+}
