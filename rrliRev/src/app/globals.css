@@ -16900,5 +16900,8 @@ html[data-theme="dark"] .profile-dropdown-logout:hover {
   gap: 2px;
 }
 
-.profile-prefs-su
-... [truncated for diff preview]
+.profile-prefs-sublabel {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
