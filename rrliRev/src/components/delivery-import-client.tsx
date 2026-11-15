@@ -406,16 +406,14 @@ export function DeliveryExcelImportClient({
             </div>
           </div>
 
-          <div style={{ padding: "24px", borderTop: "1px solid var(--line)" }}>
-            <div className="import-batch-field" style={{ marginBottom: "22px" }}>
-              <label htmlFor="import-batch-name" style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
+          <div style={{ padding: "20px 22px", borderTop: "1px solid var(--line)" }}>
+            <div className="import-batch-field">
+              <label htmlFor="import-batch-name">
                 Batch Reference Name
               </label>
               <input
                 id="import-batch-name"
                 type="text"
-                className="import-table-input"
-                style={{ maxWidth: "360px", minHeight: "38px", fontSize: "13px", padding: "8px 12px", borderRadius: "8px" }}
                 value={batchName}
                 onChange={(e) => setBatchName(e.target.value)}
                 placeholder="e.g. DTR-Batch-2026-11-01"
@@ -467,7 +465,7 @@ export function DeliveryExcelImportClient({
               />
             </label>
 
-            <div className="import-guide-card" style={{ marginTop: "24px" }}>
+            <div className="import-guide-card">
               <strong className="import-guide-title">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--color-accent)" }}>
                   <circle cx="12" cy="12" r="10" />
@@ -858,7 +856,7 @@ export function DeliveryExcelImportClient({
             </div>
           </div>
 
-          <div style={{ padding: "24px", borderTop: "1px solid var(--line)" }}>
+          <div style={{ padding: "20px 22px", borderTop: "1px solid var(--line)" }}>
             <div className="import-metric-grid">
               <div className="import-metric-card">
                 <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Batch Reference</span>
@@ -929,7 +927,7 @@ export function DeliveryExcelImportClient({
             </div>
           </div>
 
-          <div style={{ padding: "24px", borderTop: "1px solid var(--line)" }}>
+          <div style={{ padding: "20px 22px", borderTop: "1px solid var(--line)" }}>
             <div className="import-metric-grid">
               <div className="import-metric-card tone-ready">
                 <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Successfully Committed</span>

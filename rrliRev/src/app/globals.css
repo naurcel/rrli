@@ -7733,6 +7733,7 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
   align-items: center;
   gap: 8px;
   margin-bottom: 24px;
+  margin-bottom: 20px;
   padding: 8px 12px;
   border-radius: 14px;
   background: var(--glass-surface);
@@ -7808,6 +7809,7 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
   align-items: center;
   justify-content: center;
   padding: 48px 24px;
+  padding: 34px 20px;
   border: 2px dashed var(--line);
   border-radius: 16px;
   background: var(--color-surface);
@@ -7833,10 +7835,14 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
   width: 58px;
   height: 58px;
   border-radius: 16px;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
   background: var(--color-surface-subtle);
   border: 1px solid var(--color-border);
   color: var(--color-accent);
   margin-bottom: 14px;
+  margin-bottom: 12px;
   transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -7887,6 +7893,8 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
   gap: 6px;
   margin-bottom: 22px;
   max-width: 460px;
+  margin-bottom: 18px;
+  max-width: 420px;
 }
 
 .import-batch-field label {
@@ -7916,6 +7924,8 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
 .import-guide-card {
   margin-top: 24px;
   padding: 20px 24px;
+  margin-top: 18px;
+  padding: 16px 20px;
   border-radius: 14px;
   background: var(--color-surface-subtle);
   border: 1px solid var(--color-border);
@@ -15731,6 +15741,11 @@ html[data-theme="dark"] .icon-only-action.danger:hover {
   white-space: nowrap;
 }
 
+.finance-actor-filter {
+  flex: 0 1 200px;
+  min-width: 175px;
+}
+
 .finance-row-actions {
   display: inline-flex;
   align-items: center;
@@ -16892,483 +16907,5 @@ html[data-theme="dark"] .profile-dropdown-logout:hover {
 
 .profile-prefs-toggle-text {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.profile-prefs-sublabel {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  line-height: 1.25;
-}
-
-/* Dark theme overrides for design preferences dropdown */
-html[data-theme="dark"] .profile-dropdown-arrow {
-  color: #94a3b8;
-}
-
-html[data-theme="dark"] .profile-segmented-control {
-  background: #0e0f12;
-  border-color: rgba(255, 255, 255, 0.07);
-}
-
-html[data-theme="dark"] .profile-segmented-btn {
-  color: #94a3b8;
-}
-
-html[data-theme="dark"] .profile-segmented-btn:hover {
-  color: #f1f5f9;
-}
-
-html[data-theme="dark"] .profile-segmented-btn.active {
-  background: #18191d;
-  color: #fbbf24;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45) !important;
-}
-
-html[data-theme="dark"] .profile-prefs-back-btn:hover {
-  background: #18191d;
-}
-
-/* =========================================================
-   RouteX Application Minimal Footer
-   ========================================================= */
-
-.routex-footer {
-  margin-top: auto;
-  padding: 28px 24px 24px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-top: 1px solid var(--line, rgba(0, 0, 0, 0.08));
-  background: transparent;
-  user-select: none;
-  width: 100%;
-  flex-shrink: 0;
-}
-
-.routex-footer-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 4px;
-  max-width: 600px;
-}
-
-.routex-footer-brand {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 550;
-  color: var(--color-text-secondary, #71717a);
-  letter-spacing: -0.01em;
-  line-height: 1.4;
-}
-
-.routex-footer-copyright {
-  margin: 0;
-  font-size: 10px;
-  color: var(--color-text-muted, #a1a1aa);
-  opacity: 0.85;
-  line-height: 1.4;
-}
-
-html[data-theme="dark"] .routex-footer {
-  border-top-color: var(--color-border, #27272a);
-}
-
-html[data-theme="dark"] .routex-footer-brand {
-  color: var(--color-text-secondary, #a1a1aa);
-}
-
-html[data-theme="dark"] .routex-footer-copyright {
-  color: var(--color-text-muted, #71717a);
-}
-
-.login-form-wrap .routex-footer {
-  margin-top: 24px;
-  padding: 16px 0 0;
-  border-top: 1px solid var(--line, rgba(0, 0, 0, 0.08));
-  width: 100%;
-}
-
-html[data-theme="dark"] .login-form-wrap .routex-footer {
-  border-top-color: var(--color-border, #27272a);
-}
-
-html[data-compactness="compact"] .routex-footer {
-  padding: 18px 20px 16px;
-}
-
-/* ==========================================================================
-   RouteX Print & PDF Layout Engine
-   Authoritative rules for Reports and Workspace printing matching specifications
-   ========================================================================== */
-
-.report-print-only-row {
-  display: none !important;
-}
-
-@media print {
-  @page {
-    size: landscape;
-    margin: 8mm 10mm;
-  }
-
-  html,
-  body {
-    width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-    background: #ffffff !important;
-    color: #111827 !important;
-    font-size: 11px !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .app-shell,
-  .main-content,
-  .content-wrap,
-  .content-wrap.report-page,
-  .report-workspace {
-    display: block !important;
-    position: static !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    border: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  .sidebar,
-  .sidebar-state-overlay,
-  .topbar,
-  .routex-footer,
-  .help-button,
-  .report-intro,
-  .report-notice,
-  .report-actions,
-  .report-tabs,
-  .report-tabs-bar,
-  .report-custom-selector,
-  .report-custom-banner,
-  .daily-trip-date-bar,
-  .table-footer,
-  .pagination,
-  .table-pagination,
-  .report-customize-action,
-  .report-new-action,
-  .report-export-action,
-  .report-print-button,
-  .report-customizer-dialog,
-  .modal-backdrop,
-  .routex-dialog-layer,
-  .routex-dialog-backdrop,
-  .audit-toast,
-  .scope-note,
-  .notice,
-  .dashboard-range-refresh,
-  .action-button,
-  .page-intro-action {
-    display: none !important;
-  }
-
-  .report-document {
-    display: block !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-    border: 1px solid #d1d5db !important;
-    border-radius: 8px !important;
-    background: #ffffff !important;
-    box-shadow: none !important;
-    animation: none !important;
-    margin: 0 auto !important;
-  }
-
-  .report-document-header {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: flex-start !important;
-    justify-content: space-between !important;
-    gap: 20px !important;
-    padding: 18px 24px 14px !important;
-    border-bottom: 1px solid #e5e7eb !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    page-break-after: avoid !important;
-    break-after: avoid !important;
-  }
-
-  .report-document-header p {
-    color: #6b7280 !important;
-    font-size: 9px !important;
-    margin: 0 0 4px !important;
-  }
-
-  .report-document-header h2 {
-    color: #111827 !important;
-    font-size: 18px !important;
-    font-weight: 700 !important;
-    margin: 0 0 4px !important;
-  }
-
-  .report-document-header span {
-    color: #4b5563 !important;
-    font-size: 11px !important;
-  }
-
-  .report-document-header dl {
-    display: grid !important;
-    gap: 4px !important;
-    min-width: 190px !important;
-    margin: 0 !important;
-  }
-
-  .report-document-header dl div {
-    display: flex !important;
-    justify-content: space-between !important;
-    gap: 12px !important;
-  }
-
-  .report-document-header dt {
-    color: #6b7280 !important;
-    font-size: 9.5px !important;
-  }
-
-  .report-document-header dd {
-    color: #111827 !important;
-    font-size: 9.5px !important;
-    font-weight: 700 !important;
-    margin: 0 !important;
-  }
-
-  .report-summary {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)) !important;
-    gap: 8px !important;
-    padding: 12px 24px !important;
-    background: #f9fafb !important;
-    border-bottom: 1px solid #e5e7eb !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .report-summary div {
-    display: grid !important;
-    gap: 4px !important;
-    min-width: 0 !important;
-    padding: 8px 10px !important;
-    background: #ffffff !important;
-    border: 1px solid #e5e7eb !important;
-    border-radius: 6px !important;
-  }
-
-  .report-summary span {
-    color: #6b7280 !important;
-    font-size: 8.5px !important;
-    font-weight: 600 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.05em !important;
-  }
-
-  .report-summary strong {
-    color: #111827 !important;
-    font-size: 13.5px !important;
-    font-weight: 800 !important;
-    font-variant-numeric: tabular-nums !important;
-  }
-
-  .report-breakdown-section {
-    padding: 14px 24px !important;
-    border-bottom: 1px solid #e5e7eb !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .report-breakdown-grid {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 16px !important;
-  }
-
-  .report-breakdown-card {
-    box-shadow: none !important;
-    border: 1px solid #e5e7eb !important;
-    border-radius: 8px !important;
-    padding: 12px 14px !important;
-    background: #ffffff !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .report-breakdown-card .breakdown-chart-wrapper {
-    grid-template-columns: 130px minmax(0, 1fr) !important;
-    gap: 14px !important;
-  }
-
-  .report-breakdown-eyebrow {
-    color: #6b7280 !important;
-    font-size: 8.5px !important;
-  }
-
-  .report-breakdown-card-header h4 {
-    color: #111827 !important;
-    font-size: 12.5px !important;
-  }
-
-  .report-chart-badge {
-    color: #111827 !important;
-    background: #f3f4f6 !important;
-    border: 1px solid #e5e7eb !important;
-    font-size: 10px !important;
-    padding: 2px 8px !important;
-    border-radius: 9999px !important;
-  }
-
-  .donut-center-hero-val {
-    fill: #111827 !important;
-  }
-
-  .donut-center-sub,
-  .donut-center-sub-share,
-  .donut-center-sub-name {
-    fill: #6b7280 !important;
-  }
-
-  .donut-slice {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .legend-color-dot {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .report-table-section {
-    padding: 14px 24px 18px !important;
-    overflow: visible !important;
-  }
-
-  .report-table-heading {
-    display: flex !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    margin-bottom: 10px !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    page-break-after: avoid !important;
-    break-after: avoid !important;
-  }
-
-  .report-table-heading h3 {
-    color: #111827 !important;
-    font-size: 13px !important;
-    margin: 0 !important;
-  }
-
-  .report-table-heading p {
-    color: #6b7280 !important;
-    font-size: 9.5px !important;
-    margin: 0 !important;
-  }
-
-  .report-table-scroll {
-    overflow: visible !important;
-    width: 100% !important;
-  }
-
-  .report-document table {
-    width: 100% !important;
-    min-width: 0 !important;
-    table-layout: auto !important;
-    border-collapse: collapse !important;
-  }
-
-  .report-document thead {
-    display: table-header-group !important;
-  }
-
-  .report-document thead tr {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .report-document th {
-    color: #4b5563 !important;
-    font-size: 8.5px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.05em !important;
-    text-transform: uppercase !important;
-    padding: 7px 5px !important;
-    border-bottom: 2px solid #d1d5db !important;
-    background: #f9fafb !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .report-document tr {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .report-document td {
-    padding: 6px 5px !important;
-    border-bottom: 1px solid #e5e7eb !important;
-    color: #374151 !important;
-    font-size: 9.5px !important;
-    font-variant-numeric: tabular-nums !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .report-document tbody tr:nth-child(even) td {
-    background-color: #fbfbfb !important;
-  }
-
-  .report-document tbody td:first-child {
-    color: #111827 !important;
-    font-weight: 600 !important;
-  }
-
-  .report-screen-only-row {
-    display: none !important;
-  }
-
-  .report-print-only-row {
-    display: table-row !important;
-  }
-
-  .report-status-badge {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    display: inline-block !important;
-    font-size: 8.5px !important;
-    padding: 1px 6px !important;
-    border-radius: 9999px !important;
-  }
-
-  .report-document-footer {
-    display: flex !important;
-    justify-content: space-between !important;
-    gap: 16px !important;
-    padding: 10px 24px !important;
-    border-top: 1px solid #e5e7eb !important;
-    color: #6b7280 !important;
-    font-size: 9px !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-}
+  fl
+... [truncated for diff preview]

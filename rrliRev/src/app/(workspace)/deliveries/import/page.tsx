@@ -18,25 +18,17 @@ export default async function DeliveryExcelImportPage() {
     <>
       <OperationalTopbar contextLabel="Excel Import & Post-Import Review" showDateFilter={false} />
 
-      <div className="content-wrap">
-        <Link className="back-link" href="/deliveries">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <line x1="19" y1="12" x2="5" y2="12" />
-            <polyline points="12 19 5 12 12 5" />
-          </svg>
-          Back to Deliveries
-        </Link>
-
+      <div className="content-wrap delivery-entry-page">
         <header className="page-intro">
           <div>
-            <h1>Import Deliveries</h1>
+            <Link className="back-link" href="/deliveries">
+              ← Back to deliveries
+            </Link>
+            <h1>Import deliveries</h1>
             <p className="subtitle">
               Batch import and validate completed delivery trips from Excel or CSV spreadsheets.
             </p>
           </div>
-          <span className="access-pill operations">
-            Authorized: {actor.roleLabel}
-          </span>
         </header>
 
         <DeliveryExcelImportClient

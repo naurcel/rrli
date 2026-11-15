@@ -7,6 +7,7 @@ import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmExpenseDeletionDialog } from "@/components/confirm-expense-deletion-dialog";
 import { EditCompanyExpenseModal } from "@/components/edit-company-expense-modal";
 import { ViewCompanyExpenseModal } from "@/components/view-company-expense-modal";
+import { RoundedSelect } from "@/components/rounded-select";
 import {
   formatDateRange,
   GlobalDateRangePicker,
@@ -43,7 +44,7 @@ const PAGE_SIZE = 10;
 export default function FinancePage() {
   const actor = useAuthenticatedActor();
   const canManage = canManageCompanyExpenses(actor.role);
-  const { range, setRange } = useGlobalDateRange();
+  const { range } = useGlobalDateRange();
 
   // Company expenses state
   const [expenses, setExpenses] = useState<CompanyExpense[]>([]);
@@ -62,6 +63,7 @@ export default function FinancePage() {
 
   // Table filtering & sorting state
   const [searchQuery, setSearchQuery] = useState("");
+  const [actorFilter, setActorFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<"date" | "amount">("date");
   const [sortDirection, setSortDirection] = useState<TableSortDirection>("desc");
   const [page, setPage] = useState(1);
@@ -175,9 +177,53 @@ export default function FinancePage() {
     };
   }, [dateFilteredExpenses]);
 
+  // Actor filter options derived from unique expense creators
+  const actorFilterOptions = useMemo(() => {
+    const actors = new Set<string>();
+    actors.add("admin");
+    actors.add("operations");
+    expenses.forEach((e) => {
+      const c = e.createdBy?.trim();
+      if (c) actors.add(c);
+      else actors.add("system");
+    });
+    const sorted = Array.from(actors).sort((a, b) => {
+      const aLower = a.replace(/^@/, "").toLowerCase();
+      const bLower = b.replace(/^@/, "").toLowerCase();
+      if (aLower === "admin") return -1;
+      if (bLower === "admin") return 1;
+      if (aLower === "operations") return -1;
+      if (bLower === "operations") return 1;
+      if (aLower === "system") return 1;
+      if (bLower === "system") return -1;
+      return aLower.localeCompare(bLower);
+    });
+
+    return [
+      { value: "all", label: "All Users / Roles" },
+      ...sorted.map((val) => {
+        const clean = val.replace(/^@/, "").toLowerCase();
+        let label = val;
+        if (clean === "admin") label = "@admin (Admin)";
+        else if (clean === "operations") label = "@operations (Operations)";
+        else if (clean === "system") label = "System";
+        else label = val.startsWith("@") ? val : `@${val}`;
+        return { value: val, label };
+      }),
+    ];
+  }, [expenses]);
+
   // Table filtering & sorting
   const filteredAndSortedExpenses = useMemo(() => {
     let result = [...dateFilteredExpenses];
+
+    if (actorFilter !== "all") {
+      const target = actorFilter.toLowerCase().replace(/^@/, "");
+      result = result.filter((e) => {
+        const creator = (e.createdBy?.trim() || "system").toLowerCase().replace(/^@/, "");
+        return creator === target;
+      });
+    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -203,7 +249,7 @@ export default function FinancePage() {
     });
 
     return result;
-  }, [dateFilteredExpenses, searchQuery, sortField, sortDirection]);
+  }, [dateFilteredExpenses, searchQuery, actorFilter, sortField, sortDirection]);
 
   // Pagination slice
   const totalItems = filteredAndSortedExpenses.length;
@@ -220,12 +266,12 @@ export default function FinancePage() {
   }, [page, pageCount]);
 
   const hasActiveFilters = Boolean(
-    searchQuery.trim() || range.startDate || range.endDate,
+    searchQuery.trim() || actorFilter !== "all",
   );
 
   function clearFilters() {
     setSearchQuery("");
-    setRange({ startDate: null, endDate: null });
+    setActorFilter("all");
     setPage(1);
   }
 
@@ -566,6 +612,17 @@ export default function FinancePage() {
 
             <GlobalDateRangePicker />
 
+            <RoundedSelect
+              value={actorFilter}
+              options={actorFilterOptions}
+              onChange={(val) => {
+                setActorFilter(val);
+                setPage(1);
+              }}
+              ariaLabel="Filter expenses by user or role"
+              className="finance-actor-filter"
+            />
+
             {hasActiveFilters ? (
               <button
                 type="button"
@@ -597,16 +654,16 @@ export default function FinancePage() {
                   </button>
                 </span>
               ) : null}
-              {range.startDate || range.endDate ? (
+              {actorFilter !== "all" ? (
                 <span className="filter-chip">
-                  <span className="filter-chip-category">Date:</span>{" "}
-                  {formatDateRange(range)}
+                  <span className="filter-chip-category">User / Role:</span>{" "}
+                  {actorFilterOptions.find((o) => o.value === actorFilter)?.label ?? actorFilter}
                   <button
                     type="button"
                     className="filter-chip-remove"
-                    aria-label="Remove date range filter"
+                    aria-label="Remove actor filter"
                     onClick={() => {
-                      setRange({ startDate: null, endDate: null });
+                      setActorFilter("all");
                       setPage(1);
                     }}
                   >

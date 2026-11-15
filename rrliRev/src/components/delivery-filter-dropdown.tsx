@@ -35,8 +35,6 @@ export function DeliveryFilterDropdown({
   const clientDropdownId = useId();
   const truckDropdownId = useId();
 
-  const totalActive = selectedClients.length + selectedTrucks.length;
-
   // Split trucks into owned and subcontracted
   const ownedTrucks = useMemo(
     () => trucks.filter((t) => t.ownershipType !== "Subcontracted"),
@@ -176,12 +174,6 @@ export function DeliveryFilterDropdown({
     } else {
       onTrucksChange([...selectedTrucks, truckId]);
     }
-  }
-
-  function handleClearAll() {
-    onClientsChange([]);
-    onTrucksChange([]);
-    if (onClearAll) onClearAll();
   }
 
   return (
@@ -588,17 +580,6 @@ export function DeliveryFilterDropdown({
           </div>
         )}
       </div>
-
-      {/* Clear all active filters */}
-      {totalActive > 0 && (
-        <button
-          type="button"
-          className="filter-clear-action-btn"
-          onClick={handleClearAll}
-        >
-          Clear filters
-        </button>
-      )}
     </div>
   );
 }

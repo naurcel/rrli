@@ -8,6 +8,8 @@ import {
   parseDeliveryImport,
   validateStagedRow,
 } from "./delivery-import-parser.ts";
+import { canImportAndReviewExcel } from "../../lib/auth/rbac.ts";
+import { canRoleAccessPath } from "../../lib/auth/route-policy.ts";
 
 test("parseDelimitedText parses CSV correctly including quotes and escaped characters", () => {
   const csv = `Col1,Col2,"Col 3 with, comma","Col 4 with ""escaped"" quotes"\r\nval1,val2,"nested, text","quoted ""value"""`;
@@ -212,4 +214,11 @@ test("generateImportErrorReport formats CSV with error breakdown", () => {
 
   assert.ok(report.includes("WB-DUP-01"));
   assert.ok(report.includes("DUPLICATE_SKIPPED"));
+});
+
+test("Operations and Admin roles have full authorization to import deliveries", () => {
+  assert.equal(canImportAndReviewExcel("operations"), true);
+  assert.equal(canImportAndReviewExcel("admin"), true);
+  assert.equal(canRoleAccessPath("operations", "/deliveries/import"), true);
+  assert.equal(canRoleAccessPath("operations", "/api/deliveries/import"), true);
 });
