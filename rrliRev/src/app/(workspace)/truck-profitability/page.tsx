@@ -1600,12 +1600,6 @@ export default function TruckProfitabilityPage() {
                       {canAdd && (
                         <div
                           className="truck-card-actions"
-                          style={{
-                            position: "absolute",
-                            bottom: "16px",
-                            right: "18px",
-                            zIndex: 20,
-                          }}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();

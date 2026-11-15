@@ -68,31 +68,11 @@ export default function FinancePage() {
 
   // View, Edit & Delete dialog states
   const [viewingExpense, setViewingExpense] = useState<CompanyExpense | null>(null);
-  const [openActionExpenseId, setOpenActionExpenseId] = useState<string | null>(null);
-  const [actionMenuOpensAbove, setActionMenuOpensAbove] = useState(false);
   const [editingExpense, setEditingExpense] = useState<CompanyExpense | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deletingExpense, setDeletingExpense] = useState<CompanyExpense | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!openActionExpenseId) return;
-    function handleClickOutside() {
-      setOpenActionExpenseId(null);
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpenActionExpenseId(null);
-      }
-    }
-    document.addEventListener("click", handleClickOutside);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("click", handleClickOutside);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [openActionExpenseId]);
 
   useEffect(() => {
     if (!isRecordModalOpen) return;
@@ -691,13 +671,15 @@ export default function FinancePage() {
                       onReset={handleResetSort}
                       className="money"
                     />
-                    <th style={{ width: canManage ? "48px" : "64px", textAlign: "right" }}>
-                      <span className="sr-only">Actions</span>
-                    </th>
+                    {canManage && (
+                      <th style={{ width: "76px", textAlign: "right" }}>
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedExpenses.map((exp, expIndex) => (
+                  {paginatedExpenses.map((exp) => (
                     <tr
                       key={exp.id}
                       className="clickable-table-row"
@@ -708,11 +690,6 @@ export default function FinancePage() {
                           e.preventDefault();
                           setViewingExpense(exp);
                         }
-                      }}
-                      style={{
-                        position: "relative",
-                        zIndex: openActionExpenseId === exp.id ? 150 : undefined,
-                        cursor: "pointer",
                       }}
                     >
                       <td className="cell-date">{exp.expenseDate}</td>
@@ -726,134 +703,47 @@ export default function FinancePage() {
                       <td className="money">
                         <strong>{formatPeso(exp.amount)}</strong>
                       </td>
-                      {canManage ? (
+                      {canManage && (
                         <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
-                          <div
-                            className="table-row-actions"
-                            style={{ position: "relative", display: "inline-block" }}
-                          >
+                          <div className="truck-row-actions">
                             <button
                               type="button"
-                              className="row-action-more-btn"
-                              aria-label={`More actions for ${exp.description || "Total Company Expenses"}`}
-                              title="More actions"
-                              aria-haspopup="menu"
-                              aria-expanded={openActionExpenseId === exp.id}
+                              className="truck-action-icon-btn"
+                              aria-label={`Edit expense: ${exp.description || "Expense"}`}
+                              title="Edit expense"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                const spaceBelow = window.innerHeight - rect.bottom;
-                                const isNearBottom =
-                                  spaceBelow < 200 ||
-                                  expIndex >= paginatedExpenses.length - 2;
-                                setActionMenuOpensAbove(isNearBottom);
-                                setOpenActionExpenseId((curr) =>
-                                  curr === exp.id ? null : exp.id,
-                                );
+                                setEditingExpense(exp);
                               }}
                             >
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 16 16"
-                                fill="currentColor"
-                                aria-hidden="true"
-                              >
-                                <circle cx="8" cy="3" r="1.5" />
-                                <circle cx="8" cy="8" r="1.5" />
-                                <circle cx="8" cy="13" r="1.5" />
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                               </svg>
                             </button>
-
-                            {openActionExpenseId === exp.id ? (
-                              <div
-                                className={`row-action-menu${actionMenuOpensAbove ? " opens-above" : ""}`}
-                                role="menu"
-                                aria-label={`Actions for ${exp.description || "Total Company Expenses"}`}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    setOpenActionExpenseId(null);
-                                    setViewingExpense(exp);
-                                  }}
-                                >
-                                  View Details
-                                </button>
-                                <div
-                                  className="row-action-menu-divider"
-                                  role="separator"
-                                />
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    setOpenActionExpenseId(null);
-                                    setEditingExpense(exp);
-                                  }}
-                                >
-                                  Edit Expense
-                                </button>
-                                <div
-                                  className="row-action-menu-divider"
-                                  role="separator"
-                                />
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="row-action-menu-danger"
-                                  onClick={() => {
-                                    setOpenActionExpenseId(null);
-                                    setDeleteError(null);
-                                    setDeletingExpense(exp);
-                                  }}
-                                >
-                                  Delete Expense
-                                </button>
-                              </div>
-                            ) : null}
+                            <button
+                              type="button"
+                              className="truck-action-icon-btn danger"
+                              aria-label={`Delete expense: ${exp.description || "Expense"}`}
+                              title="Delete expense"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteError(null);
+                                setDeletingExpense(exp);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
+                              </svg>
+                            </button>
                           </div>
-                        </td>
-                      ) : (
-                        <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            style={{ minHeight: "26px", padding: "0 8px", fontSize: "11px", fontWeight: 600 }}
-                            onClick={() => setViewingExpense(exp)}
-                            title="View full expense details"
-                          >
-                            View
-                          </button>
                         </td>
                       )}
                     </tr>
                   ))}
                 </tbody>
-                <tfoot>
-                  <tr className="finance-ledger-tfoot-row">
-                    <td colSpan={4}>
-                      Filtered Total ({filteredAndSortedExpenses.length}{" "}
-                      {filteredAndSortedExpenses.length === 1
-                        ? "entry"
-                        : "entries"}
-                      )
-                    </td>
-                    <td className="money">
-                      <strong>
-                        {formatPeso(
-                          filteredAndSortedExpenses.reduce(
-                            (s, e) => s + e.amount,
-                            0,
-                          ),
-                        )}
-                      </strong>
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
               </table>
             </div>
           )}

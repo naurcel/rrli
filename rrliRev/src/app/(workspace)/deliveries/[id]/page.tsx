@@ -6,7 +6,6 @@ import { Suspense, use, useEffect, useMemo, useState } from "react";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-deletion-dialog";
-import { DeliveryCrewSection } from "@/components/delivery-crew-section";
 import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline";
 import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
 import { DeliveryNavigator } from "@/components/delivery-navigator";
@@ -15,7 +14,6 @@ import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-secti
 import { useGlobalDateRange } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import {
-  type ExpenseResolutionStatus,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
 } from "@/features/deliveries/delivery-domain";
@@ -29,15 +27,6 @@ import {
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import { canManageDocuments, canMutateDeliveryRecords } from "@/lib/auth/rbac";
 import { formatPeso } from "@/lib/format";
-
-function formatExpenseResolution(
-  value: number | null | undefined,
-  status: ExpenseResolutionStatus | null | undefined,
-): string {
-  if (status === "not_applicable") return "N/A";
-  if (status === "unknown" || value == null || !Number.isFinite(value)) return "Incomplete";
-  return formatPeso(value);
-}
 
 export default function DeliveryDetailsPageWrapper({
   params,
@@ -79,7 +68,6 @@ function DeliveryDetailsPageContent({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
-  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -90,27 +78,6 @@ function DeliveryDetailsPageContent({
       }
     }
   }, []);
-
-  useEffect(() => {
-    if (!isActionMenuOpen) return;
-    function handleGlobalClick(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      if (!target.closest(".table-row-actions")) {
-        setIsActionMenuOpen(false);
-      }
-    }
-    function handleGlobalKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setIsActionMenuOpen(false);
-      }
-    }
-    document.addEventListener("click", handleGlobalClick);
-    document.addEventListener("keydown", handleGlobalKeyDown);
-    return () => {
-      document.removeEventListener("click", handleGlobalClick);
-      document.removeEventListener("keydown", handleGlobalKeyDown);
-    };
-  }, [isActionMenuOpen]);
 
   // Sync active delivery when id or allDeliveries changes
   useEffect(() => {
@@ -264,7 +231,7 @@ function DeliveryDetailsPageContent({
         return;
       }
 
-      if (deliveryToDelete || isActionMenuOpen) {
+      if (deliveryToDelete) {
         return;
       }
 
@@ -287,7 +254,7 @@ function DeliveryDetailsPageContent({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [delivery?.id, delivery?.waybillNumber, deliveryToDelete, isActionMenuOpen, navigatorDeliveries]);
+  }, [delivery?.id, delivery?.waybillNumber, deliveryToDelete, navigatorDeliveries]);
 
   async function handleConfirmDelete() {
     if (!deliveryToDelete || isDeleting) return;
@@ -446,60 +413,37 @@ function DeliveryDetailsPageContent({
           </div>
 
           {canWrite ? (
-            <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
+            <div className="delivery-header-actions" style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
               <button
                 type="button"
-                className="row-action-more-btn"
-                aria-label={`Actions for waybill ${delivery.waybillNumber}`}
-                title="More actions"
-                aria-haspopup="menu"
-                aria-expanded={isActionMenuOpen}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsActionMenuOpen((curr) => !curr);
+                className="truck-action-icon-btn"
+                aria-label={`Edit delivery #${delivery.waybillNumber}`}
+                title="Edit delivery"
+                onClick={() => {
+                  router.push(`/deliveries/${encodeURIComponent(delivery.id)}/edit`);
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                  <circle cx="8" cy="3" r="1.5" />
-                  <circle cx="8" cy="8" r="1.5" />
-                  <circle cx="8" cy="13" r="1.5" />
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                 </svg>
               </button>
-
-              {isActionMenuOpen && (
-                <div
-                  className="row-action-menu"
-                  role="menu"
-                  aria-label={`Actions for waybill ${delivery.waybillNumber}`}
-                  onClick={(e) => e.stopPropagation()}
+              {actor.role === "admin" && (
+                <button
+                  type="button"
+                  className="truck-action-icon-btn danger"
+                  aria-label={`Delete delivery #${delivery.waybillNumber}`}
+                  title="Delete delivery"
+                  onClick={() => {
+                    setDeliveryToDelete(delivery);
+                  }}
                 >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setIsActionMenuOpen(false);
-                      router.push(`/deliveries/${encodeURIComponent(delivery.id)}/edit`);
-                    }}
-                  >
-                    Edit Delivery
-                  </button>
-                  {actor.role === "admin" && (
-                    <>
-                      <div className="row-action-menu-divider" role="separator" />
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="row-action-menu-danger"
-                        onClick={() => {
-                          setIsActionMenuOpen(false);
-                          setDeliveryToDelete(delivery);
-                        }}
-                      >
-                        Delete Delivery
-                      </button>
-                    </>
-                  )}
-                </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </button>
               )}
             </div>
           ) : null}
@@ -601,19 +545,6 @@ function DeliveryDetailsPageContent({
                 truckTemperature={delivery.truckTemperature}
                 truckOwnership={delivery.truckOwnership}
                 rateBasis={delivery.rateBasis}
-              />
-            </section>
-
-            {/* Delivery Crew */}
-            <section className="records-card delivery-section-card">
-              <div className="section-card-header">
-                <h2 className="section-card-title">Delivery Crew</h2>
-              </div>
-              <DeliveryCrewSection
-                driverName={delivery.driverName}
-                helperName={delivery.helperName}
-                driverRateText={`${formatExpenseResolution(delivery.expenses.driverDailyRate, delivery.expenseStates?.driverDailyRate)} + ${formatExpenseResolution(delivery.expenses.driverAllowance, delivery.expenseStates?.driverAllowance)}`}
-                helperRateText={`${formatExpenseResolution(delivery.expenses.helperDailyRate, delivery.expenseStates?.helperDailyRate)} + ${formatExpenseResolution(delivery.expenses.helperAllowance, delivery.expenseStates?.helperAllowance)}`}
               />
             </section>
           </div>

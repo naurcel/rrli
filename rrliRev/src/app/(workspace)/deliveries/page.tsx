@@ -18,9 +18,6 @@ import {
 } from "@/components/record-detail-drawer";
 import { DeliveryFilterDropdown } from "@/components/delivery-filter-dropdown";
 import { TablePagination } from "@/components/table-pagination";
-import {
-  AggregateExpenseBreakdown,
-} from "@/components/delivery-financial-breakdown";
 import { ViewTripExpensesModal } from "@/components/view-trip-expenses-modal";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { RoundedSelect } from "@/components/rounded-select";
@@ -183,30 +180,7 @@ export default function DeliveriesPage() {
   const [deleteDeliveryError, setDeleteDeliveryError] = useState<string | null>(null);
   const [activeKpi, setActiveKpi] = useState<"earnings" | "expenses" | "profit" | null>(null);
   const [financialActionMessage, setFinancialActionMessage] = useState<string | null>(null);
-  const [openActionDeliveryId, setOpenActionDeliveryId] = useState<string | null>(null);
-  const [actionOpensAbove, setActionOpensAbove] = useState(false);
   const [viewingTripExpenses, setViewingTripExpenses] = useState<DeliveryLedgerItem | null>(null);
-
-  useEffect(() => {
-    if (!openActionDeliveryId) return;
-    function handleGlobalClick(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      if (!target.closest(".table-row-actions")) {
-        setOpenActionDeliveryId(null);
-      }
-    }
-    function handleGlobalKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setOpenActionDeliveryId(null);
-      }
-    }
-    document.addEventListener("click", handleGlobalClick);
-    document.addEventListener("keydown", handleGlobalKeyDown);
-    return () => {
-      document.removeEventListener("click", handleGlobalClick);
-      document.removeEventListener("keydown", handleGlobalKeyDown);
-    };
-  }, [openActionDeliveryId]);
 
   function navigateToDelivery(trip: DeliveryLedgerItem) {
     const query = new URLSearchParams();
@@ -866,56 +840,44 @@ export default function DeliveriesPage() {
 
       return [
         {
-          eyebrow: "CALCULATION FORMULA",
-          title: "Revenue",
+          eyebrow: "REVENUE SUMMARY",
+          title: "Operational Revenue",
           rows: [
-            { label: "Formula", value: "∑ (Revenue for all Finalized Deliveries)" },
-            { label: "Revenue", value: formatPeso(summary.rateTotal), tone: "success" },
-            { label: "Finalized Trips", value: `${kpiBreakdown.finalizedCount} of ${kpiBreakdown.totalTrips} records` },
-            {
-              label: "Incomplete Financials",
-              value: `${kpiBreakdown.incompleteCount} ${kpiBreakdown.incompleteCount === 1 ? "trip" : "trips"} (excluded until finalized)`,
-              tone: kpiBreakdown.incompleteCount > 0 ? "warning" : undefined,
-            },
-          ],
-        },
-        {
-          eyebrow: "UNIT REVENUE ECONOMICS",
-          title: "Trip & Drop-off Averages",
-          rows: [
-            { label: "Average per Finalized Trip", value: formatPeso(kpiBreakdown.avgRevenuePerTrip) },
-            { label: "Average per Store Drop-off", value: formatPeso(kpiBreakdown.avgRevenuePerStop) },
-            { label: "Total Store Drop-offs Served", value: `${kpiBreakdown.totalStops} drop-offs` },
-            {
-              label: "Average Drop-offs per Trip",
-              value: `${kpiBreakdown.finalizedCount > 0 ? (kpiBreakdown.totalStops / kpiBreakdown.finalizedCount).toFixed(1) : "0"} drop-offs`,
-            },
+            { label: "Total Revenue", value: formatPeso(summary.rateTotal), tone: "success" },
+            { label: "Finalized Deliveries", value: `${kpiBreakdown.finalizedCount} of ${kpiBreakdown.totalTrips} records` },
+            { label: "Average per Trip", value: formatPeso(kpiBreakdown.avgRevenuePerTrip) },
+            { label: "Store Drop-offs Served", value: `${kpiBreakdown.totalStops} drop-offs` },
+            ...(kpiBreakdown.incompleteCount > 0
+              ? [
+                  {
+                    label: "Incomplete Financials",
+                    value: `${kpiBreakdown.incompleteCount} ${kpiBreakdown.incompleteCount === 1 ? "trip" : "trips"} (excluded until finalized)`,
+                    tone: "warning" as const,
+                  },
+                ]
+              : []),
           ],
         },
         ...(clientRows.length > 0
           ? [
               {
-                eyebrow: "CLIENT REVENUE BREAKDOWN",
+                eyebrow: "CLIENT BREAKDOWN",
                 title: "Contribution by Client Account",
                 rows: clientRows,
               },
             ]
           : []),
         {
-          eyebrow: "FLEET CONTRIBUTION",
-          title: "Owned vs. Subcontracted Revenue",
+          eyebrow: "FLEET SHARE",
+          title: "Owned vs. Subcontracted Fleet",
           rows: [
             {
-              label: "Owned Trucks",
+              label: "Company-Owned Trucks",
               value: `${formatPeso(kpiBreakdown.ownershipRevenue.Owned.total)} (${sharePercent(kpiBreakdown.ownershipRevenue.Owned.total, summary.rateTotal)}) · ${kpiBreakdown.ownershipRevenue.Owned.trips} trips`,
             },
             {
               label: "Subcontracted Trucks",
               value: `${formatPeso(kpiBreakdown.ownershipRevenue.Subcontracted.total)} (${sharePercent(kpiBreakdown.ownershipRevenue.Subcontracted.total, summary.rateTotal)}) · ${kpiBreakdown.ownershipRevenue.Subcontracted.trips} trips`,
-            },
-            {
-              label: "Total Fleet Trips",
-              value: `${kpiBreakdown.ownershipRevenue.Owned.trips + kpiBreakdown.ownershipRevenue.Subcontracted.trips} trips`,
             },
           ],
         },
@@ -926,30 +888,18 @@ export default function DeliveriesPage() {
       const expTotal = summary.expenseTotal;
       return [
         {
-          eyebrow: "EXPENSE BREAKDOWN",
-          title: "Trip Expenses Distribution",
-          fullWidth: true,
-          customContent: (
-            <AggregateExpenseBreakdown
-              summary={summary}
-              kpiBreakdown={kpiBreakdown}
-            />
-          ),
-        },
-        {
-          eyebrow: "FORMULA",
-          title: "Trip Expenses",
+          eyebrow: "EXPENSE SUMMARY",
+          title: "Operational Costs",
           rows: [
-            { label: "Formula", value: "Diesel Fuel + Highway Tolls + Store Entry Fees + Crew Compensation + Other Expenses" },
-            { label: "Trip Expenses", value: formatPeso(expTotal), tone: "warning" },
+            { label: "Total Trip Expenses", value: formatPeso(expTotal), tone: "warning" },
             { label: "Finalized Trips Included", value: `${kpiBreakdown.finalizedCount} trips` },
             { label: "Average Expense per Trip", value: formatPeso(kpiBreakdown.avgExpensePerTrip) },
-            { label: "Average Expense per Store Drop-off", value: formatPeso(kpiBreakdown.avgExpensePerStop) },
+            { label: "Average per Store Drop-off", value: formatPeso(kpiBreakdown.avgExpensePerStop) },
           ],
         },
         {
           eyebrow: "COST CATEGORIES",
-          title: "Cost Categories",
+          title: "Expense Distribution",
           rows: [
             { label: "Diesel Fuel", value: `${formatPeso(kpiBreakdown.diesel)} (${sharePercent(kpiBreakdown.diesel, expTotal)})` },
             { label: "Highway Tolls", value: `${formatPeso(kpiBreakdown.toll)} (${sharePercent(kpiBreakdown.toll, expTotal)})` },
@@ -959,15 +909,11 @@ export default function DeliveriesPage() {
           ],
         },
         {
-          eyebrow: "CREW COMPENSATION",
-          title: "Crew Compensation",
+          eyebrow: "CREW PAYROLL",
+          title: "Driver & Helper Compensation",
           rows: [
-            { label: "Driver Daily Rates", value: formatPeso(kpiBreakdown.driverDailyRate) },
-            { label: "Driver Allowances", value: formatPeso(kpiBreakdown.driverAllowance) },
-            { label: "Driver Total", value: `${formatPeso(kpiBreakdown.driverTotal)} (${sharePercent(kpiBreakdown.driverTotal, expTotal)} of all expenses)` },
-            { label: "Helper Daily Rates", value: formatPeso(kpiBreakdown.helperDailyRate) },
-            { label: "Helper Allowances", value: formatPeso(kpiBreakdown.helperAllowance) },
-            { label: "Helper Total", value: `${formatPeso(kpiBreakdown.helperTotal)} (${sharePercent(kpiBreakdown.helperTotal, expTotal)} of all expenses)` },
+            { label: "Driver Crew Total", value: `${formatPeso(kpiBreakdown.driverTotal)} (${sharePercent(kpiBreakdown.driverTotal, expTotal)})` },
+            { label: "Helper Crew Total", value: `${formatPeso(kpiBreakdown.helperTotal)} (${sharePercent(kpiBreakdown.helperTotal, expTotal)})` },
           ],
         },
       ];
@@ -977,30 +923,29 @@ export default function DeliveriesPage() {
       const margin = kpiBreakdown.marginPercent;
       return [
         {
-          eyebrow: "CALCULATION FORMULA",
-          title: "Net Profit Calculation",
+          eyebrow: "FINANCIAL SUMMARY",
+          title: "Net Operating Profit",
           rows: [
-            { label: "Profit Equation", value: "Revenue − Expenses" },
-            { label: "Revenue (+)", value: formatPeso(summary.rateTotal), tone: "success" },
-            { label: "Expenses (−)", value: formatPeso(summary.expenseTotal), tone: "warning" },
+            { label: "Total Revenue (+)", value: formatPeso(summary.rateTotal), tone: "success" },
+            { label: "Total Trip Expenses (−)", value: formatPeso(summary.expenseTotal), tone: "warning" },
             {
-              label: "Net Profit (=)",
+              label: "Net Operating Profit (=)",
               value: formatPeso(summary.netTotal),
               tone: summary.netTotal >= 0 ? "success" : "warning",
+            },
+            {
+              label: "Operating Profit Margin",
+              value: formatPercent(margin),
+              tone: margin != null && margin >= 15 ? "success" : margin != null && margin < 0 ? "warning" : undefined,
             },
           ],
         },
         {
-          eyebrow: "MARGIN PERFORMANCE",
+          eyebrow: "TRIP PERFORMANCE",
           title: "Profitability Metrics",
           rows: [
             {
-              label: "Profit Margin",
-              value: formatPercent(margin),
-              tone: margin != null && margin >= 15 ? "success" : margin != null && margin < 0 ? "warning" : undefined,
-            },
-            {
-              label: "Average Net Profit per Trip",
+              label: "Average Profit per Trip",
               value: formatPeso(kpiBreakdown.avgProfitPerTrip),
               tone: kpiBreakdown.avgProfitPerTrip >= 0 ? "success" : "warning",
             },
@@ -1010,19 +955,7 @@ export default function DeliveriesPage() {
               value: `${kpiBreakdown.lossOrEvenTrips} trips`,
               tone: kpiBreakdown.lossOrEvenTrips > 0 ? "warning" : undefined,
             },
-          ],
-        },
-        {
-          eyebrow: "LEDGER AUDIT COMPLIANCE",
-          title: "Scope & Status Notes",
-          rows: [
-            { label: "Finalized Deliveries in Calculation", value: `${kpiBreakdown.finalizedCount} records` },
-            {
-              label: "Pending Deliveries Excluded",
-              value: `${kpiBreakdown.incompleteCount} records`,
-              tone: kpiBreakdown.incompleteCount > 0 ? "warning" : undefined,
-            },
-            { label: "Audit Standard", value: "Version-controlled ledger with tamper-resistant audit logs" },
+            { label: "Finalized Trips Count", value: `${kpiBreakdown.finalizedCount} records` },
           ],
         },
       ];
@@ -1035,22 +968,22 @@ export default function DeliveriesPage() {
     switch (activeKpi) {
       case "earnings":
         return {
-          eyebrow: "METRIC BREAKDOWN & CALCULATION",
-          title: "Revenue",
+          eyebrow: "Financial Breakdown",
+          title: "Revenue Overview",
           statusLabel: formatPeso(summary.rateTotal),
           statusTone: "success" as const,
         };
       case "expenses":
         return {
-          eyebrow: "METRIC BREAKDOWN & CALCULATION",
-          title: "Expenses",
+          eyebrow: "Financial Breakdown",
+          title: "Trip Expenses Overview",
           statusLabel: formatPeso(summary.expenseTotal),
           statusTone: "warning" as const,
         };
       case "profit":
         return {
-          eyebrow: "METRIC BREAKDOWN & CALCULATION",
-          title: "Net Profit",
+          eyebrow: "Financial Breakdown",
+          title: "Net Operating Profit",
           statusLabel: formatPeso(summary.netTotal),
           statusTone: summary.netTotal >= 0 ? ("success" as const) : ("warning" as const),
         };
@@ -1419,18 +1352,17 @@ export default function DeliveriesPage() {
                     <SortableTableHeader label="Revenue" sortKey="delivery_rate" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Expenses" sortKey="total_expenses" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Net Profit" sortKey="net_income" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
-                    <th style={{ width: "40px", textAlign: "center" }}><span className="sr-only">Actions</span></th>
+                    <th style={{ width: actor.role === "admin" ? "76px" : "44px", textAlign: "right" }}><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedDeliveries.map((trip, tripIndex) => {
+                  {paginatedDeliveries.map((trip) => {
                     const isIncomplete = isDeliveryIncomplete(trip);
                     const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                     return (
                       <tr
                         key={trip.id}
                         className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
-                        style={{ position: "relative", zIndex: openActionDeliveryId === trip.id ? 150 : undefined }}
                         tabIndex={0}
                         onClick={() => {
                           setActiveKpi(null);
@@ -1538,87 +1470,60 @@ export default function DeliveriesPage() {
                           )}
                         </div>
                       </td>
-                      <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                        <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
-                          <button
-                            type="button"
-                            className="row-action-more-btn"
-                            aria-label={`Actions for waybill ${trip.waybillNumber}`}
-                            title="More actions"
-                            aria-haspopup="menu"
-                            aria-expanded={openActionDeliveryId === trip.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              const spaceBelow = window.innerHeight - rect.bottom;
-                              const isNearBottom = spaceBelow < 220 || tripIndex >= paginatedDeliveries.length - 2;
-                              setActionOpensAbove(isNearBottom);
-                              setOpenActionDeliveryId((curr) => (curr === trip.id ? null : trip.id));
-                            }}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                              <circle cx="8" cy="3" r="1.5" />
-                              <circle cx="8" cy="8" r="1.5" />
-                              <circle cx="8" cy="13" r="1.5" />
-                            </svg>
-                          </button>
-
-                          {openActionDeliveryId === trip.id && (
-                            <div
-                              className={`row-action-menu${actionOpensAbove ? " opens-above" : ""}`}
-                              role="menu"
-                              aria-label={`Actions for waybill ${trip.waybillNumber}`}
-                              onClick={(e) => e.stopPropagation()}
-                            >
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                        <div className="table-row-actions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: "6px" }}>
+                          {canWrite ? (
+                            <>
                               <button
                                 type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setOpenActionDeliveryId(null);
-                                  navigateToDelivery(trip);
+                                className="truck-action-icon-btn"
+                                aria-label={`Edit delivery #${trip.waybillNumber}`}
+                                title="Edit delivery"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/deliveries/${encodeURIComponent(trip.id)}/edit`);
                                 }}
                               >
-                                View Details
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                                </svg>
                               </button>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setOpenActionDeliveryId(null);
-                                  setViewingTripExpenses(trip);
-                                }}
-                              >
-                                View Expenses
-                              </button>
-                              {canWrite && (
+                              {actor.role === "admin" && (
                                 <button
                                   type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    setOpenActionDeliveryId(null);
-                                    router.push(`/deliveries/${encodeURIComponent(trip.id)}/edit`);
+                                  className="truck-action-icon-btn danger"
+                                  aria-label={`Delete delivery #${trip.waybillNumber}`}
+                                  title="Delete delivery"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDeleteDeliveryModal(trip);
                                   }}
                                 >
-                                  Edit Delivery
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                    <line x1="10" y1="11" x2="10" y2="17" />
+                                    <line x1="14" y1="11" x2="14" y2="17" />
+                                  </svg>
                                 </button>
                               )}
-                              {actor.role === "admin" && (
-                                <>
-                                  <div className="row-action-menu-divider" role="separator" />
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="row-action-menu-danger"
-                                    onClick={() => {
-                                      setOpenActionDeliveryId(null);
-                                      openDeleteDeliveryModal(trip);
-                                    }}
-                                  >
-                                    Delete Delivery
-                                  </button>
-                                </>
-                              )}
-                            </div>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className="truck-action-icon-btn"
+                              aria-label={`View delivery #${trip.waybillNumber}`}
+                              title="View delivery details"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigateToDelivery(trip);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            </button>
                           )}
                         </div>
                       </td>

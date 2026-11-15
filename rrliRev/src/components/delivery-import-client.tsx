@@ -41,6 +41,7 @@ export function DeliveryExcelImportClient({
   const [step, setStep] = useState<ImportStep>(1);
   const [batchName, setBatchName] = useState(() => `DTR-Batch-${new Date().toISOString().slice(0, 10)}`);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [stagedRows, setStagedRows] = useState<StagedDeliveryRow[]>([]);
   const [existingWaybills, setExistingWaybills] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
@@ -335,34 +336,26 @@ export function DeliveryExcelImportClient({
   return (
     <>
       {/* Workflow Step Indicator */}
-      <nav aria-label="Import Workflow Steps" style={{ marginBottom: "20px" }}>
-        <ol
-          style={{
-            display: "flex",
-            gap: "12px",
-            listStyle: "none",
-            padding: 0,
-            margin: 0,
-            fontSize: "13px",
-            color: "var(--muted)",
-          }}
-        >
-          <li style={{ fontWeight: step === 1 ? 600 : 400, color: step === 1 ? "var(--ink)" : undefined }}>
-            1. Select File
-          </li>
-          <li aria-hidden="true">›</li>
-          <li style={{ fontWeight: step === 2 ? 600 : 400, color: step === 2 ? "var(--ink)" : undefined }}>
-            2. Preview & Validate
-          </li>
-          <li aria-hidden="true">›</li>
-          <li style={{ fontWeight: step === 3 ? 600 : 400, color: step === 3 ? "var(--ink)" : undefined }}>
-            3. Confirm Batch
-          </li>
-          <li aria-hidden="true">›</li>
-          <li style={{ fontWeight: step === 4 ? 600 : 400, color: step === 4 ? "var(--ink)" : undefined }}>
-            4. Import Results
-          </li>
-        </ol>
+      <nav className="import-stepper" aria-label="Import Workflow Steps">
+        <div className={`import-stepper-item${step === 1 ? " active" : step > 1 ? " completed" : ""}`}>
+          <span className="import-stepper-num">1</span>
+          <span>Select File</span>
+        </div>
+        <span className="import-stepper-arrow" aria-hidden="true">›</span>
+        <div className={`import-stepper-item${step === 2 ? " active" : step > 2 ? " completed" : ""}`}>
+          <span className="import-stepper-num">2</span>
+          <span>Preview &amp; Validate</span>
+        </div>
+        <span className="import-stepper-arrow" aria-hidden="true">›</span>
+        <div className={`import-stepper-item${step === 3 ? " active" : step > 3 ? " completed" : ""}`}>
+          <span className="import-stepper-num">3</span>
+          <span>Confirm Batch</span>
+        </div>
+        <span className="import-stepper-arrow" aria-hidden="true">›</span>
+        <div className={`import-stepper-item${step === 4 ? " active" : ""}`}>
+          <span className="import-stepper-num">4</span>
+          <span>Import Results</span>
+        </div>
       </nav>
 
       {/* Global Error Banner */}
@@ -396,73 +389,76 @@ export function DeliveryExcelImportClient({
             </div>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
               <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
                 Download CSV Template
               </button>
               <button type="button" className="secondary-button" onClick={loadSampleData}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="1 4 1 10 7 10" />
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                </svg>
                 Load Sample DTR Rows
               </button>
             </div>
           </div>
 
           <div style={{ padding: "24px", borderTop: "1px solid var(--line)" }}>
-            <div style={{ marginBottom: "20px", maxWidth: "480px" }}>
-              <label
-                htmlFor="import-batch-name"
-                style={{ display: "block", fontSize: "12px", color: "var(--muted)", marginBottom: "6px" }}
-              >
+            <div className="import-batch-field" style={{ marginBottom: "22px" }}>
+              <label htmlFor="import-batch-name" style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
                 Batch Reference Name
               </label>
               <input
                 id="import-batch-name"
                 type="text"
-                className="base-input"
+                className="import-table-input"
+                style={{ maxWidth: "360px", minHeight: "38px", fontSize: "13px", padding: "8px 12px", borderRadius: "8px" }}
                 value={batchName}
                 onChange={(e) => setBatchName(e.target.value)}
                 placeholder="e.g. DTR-Batch-2026-11-01"
-                style={{ width: "100%" }}
               />
             </div>
 
             <label
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleDrop}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "48px 24px",
-                border: "2px dashed var(--line)",
-                borderRadius: "12px",
-                background: "var(--color-surface)",
-                cursor: "pointer",
-                textAlign: "center",
+              className={`import-dropzone${isDragging ? " is-dragging" : ""}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                setIsDragging(false);
+                handleDrop(e);
               }}
             >
-              <svg
-                width="36"
-                height="36"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ color: "var(--muted)", marginBottom: "12px" }}
-                aria-hidden="true"
-              >
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="12" y1="18" x2="12" y2="12" />
-                <line x1="9" y1="15" x2="12" y2="12" />
-                <line x1="15" y1="15" x2="12" y2="12" />
-              </svg>
-              <strong style={{ fontSize: "14px", color: "var(--ink)", marginBottom: "4px" }}>
+              <div className="import-dropzone-icon-wrap" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="12" y1="18" x2="12" y2="12" />
+                  <line x1="9" y1="15" x2="12" y2="12" />
+                  <line x1="15" y1="15" x2="12" y2="12" />
+                </svg>
+              </div>
+              <strong className="import-dropzone-title">
                 Click to browse or drag and drop your spreadsheet
               </strong>
-              <small style={{ color: "var(--muted)", fontSize: "12px" }}>
+              <span className="import-dropzone-desc">
                 Supports standard CSV, TSV, and delimited text files up to 10MB.
-              </small>
+              </span>
+              <div className="import-dropzone-badges">
+                <span className="import-badge">.CSV</span>
+                <span className="import-badge">.TSV</span>
+                <span className="import-badge">.TXT</span>
+                <span className="import-badge">MAX 10MB</span>
+              </div>
               <input
                 type="file"
                 accept=".csv,.tsv,.txt"
@@ -471,26 +467,20 @@ export function DeliveryExcelImportClient({
               />
             </label>
 
-            <div
-              style={{
-                marginTop: "24px",
-                padding: "16px 20px",
-                borderRadius: "8px",
-                background: "var(--color-surface)",
-                border: "1px solid var(--line)",
-                fontSize: "12px",
-                color: "var(--muted)",
-                lineHeight: "1.6",
-              }}
-            >
-              <strong style={{ display: "block", color: "var(--ink)", marginBottom: "6px" }}>
-                Import Requirements & Multi-Stop Grouping:
+            <div className="import-guide-card" style={{ marginTop: "24px" }}>
+              <strong className="import-guide-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--color-accent)" }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+                Import Requirements &amp; Multi-Stop Grouping:
               </strong>
-              <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                <li>Required columns: Waybill Number, Delivery Date (2024 or later), Client Name, Truck Plate, Temperature, Delivery Rate/Revenue, and at least one Store Stop.</li>
-                <li>Multiple stops for the same trip should repeat the same Waybill Number with different store stops. They will automatically be grouped into a single delivery.</li>
-                <li>Existing waybills in the system are safely detected to prevent duplicate record insertion.</li>
-                <li>Financial values and trip details are strictly validated; missing rates will not be silently replaced with dummy values.</li>
+              <ul className="import-guide-list">
+                <li><strong>Mandatory Columns:</strong> Waybill Number, Delivery Date (2024 or later), Client Name, Truck Plate, Temperature, Delivery Rate/Revenue, and at least one Store Stop.</li>
+                <li><strong>Multi-Stop Aggregation:</strong> Deliveries with multiple drop-offs repeat the same Waybill Number across consecutive rows and are automatically combined into a single trip record.</li>
+                <li><strong>Duplicate Protection:</strong> Existing waybills in RouteX are detected before commit, preventing accidental historical record overwrites.</li>
+                <li><strong>Strict Financial Integrity:</strong> Rates and allowances are strictly validated; incomplete or missing rates remain unresolved until verified.</li>
               </ul>
             </div>
           </div>
@@ -619,7 +609,7 @@ export function DeliveryExcelImportClient({
               <tbody>
                 {visibleRows.length === 0 ? (
                   <tr>
-                    <td colSpan={12} style={{ textAlign: "center", padding: "32px", color: "var(--muted)" }}>
+                    <td colSpan={12} style={{ textAlign: "center", padding: "36px 16px", color: "var(--color-text-muted)" }}>
                       No deliveries matching current filter.
                     </td>
                   </tr>
@@ -632,12 +622,12 @@ export function DeliveryExcelImportClient({
                           row.status === "needs_attention"
                             ? "rgba(239, 68, 68, 0.04)"
                             : row.status === "duplicate"
-                              ? "rgba(107, 114, 128, 0.04)"
+                              ? "rgba(255, 255, 255, 0.02)"
                               : undefined,
                       }}
                     >
                       <td>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                           <span
                             className={`pod-status ${
                               row.status === "ready"
@@ -655,16 +645,14 @@ export function DeliveryExcelImportClient({
                                 : "Needs Attention"}
                           </span>
                           {row.issues.length > 0 ? (
-                            <small
-                              style={{
-                                color: "var(--color-critical, #dc2626)",
-                                fontSize: "11px",
-                                lineHeight: "1.2",
-                                marginTop: "2px",
-                              }}
-                            >
+                            <span className="import-row-error-badge">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                              </svg>
                               {row.issues.map((i) => i.message).join(", ")}
-                            </small>
+                            </span>
                           ) : null}
                         </div>
                       </td>
@@ -672,62 +660,51 @@ export function DeliveryExcelImportClient({
                         <input
                           type="date"
                           min="2024-01-01"
-                          className="base-input"
+                          className="import-table-input"
                           value={row.deliveryDate}
                           onChange={(e) => updateRowField(row.id, "deliveryDate", e.target.value)}
-                          style={{ fontSize: "12px", padding: "4px 6px" }}
+                          style={{ width: "125px" }}
                         />
                       </td>
                       <td>
                         <input
                           type="text"
-                          className="base-input"
+                          className={`import-table-input${!row.waybillNumber.trim() ? " has-error" : ""}`}
                           value={row.waybillNumber}
                           onChange={(e) => updateRowField(row.id, "waybillNumber", e.target.value)}
                           style={{
-                            fontSize: "12px",
-                            padding: "4px 6px",
-                            width: "120px",
-                            borderColor: !row.waybillNumber.trim() ? "var(--color-critical, #dc2626)" : undefined,
+                            width: "115px",
+                            fontFamily: "var(--font-mono, monospace)",
+                            fontWeight: 600,
                           }}
                         />
                       </td>
                       <td>
                         <input
                           type="text"
-                          className="base-input"
+                          className={`import-table-input${!row.clientName.trim() ? " has-error" : ""}`}
                           value={row.clientName}
                           onChange={(e) => updateRowField(row.id, "clientName", e.target.value)}
-                          style={{
-                            fontSize: "12px",
-                            padding: "4px 6px",
-                            width: "130px",
-                            borderColor: !row.clientName.trim() ? "var(--color-critical, #dc2626)" : undefined,
-                          }}
+                          style={{ width: "135px" }}
                         />
                       </td>
                       <td>
                         <input
                           type="text"
-                          className="base-input"
+                          className={`import-table-input${!row.plateNumber.trim() ? " has-error" : ""}`}
                           value={row.plateNumber}
                           onChange={(e) => updateRowField(row.id, "plateNumber", e.target.value)}
-                          style={{
-                            fontSize: "12px",
-                            padding: "4px 6px",
-                            width: "95px",
-                            borderColor: !row.plateNumber.trim() ? "var(--color-critical, #dc2626)" : undefined,
-                          }}
+                          style={{ width: "95px", textTransform: "uppercase", fontWeight: 600 }}
                         />
                       </td>
                       <td>
                         <select
-                          className="base-input"
+                          className="import-table-select"
                           value={row.truckTemperature}
                           onChange={(e) =>
                             updateRowField(row.id, "truckTemperature", e.target.value as TruckTemperature)
                           }
-                          style={{ fontSize: "12px", padding: "4px 6px" }}
+                          style={{ width: "75px" }}
                         >
                           {DELIVERY_TEMPERATURES.map((t) => (
                             <option key={t} value={t}>
@@ -739,23 +716,18 @@ export function DeliveryExcelImportClient({
                       <td>
                         <input
                           type="number"
-                          className="base-input"
+                          className={`import-table-input${row.deliveryRate <= 0 ? " has-error" : ""}`}
                           min="0"
                           value={row.deliveryRate || ""}
                           placeholder="0"
                           onChange={(e) => updateRowField(row.id, "deliveryRate", Number(e.target.value) || 0)}
-                          style={{
-                            fontSize: "12px",
-                            padding: "4px 6px",
-                            width: "90px",
-                            borderColor: row.deliveryRate <= 0 ? "var(--color-critical, #dc2626)" : undefined,
-                          }}
+                          style={{ width: "90px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
                         />
                       </td>
                       <td>
                         <input
                           type="number"
-                          className="base-input"
+                          className="import-table-input"
                           min="0"
                           value={row.dieselExpenses ?? ""}
                           placeholder="Optional"
@@ -766,13 +738,13 @@ export function DeliveryExcelImportClient({
                               e.target.value !== "" ? Number(e.target.value) : null,
                             )
                           }
-                          style={{ fontSize: "12px", padding: "4px 6px", width: "80px" }}
+                          style={{ width: "80px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
                         />
                       </td>
                       <td>
                         <input
                           type="number"
-                          className="base-input"
+                          className="import-table-input"
                           min="0"
                           value={row.tollGateExpenses ?? ""}
                           placeholder="Optional"
@@ -783,59 +755,70 @@ export function DeliveryExcelImportClient({
                               e.target.value !== "" ? Number(e.target.value) : null,
                             )
                           }
-                          style={{ fontSize: "12px", padding: "4px 6px", width: "80px" }}
+                          style={{ width: "80px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
                         />
                       </td>
                       <td>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                           <input
                             type="text"
-                            className="base-input"
+                            className="import-table-input"
                             value={row.driverName ?? ""}
                             placeholder="Driver"
                             onChange={(e) =>
                               updateRowField(row.id, "driverName", e.target.value.trim() ? e.target.value : null)
                             }
-                            style={{ fontSize: "11px", padding: "2px 6px", width: "110px" }}
+                            style={{ width: "110px", fontSize: "11px", padding: "3px 6px" }}
                           />
                           <input
                             type="text"
-                            className="base-input"
+                            className="import-table-input"
                             value={row.helperName ?? ""}
                             placeholder="Helper"
                             onChange={(e) =>
                               updateRowField(row.id, "helperName", e.target.value.trim() ? e.target.value : null)
                             }
-                            style={{ fontSize: "11px", padding: "2px 6px", width: "110px" }}
+                            style={{ width: "110px", fontSize: "11px", padding: "3px 6px" }}
                           />
                         </div>
                       </td>
                       <td>
-                        <div style={{ fontSize: "12px", maxWidth: "200px" }}>
-                          <strong style={{ display: "block" }}>
-                            {row.dropoffs.length} {row.dropoffs.length === 1 ? "Stop" : "Stops"}
-                          </strong>
-                          <span style={{ color: "var(--muted)", fontSize: "11px" }}>
+                        <div style={{ maxWidth: "200px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span className="routex-badge" style={{ fontSize: "10px" }}>
+                              {row.dropoffs.length} {row.dropoffs.length === 1 ? "Stop" : "Stops"}
+                            </span>
+                          </div>
+                          <span
+                            style={{
+                              display: "block",
+                              color: "var(--color-text-muted)",
+                              fontSize: "11px",
+                              marginTop: "3px",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                            title={row.dropoffs.map((d) => d.storeName).join(", ")}
+                          >
                             {row.dropoffs.map((d) => d.storeName).join(", ")}
                           </span>
                         </div>
                       </td>
-                      <td>
+                      <td style={{ textAlign: "center" }}>
                         <button
                           type="button"
-                          className="row-action-btn"
+                          className="truck-action-icon-btn danger"
                           aria-label={`Remove row for waybill ${row.waybillNumber}`}
-                          title="Remove row"
+                          title="Remove staged row"
                           onClick={() => removeStagedRow(row.id)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--muted)",
-                            cursor: "pointer",
-                            padding: "4px",
-                          }}
                         >
-                          ✕
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            <line x1="10" y1="11" x2="10" y2="17" />
+                            <line x1="14" y1="11" x2="14" y2="17" />
+                          </svg>
                         </button>
                       </td>
                     </tr>
@@ -876,102 +859,48 @@ export function DeliveryExcelImportClient({
           </div>
 
           <div style={{ padding: "24px", borderTop: "1px solid var(--line)" }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div
-                style={{
-                  padding: "16px",
-                  borderRadius: "8px",
-                  background: "var(--color-surface)",
-                  border: "1px solid var(--line)",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "var(--muted)" }}>Batch Reference</div>
-                <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--ink)", marginTop: "4px" }}>
+            <div className="import-metric-grid">
+              <div className="import-metric-card">
+                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Batch Reference</span>
+                <strong style={{ fontSize: "16px", color: "var(--color-text-primary)", marginTop: "4px" }}>
                   {batchName}
-                </div>
+                </strong>
               </div>
 
-              <div
-                style={{
-                  padding: "16px",
-                  borderRadius: "8px",
-                  background: "var(--color-surface)",
-                  border: "1px solid var(--line)",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "var(--muted)" }}>Ready to Commit</div>
-                <div
-                  style={{
-                    fontSize: "20px",
-                    fontWeight: 600,
-                    color: "var(--color-positive, #16a34a)",
-                    marginTop: "4px",
-                  }}
-                >
+              <div className="import-metric-card tone-ready">
+                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Ready to Commit</span>
+                <strong style={{ fontSize: "22px", color: "#10b981", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
                   {readyCount} trips
-                </div>
+                </strong>
               </div>
 
               {duplicateCount > 0 ? (
-                <div
-                  style={{
-                    padding: "16px",
-                    borderRadius: "8px",
-                    background: "var(--color-surface)",
-                    border: "1px solid var(--line)",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>Duplicates (Will be Skipped)</div>
-                  <div style={{ fontSize: "20px", fontWeight: 600, color: "var(--muted)", marginTop: "4px" }}>
+                <div className="import-metric-card tone-duplicate">
+                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Duplicates (Will be Skipped)</span>
+                  <strong style={{ fontSize: "22px", color: "var(--color-text-muted)", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
                     {duplicateCount} trips
-                  </div>
+                  </strong>
                 </div>
               ) : null}
 
               {attentionCount > 0 ? (
-                <div
-                  style={{
-                    padding: "16px",
-                    borderRadius: "8px",
-                    background: "var(--color-surface)",
-                    border: "1px solid var(--line)",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>Needs Attention (Excluded)</div>
-                  <div
-                    style={{
-                      fontSize: "20px",
-                      fontWeight: 600,
-                      color: "var(--color-critical, #dc2626)",
-                      marginTop: "4px",
-                    }}
-                  >
+                <div className="import-metric-card tone-attention">
+                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Needs Attention (Excluded)</span>
+                  <strong style={{ fontSize: "22px", color: "#ef4444", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
                     {attentionCount} trips
-                  </div>
+                  </strong>
                 </div>
               ) : null}
             </div>
 
-            <div
-              style={{
-                padding: "16px 20px",
-                borderRadius: "8px",
-                background: "var(--color-surface)",
-                border: "1px solid var(--line)",
-                fontSize: "13px",
-                lineHeight: "1.6",
-                color: "var(--ink)",
-              }}
-            >
-              <strong style={{ display: "block", marginBottom: "6px" }}>Import Safety Guarantees:</strong>
-              <ul style={{ margin: 0, paddingLeft: "20px", color: "var(--muted)", fontSize: "12px" }}>
+            <div className="import-guide-card">
+              <strong className="import-guide-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--color-accent)" }}>
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Import Safety Guarantees:
+              </strong>
+              <ul className="import-guide-list">
                 <li>Only rows marked as <strong>Ready</strong> will be committed to the database.</li>
                 <li>Duplicate waybills are never overwritten, protecting existing historical delivery trips.</li>
                 <li>All import events are written to the audit log under entity ID for this batch.</li>
@@ -1001,71 +930,29 @@ export function DeliveryExcelImportClient({
           </div>
 
           <div style={{ padding: "24px", borderTop: "1px solid var(--line)" }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "16px",
-                marginBottom: "24px",
-              }}
-            >
-              <div
-                style={{
-                  padding: "16px",
-                  borderRadius: "8px",
-                  background: "rgba(22, 163, 74, 0.06)",
-                  border: "1px solid rgba(22, 163, 74, 0.2)",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "var(--muted)" }}>Successfully Committed</div>
-                <div
-                  style={{
-                    fontSize: "22px",
-                    fontWeight: 600,
-                    color: "var(--color-positive, #16a34a)",
-                    marginTop: "4px",
-                  }}
-                >
+            <div className="import-metric-grid">
+              <div className="import-metric-card tone-ready">
+                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Successfully Committed</span>
+                <strong style={{ fontSize: "24px", color: "#10b981", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
                   {importResult.committedCount} Deliveries
-                </div>
+                </strong>
               </div>
 
               {importResult.duplicateCount > 0 ? (
-                <div
-                  style={{
-                    padding: "16px",
-                    borderRadius: "8px",
-                    background: "var(--color-surface)",
-                    border: "1px solid var(--line)",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>Duplicate Waybills Skipped</div>
-                  <div style={{ fontSize: "22px", fontWeight: 600, color: "var(--muted)", marginTop: "4px" }}>
+                <div className="import-metric-card tone-duplicate">
+                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Duplicate Waybills Skipped</span>
+                  <strong style={{ fontSize: "24px", color: "var(--color-text-muted)", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
                     {importResult.duplicateCount}
-                  </div>
+                  </strong>
                 </div>
               ) : null}
 
               {importResult.errors.length > 0 ? (
-                <div
-                  style={{
-                    padding: "16px",
-                    borderRadius: "8px",
-                    background: "rgba(220, 38, 38, 0.06)",
-                    border: "1px solid rgba(220, 38, 38, 0.2)",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "var(--muted)" }}>Failed Records</div>
-                  <div
-                    style={{
-                      fontSize: "22px",
-                      fontWeight: 600,
-                      color: "var(--color-critical, #dc2626)",
-                      marginTop: "4px",
-                    }}
-                  >
+                <div className="import-metric-card tone-attention">
+                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Failed Records</span>
+                  <strong style={{ fontSize: "24px", color: "#ef4444", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
                     {importResult.errors.length}
-                  </div>
+                  </strong>
                 </div>
               ) : null}
             </div>
@@ -1073,23 +960,12 @@ export function DeliveryExcelImportClient({
             {/* Committed Waybill Chips */}
             {importResult.committedWaybills.length > 0 ? (
               <div style={{ marginBottom: "24px" }}>
-                <strong style={{ display: "block", fontSize: "13px", marginBottom: "8px", color: "var(--ink)" }}>
-                  Committed Waybill Records:
+                <strong style={{ display: "block", fontSize: "13px", marginBottom: "10px", color: "var(--color-text-primary)" }}>
+                  Committed Waybill Records ({importResult.committedWaybills.length}):
                 </strong>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                   {importResult.committedWaybills.map((wb) => (
-                    <span
-                      key={wb}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: "4px",
-                        background: "var(--color-surface)",
-                        border: "1px solid var(--line)",
-                        fontSize: "12px",
-                        fontFamily: "monospace",
-                        color: "var(--ink)",
-                      }}
-                    >
+                    <span key={wb} className="import-waybill-pill">
                       {wb}
                     </span>
                   ))}
@@ -1100,23 +976,12 @@ export function DeliveryExcelImportClient({
             {/* Skipped / Duplicates */}
             {importResult.duplicateWaybills.length > 0 ? (
               <div style={{ marginBottom: "24px" }}>
-                <strong style={{ display: "block", fontSize: "13px", marginBottom: "8px", color: "var(--muted)" }}>
-                  Skipped Duplicates:
+                <strong style={{ display: "block", fontSize: "13px", marginBottom: "10px", color: "var(--color-text-muted)" }}>
+                  Skipped Duplicates ({importResult.duplicateWaybills.length}):
                 </strong>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                   {importResult.duplicateWaybills.map((wb) => (
-                    <span
-                      key={wb}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: "4px",
-                        background: "var(--color-surface)",
-                        border: "1px solid var(--line)",
-                        fontSize: "12px",
-                        fontFamily: "monospace",
-                        color: "var(--muted)",
-                      }}
-                    >
+                    <span key={wb} className="import-waybill-pill" style={{ opacity: 0.75 }}>
                       {wb}
                     </span>
                   ))}
@@ -1126,8 +991,13 @@ export function DeliveryExcelImportClient({
 
             {/* Error Report Download */}
             {(importResult.duplicateCount > 0 || importResult.errors.length > 0) ? (
-              <div style={{ marginTop: "16px" }}>
+              <div style={{ marginTop: "20px", paddingTop: "18px", borderTop: "1px solid var(--line)" }}>
                 <button type="button" className="secondary-button" onClick={downloadErrorReport}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
                   Download Audit / Error Report (CSV)
                 </button>
               </div>

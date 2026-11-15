@@ -894,6 +894,176 @@ export default function TruckProfilePage({
                   </div>
                 )}
 
+                {/* Full-width enlarged truck photo uploader at top */}
+                <div className="truck-dialog-photo-upload-wrap">
+                  <label
+                    htmlFor="edit-profile-truck-photo"
+                    className={`truck-dialog-photo-card ${editTruckPhotoPreview ? "has-photo" : "empty"}`}
+                    title={editTruckPhotoPreview ? "Change photo" : "Select photo"}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        document.getElementById("edit-profile-truck-photo")?.click();
+                      }
+                    }}
+                  >
+                    {editTruckPhotoPreview ? (
+                      <>
+                        <img src={editTruckPhotoPreview} alt="Selected truck preview" className="truck-dialog-photo-img" />
+                        <span className="truck-dialog-photo-change-badge">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                            <circle cx="12" cy="13" r="4" />
+                          </svg>
+                          Change Photo
+                        </span>
+                      </>
+                    ) : (
+                      <div className="truck-dialog-photo-empty-content">
+                        <div className="truck-dialog-photo-icon-wrap">
+                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="1" y="3" width="15" height="13" rx="1.5" />
+                            <polygon points="16 8 20 8 23 11 23 16 16 8" />
+                            <circle cx="5.5" cy="18.5" r="2.5" />
+                            <circle cx="18.5" cy="18.5" r="2.5" />
+                          </svg>
+                        </div>
+                        <span className="truck-dialog-photo-label">Upload Truck Picture</span>
+                        <span className="truck-dialog-photo-subtext">Optional · PNG, JPG up to 10MB</span>
+                      </div>
+                    )}
+                  </label>
+
+                  <input
+                    id="edit-profile-truck-photo"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    tabIndex={-1}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      if (!file) return;
+                      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+                        setEditError("Choose an image file smaller than 10 MB.");
+                        event.target.value = "";
+                        return;
+                      }
+                      setEditError(null);
+                      setEditTruckPhotoFile(file);
+                      const reader = new FileReader();
+                      reader.onload = () => setEditTruckPhotoPreview(String(reader.result));
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+
+                  {editTruckPhotoPreview && (
+                    <button
+                      type="button"
+                      className="truck-dialog-photo-remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditTruckPhotoFile(null);
+                        setEditTruckPhotoPreview(null);
+                        const input = document.getElementById("edit-profile-truck-photo") as HTMLInputElement | null;
+                        if (input) input.value = "";
+                      }}
+                      title="Remove photo"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+
+                {/* Full-width enlarged truck photo uploader at top */}
+                <div className="truck-dialog-photo-upload-wrap">
+                  <label
+                    htmlFor="edit-profile-truck-photo"
+                    className={`truck-dialog-photo-card ${editTruckPhotoPreview ? "has-photo" : "empty"}`}
+                    title={editTruckPhotoPreview ? "Change photo" : "Select photo"}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        document.getElementById("edit-profile-truck-photo")?.click();
+                      }
+                    }}
+                  >
+                    {editTruckPhotoPreview ? (
+                      <>
+                        <img src={editTruckPhotoPreview} alt="Selected truck preview" className="truck-dialog-photo-img" />
+                        <span className="truck-dialog-photo-change-badge">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                            <circle cx="12" cy="13" r="4" />
+                          </svg>
+                          Change Photo
+                        </span>
+                      </>
+                    ) : (
+                      <div className="truck-dialog-photo-empty-content">
+                        <div className="truck-dialog-photo-icon-wrap">
+                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="1" y="3" width="15" height="13" rx="1.5" />
+                            <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
+                            <circle cx="5.5" cy="18.5" r="2.5" />
+                            <circle cx="18.5" cy="18.5" r="2.5" />
+                          </svg>
+                        </div>
+                        <span className="truck-dialog-photo-label">Upload Truck Picture</span>
+                        <span className="truck-dialog-photo-subtext">Optional · PNG, JPG up to 10MB</span>
+                      </div>
+                    )}
+                  </label>
+
+                  <input
+                    id="edit-profile-truck-photo"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    tabIndex={-1}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      if (!file) return;
+                      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+                        setEditError("Choose an image file smaller than 10 MB.");
+                        event.target.value = "";
+                        return;
+                      }
+                      setEditError(null);
+                      setEditTruckPhotoFile(file);
+                      const reader = new FileReader();
+                      reader.onload = () => setEditTruckPhotoPreview(String(reader.result));
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+
+                  {editTruckPhotoPreview && (
+                    <button
+                      type="button"
+                      className="truck-dialog-photo-remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditTruckPhotoFile(null);
+                        setEditTruckPhotoPreview(null);
+                        const input = document.getElementById("edit-profile-truck-photo") as HTMLInputElement | null;
+                        if (input) input.value = "";
+                      }}
+                      title="Remove photo"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+
                 <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div className="routex-dialog-field">
                     <label htmlFor="edit-profile-truck-plate" style={{ fontWeight: 600, fontSize: "12px" }}>
@@ -934,6 +1104,91 @@ export default function TruckProfilePage({
                       ariaLabel="Select fleet ownership"
                     />
                   </div>
+                </div>
+
+                {/* Full-width enlarged truck photo uploader at top */}
+                <div className="truck-dialog-photo-upload-wrap">
+                  <label
+                    htmlFor="edit-profile-truck-photo"
+                    className={`truck-dialog-photo-card ${editTruckPhotoPreview ? "has-photo" : "empty"}`}
+                    title={editTruckPhotoPreview ? "Change photo" : "Select photo"}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        document.getElementById("edit-profile-truck-photo")?.click();
+                      }
+                    }}
+                  >
+                    {editTruckPhotoPreview ? (
+                      <>
+                        <img src={editTruckPhotoPreview} alt="Selected truck preview" className="truck-dialog-photo-img" />
+                        <span className="truck-dialog-photo-change-badge">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                            <circle cx="12" cy="13" r="4" />
+                          </svg>
+                          Change Photo
+                        </span>
+                      </>
+                    ) : (
+                      <div className="truck-dialog-photo-empty-content">
+                        <div className="truck-dialog-photo-icon-wrap">
+                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <rect x="1" y="3" width="15" height="13" rx="1.5" />
+                            <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
+                            <circle cx="5.5" cy="18.5" r="2.5" />
+                            <circle cx="18.5" cy="18.5" r="2.5" />
+                          </svg>
+                        </div>
+                        <span className="truck-dialog-photo-label">Upload Truck Picture</span>
+                        <span className="truck-dialog-photo-subtext">Optional · PNG, JPG up to 10MB</span>
+                      </div>
+                    )}
+                  </label>
+
+                  <input
+                    id="edit-profile-truck-photo"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    tabIndex={-1}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      if (!file) return;
+                      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+                        setEditError("Choose an image file smaller than 10 MB.");
+                        event.target.value = "";
+                        return;
+                      }
+                      setEditError(null);
+                      setEditTruckPhotoFile(file);
+                      const reader = new FileReader();
+                      reader.onload = () => setEditTruckPhotoPreview(String(reader.result));
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+
+                  {editTruckPhotoPreview && (
+                    <button
+                      type="button"
+                      className="truck-dialog-photo-remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditTruckPhotoFile(null);
+                        setEditTruckPhotoPreview(null);
+                        const input = document.getElementById("edit-profile-truck-photo") as HTMLInputElement | null;
+                        if (input) input.value = "";
+                      }}
+                      title="Remove photo"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                      Remove photo
+                    </button>
+                  )}
                 </div>
 
                 <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -1012,35 +1267,7 @@ export default function TruckProfilePage({
                   </div>
                 )}
 
-                <div className="truck-create-photo-field">
-                  <div className="truck-create-photo-preview">
-                    {editTruckPhotoPreview ? <img src={editTruckPhotoPreview} alt="Selected truck preview" /> : <span>No photo</span>}
-                  </div>
-                  <div className="routex-dialog-field">
-                    <label htmlFor="edit-profile-truck-photo" style={{ fontWeight: 600, fontSize: "12px" }}>
-                      Truck Picture (Optional)
-                    </label>
-                    <input
-                      id="edit-profile-truck-photo"
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0] ?? null;
-                        if (!file) return;
-                        if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
-                          setEditError("Choose an image file smaller than 10 MB.");
-                          event.target.value = "";
-                          return;
-                        }
-                        setEditError(null);
-                        setEditTruckPhotoFile(file);
-                        const reader = new FileReader();
-                        reader.onload = () => setEditTruckPhotoPreview(String(reader.result));
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                  </div>
-                </div>
+
               </div>
 
               <footer className="routex-dialog-footer">
