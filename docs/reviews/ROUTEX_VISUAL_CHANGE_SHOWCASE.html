@@ -1,0 +1,1438 @@
+            /komit<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RouteX — Visual Change Showcase & Final UI Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* ==========================================================================
+       RouteX Design System Tokens (Light & Refined Deeper Dark Mode)
+       ========================================================================== */
+    :root {
+      --color-page: #f4f6f8;
+      --color-surface: #ffffff;
+      --color-surface-subtle: #f8fafc;
+      --color-text-primary: #0f172a;
+      --color-text-secondary: #475569;
+      --color-text-muted: #64748b;
+      --color-border: #e2e8f0;
+      --color-border-subtle: #edf2f7;
+      --color-accent: #f59e0b;
+      --color-accent-deep: #d97706;
+      --color-accent-soft: rgba(245, 158, 11, 0.12);
+      --color-status-success: #10b981;
+      --color-status-warning: #f59e0b;
+      --color-status-danger: #ef4444;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+      --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+      --font-sans: 'Readex Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    html[data-theme="dark"] {
+      --color-page: #070a0e;
+      --color-surface: #0f151d;
+      --color-surface-subtle: #16202c;
+      --color-text-primary: #f8fafc;
+      --color-text-secondary: #cbd5e1;
+      --color-text-muted: #94a3b8;
+      --color-border: #1e293b;
+      --color-border-subtle: #141c27;
+      --color-accent: #f59e0b;
+      --color-accent-deep: #fbbf24;
+      --color-accent-soft: rgba(245, 158, 11, 0.14);
+      --color-status-success: #34d399;
+      --color-status-warning: #fbbf24;
+      --color-status-danger: #f87171;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+      --shadow-lg: 0 16px 42px rgba(0, 0, 0, 0.65);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--color-page);
+      color: var(--color-text-primary);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.25s ease, color 0.25s ease;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Showcase Bar */
+    .showcase-header {
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .showcase-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .showcase-logo-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 17px;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+    }
+
+    .showcase-title h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .showcase-title p {
+      font-size: 11.5px;
+      color: var(--color-text-muted);
+    }
+
+    .showcase-nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .showcase-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--color-accent-soft);
+      color: var(--color-accent-deep);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .theme-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface-subtle);
+      color: var(--color-text-primary);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .theme-toggle-btn:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent-deep);
+      transform: translateY(-1px);
+    }
+
+    /* Showcase Layout */
+    .showcase-container {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      flex: 1;
+      min-height: calc(100vh - 65px);
+    }
+
+    /* Left Showcase TOC */
+    .showcase-sidebar {
+      background: var(--color-surface);
+      border-right: 1px solid var(--color-border);
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: sticky;
+      top: 65px;
+      height: calc(100vh - 65px);
+      overflow-y: auto;
+    }
+
+    .showcase-sidebar-heading {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+      padding: 0 10px 4px;
+    }
+
+    .showcase-toc-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      font-size: 12.5px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+
+    .showcase-toc-link:hover,
+    .showcase-toc-link.active {
+      background: var(--color-surface-subtle);
+      color: var(--color-text-primary);
+    }
+
+    .showcase-toc-link.active {
+      color: var(--color-accent-deep);
+      font-weight: 600;
+      border-left: 3px solid var(--color-accent);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+
+    .showcase-toc-tag {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--color-surface-subtle);
+      color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+    }
+
+    /* Main Showcase Content */
+    .showcase-main {
+      padding: 32px 40px 80px;
+      max-width: 1200px;
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+    }
+
+    .showcase-section {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scroll-margin-top: 85px;
+    }
+
+    .section-header {
+      border-bottom: 1px solid var(--color-border);
+      padding-bottom: 14px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .section-header-text h2 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 4px;
+    }
+
+    .section-header-text p {
+      font-size: 13px;
+      color: var(--color-text-muted);
+    }
+
+    .section-status-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--color-status-success);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      white-space: nowrap;
+    }
+
+    /* Presentation Card Container */
+    .preview-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .preview-card-header {
+      background: var(--color-surface-subtle);
+      border-bottom: 1px solid var(--color-border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .preview-card-header span {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .preview-card-body {
+      padding: 24px;
+    }
+
+    /* --------------------------------------------------------------------------
+       1. Animated Sidebar Light Ray Recreation
+       -------------------------------------------------------------------------- */
+    .sidebar-showcase-box {
+      width: 250px;
+      height: 380px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-md);
+    }
+
+    html[data-theme="dark"] .sidebar-showcase-box {
+      background: rgba(9, 13, 18, 0.96);
+      border-color: rgba(148, 163, 184, 0.14);
+    }
+
+    .sidebar-rays-beam {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 140px;
+      height: 220px;
+      pointer-events: none;
+      background: radial-gradient(ellipse at 50% 0%, rgba(245, 158, 11, 0.38) 0%, rgba(217, 119, 6, 0.16) 42%, transparent 72%);
+      animation: previewFlameWaver 4.8s ease-in-out infinite;
+      transform-origin: 50% 0%;
+      filter: blur(14px);
+      z-index: 1;
+    }
+
+    @keyframes previewFlameWaver {
+      0%, 100% { transform: translateX(-50%) translateY(0) scale(1) rotate(0deg); opacity: 0.85; }
+      25% { transform: translateX(calc(-50% + 2px)) translateY(-3px) scale(1.05, 0.98) rotate(0.6deg); opacity: 0.95; }
+      50% { transform: translateX(calc(-50% - 2px)) translateY(-5px) scale(0.97, 1.06) rotate(-0.8deg); opacity: 0.80; }
+      75% { transform: translateX(calc(-50% + 1px)) translateY(-2px) scale(1.02, 1.01) rotate(0.4deg); opacity: 0.90; }
+    }
+
+    .sidebar-mock-header {
+      padding: 18px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .sidebar-mock-brand {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .sidebar-mock-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 0 10px;
+      position: relative;
+      z-index: 2;
+      flex: 1;
+    }
+
+    .sidebar-mock-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      color: var(--color-text-secondary);
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .sidebar-mock-item.active {
+      background: var(--color-accent-soft);
+      color: var(--color-accent-deep);
+      font-weight: 600;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    /* --------------------------------------------------------------------------
+       2. Add Truck Layout Redesign Showcase
+       -------------------------------------------------------------------------- */
+    .truck-redesign-grid {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .truck-photo-centerpiece {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+      background: var(--color-surface-subtle);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+    }
+
+    .truck-photo-enlarged {
+      width: 140px;
+      height: 140px;
+      border-radius: var(--radius-lg);
+      background: var(--color-surface);
+      border: 2px dashed var(--color-border);
+      display: grid;
+      place-items: center;
+      color: var(--color-text-muted);
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .truck-photo-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .truck-photo-details strong {
+      font-size: 14px;
+      color: var(--color-text-primary);
+    }
+
+    .truck-photo-details span {
+      font-size: 12px;
+      color: var(--color-text-muted);
+    }
+
+    .truck-fields-right {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .field-group-subtle {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      background: var(--color-surface-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .field-group-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+
+    .form-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .form-control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .form-control-group label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+
+    .form-input-mock {
+      height: 38px;
+      padding: 0 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text-primary);
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+
+    /* --------------------------------------------------------------------------
+       3. Delivery Switching Slide Transition Simulator
+       -------------------------------------------------------------------------- */
+    .delivery-navigator-mock {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: var(--color-surface-subtle);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 16px;
+    }
+
+    .nav-btn-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-arrow-btn {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text-primary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .nav-arrow-btn:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent-deep);
+    }
+
+    .delivery-card-stage {
+      position: relative;
+      overflow: hidden;
+      min-height: 180px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+
+    .delivery-detail-slide {
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .delivery-detail-slide.slide-out-left {
+      transform: translateX(-35px);
+      opacity: 0;
+    }
+
+    .delivery-detail-slide.slide-out-right {
+      transform: translateX(35px);
+      opacity: 0;
+    }
+
+    /* --------------------------------------------------------------------------
+       4. Finance & Company Expenses Record Popup Simulator
+       -------------------------------------------------------------------------- */
+    .kpi-row-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .kpi-stat-card {
+      background: var(--color-surface-subtle);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+    }
+
+    .kpi-amount {
+      font-size: 19px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--color-text-primary);
+    }
+
+    .kpi-amount.success { color: var(--color-status-success); }
+    .kpi-amount.warning { color: var(--color-status-warning); }
+
+    /* Mock Data Table */
+    .mock-table-wrap {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    .mock-table-wrap th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--color-text-muted);
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-surface-subtle);
+    }
+
+    .mock-table-wrap td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--color-border-subtle);
+      color: var(--color-text-primary);
+    }
+
+    .money-cell {
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .action-icon-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-action-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      color: var(--color-text-secondary);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .icon-action-btn:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent-deep);
+      transform: translateY(-1px);
+    }
+
+    .icon-action-btn.delete:hover {
+      border-color: var(--color-status-danger);
+      color: var(--color-status-danger);
+    }
+
+    /* --------------------------------------------------------------------------
+       5. Subtle Tooltip Demonstration
+       -------------------------------------------------------------------------- */
+    .tooltip-target-wrap {
+      position: relative;
+      display: inline-block;
+    }
+
+    .subtle-tooltip {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: var(--color-surface-subtle);
+      border: 1px solid var(--color-border);
+      color: var(--color-text-primary);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      box-shadow: var(--shadow-sm);
+      z-index: 50;
+    }
+
+    .tooltip-target-wrap:hover .subtle-tooltip {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* --------------------------------------------------------------------------
+       Modal Simulator Overlay
+       -------------------------------------------------------------------------- */
+    .modal-backdrop-mock {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      display: none;
+      place-items: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-backdrop-mock.is-open {
+      display: grid;
+    }
+
+    .modal-dialog-mock {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      width: 100%;
+      max-width: 520px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalPop {
+      from { transform: scale(0.96) translateY(8px); opacity: 0; }
+      to { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    .modal-header-mock {
+      padding: 16px 22px;
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--color-surface-subtle);
+    }
+
+    .modal-header-mock h3 {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .modal-close-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: var(--color-text-muted);
+      cursor: pointer;
+    }
+
+    .modal-body-mock {
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .modal-footer-mock {
+      padding: 14px 22px;
+      border-top: 1px solid var(--color-border);
+      background: var(--color-surface-subtle);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .primary-btn {
+      background: var(--color-accent-deep);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 8px 18px;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .primary-btn:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .secondary-btn {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      color: var(--color-text-primary);
+      border-radius: var(--radius-md);
+      padding: 8px 16px;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .showcase-container {
+        grid-template-columns: 1fr;
+      }
+      .showcase-sidebar {
+        display: none;
+      }
+      .showcase-main {
+        padding: 20px;
+      }
+      .kpi-row-4 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .truck-redesign-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Showcase Navigation Bar -->
+  <header class="showcase-header">
+    <div class="showcase-title-wrap">
+      <div class="showcase-logo-badge">R</div>
+      <div class="showcase-title">
+        <h1>RouteX UI Visual Change Showcase</h1>
+        <p>Interactive verification & design showcase for recent updates</p>
+      </div>
+    </div>
+    <div class="showcase-nav-actions">
+      <span class="showcase-badge">System Status: Verified Clean</span>
+      <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()">
+        <span id="themeToggleIcon">☀️</span>
+        <span id="themeToggleText">Switch to Light Mode</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="showcase-container">
+    
+    <!-- Sidebar Navigation / Quick TOC -->
+    <aside class="showcase-sidebar">
+      <span class="showcase-sidebar-heading">Showcase Modules</span>
+      <a href="#dark-mode" class="showcase-toc-link active">
+        <span>Dark Mode Darker Palette</span>
+        <span class="showcase-toc-tag">Global</span>
+      </a>
+      <a href="#sidebar-flame" class="showcase-toc-link">
+        <span>Sidebar Flame Ray Animation</span>
+        <span class="showcase-toc-tag">Shell</span>
+      </a>
+      <a href="#add-truck" class="showcase-toc-link">
+        <span>Add Truck Layout Redesign</span>
+        <span class="showcase-toc-tag">Fleet</span>
+      </a>
+      <a href="#delivery-switch" class="showcase-toc-link">
+        <span>Delivery Switch Animation</span>
+        <span class="showcase-toc-tag">Deliveries</span>
+      </a>
+      <a href="#finance-modal" class="showcase-toc-link">
+        <span>Finance Page & Expense Modal</span>
+        <span class="showcase-toc-tag">Finance</span>
+      </a>
+      <a href="#tooltips" class="showcase-toc-link">
+        <span>Subtle Tooltip Redesign</span>
+        <span class="showcase-toc-tag">UX</span>
+      </a>
+      <a href="#import-flow" class="showcase-toc-link">
+        <span>Delivery Import Workflow</span>
+        <span class="showcase-toc-tag">Import</span>
+      </a>
+    </aside>
+
+    <!-- Main Showcase Content -->
+    <main class="showcase-main">
+
+      <!-- Module 1: Refined Darker Palette -->
+      <section id="dark-mode" class="showcase-section">
+        <div class="section-header">
+          <div class="section-header-text">
+            <h2>1. Dark Mode Darker Palette Refinement</h2>
+            <p>Significant deepening of the dark theme environment while strictly preserving typography contrast and surface hierarchy ("Darken the environment, not the information").</p>
+          </div>
+          <span class="section-status-pill">Implemented & Verified</span>
+        </div>
+
+        <div class="preview-card">
+          <div class="preview-card-header">
+            <span>Color Hierarchy Reference Palette</span>
+            <span style="font-family: var(--font-mono); font-size: 11px;">CSS Tokens</span>
+          </div>
+          <div class="preview-card-body">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+              <div style="background: var(--color-page); border: 1px solid var(--color-border); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700;">Canvas Background</div>
+                <div style="font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted);">#070a0e</div>
+                <div style="font-size: 11px; margin-top: 6px; color: var(--color-text-secondary);">Deep midnight foundation</div>
+              </div>
+              <div style="background: var(--color-surface); border: 1px solid var(--color-border); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700;">Elevated Card</div>
+                <div style="font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted);">#0f151d</div>
+                <div style="font-size: 11px; margin-top: 6px; color: var(--color-text-secondary);">Distinguishable cards & modals</div>
+              </div>
+              <div style="background: var(--color-surface-subtle); border: 1px solid var(--color-border); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700;">Subtle Nested</div>
+                <div style="font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted);">#16202c</div>
+                <div style="font-size: 11px; margin-top: 6px; color: var(--color-text-secondary);">Table headers & field groups</div>
+              </div>
+              <div style="border: 1px solid var(--color-border); padding: 14px; border-radius: var(--radius-md);">
+                <div style="font-size: 12px; font-weight: 700;">Component Borders</div>
+                <div style="font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted);">#1e293b</div>
+                <div style="font-size: 11px; margin-top: 6px; color: var(--color-text-secondary);">Hairline muted boundaries</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 2: Sidebar Flame Ray Animation -->
+      <section id="sidebar-flame" class="showcase-section">
+        <div class="section-header">
+          <div class="section-header-text">
+            <h2>2. Operational Sidebar & Flame Ray Effect</h2>
+            <p>Subtle animated radial gradient lighting up the top of the sidebar navigation with smooth keyframe waver effect.</p>
+          </div>
+          <span class="section-status-pill">Active in Shell</span>
+        </div>
+
+        <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
+          <div class="sidebar-showcase-box">
+            <div class="sidebar-rays-beam"></div>
+            <div class="sidebar-mock-header">
+              <div class="sidebar-mock-brand">R</div>
+              <div>
+                <strong style="font-size: 13px; display: block;">RouteX</strong>
+                <small style="font-size: 10px; color: var(--color-text-muted);">Redeemed Route</small>
+              </div>
+            </div>
+            <div class="sidebar-mock-nav">
+              <div class="sidebar-mock-item active">
+                <span>📊</span> <span>Dashboard</span>
+              </div>
+              <div class="sidebar-mock-item">
+                <span>🚚</span> <span>Deliveries</span>
+              </div>
+              <div class="sidebar-mock-item">
+                <span>🚛</span> <span>Trucks</span>
+              </div>
+              <div class="sidebar-mock-item">
+                <span>💰</span> <span>Finance</span>
+              </div>
+              <div class="sidebar-mock-item">
+                <span>📑</span> <span>Reports</span>
+              </div>
+            </div>
+          </div>
+          <div style="flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 12px;">
+            <div class="preview-card">
+              <div class="preview-card-header">
+                <span>Animation Specs</span>
+              </div>
+              <div class="preview-card-body" style="font-size: 12.5px; color: var(--color-text-secondary); display: flex; flex-direction: column; gap: 8px;">
+                <p>• <strong>Keyframe:</strong> <code>flameWaver</code> over 4.8s cubic ease cycle.</p>
+                <p>• <strong>Layering:</strong> Positioned behind navigation items with <code>pointer-events: none</code>.</p>
+                <p>• <strong>Glow Palette:</strong> Warm amber radial gradient matching the RouteX brand identity.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 3: Add Truck Layout Redesign -->
+      <section id="add-truck" class="showcase-section">
+        <div class="section-header">
+          <div class="section-header-text">
+            <h2>3. Add Truck Layout Redesign</h2>
+            <p>Centered enlarged photo area positioned upwards, vehicle details below it, inputs shifted rightward with subtle grouping and clean unbadged classifications.</p>
+          </div>
+          <span class="section-status-pill">Verified Implemented</span>
+        </div>
+
+        <div class="preview-card">
+          <div class="preview-card-header">
+            <span>Fleet Management: Add Truck Profile Component</span>
+          </div>
+          <div class="preview-card-body">
+            <div class="truck-redesign-grid">
+              
+              <!-- Left Centerpiece -->
+              <div class="truck-photo-centerpiece">
+                <div class="truck-photo-enlarged">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <rect x="1" y="3" width="15" height="13"></rect>
+                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                    <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                    <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                  </svg>
+                </div>
+                <div class="truck-photo-details">
+                  <strong>NDX 8492</strong>
+                  <span>6-Wheeler · Refrigerated (Cold)</span>
+                  <small style="color: var(--color-status-success); font-weight: 600; margin-top: 4px;">Company Owned Fleet</small>
+                </div>
+              </div>
+
+              <!-- Right Grouped Inputs -->
+              <div class="truck-fields-right">
+                <div class="field-group-subtle">
+                  <div class="field-group-title">Identification & Fleet Details</div>
+                  <div class="form-row-2">
+                    <div class="form-control-group">
+                      <label>Plate Number</label>
+                      <input class="form-input-mock" value="NDX 8492" readonly>
+                    </div>
+                    <div class="form-control-group">
+                      <label>Truck Ownership</label>
+                      <input class="form-input-mock" value="Owned" readonly>
+                    </div>
+                  </div>
+                  <div class="form-row-2">
+                    <div class="form-control-group">
+                      <label>Vehicle Type</label>
+                      <input class="form-input-mock" value="6-Wheeler" readonly>
+                    </div>
+                    <div class="form-control-group">
+                      <label>Cargo Capability</label>
+                      <input class="form-input-mock" value="Cold Storage (-18°C)" readonly>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="field-group-subtle">
+                  <div class="field-group-title">Driver Assignment & Operational Status</div>
+                  <div class="form-row-2">
+                    <div class="form-control-group">
+                      <label>Primary Driver</label>
+                      <input class="form-input-mock" value="Rolando Cruz" readonly>
+                    </div>
+                    <div class="form-control-group">
+                      <label>Status</label>
+                      <input class="form-input-mock" value="Active / On-Route" readonly>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 4: Delivery Detail Switching Animation -->
+      <section id="delivery-switch" class="showcase-section">
+        <div class="section-header">
+          <div class="section-header-text">
+            <h2>4. Delivery Detail Switching Animation</h2>
+            <p>Smooth slide transitions when switching between delivery waybills with keyboard shortcuts ([ / ]) and arrow buttons.</p>
+          </div>
+          <span class="section-status-pill">Interactive Demo</span>
+        </div>
+
+        <div class="preview-card">
+          <div class="preview-card-header">
+            <span>Interactive Waybill Switching Simulator</span>
+            <span style="font-size: 11.5px; color: var(--color-text-muted);">Use buttons below or keys [ / ]</span>
+          </div>
+          <div class="preview-card-body">
+            <div class="delivery-navigator-mock">
+              <div>
+                <span style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--color-text-muted);">Viewing Record</span>
+                <h4 id="demoWaybillTitle" style="font-size: 16px; font-weight: 700;">Waybill #WB-2026-1049</h4>
+              </div>
+              <div class="nav-btn-group">
+                <button class="nav-arrow-btn" onclick="switchDelivery('prev')">← Previous [</button>
+                <button class="nav-arrow-btn" onclick="switchDelivery('next')">Next ] →</button>
+              </div>
+            </div>
+
+            <div class="delivery-card-stage">
+              <div id="demoDeliverySlide" class="delivery-detail-slide">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                  <div>
+                    <h3 id="demoClient" style="font-size: 18px; font-weight: 700;">Nestle Philippines</h3>
+                    <p id="demoRoute" style="font-size: 12.5px; color: var(--color-text-muted);">Cabuyao Laguna Depot → SM Megamall & Robinsons Galleria</p>
+                  </div>
+                  <span id="demoStatus" style="font-size: 12px; font-weight: 700; color: var(--color-status-success); background: rgba(16, 185, 129, 0.12); padding: 4px 10px; border-radius: 999px;">Finalized & Attached</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding-top: 14px; border-top: 1px solid var(--color-border);">
+                  <div>
+                    <small style="color: var(--color-text-muted); font-size: 11px;">Delivery Rate</small>
+                    <div id="demoRate" style="font-size: 16px; font-weight: 700; font-family: var(--font-mono);">₱28,500.00</div>
+                  </div>
+                  <div>
+                    <small style="color: var(--color-text-muted); font-size: 11px;">Assigned Truck</small>
+                    <div id="demoTruck" style="font-size: 14px; font-weight: 600;">NBE 9042 (Cold)</div>
+                  </div>
+                  <div>
+                    <small style="color: var(--color-text-muted); font-size: 11px;">Assigned Crew</small>
+                    <div id="demoCrew" style="font-size: 14px; font-weight: 600;">Driver: Carlo M. / Helper: Dante S.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 5: Finance & Company Expense Modal -->
+      <section id="finance-modal" class="showcase-section">
+        <div class="section-header">
+          <div class="section-header-text">
+            <h2>5. Simplified Finance Page & Record Popup</h2>
+            <p>Unified financial ledger with itemized company expenses, prominent KPI cards, and dedicated modal popup for expense recording.</p>
+          </div>
+          <span class="section-status-pill">Interactive Modal</span>
+        </div>
+
+        <div class="preview-card">
+          <div class="preview-card-header">
+            <span>Company Financial Summary (October 2026)</span>
+            <button class="primary-btn" onclick="openExpenseModal()">+ Add Company Expense</button>
+          </div>
+          <div class="preview-card-body">
+            <div class="kpi-row-4">
+              <div class="kpi-stat-card">
+                <span class="kpi-label">Gross Revenue</span>
+                <span class="kpi-amount success">₱782,400.00</span>
+              </div>
+              <div class="kpi-stat-card">
+                <span class="kpi-label">Trip Expenses</span>
+                <span class="kpi-amount warning">₱341,200.00</span>
+              </div>
+              <div class="kpi-stat-card">
+                <span class="kpi-label">Company Expenses</span>
+                <span class="kpi-amount warning">₱68,500.00</span>
+              </div>
+              <div class="kpi-stat-card">
+                <span class="kpi-label">Company Net Profit</span>
+                <span class="kpi-amount success">₱372,700.00</span>
+              </div>
+            </div>
+
+            <table class="mock-table-wrap">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Category</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>2026-10-28</td>
+                  <td>Utilities</td>
+                  <td>Valenzuela Warehouse Meralco Electricity</td>
+                  <td class="money-cell">₱18,420.50</td>
+                  <td>
+                    <div class="action-icon-group">
+                      <button class="icon-action-btn" title="Edit Expense" onclick="openExpenseModal('Valenzuela Warehouse Meralco Electricity', '18420.50', 'Utilities')">✏️</button>
+                      <button class="icon-action-btn delete" title="Delete Expense">🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td>2026-10-25</td>
+                  <td>Maintenance</td>
+                  <td>Fleet Preventive Maintenance & Oil Change (3 Trucks)</td>
+                  <td class="money-cell">₱24,600.00</td>
+                  <td>
+                    <div class="action-icon-group">
+                      <button class="icon-action-btn" title="Edit Expense" onclick="openExpenseModal('Fleet Preventive Maintenance', '24600.00', 'Maintenance')">✏️</button>
+                      <button class="icon-action-btn delete" title="Delete Expense">🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 6: Subtle Tooltips Redesign -->
+      <section id="tooltips" class="showcase-section">
+        <div class="section-header">
+          <div class="section-header-text">
+            <h2>6. Tooltip Simplification & Refinement</h2>
+            <p>Non-intrusive, short tooltips reserved only for icon buttons and ambiguous controls, eliminating redundant text.</p>
+          </div>
+          <span class="section-status-pill">Refined & Verified</span>
+        </div>
+
+        <div class="preview-card">
+          <div class="preview-card-header">
+            <span>Hover to Inspect Refined Tooltip Micro-interactions</span>
+          </div>
+          <div class="preview-card-body" style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+            
+            <div class="tooltip-target-wrap">
+              <button class="icon-action-btn" style="width: 36px; height: 36px;">✏️</button>
+              <div class="subtle-tooltip">Edit record</div>
+            </div>
+
+            <div class="tooltip-target-wrap">
+              <button class="icon-action-btn" style="width: 36px; height: 36px;">🗑️</button>
+              <div class="subtle-tooltip">Delete record</div>
+            </div>
+
+            <div class="tooltip-target-wrap">
+              <button class="icon-action-btn" style="width: 36px; height: 36px;">📑</button>
+              <div class="subtle-tooltip">Download PDF</div>
+            </div>
+
+            <div class="tooltip-target-wrap">
+              <button class="icon-action-btn" style="width: 36px; height: 36px;">🔍</button>
+              <div class="subtle-tooltip">View full picture</div>
+            </div>
+
+            <span style="font-size: 12px; color: var(--color-text-muted); margin-left: 10px;">Notice: Clean contrast, instant fade-in, no decorative heavy dropshadows.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Module 7: Delivery Import Workflow -->
+      <section id="import-flow" class="showcase-section">
+        <div class="section-header">
+          <div class="section-header-text">
+            <h2>7. Delivery Excel/CSV Import Workflow</h2>
+            <p>Multi-step batch parser detecting duplicate waybills, missing POD documents, and incomplete rates with instant status classification.</p>
+          </div>
+          <span class="section-status-pill">Functional Workflow</span>
+        </div>
+
+        <div class="preview-card">
+          <div class="preview-card-header">
+            <span>Step 2: Staged Batch Review (DTR-Batch-2026-11)</span>
+            <div style="display: flex; gap: 8px;">
+              <span style="background: rgba(16, 185, 129, 0.14); color: var(--color-status-success); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;">12 Ready</span>
+              <span style="background: rgba(245, 158, 11, 0.14); color: var(--color-status-warning); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;">2 Attention</span>
+            </div>
+          </div>
+          <div class="preview-card-body">
+            <table class="mock-table-wrap">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Waybill</th>
+                  <th>Client</th>
+                  <th>Truck Plate</th>
+                  <th>Rate</th>
+                  <th>Issues / Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span style="background: rgba(16, 185, 129, 0.14); color: var(--color-status-success); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700;">Ready</span></td>
+                  <td style="font-family: var(--font-mono); font-weight: 600;">WB-9481</td>
+                  <td>Monde Nissin</td>
+                  <td>NGS 4281</td>
+                  <td class="money-cell">₱32,000.00</td>
+                  <td style="color: var(--color-status-success);">All drop-offs & crew validated</td>
+                </tr>
+                <tr>
+                  <td><span style="background: rgba(245, 158, 11, 0.14); color: var(--color-status-warning); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700;">Attention</span></td>
+                  <td style="font-family: var(--font-mono); font-weight: 600;">WB-9482</td>
+                  <td>Wilcon Depot</td>
+                  <td>TRK-2024</td>
+                  <td class="money-cell" style="color: var(--color-status-warning);">₱0.00</td>
+                  <td style="color: var(--color-status-warning);">Agreed billing rate pending</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Reusable Expense Modal Recreation -->
+  <div class="modal-backdrop-mock" id="expenseModal" onclick="closeExpenseModal(event)">
+    <div class="modal-dialog-mock" onclick="event.stopPropagation()">
+      <div class="modal-header-mock">
+        <h3 id="modalTitle">Add Company Expense</h3>
+        <button class="modal-close-btn" onclick="closeExpenseModal()">×</button>
+      </div>
+      <div class="modal-body-mock">
+        <div class="form-control-group">
+          <label>Expense Description</label>
+          <input class="form-input-mock" id="modalDesc" placeholder="e.g. Office supplies or facility maintenance">
+        </div>
+        <div class="form-row-2">
+          <div class="form-control-group">
+            <label>Amount (PHP)</label>
+            <input class="form-input-mock" id="modalAmount" placeholder="0.00">
+          </div>
+          <div class="form-control-group">
+            <label>Category</label>
+            <select class="form-input-mock" id="modalCat">
+              <option value="Utilities">Utilities</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Office">Office & Admin</option>
+              <option value="Salaries">Administrative Salaries</option>
+              <option value="Other">Other Expenses</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-control-group">
+          <label>Receipt Reference / Notes</label>
+          <input class="form-input-mock" placeholder="OR # or check voucher number">
+        </div>
+      </div>
+      <div class="modal-footer-mock">
+        <button class="secondary-btn" onclick="closeExpenseModal()">Cancel</button>
+        <button class="primary-btn" onclick="closeExpenseModal()">Save Record</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Showcase Scripts -->
+  <script>
+    // Theme switching logic
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute("data-theme");
+      const next = current === "dark" ? "light" : "dark";
+      html.setAttribute("data-theme", next);
+      
+      const icon = document.getElementById("themeToggleIcon");
+      const text = document.getElementById("themeToggleText");
+      if (next === "dark") {
+        icon.textContent = "☀️";
+        text.textContent = "Switch to Light Mode";
+      } else {
+        icon.textContent = "🌙";
+        text.textContent = "Switch to Darker Dark Mode";
+      }
+    }
+
+    // Waybill switcher data
+    const deliveries = [
+      {
+        waybill: "Waybill #WB-2026-1049",
+        client: "Nestle Philippines",
+        route: "Cabuyao Laguna Depot → SM Megamall & Robinsons Galleria",
+        status: "Finalized & Attached",
+        rate: "₱28,500.00",
+        truck: "NBE 9042 (Cold)",
+        crew: "Driver: Carlo M. / Helper: Dante S."
+      },
+      {
+        waybill: "Waybill #WB-2026-1050",
+        client: "Monde Nissin",
+        route: "Santa Rosa Factory → Puregold San Pedro & Biñan",
+        status: "Finalized & Attached",
+        rate: "₱32,400.00",
+        truck: "NGS 4281 (Cold)",
+        crew: "Driver: Roberto T. / Helper: Mark P."
+      },
+      {
+        waybill: "Waybill #WB-2026-1051",
+        client: "San Miguel Pure Foods",
+        route: "Marikina Central Hub → Pasig Supermarket Cluster",
+        status: "Pending Receipts",
+        rate: "₱22,000.00",
+        truck: "DAA 7310 (Dry)",
+        crew: "Driver: Danilo B. / Helper: Sonny K."
+      }
+    ];
+
+    let currentDeliveryIndex = 0;
+
+    function switchDelivery(dir) {
+      const slide = document.getElementById("demoDeliverySlide");
+      slide.classList.add(dir === 'next' ? 'slide-out-left' : 'slide-out-right');
+
+      setTimeout(() => {
+        if (dir === 'next') {
+          currentDeliveryIndex = (currentDeliveryIndex + 1) % deliveries.length;
+        } else {
+          currentDeliveryIndex = (currentDeliveryIndex - 1 + deliveries.length) % deliveries.length;
+        }
+        const del = deliveries[currentDeliveryIndex];
+        document.getElementById("demoWaybillTitle").textContent = del.waybill;
+        document.getElementById("demoClient").textContent = del.client;
+        document.getElementById("demoRoute").textContent = del.route;
+        document.getElementById("demoStatus").textContent = del.status;
+        document.getElementById("demoRate").textContent = del.rate;
+        document.getElementById("demoTruck").textContent = del.truck;
+        document.getElementById("demoCrew").textContent = del.crew;
+
+        slide.classList.remove('slide-out-left', 'slide-out-right');
+      }, 200);
+    }
+
+    // Keyboard navigation
+    window.addEventListener("keydown", (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === ']' || e.key === 'ArrowRight') switchDelivery('next');
+      if (e.key === '[' || e.key === 'ArrowLeft') switchDelivery('prev');
+    });
+
+    // Modal interactions
+    function openExpenseModal(desc = '', amount = '', cat = 'Utilities') {
+      const modal = document.getElementById("expenseModal");
+      const title = document.getElementById("modalTitle");
+      const descInput = document.getElementById("modalDesc");
+      const amountInput = document.getElementById("modalAmount");
+      const catSelect = document.getElementById("modalCat");
+
+      if (desc) {
+        title.textContent = "Edit Company Expense";
+        descInput.value = desc;
+        amountInput.value = amount;
+        catSelect.value = cat;
+      } else {
+        title.textContent = "Add Company Expense";
+        descInput.value = "";
+        amountInput.value = "";
+        catSelect.value = "Utilities";
+      }
+
+      modal.classList.add("is-open");
+    }
+
+    function closeExpenseModal(e) {
+      if (!e || e.target.id === 'expenseModal' || e.target.classList.contains('modal-close-btn') || e.target.classList.contains('secondary-btn') || e.target.classList.contains('primary-btn')) {
+        document.getElementById("expenseModal").classList.remove("is-open");
+      }
+    }
+  </script>
+</body>
+</html>

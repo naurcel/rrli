@@ -49,14 +49,45 @@
       background: rgba(148, 163, 184, 0.12);
       border: 1px solid rgba(148, 163, 184, 0.2);
     }
-    /* Simulated Sidebar Radiating Rays Animation */
-    @keyframes raysSpin {
-      0% { transform: translate(-50%, -50%) rotate(0deg); }
-      100% { transform: translate(-50%, -50%) rotate(360deg); }
+    /* Simulated Sidebar Flame / Crack Light Animation */
+    @keyframes previewFlameWaver {
+      0% {
+        transform: translateX(-50%) translateY(0) scaleY(1.0) scaleX(1.0) rotate(0deg);
+        opacity: 0.82;
+      }
+      14% {
+        transform: translateX(calc(-50% + 1.5px)) translateY(-4px) scaleY(1.07) scaleX(0.97) rotate(0.8deg);
+        opacity: 0.90;
+      }
+      28% {
+        transform: translateX(calc(-50% + 0.5px)) translateY(-1px) scaleY(0.97) scaleX(1.02) rotate(0.1deg);
+        opacity: 0.76;
+      }
+      44% {
+        transform: translateX(calc(-50% - 2px)) translateY(-7px) scaleY(1.12) scaleX(0.95) rotate(-1.1deg);
+        opacity: 0.94;
+      }
+      58% {
+        transform: translateX(calc(-50% - 0.5px)) translateY(-3px) scaleY(1.01) scaleX(1.0) rotate(-0.3deg);
+        opacity: 0.80;
+      }
+      72% {
+        transform: translateX(calc(-50% + 1.5px)) translateY(-6px) scaleY(1.09) scaleX(0.96) rotate(0.6deg);
+        opacity: 0.88;
+      }
+      86% {
+        transform: translateX(calc(-50% - 0.5px)) translateY(-1px) scaleY(0.96) scaleX(1.02) rotate(-0.2deg);
+        opacity: 0.78;
+      }
+      100% {
+        transform: translateX(-50%) translateY(0) scaleY(1.0) scaleX(1.0) rotate(0deg);
+        opacity: 0.82;
+      }
     }
-    @keyframes raysPulse {
-      0%, 100% { opacity: 0.45; }
-      50% { opacity: 0.75; }
+    @keyframes previewCrackBreathe {
+      0%, 100% { transform: translateX(-50%) scaleX(1.0) scaleY(1.0); opacity: 0.70; }
+      45% { transform: translateX(-50%) scaleX(0.96) scaleY(1.06); opacity: 0.65; }
+      68% { transform: translateX(calc(-50% - 1px)) scaleX(1.08) scaleY(0.94); opacity: 0.86; }
     }
     .preview-rays-container {
       position: relative;
@@ -68,32 +99,27 @@
     .preview-rays-beam {
       position: absolute;
       left: 50%;
-      top: 50%;
-      width: 280px;
-      height: 280px;
-      border-radius: 9999px;
-      background: repeating-conic-gradient(
-        from 0deg,
-        rgba(245, 158, 11, 0.18) 0deg 15deg,
-        transparent 15deg 30deg,
-        rgba(217, 119, 6, 0.14) 30deg 45deg,
-        transparent 45deg 60deg
-      );
-      animation: raysSpin 20s linear infinite;
+      bottom: 0;
+      width: 52px;
+      height: 110px;
+      transform-origin: 50% 100%;
+      background:
+        radial-gradient(ellipse 30% 90% at 50% 100%, rgba(251, 191, 36, 0.35) 0%, rgba(245, 158, 11, 0.2) 35%, transparent 75%),
+        radial-gradient(ellipse 50% 100% at 50% 100%, rgba(245, 158, 11, 0.22) 0%, rgba(217, 119, 6, 0.1) 55%, transparent 85%);
+      animation: previewFlameWaver 15s ease-in-out infinite;
       filter: blur(2px);
       pointer-events: none;
     }
     .preview-rays-glow {
       position: absolute;
       left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: 140px;
-      height: 140px;
-      border-radius: 9999px;
-      background: radial-gradient(circle, rgba(245, 158, 11, 0.4) 0%, rgba(217, 119, 6, 0.15) 45%, transparent 70%);
-      animation: raysPulse 4s ease-in-out infinite;
-      filter: blur(10px);
+      bottom: 0;
+      transform: translateX(-50%);
+      width: 80px;
+      height: 26px;
+      background: radial-gradient(ellipse 65% 100% at 50% 100%, rgba(245, 158, 11, 0.45) 0%, rgba(217, 119, 6, 0.18) 45%, transparent 80%);
+      animation: previewCrackBreathe 11s ease-in-out infinite;
+      filter: blur(3px);
       pointer-events: none;
     }
   </style>
@@ -348,27 +374,28 @@
           </ul>
         </article>
 
-        <!-- 11. Animated Radiating Rays Gradient in Sidebar -->
+        <!-- 11. Animated Subtle Flame / Crack Light in Sidebar -->
         <article class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 space-y-3">
           <div class="flex items-center justify-between">
             <span class="tag-pill bg-amber-500/10 text-amber-600 dark:text-amber-400">Design Signature</span>
             <span class="code-badge">operational-sidebar.tsx</span>
           </div>
-          <h2 class="text-lg font-bold text-[var(--foreground)]">11. Animated Radiating Rays in Expanded Sidebar</h2>
+          <h2 class="text-lg font-bold text-[var(--foreground)]">11. Flame &amp; Ground Crack Light Animation</h2>
           <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
-            Added a subtle, dynamic conic ray gradient with pulsating glow at the bottom of the expanded sidebar navigation.
+            Refined the bottom sidebar animated gradient into an understated warm light source escaping through a narrow ground crack, with the slow, gentle wavering motion of a natural flame.
           </p>
           <div class="preview-rays-container my-2">
             <div class="preview-rays-beam"></div>
             <div class="preview-rays-glow"></div>
             <div class="relative z-10 flex flex-col justify-end h-full p-3 text-white text-xs">
-              <span class="font-semibold text-amber-400">Expanded Sidebar Ambience</span>
-              <span class="text-[10px] text-slate-300">Continuous 45s smooth conic rotation & 6s pulse</span>
+              <span class="font-semibold text-amber-400">Subterranean Crack Hearth Ambience</span>
+              <span class="text-[10px] text-slate-300">Gentle vertical rise, &lt;2px diagonal sway &amp; organic flame breathing</span>
             </div>
           </div>
           <ul class="text-xs space-y-1.5 text-[var(--muted-foreground)]">
-            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Automatically hidden in collapsed rail mode to preserve minimal desktop footprint.</li>
-            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Non-interactive (<code class="font-mono">pointer-events: none</code>) layered beneath nav links; respects <code class="font-mono">prefers-reduced-motion</code>.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Narrow vertical light plume anchored at bottom crack (<code class="font-mono">transform-origin: 50% 100%</code>).</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Subtle diagonal drift limited to ±2px with slow 15s waver curve; avoids distracting sideways motion.</li>
+            <li class="flex items-start gap-2"><span class="text-emerald-500">✔</span> Hidden in collapsed rail mode; respects <code class="font-mono">prefers-reduced-motion</code> &amp; <code class="font-mono">data-reduce-motion</code>.</li>
           </ul>
         </article>
 
@@ -540,7 +567,7 @@
               <tr class="hover:bg-[var(--card-surface)]/50 transition-colors bg-amber-500/5">
                 <td class="p-3 font-bold text-emerald-600">Finance Officer</td>
                 <td class="p-3 text-emerald-600 font-bold">Create, Edit & Manage (Finance Page)</td>
-                <td class="p-3 text-slate-600 dark:text-slate-300">View + Edit Financials</td>
+                <td class="p-3 text-slate-600 dark:text-slate-300">View-Only (Audit Trips & PODs)</td>
                 <td class="p-3 text-slate-600 dark:text-slate-300">View Profitability</td>
                 <td class="p-3 text-emerald-600 font-medium">View & Export</td>
                 <td class="p-3 text-slate-400">View Audit Log Only</td>
@@ -872,13 +899,28 @@
       {
         id: "tc-trucks-3",
         category: "Fleet Management",
-        title: "Truck Row Click Navigation",
+        title: "Inline Direct Action Icons & Row Click Navigation",
         route: "/truck-profitability",
         steps: [
           "Click anywhere on a truck table row.",
-          "Click the 3-dots action menu on the right."
+          "Observe that Edit and Delete are simple, direct icon buttons (no dropdown popup).",
+          "Click the Edit icon (pencil) to edit the truck without triggering row navigation.",
+          "As Operations role, confirm only the Edit icon button is displayed; as Admin, both Edit and Delete icons are shown."
         ],
-        expected: "Row click navigates to /truck-profitability/[plate]; clicking the '...' menu opens the action menu without triggering row navigation."
+        expected: "Row click navigates to /truck-profitability/[plate]; clicking the standalone Edit/Delete icon buttons opens their respective modals directly without opening a redundant 1-item menu or triggering row navigation."
+      },
+      {
+        id: "tc-trucks-4",
+        category: "Fleet Management",
+        title: "Enlarged & Centered Photo Upload Area (Add/Edit Truck)",
+        route: "/truck-profitability",
+        steps: [
+          "Navigate to /truck-profitability and click '+ Add Truck' (or 'Edit Truck' from action menu).",
+          "Observe that the truck photo area is placed at the top of the dialog, enlarged, and centered horizontally.",
+          "Check that all truck details (Plate Number, Ownership, Size, Classification) are placed cleanly below the photo area.",
+          "Click the photo card or upload an image to preview it in the enlarged container, and verify the 'Remove photo' option."
+        ],
+        expected: "Photo uploader is prominently centered at the top of the modal with details neatly positioned beneath it. Image selection and removal function seamlessly."
       },
       {
         id: "tc-audit-1",

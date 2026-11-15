@@ -1,4 +1,37 @@
-%PDF-1.4
+### RouteX Sidebar: Refine Gradient Animation
+
+Refine the existing animated gradient in the sidebar. Change its movement to imitate a subtle light source escaping through a narrow crack in the ground, with the gentle, slow wavering motion of a flame.
+
+**Visual direction:**
+- The light should appear to originate from a narrow vertical area, resembling light escaping through a crack.
+- Movement should primarily follow a vertical direction, traveling gently upward and downward.
+- Allow a very slight diagonal drift, but keep it almost vertical. Avoid obvious sideways movement.
+- The gradient should softly fluctuate in intensity and position, creating a natural flame-like wavering effect.
+- Use smooth transitions with no abrupt jumps, flickering, pulsing, or obvious animation loops.
+- Preserve the existing gradient colors and overall sidebar appearance unless minor adjustments are necessary for the effect.
+
+**Animation behavior:**
+- Slow, continuous, organic movement.
+- Subtle changes in brightness and gradient spread.
+- Slight irregularity in motion so it does not feel mechanical.
+- Avoid excessive blur, glow, or large movements.
+- The animation should remain understated and should not distract from sidebar navigation or text.
+
+**Technical considerations:**
+- Inspect the existing gradient implementation and modify it rather than introducing an unnecessary second animation.
+- Prefer efficient CSS animations and transforms over JavaScript-driven animation.
+- Avoid triggering unnecessary React re-renders.
+- Ensure the animation remains smooth and does not negatively affect scrolling or general application performance.
+- Respect `prefers-reduced-motion` and the application's Reduce Motion preference.
+- Verify appearance in both Light Mode and Dark Mode.
+
+**Important:** Do not change the sidebar layout, dimensions, navigation, colors, or other UI elements unnecessarily.
+
+### Desired Result
+
+Imagine a thin crack in the ground with warm light escaping from underneath. The light gently dances vertically, occasionally leaning just a little to one side, then returning. It should feel alive without looking like an obvious flame animation.
+
+Keep it elegant, slow, subtle, and restrained.%PDF-1.4
 1 0 obj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
