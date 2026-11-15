@@ -895,7 +895,6 @@ export default function TruckProfitabilityPage() {
     plateSearch.trim() ||
     classificationFilter !== "all" ||
     performanceFilter !== "all" ||
-    ownedTruckSort !== "netProfit" ||
     range.startDate ||
     range.endDate
   );
@@ -904,7 +903,6 @@ export default function TruckProfitabilityPage() {
     setPlateSearch("");
     setClassificationFilter("all");
     setPerformanceFilter("all");
-    setOwnedTruckSort("netProfit");
     setRange({ startDate: null, endDate: null });
   }
 
@@ -1401,23 +1399,6 @@ export default function TruckProfitabilityPage() {
                   placeholder="Sort by"
                 />
               </div>
-
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  className="filter-clear-action-btn"
-                  onClick={handleResetFilters}
-                  aria-label="Clear all truck filters"
-                  title="Clear all filters"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                  <span>Clear filters</span>
-                </button>
-              )}
-
             </div>
 
             {hasActiveFilters && (
@@ -1480,21 +1461,6 @@ export default function TruckProfitabilityPage() {
                       aria-label="Remove performance tier filter"
                       title="Clear tier filter"
                       onClick={() => setPerformanceFilter("all")}
-                    >
-                      ×
-                    </button>
-                  </span>
-                )}
-                {ownedTruckSort !== "netProfit" && (
-                  <span className="filter-chip">
-                    <span className="filter-chip-category">Sort:</span>{" "}
-                    {OWNED_TRUCK_SORT_OPTIONS.find((o) => o.value === ownedTruckSort)?.label ?? ownedTruckSort}
-                    <button
-                      type="button"
-                      className="filter-chip-remove"
-                      aria-label="Reset sort to default"
-                      title="Reset sort"
-                      onClick={() => setOwnedTruckSort("netProfit")}
                     >
                       ×
                     </button>

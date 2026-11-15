@@ -369,7 +369,7 @@ function DeliveryDetailsPageContent({
               <span className="waybill-tag">WAYBILL #{delivery.waybillNumber}</span>
               <span className="delivery-date-tag">Date: {delivery.deliveryDate}</span>
               {delivery.recordingDelayed ? (
-                <span className="late-recording-pill" title="Recorded past 3-day window">
+                <span className="late-recording-pill" title="Recorded past 2-day window">
                   Late Recording
                 </span>
               ) : null}

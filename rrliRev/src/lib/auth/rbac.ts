@@ -124,7 +124,7 @@ export const ROLE_METADATA: Readonly<Record<UserRole, RoleMetadata>> = {
     accessLevelLabel: "Full Access",
     badgeTone: "success",
     summary:
-      "Full system access (can do EVERYTHING): manage user accounts and roles, import and review Excel trip reports, manage deliveries without 3-day limitation, multi-store drop-offs, PODs, truck performance, company expenses, and audited record deletions.",
+      "Full system access (can do EVERYTHING): manage user accounts and roles, import and review Excel trip reports, manage deliveries without 2-day limitation, multi-store drop-offs, PODs, truck performance, company expenses, and audited record deletions.",
   },
   operations: {
     role: "operations",
@@ -133,7 +133,7 @@ export const ROLE_METADATA: Readonly<Record<UserRole, RoleMetadata>> = {
     accessLevelLabel: "Operations Write Access",
     badgeTone: "success",
     summary:
-      "Create and manage deliveries (subject to 3-day submission window), manage multi-store drop-offs, import and review Excel trip reports, manage POD files, and register fleet trucks. Finance page and administrative features are view-only / restricted.",
+      "Create and manage deliveries (subject to 2-day submission window), manage multi-store drop-offs, import and review Excel trip reports, manage POD files, and register fleet trucks. Finance page and administrative features are view-only / restricted.",
   },
   finance: {
     role: "finance",

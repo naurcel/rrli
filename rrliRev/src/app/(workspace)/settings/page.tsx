@@ -958,10 +958,10 @@ function renderFinanceCell(role: UserRole) {
 
 function renderDeliveriesCell(role: UserRole) {
   if (role === "admin") {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Control (No 3-Day Limit)</strong>;
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Control (No Date Limit)</strong>;
   }
   if (canMutateDeliveryRecords(role)) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Create, Edit &amp; View (3-Day Window)</strong>;
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Create, Edit &amp; View (2-Day Window)</strong>;
   }
   return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
 }

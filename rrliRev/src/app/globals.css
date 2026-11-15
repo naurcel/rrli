@@ -4631,14 +4631,15 @@ body.has-global-tooltip [data-tooltip]::after {
 
 /* Completed delivery entry */
 .delivery-entry-page {
-  width: min(100%, 920px);
-  max-width: 920px;
+  width: min(1080px, calc(100% - 48px)) !important;
+  max-width: 1080px !important;
   margin-inline: auto !important;
-  padding-inline: clamp(16px, 2.5vw, 28px);
+  padding-inline: clamp(16px, 2.5vw, 28px) !important;
 }
 
 .delivery-entry-page .page-intro {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+  padding-top: 8px;
 }
 
 .back-link {
@@ -4653,14 +4654,14 @@ body.has-global-tooltip [data-tooltip]::after {
 
 .delivery-entry-form {
   display: grid;
-  gap: 18px;
-  padding-bottom: 48px;
+  gap: 16px;
+  padding-bottom: 40px;
 }
 
 .delivery-form-section {
-  padding: 22px 24px;
+  padding: 20px 22px;
   border: 1px solid var(--glass-border);
-  border-radius: 18px;
+  border-radius: 16px;
   background:
     radial-gradient(circle at 96% 0%, rgba(245, 158, 11, .07), transparent 34%),
     var(--glass-surface-strong);
@@ -4729,12 +4730,13 @@ body.has-global-tooltip [data-tooltip]::after {
 .delivery-field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px 16px;
 }
 
 .delivery-trip-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
+  gap: 14px 16px;
 }
 
 .delivery-field-grid label,
@@ -5665,6 +5667,7 @@ html[data-theme="dark"] .delivery-reference-warning {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-height: 32px;
   gap: 12px;
   padding-bottom: 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
@@ -5710,11 +5713,11 @@ html[data-theme="dark"] .delivery-reference-warning {
 
 .crew-cards-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 680px) {
   .crew-cards-grid {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -5723,7 +5726,8 @@ html[data-theme="dark"] .delivery-reference-warning {
 
 .crew-add-helper-slot {
   display: flex;
-  min-height: 100%;
+  min-height: 142px;
+  height: 100%;
 }
 
 .crew-add-helper-card-btn {
@@ -5732,8 +5736,9 @@ html[data-theme="dark"] .delivery-reference-warning {
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 110px;
-  padding: 18px 16px;
+  min-height: 142px;
+  height: 100%;
+  padding: 16px 16px;
   border: 2px dashed color-mix(in srgb, var(--color-accent) 35%, var(--glass-border));
   border-radius: 14px;
   background: color-mix(in srgb, var(--glass-surface) 60%, transparent);
@@ -5742,6 +5747,43 @@ html[data-theme="dark"] .delivery-reference-warning {
   gap: 8px;
   transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
   text-align: center;
+}
+
+.crew-info-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 142px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--color-surface-subtle) 40%, transparent);
+}
+
+.crew-info-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+html[data-theme="dark"] .crew-info-badge {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+}
+
+.crew-info-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
 }
 
 .crew-add-helper-card-btn:hover {
@@ -5792,23 +5834,26 @@ html[data-theme="dark"] .delivery-reference-warning {
 .crew-card-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 12px;
+  min-width: 0;
 }
 
 .crew-role-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: var(--badge-min-height, 18px);
-  padding: var(--badge-padding-y, 2px) var(--badge-padding-x, 6px);
-  border-radius: var(--badge-radius, 4px);
+  min-height: var(--badge-min-height, 22px);
+  min-width: 68px;
+  padding: 2px 8px;
+  border-radius: var(--badge-radius, 5px);
   font-size: var(--badge-font-size, 10px);
-  font-weight: 600;
-  line-height: var(--badge-line-height, 1.2);
+  font-weight: 650;
+  line-height: 1.2;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   white-space: nowrap;
+  flex-shrink: 0;
   background: #f1f5f9;
   color: #475569;
   border: 1px solid #e2e8f0;
@@ -5842,7 +5887,7 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
 }
 
 .crew-name-select {
-  flex: 1 1 220px;
+  flex: 1 1 0;
   width: auto;
   min-width: 0;
 }
@@ -5886,7 +5931,7 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
 .remove-helper-btn,
 .crew-remove-btn {
   margin-left: auto;
-  padding: 3px 8px;
+  padding: 4px 9px;
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 6px;
   background: rgba(239, 68, 68, 0.08);
@@ -5894,6 +5939,8 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
   transition: background 0.15s ease;
 }
 
@@ -10996,6 +11043,7 @@ html[data-theme="dark"] .routex-dialog textarea.correction-reason-textarea {
 .table-wrap::-webkit-scrollbar,
 .revenue-chart-scroll::-webkit-scrollbar,
 .metric-tabs::-webkit-scrollbar,
+.custom-client-scroll::-webkit-scrollbar,
 .report-table-scroll::-webkit-scrollbar,
 .login-layout-split::-webkit-scrollbar {
   width: 10px;
@@ -11008,6 +11056,7 @@ html[data-theme="dark"] .routex-dialog textarea.correction-reason-textarea {
 .table-wrap::-webkit-scrollbar-track,
 .revenue-chart-scroll::-webkit-scrollbar-track,
 .metric-tabs::-webkit-scrollbar-track,
+.custom-client-scroll::-webkit-scrollbar-track,
 .report-table-scroll::-webkit-scrollbar-track,
 .login-layout-split::-webkit-scrollbar-track {
   background: transparent;
@@ -11019,6 +11068,7 @@ html[data-theme="dark"] .routex-dialog textarea.correction-reason-textarea {
 .table-wrap::-webkit-scrollbar-thumb,
 .revenue-chart-scroll::-webkit-scrollbar-thumb,
 .metric-tabs::-webkit-scrollbar-thumb,
+.custom-client-scroll::-webkit-scrollbar-thumb,
 .report-table-scroll::-webkit-scrollbar-thumb,
 .login-layout-split::-webkit-scrollbar-thumb {
   border: var(--scrollbar-thumb-inset) solid transparent;
@@ -11947,6 +11997,9 @@ html[data-theme="dark"] .sign-in-button:active:not(:disabled) {
 
 /* Enhanced Page Scrollability & Layout Stability */
 .main-content {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 100vh;
   overflow-y: auto !important;
   scrollbar-gutter: stable;
   scroll-behavior: smooth;
@@ -11954,8 +12007,15 @@ html[data-theme="dark"] .sign-in-button:active:not(:disabled) {
   -webkit-overflow-scrolling: touch;
 }
 
+.main-content > .content-wrap,
+.main-content > .route-template,
+.main-content > .delivery-entry-page,
+.main-content > div:not(.topbar):not(.routex-footer):not(.initial-setup-modal) {
+  flex: 1 0 auto;
+}
+
 .content-wrap {
-  padding-bottom: 72px !important;
+  padding-bottom: 24px !important;
 }
 
 /* Records Card Header Hierarchy & Meta */
@@ -16831,491 +16891,5 @@ html[data-theme="dark"] .profile-segmented-btn.active {
 }
 
 html[data-theme="dark"] .profile-prefs-back-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f8fafc;
-}
-
-html[data-theme="dark"] .profile-prefs-reset-btn:hover {
-  color: #fbbf24;
-  background: rgba(245, 158, 11, 0.12);
-}
-
-html[data-theme="dark"] .profile-prefs-toggle-section {
-  border-color: rgba(255, 255, 255, 0.06);
-}
-
-/* =========================================================
-   RouteX Design Preferences: Global Token Modifiers
-   ========================================================= */
-
-/* --- 1. Font Size: Small (Scale ~0.92x) --- */
-html[data-font-size="small"] .stat-card-value {
-  font-size: 19px;
-}
-
-html[data-font-size="small"] .routex-badge {
-  font-size: 9px;
-  min-height: 16px;
-  padding: 1px 5px;
-}
-
-/* --- 2. Font Size: Large (Scale ~1.08x) --- */
-html[data-font-size="large"] {
-  --font-size-base: 15px;
-}
-
-html[data-font-size="large"] body {
-  font-size: 15px;
-}
-
-html[data-font-size="large"] .records-table th,
-html[data-font-size="large"] .delivery-table th,
-html[data-font-size="large"] table th {
-  font-size: 11.5px !important;
-}
-
-html[data-font-size="large"] .records-table td,
-html[data-font-size="large"] .delivery-table td,
-html[data-font-size="large"] table td {
-  font-size: 13.5px !important;
-}
-
-html[data-font-size="large"] .sidebar-nav-item,
-html[data-font-size="large"] .sidebar-link {
-  font-size: 14px;
-}
-
-html[data-font-size="large"] input:not([type="checkbox"]):not([type="radio"]),
-html[data-font-size="large"] select,
-html[data-font-size="large"] textarea {
-  font-size: 14px;
-}
-
-html[data-font-size="large"] .stat-card-title,
-html[data-font-size="large"] .metric-label {
-  font-size: 12px;
-}
-
-html[data-font-size="large"] .stat-card-value {
-  font-size: 24px;
-}
-
-html[data-font-size="large"] .routex-badge {
-  font-size: 10.5px;
-  min-height: 20px;
-  padding: 2px 7px;
-}
-
-/* --- 3. Compactness: Compact --- */
-html[data-compactness="compact"] .records-table th,
-html[data-compactness="compact"] .delivery-table th,
-html[data-compactness="compact"] table th {
-  padding-top: 6px !important;
-  padding-bottom: 6px !important;
-  padding-left: 8px !important;
-  padding-right: 8px !important;
-}
-
-html[data-compactness="compact"] .records-table td,
-html[data-compactness="compact"] .delivery-table td,
-html[data-compactness="compact"] table td {
-  padding-top: 6px !important;
-  padding-bottom: 6px !important;
-  padding-left: 8px !important;
-  padding-right: 8px !important;
-}
-
-html[data-compactness="compact"] .stat-card {
-  padding: 10px 14px !important;
-}
-
-html[data-compactness="compact"] .records-card {
-  padding: 12px 14px !important;
-}
-
-html[data-compactness="compact"] .stats-grid,
-html[data-compactness="compact"] .dashboard-kpi-grid {
-  gap: 10px !important;
-}
-
-html[data-compactness="compact"] .workspace-content-wrap,
-html[data-compactness="compact"] .main-content {
-  gap: 12px !important;
-}
-
-html[data-compactness="compact"] .sidebar-nav-item,
-html[data-compactness="compact"] .sidebar-link {
-  padding-top: 6px !important;
-  padding-bottom: 6px !important;
-}
-
-html[data-compactness="compact"] .delivery-timeline-stop {
-  padding: 8px 10px !important;
-}
-
-/* --- 4. Reduce Motion: True --- */
-html[data-reduce-motion="true"] {
-  --motion-duration-fast: 40ms !important;
-  --motion-duration-normal: 50ms !important;
-  --motion-duration-slow: 60ms !important;
-  --motion-duration-entrance: 50ms !important;
-}
-
-html[data-reduce-motion="true"] *,
-html[data-reduce-motion="true"] *::before,
-html[data-reduce-motion="true"] *::after {
-  animation-duration: 0.001ms !important;
-  animation-iteration-count: 1 !important;
-  scroll-behavior: auto !important;
-}
-
-/* Preserve tactile 50ms transitions for critical interactive state feedback */
-html[data-reduce-motion="true"] button,
-html[data-reduce-motion="true"] a,
-html[data-reduce-motion="true"] input,
-html[data-reduce-motion="true"] select,
-html[data-reduce-motion="true"] .profile-theme-switch,
-html[data-reduce-motion="true"] .profile-theme-knob,
-html[data-reduce-motion="true"] .profile-segmented-btn {
-  transition-duration: 50ms !important;
-}
-
-html[data-reduce-motion="true"] .settings-hero-avatar-container::before,
-html[data-reduce-motion="true"] .settings-hero-avatar-glow {
-  animation: none !important;
-}
-
-/* ==========================================================================
-   RouteX Table & Ledger Plain-Text Enforcement
-   Prevents pill-style badges, box backgrounds, borders, and status dots in tables
-   ========================================================================== */
-table .pod-status,
-table .margin-pill,
-table .access-pill,
-table .report-status-badge,
-table .routex-badge,
-table .dropoff-count-badge,
-table .recent-dropoff-pill,
-table .truck-capability-pill-small,
-table .settings-current-role-tag,
-table .audit-entity-id,
-table .audit-val-old,
-table .audit-val-new,
-table .audit-attribute-pill,
-.table-wrap .pod-status,
-.table-wrap .margin-pill,
-.table-wrap .access-pill,
-.table-wrap .report-status-badge,
-.table-wrap .routex-badge,
-.table-wrap .dropoff-count-badge,
-.table-wrap .recent-dropoff-pill,
-.table-wrap .truck-capability-pill-small,
-.table-wrap .settings-current-role-tag,
-.table-wrap .audit-entity-id,
-.table-wrap .audit-val-old,
-.table-wrap .audit-val-new,
-.table-wrap .audit-attribute-pill {
-  background: transparent !important;
-  background-color: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-  min-height: 0 !important;
-  box-shadow: none !important;
-}
-
-table .pod-status i,
-table .store-pin-dot,
-.table-wrap .pod-status i,
-.table-wrap .store-pin-dot {
-  display: none !important;
-}
-
-/* ==========================================================================
-   RouteX Understated Badges & Status Indicators
-   ========================================================================== */
-.pod-status,
-.detail-status,
-.fleet-status,
-.access-pill,
-.late-recording-pill,
-.report-status-badge {
-  text-transform: none !important;
-  font-weight: 550 !important;
-  letter-spacing: normal !important;
-}
-
-.pod-status.attached,
-.detail-status.success {
-  border-color: rgba(16, 185, 129, 0.18) !important;
-}
-
-.pod-status.missing,
-.detail-status.warning {
-  border-color: rgba(245, 158, 11, 0.18) !important;
-}
-
-/* ==========================================================================
-   RouteX Delivery Excel / CSV Import UI System
-   ========================================================================== */
-.import-stepper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 28px;
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: var(--glass-surface);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-soft);
-  list-style: none;
-}
-
-.import-stepper-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  transition: all 0.2s ease;
-  flex: 1;
-}
-
-.import-stepper-item.active {
-  color: var(--color-accent-deep);
-}
-
-.import-stepper-item.completed {
-  color: var(--color-text-primary);
-}
-
-.import-stepper-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 700;
-  background: var(--color-surface-subtle);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-}
-
-.import-stepper-item.active .import-stepper-num {
-  background: var(--color-accent);
-  color: #ffffff;
-  border-color: var(--color-accent);
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
-}
-
-.import-stepper-item.completed .import-stepper-num {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border-color: rgba(16, 185, 129, 0.35);
-}
-
-.import-stepper-arrow {
-  color: var(--color-border);
-  font-size: 14px;
-  user-select: none;
-}
-
-.import-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 56px 28px;
-  border: 2px dashed var(--color-border);
-  border-radius: 20px;
-  background: var(--glass-surface);
-  cursor: pointer;
-  transition: all 0.22s ease;
-}
-
-.import-dropzone:hover,
-.import-dropzone.is-dragging {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-raised);
-}
-
-.import-dropzone-icon-wrap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 68px;
-  height: 68px;
-  border-radius: 20px;
-  background: var(--color-surface-subtle);
-  border: 1px solid var(--color-border);
-  color: var(--color-accent);
-  margin-bottom: 18px;
-  box-shadow: var(--shadow-soft);
-  transition: all 0.2s ease;
-}
-
-.import-dropzone:hover .import-dropzone-icon-wrap {
-  transform: scale(1.08);
-  background: var(--color-surface);
-  border-color: var(--color-accent);
-}
-
-.import-dropzone-title {
-  margin: 0 0 8px;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.import-dropzone-desc {
-  margin: 0 0 18px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  max-width: 480px;
-  line-height: 1.5;
-}
-
-.import-dropzone-badges {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.import-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  background: var(--color-surface-subtle);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-}
-
-.import-batch-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.import-guide-card {
-  padding: 20px 24px;
-  border-radius: 16px;
-  background: var(--glass-surface);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-soft);
-}
-
-.import-guide-title {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.import-guide-list {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-}
-
-.import-table-input,
-.import-table-select {
-  width: 100%;
-  min-height: 32px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  font-size: 12px;
-  transition: all 0.15s ease;
-}
-
-.import-table-input:focus,
-.import-table-select:focus {
-  border-color: var(--color-accent);
-  outline: none;
-  box-shadow: 0 0 0 2px var(--color-accent-soft);
-}
-
-.import-table-input.has-error,
-.import-table-select.has-error {
-  border-color: #ef4444 !important;
-  background: rgba(239, 68, 68, 0.05) !important;
-}
-
-.import-row-error-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  margin-top: 3px;
-}
-
-.import-metric-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.import-metric-card {
-  padding: 16px 20px;
-  border-radius: 14px;
-  background: var(--glass-surface);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-soft);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.import-metric-card.tone-ready {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: linear-gradient(135deg, var(--glass-surface) 0%, rgba(16, 185, 129, 0.06) 100%);
-}
-
-.import-metric-card.tone-attention {
-  border-color: rgba(245, 158, 11, 0.35);
-  background: linear-gradient(135deg, var(--glass-surface) 0%, rgba(245, 158, 11, 0.06) 100%);
-}
-
-.import-metric-card.tone-duplicate {
-  border-color: rgba(239, 68, 68, 0.35);
-  background: linear-gradient(135deg, var(--glass-surface) 0%, rgba(239, 68, 68, 0.06) 100%);
-}
-
-.import-waybill-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-family: var(--font-mono, monospace);
-  font-weight: 600;
-  background: var(--color-surface-subtle);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-primary);
-}
+  backgroun
+... [truncated for diff preview]

@@ -33,7 +33,7 @@ export function getDeliveryDateWindow(reference = new Date()): {
   max: string;
 } {
   const max = dateKeyInTimeZone(reference);
-  return { min: shiftDateKey(max, -2), max };
+  return { min: shiftDateKey(max, -1), max };
 }
 
 export function validateDeliveryDateWindow(

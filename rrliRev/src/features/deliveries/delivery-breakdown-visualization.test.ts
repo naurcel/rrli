@@ -245,4 +245,53 @@ test("RouteX: Delivery Breakdown UI & Visualization Improvements", async (t) => 
     const arcTotal = arcs.reduce((acc, curr) => acc + curr.slice.amount, 0);
     assert.equal(arcTotal, 8400, "Arc amounts must equal total expenses");
   });
+
+  await t.test("Client Breakdown Top Clients Limiting and Future-Proof Scaling", () => {
+    // Generate a diverse pool of 12 client accounts
+    const mockClientRevenue: Record<string, { total: number; trips: number }> = {
+      "Nestle Philippines": { total: 150000, trips: 15 },
+      "Unilever": { total: 120000, trips: 12 },
+      "Universal Robina": { total: 90000, trips: 9 },
+      "Monde Nissin": { total: 80000, trips: 8 },
+      "Procter & Gamble": { total: 70000, trips: 7 },
+      "Coca-Cola Bottlers": { total: 60000, trips: 6 },
+      "San Miguel Foods": { total: 50000, trips: 5 },
+      "NutriAsia Inc": { total: 40000, trips: 4 },
+      "Century Pacific": { total: 30000, trips: 3 },
+      "Jollibee Foods": { total: 20000, trips: 2 },
+      "Liwayway Marketing": { total: 15000, trips: 2 },
+      "Mega Global": { total: 10000, trips: 1 },
+    };
+
+    const clientRevenueList = Object.entries(mockClientRevenue)
+      .map(([client, data]) => ({
+        client,
+        total: data.total,
+        trips: data.trips,
+        share: (data.total / 735000) * 100,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    assert.equal(clientRevenueList.length, 12, "Should parse all 12 client accounts");
+    assert.equal(clientRevenueList[0].client, "Nestle Philippines", "Top client should rank first");
+
+    // Standard baseline top-N limit
+    const TOP_LIMIT = 4;
+    const topClients = clientRevenueList.slice(0, TOP_LIMIT);
+    assert.equal(topClients.length, 4, "Collapsed default view must show exactly top 4 clients");
+    assert.deepEqual(
+      topClients.map((c) => c.client),
+      ["Nestle Philippines", "Unilever", "Universal Robina", "Monde Nissin"],
+    );
+
+    // Remaining clients calculation for view more badge
+    const remainingCount = clientRevenueList.length - TOP_LIMIT;
+    assert.equal(remainingCount, 8, "Should indicate 8 more clients available in view more mode");
+
+    // Search query filter simulation in expanded mode
+    const query = "coca";
+    const filtered = clientRevenueList.filter((c) => c.client.toLowerCase().includes(query));
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0].client, "Coca-Cola Bottlers");
+  });
 });

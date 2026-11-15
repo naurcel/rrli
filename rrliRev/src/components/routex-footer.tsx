@@ -10,8 +10,9 @@ const EXCLUDED_WORKFLOW_PATHS = new Set([
 
 export function RouteXFooter() {
   const pathname = usePathname();
+  const normalizedPath = pathname ? pathname.replace(/\/$/, "") : "";
 
-  if (EXCLUDED_WORKFLOW_PATHS.has(pathname)) {
+  if (normalizedPath && EXCLUDED_WORKFLOW_PATHS.has(normalizedPath)) {
     return null;
   }
 

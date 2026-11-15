@@ -8,22 +8,23 @@ import {
 
 const reference = new Date("2026-11-05T03:00:00.000Z");
 
-test("delivery recording window includes today and the previous two calendar dates", () => {
+test("delivery recording window includes today and the previous calendar date (2-day window)", () => {
   assert.deepEqual(getDeliveryDateWindow(reference), {
-    min: "2026-11-03",
+    min: "2026-11-04",
     max: "2026-11-05",
   });
   assert.deepEqual(validateDeliveryDateWindow("2026-11-05", reference), {
     ok: true,
     isLate: false,
   });
-  assert.deepEqual(validateDeliveryDateWindow("2026-11-03", reference), {
+  assert.deepEqual(validateDeliveryDateWindow("2026-11-04", reference), {
     ok: true,
     isLate: true,
   });
 });
 
 test("delivery recording window rejects future and older dates for non-admins", () => {
+  assert.equal(validateDeliveryDateWindow("2026-11-03", reference).ok, false);
   assert.equal(validateDeliveryDateWindow("2026-11-02", reference).ok, false);
   assert.equal(validateDeliveryDateWindow("2026-11-06", reference).ok, false);
   assert.equal(validateDeliveryDateWindow("2026-10-01", reference, "operations").ok, false);

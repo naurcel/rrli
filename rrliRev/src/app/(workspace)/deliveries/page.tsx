@@ -12,10 +12,7 @@ import {
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
-import {
-  RecordDetailDrawer,
-  type DetailSection,
-} from "@/components/record-detail-drawer";
+import { FinancialBreakdownModal } from "@/components/financial-breakdown-modal";
 import { DeliveryFilterDropdown } from "@/components/delivery-filter-dropdown";
 import { TablePagination } from "@/components/table-pagination";
 import { ViewTripExpensesModal } from "@/components/view-trip-expenses-modal";
@@ -824,173 +821,7 @@ export default function DeliveriesPage() {
     };
   }, [sortedDeliveriesBase, statusCounts, summary]);
 
-  const kpiDrawerSections = useMemo<DetailSection[]>(() => {
-    if (!activeKpi) return [];
 
-    const sharePercent = (amount: number, total: number) =>
-      total > 0 ? `${((amount / total) * 100).toFixed(1)}%` : "0.0%";
-
-    if (activeKpi === "earnings") {
-      const clientRows = Object.entries(kpiBreakdown.clientRevenue)
-        .sort((a, b) => b[1].total - a[1].total)
-        .map(([client, data]) => ({
-          label: client,
-          value: `${formatPeso(data.total)} (${sharePercent(data.total, summary.rateTotal)}) · ${data.trips} ${data.trips === 1 ? "trip" : "trips"}`,
-        }));
-
-      return [
-        {
-          eyebrow: "REVENUE SUMMARY",
-          title: "Operational Revenue",
-          rows: [
-            { label: "Total Revenue", value: formatPeso(summary.rateTotal), tone: "success" },
-            { label: "Finalized Deliveries", value: `${kpiBreakdown.finalizedCount} of ${kpiBreakdown.totalTrips} records` },
-            { label: "Average per Trip", value: formatPeso(kpiBreakdown.avgRevenuePerTrip) },
-            { label: "Store Drop-offs Served", value: `${kpiBreakdown.totalStops} drop-offs` },
-            ...(kpiBreakdown.incompleteCount > 0
-              ? [
-                  {
-                    label: "Incomplete Financials",
-                    value: `${kpiBreakdown.incompleteCount} ${kpiBreakdown.incompleteCount === 1 ? "trip" : "trips"} (excluded until finalized)`,
-                    tone: "warning" as const,
-                  },
-                ]
-              : []),
-          ],
-        },
-        ...(clientRows.length > 0
-          ? [
-              {
-                eyebrow: "CLIENT BREAKDOWN",
-                title: "Contribution by Client Account",
-                rows: clientRows,
-              },
-            ]
-          : []),
-        {
-          eyebrow: "FLEET SHARE",
-          title: "Owned vs. Subcontracted Fleet",
-          rows: [
-            {
-              label: "Company-Owned Trucks",
-              value: `${formatPeso(kpiBreakdown.ownershipRevenue.Owned.total)} (${sharePercent(kpiBreakdown.ownershipRevenue.Owned.total, summary.rateTotal)}) · ${kpiBreakdown.ownershipRevenue.Owned.trips} trips`,
-            },
-            {
-              label: "Subcontracted Trucks",
-              value: `${formatPeso(kpiBreakdown.ownershipRevenue.Subcontracted.total)} (${sharePercent(kpiBreakdown.ownershipRevenue.Subcontracted.total, summary.rateTotal)}) · ${kpiBreakdown.ownershipRevenue.Subcontracted.trips} trips`,
-            },
-          ],
-        },
-      ];
-    }
-
-    if (activeKpi === "expenses") {
-      const expTotal = summary.expenseTotal;
-      return [
-        {
-          eyebrow: "EXPENSE SUMMARY",
-          title: "Operational Costs",
-          rows: [
-            { label: "Total Trip Expenses", value: formatPeso(expTotal), tone: "warning" },
-            { label: "Finalized Trips Included", value: `${kpiBreakdown.finalizedCount} trips` },
-            { label: "Average Expense per Trip", value: formatPeso(kpiBreakdown.avgExpensePerTrip) },
-            { label: "Average per Store Drop-off", value: formatPeso(kpiBreakdown.avgExpensePerStop) },
-          ],
-        },
-        {
-          eyebrow: "COST CATEGORIES",
-          title: "Expense Distribution",
-          rows: [
-            { label: "Diesel Fuel", value: `${formatPeso(kpiBreakdown.diesel)} (${sharePercent(kpiBreakdown.diesel, expTotal)})` },
-            { label: "Highway Tolls", value: `${formatPeso(kpiBreakdown.toll)} (${sharePercent(kpiBreakdown.toll, expTotal)})` },
-            { label: "Store Entry Fees", value: `${formatPeso(kpiBreakdown.entryFees)} (${sharePercent(kpiBreakdown.entryFees, expTotal)})` },
-            { label: "Crew Compensation", value: `${formatPeso(kpiBreakdown.crewTotal)} (${sharePercent(kpiBreakdown.crewTotal, expTotal)})` },
-            { label: "Other Expenses", value: `${formatPeso(kpiBreakdown.otherExpenses)} (${sharePercent(kpiBreakdown.otherExpenses, expTotal)})` },
-          ],
-        },
-        {
-          eyebrow: "CREW PAYROLL",
-          title: "Driver & Helper Compensation",
-          rows: [
-            { label: "Driver Crew Total", value: `${formatPeso(kpiBreakdown.driverTotal)} (${sharePercent(kpiBreakdown.driverTotal, expTotal)})` },
-            { label: "Helper Crew Total", value: `${formatPeso(kpiBreakdown.helperTotal)} (${sharePercent(kpiBreakdown.helperTotal, expTotal)})` },
-          ],
-        },
-      ];
-    }
-
-    if (activeKpi === "profit") {
-      const margin = kpiBreakdown.marginPercent;
-      return [
-        {
-          eyebrow: "FINANCIAL SUMMARY",
-          title: "Net Operating Profit",
-          rows: [
-            { label: "Total Revenue (+)", value: formatPeso(summary.rateTotal), tone: "success" },
-            { label: "Total Trip Expenses (−)", value: formatPeso(summary.expenseTotal), tone: "warning" },
-            {
-              label: "Net Operating Profit (=)",
-              value: formatPeso(summary.netTotal),
-              tone: summary.netTotal >= 0 ? "success" : "warning",
-            },
-            {
-              label: "Operating Profit Margin",
-              value: formatPercent(margin),
-              tone: margin != null && margin >= 15 ? "success" : margin != null && margin < 0 ? "warning" : undefined,
-            },
-          ],
-        },
-        {
-          eyebrow: "TRIP PERFORMANCE",
-          title: "Profitability Metrics",
-          rows: [
-            {
-              label: "Average Profit per Trip",
-              value: formatPeso(kpiBreakdown.avgProfitPerTrip),
-              tone: kpiBreakdown.avgProfitPerTrip >= 0 ? "success" : "warning",
-            },
-            { label: "Profitable Deliveries", value: `${kpiBreakdown.profitableTrips} trips`, tone: "success" },
-            {
-              label: "Loss or Break-Even Deliveries",
-              value: `${kpiBreakdown.lossOrEvenTrips} trips`,
-              tone: kpiBreakdown.lossOrEvenTrips > 0 ? "warning" : undefined,
-            },
-            { label: "Finalized Trips Count", value: `${kpiBreakdown.finalizedCount} records` },
-          ],
-        },
-      ];
-    }
-
-    return [];
-  }, [activeKpi, kpiBreakdown, summary]);
-
-  const activeKpiMeta = useMemo(() => {
-    switch (activeKpi) {
-      case "earnings":
-        return {
-          eyebrow: "Financial Breakdown",
-          title: "Revenue Overview",
-          statusLabel: formatPeso(summary.rateTotal),
-          statusTone: "success" as const,
-        };
-      case "expenses":
-        return {
-          eyebrow: "Financial Breakdown",
-          title: "Trip Expenses Overview",
-          statusLabel: formatPeso(summary.expenseTotal),
-          statusTone: "warning" as const,
-        };
-      case "profit":
-        return {
-          eyebrow: "Financial Breakdown",
-          title: "Net Operating Profit",
-          statusLabel: formatPeso(summary.netTotal),
-          statusTone: summary.netTotal >= 0 ? ("success" as const) : ("warning" as const),
-        };
-      default:
-        return null;
-    }
-  }, [activeKpi, summary]);
 
   const canWrite = canMutateDeliveryRecords(actor.role);
   const canImport = canImportAndReviewExcel(actor.role);
@@ -1558,14 +1389,13 @@ export default function DeliveriesPage() {
         }}
       />
 
-      <RecordDetailDrawer
-        open={Boolean(activeKpi && activeKpiMeta)}
-        eyebrow={activeKpiMeta?.eyebrow ?? ""}
-        title={activeKpiMeta?.title ?? ""}
-        statusLabel={activeKpiMeta?.statusLabel}
-        statusTone={activeKpiMeta?.statusTone}
-        sections={kpiDrawerSections}
+      <FinancialBreakdownModal
+        open={Boolean(activeKpi)}
+        activeTab={activeKpi ?? "earnings"}
+        onTabChange={(tab) => setActiveKpi(tab)}
         onClose={() => setActiveKpi(null)}
+        summary={summary}
+        kpiBreakdown={kpiBreakdown}
       />
 
       {correctingTrip ? (
