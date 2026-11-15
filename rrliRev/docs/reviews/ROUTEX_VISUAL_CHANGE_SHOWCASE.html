@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+            /komit<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
@@ -328,25 +328,69 @@
       border-color: rgba(148, 163, 184, 0.14);
     }
 
+    .sidebar-radiating-rays {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 180px;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 1;
+      mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 55%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 55%, transparent 100%);
+    }
+
+    .sidebar-cracks-svg {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0.9;
+      filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.35));
+    }
+
     .sidebar-rays-beam {
       position: absolute;
-      top: 0;
-      left: 50%;
-      width: 140px;
-      height: 220px;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: 180px;
       pointer-events: none;
-      background: radial-gradient(ellipse at 50% 0%, rgba(245, 158, 11, 0.38) 0%, rgba(217, 119, 6, 0.16) 42%, transparent 72%);
+      background:
+        radial-gradient(ellipse 26% 80% at 14% 100%, rgba(245, 158, 11, 0.22) 0%, transparent 68%),
+        radial-gradient(ellipse 30% 92% at 36% 100%, rgba(251, 191, 36, 0.30) 0%, transparent 72%),
+        radial-gradient(ellipse 32% 98% at 55% 100%, rgba(251, 191, 36, 0.32) 0%, transparent 76%),
+        radial-gradient(ellipse 28% 88% at 76% 100%, rgba(245, 158, 11, 0.28) 0%, transparent 70%),
+        radial-gradient(ellipse 26% 75% at 92% 100%, rgba(217, 119, 6, 0.20) 0%, transparent 64%);
       animation: previewFlameWaver 4.8s ease-in-out infinite;
-      transform-origin: 50% 0%;
-      filter: blur(14px);
+      filter: blur(5px);
+      z-index: 1;
+    }
+
+    .sidebar-rays-glow {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: 44px;
+      background:
+        linear-gradient(to top, rgba(245, 158, 11, 0.35) 0%, rgba(217, 119, 6, 0.16) 42%, transparent 100%),
+        radial-gradient(ellipse 100% 100% at 50% 100%, rgba(251, 191, 36, 0.4) 0%, transparent 80%);
+      filter: blur(2px);
       z-index: 1;
     }
 
     @keyframes previewFlameWaver {
-      0%, 100% { transform: translateX(-50%) translateY(0) scale(1) rotate(0deg); opacity: 0.85; }
-      25% { transform: translateX(calc(-50% + 2px)) translateY(-3px) scale(1.05, 0.98) rotate(0.6deg); opacity: 0.95; }
-      50% { transform: translateX(calc(-50% - 2px)) translateY(-5px) scale(0.97, 1.06) rotate(-0.8deg); opacity: 0.80; }
-      75% { transform: translateX(calc(-50% + 1px)) translateY(-2px) scale(1.02, 1.01) rotate(0.4deg); opacity: 0.90; }
+      0%, 100% { transform: translateY(0) scaleY(1); opacity: 0.85; }
+      25% { transform: translateY(-3px) scaleY(1.04); opacity: 0.95; }
+      50% { transform: translateY(-1px) scaleY(0.98); opacity: 0.80; }
+      75% { transform: translateY(-4px) scaleY(1.05); opacity: 0.90; }
     }
 
     .sidebar-mock-header {
@@ -920,19 +964,18 @@
         </div>
       </section>
 
-      <!-- Module 2: Sidebar Flame Ray Animation -->
+      <!-- Module 2: Sidebar Full-Width Crack Fissures & Radiant Hearth -->
       <section id="sidebar-flame" class="showcase-section">
         <div class="section-header">
           <div class="section-header-text">
-            <h2>2. Operational Sidebar & Flame Ray Effect</h2>
-            <p>Subtle animated radial gradient lighting up the top of the sidebar navigation with smooth keyframe waver effect.</p>
+            <h2>2. Operational Sidebar & Full-Width Crack Fissures Effect</h2>
+            <p>Animated glowing ground fissures spanning the entire bottom of the expanded sidebar with multi-shaft ambient plumes and subtle breathing embers.</p>
           </div>
           <span class="section-status-pill">Active in Shell</span>
         </div>
 
         <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
-          <div class="sidebar-showcase-box">
-            <div class="sidebar-rays-beam"></div>
+          <div class="sidebar-showcase-box" style="position: relative; overflow: hidden; height: 340px;">
             <div class="sidebar-mock-header">
               <div class="sidebar-mock-brand">R</div>
               <div>
@@ -957,16 +1000,39 @@
                 <span>📑</span> <span>Reports</span>
               </div>
             </div>
+            <!-- Full-width crack fissures & hearth at bottom of sidebar -->
+            <div class="sidebar-radiating-rays" aria-hidden="true">
+              <svg class="sidebar-cracks-svg" viewBox="0 0 240 220" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="scGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.9" />
+                    <stop offset="35%" stop-color="#fbbf24" stop-opacity="0.65" />
+                    <stop offset="70%" stop-color="#d97706" stop-opacity="0.25" />
+                    <stop offset="100%" stop-color="#b45309" stop-opacity="0" />
+                  </linearGradient>
+                </defs>
+                <path d="M 0 219 L 24 218 L 48 220 L 76 217 L 104 219 L 136 218 L 168 220 L 196 217 L 220 219 L 240 218" stroke="url(#scGrad)" stroke-width="3" stroke-linecap="round" />
+                <path d="M 16 218 L 22 188 L 18 158 L 28 122 L 24 92 L 32 62 M 22 188 L 34 168 L 40 142" stroke="url(#scGrad)" stroke-width="2.2" stroke-linecap="round" />
+                <path d="M 56 219 L 62 182 L 58 148 L 70 108 L 66 78 L 74 42 M 62 182 L 76 162 L 82 132" stroke="url(#scGrad)" stroke-width="2.4" stroke-linecap="round" />
+                <path d="M 98 218 L 94 178 L 102 142 L 96 102 L 106 68 L 102 32 M 94 178 L 84 152 L 82 122" stroke="url(#scGrad)" stroke-width="2.6" stroke-linecap="round" />
+                <path d="M 142 218 L 148 182 L 142 142 L 154 108 L 150 72 L 158 38 M 148 182 L 160 158 L 166 128" stroke="url(#scGrad)" stroke-width="2.5" stroke-linecap="round" />
+                <path d="M 186 219 L 180 182 L 190 148 L 184 112 L 194 78 L 190 48 M 180 182 L 172 158 L 170 132" stroke="url(#scGrad)" stroke-width="2.3" stroke-linecap="round" />
+                <path d="M 224 218 L 218 188 L 226 152 L 220 118 L 228 82 L 224 58 M 218 188 L 208 162 L 206 138" stroke="url(#scGrad)" stroke-width="2.1" stroke-linecap="round" />
+              </svg>
+              <div class="sidebar-rays-beam"></div>
+              <div class="sidebar-rays-glow"></div>
+            </div>
           </div>
           <div style="flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 12px;">
             <div class="preview-card">
               <div class="preview-card-header">
-                <span>Animation Specs</span>
+                <span>Animation & Layout Specs</span>
               </div>
               <div class="preview-card-body" style="font-size: 12.5px; color: var(--color-text-secondary); display: flex; flex-direction: column; gap: 8px;">
-                <p>• <strong>Keyframe:</strong> <code>flameWaver</code> over 4.8s cubic ease cycle.</p>
-                <p>• <strong>Layering:</strong> Positioned behind navigation items with <code>pointer-events: none</code>.</p>
-                <p>• <strong>Glow Palette:</strong> Warm amber radial gradient matching the RouteX brand identity.</p>
+                <p>• <strong>Full Baseline Coverage:</strong> Spans 100% of the expanded sidebar bottom width instead of a single point.</p>
+                <p>• <strong>Multi-Fissure Distribution:</strong> 6 organic branch paths rising at natural angles across the entire floor.</p>
+                <p>• <strong>Ground Hearth Glow:</strong> Multi-stop amber horizontal gradient and breathing base fissure line.</p>
+                <p>• <strong>Theme Support:</strong> Rich honey amber in Light Mode; radiant incandescent gold in Dark Mode.</p>
               </div>
             </div>
           </div>
