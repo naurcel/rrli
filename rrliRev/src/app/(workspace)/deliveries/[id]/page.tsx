@@ -386,8 +386,18 @@ function DeliveryDetailsPageContent({
                     : undefined
                 }
               >
-                <span className="simple-badge-dot" />
-                {isComplete ? "Complete" : "Incomplete"}
+                {isComplete ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                )}
+                <span>{isComplete ? "Complete" : "Incomplete"}</span>
               </span>
 
               <span className="simple-hero-badge-sep">·</span>
@@ -395,7 +405,18 @@ function DeliveryDetailsPageContent({
               <span
                 className={`simple-hero-badge ${delivery.podStatus === "Verified" ? "positive" : "warning"}`}
               >
-                {delivery.podStatus === "Verified" ? "POD Attached" : "Missing POD"}
+                {delivery.podStatus === "Verified" ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                )}
+                <span>{delivery.podStatus === "Verified" ? "POD Attached" : "Missing POD"}</span>
               </span>
 
               <span className="simple-hero-badge-sep">·</span>
@@ -506,38 +527,32 @@ function DeliveryDetailsPageContent({
               </div>
               <div className="detail-meta-grid">
                 <div className="detail-meta-item">
-                  <span className="meta-label">Client Account</span>
+                  <span className="meta-label">Client</span>
                   <strong className="meta-value">{delivery.clientName}</strong>
                 </div>
                 <div className="detail-meta-item">
-                  <span className="meta-label">Origin Hub</span>
-                  <strong className="meta-value">{delivery.origin || "Default Origin Hub"}</strong>
+                  <span className="meta-label">Origin</span>
+                  <strong className="meta-value">{delivery.origin || "Default Origin"}</strong>
                 </div>
                 <div className="detail-meta-item">
-                  <span className="meta-label">Transit Distance</span>
+                  <span className="meta-label">Distance</span>
                   <strong className="meta-value">{delivery.distanceKm} km</strong>
                 </div>
                 <div className="detail-meta-item">
-                  <span className="meta-label">Fuel Benchmark Rate</span>
+                  <span className="meta-label">Fuel Rate</span>
                   <strong className="meta-value">{formatPeso(delivery.fuelRate)} / L</strong>
                 </div>
                 <div className="detail-meta-item">
-                  <span className="meta-label">Delivery Date</span>
+                  <span className="meta-label">Date</span>
                   <strong className="meta-value">{delivery.deliveryDate}</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Financial Status</span>
-                  <strong className={`meta-value ${isComplete ? "tone-success" : "tone-warning"}`}>
-                    {isComplete ? "Complete" : "Incomplete"}
-                  </strong>
                 </div>
               </div>
             </section>
 
-            {/* Assigned Vehicle */}
+            {/* Truck */}
             <section className="records-card delivery-section-card">
               <div className="section-card-header">
-                <h2 className="section-card-title">Assigned Vehicle</h2>
+                <h2 className="section-card-title">Truck</h2>
               </div>
               <DeliveryTruckInfoSection
                 plateNumber={delivery.plateNumber}

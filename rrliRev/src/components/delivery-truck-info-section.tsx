@@ -68,11 +68,11 @@ export function DeliveryTruckInfoSection({
             <strong>{storageCapability === "Refrigerated" ? "Cold" : "Dry"}</strong>
           </div>
           <div>
-            <span>Vehicle Size</span>
+            <span>Type</span>
             <strong>{truckType}</strong>
           </div>
           <div>
-            <span>Cargo Temp</span>
+            <span>Temperature</span>
             <strong>{truckTemperature}</strong>
           </div>
           <div>

@@ -485,8 +485,8 @@ export default function PodDocumentsPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", background: "var(--glass-surface)", padding: "14px", borderRadius: "12px", fontSize: "12px" }}>
                 <div><strong>Client:</strong> {inspectingStop.clientName}</div>
                 <div><strong>Truck:</strong> {inspectingStop.plateNumber}</div>
-                <div><strong>Delivery Date:</strong> {inspectingStop.deliveryDate}</div>
-                <div><strong>Destination Area:</strong> {inspectingStop.stop.destinationArea}</div>
+                <div><strong>Date:</strong> {inspectingStop.deliveryDate}</div>
+                <div><strong>Destination:</strong> {inspectingStop.stop.destinationArea}</div>
                 <div style={{ gridColumn: "1 / -1" }}>
                   <strong>POD Status:</strong>{" "}
                   <span className={`pod-status ${inspectingStop.hasPod ? "attached" : "missing"}`}>

@@ -734,7 +734,7 @@ export function FinancialBreakdownModal({
                     )}
                   </div>
                   <span style={{ fontSize: "11px", fontWeight: 650, color: "var(--color-text-muted)" }}>
-                    {clientRevenueList.length} {clientRevenueList.length === 1 ? "Client Account" : "Client Accounts"}
+                    {clientRevenueList.length} {clientRevenueList.length === 1 ? "Client" : "Clients"}
                   </span>
                 </div>
 

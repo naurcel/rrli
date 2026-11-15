@@ -1196,15 +1196,8 @@ export default function DashboardPage() {
                         : "stat-client-name--xl";
               return (
                 <Link
-                  className="stat-card stat-card-link stat-card-top-client ui-tooltip"
+                  className="stat-card stat-card-link stat-card-top-client"
                   href="/reports"
-                  data-tooltip={
-                    topClientData.isTied
-                      ? `Tied top clients: ${topClientData.allNames}`
-                      : topClientData.name !== "None"
-                        ? `Top client: ${topClientData.name} (${formatPeso(topClientData.revenue)})`
-                        : "No client revenue recorded in selected range"
-                  }
                 >
                   <span className="stat-label">TOP CLIENT</span>
                   <div className="stat-client-body">
@@ -1284,7 +1277,7 @@ export default function DashboardPage() {
                         </td>
                         <td>
                           <span className="recent-dropoff-pill">
-                            {trip.dropoffs.length} {trip.dropoffs.length === 1 ? "drop-off" : "drop-offs"}
+                            {trip.dropoffs.length}
                           </span>
                         </td>
                         <td className="money">

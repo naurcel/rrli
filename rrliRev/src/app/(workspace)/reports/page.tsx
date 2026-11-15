@@ -351,7 +351,7 @@ export default function ReportsPage() {
       const totalRevenue = totals.grossEarnings;
       if (totalRevenue <= 0) {
         return {
-          title: "Revenue by Client Account",
+          title: "Revenue by Client",
           eyebrow: "CLIENT ATTRIBUTION",
           slices: [] as ExpenseCategorySlice[],
           total: 0,
@@ -392,7 +392,7 @@ export default function ReportsPage() {
       }
 
       return {
-        title: "Revenue by Client Account",
+        title: "Revenue by Client",
         eyebrow: "CLIENT ATTRIBUTION",
         slices,
         total: totalRevenue,

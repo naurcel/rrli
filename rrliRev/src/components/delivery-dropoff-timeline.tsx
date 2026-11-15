@@ -2,10 +2,10 @@
 
 import type { DeliveryStoreDropoff } from "@/features/deliveries/delivery-domain";
 
-function formatEntryFee(amount: number | null, status: string): string {
-  if (status === "not_applicable") return "None (N/A)";
-  if (status === "unknown") return "Unknown";
-  if (amount == null || amount === 0) return "None (₱0)";
+function formatEntryFee(amount: number | null, status?: string | null): string {
+  if (status === "not_applicable") return "None";
+  if (status === "unknown") return "Pending";
+  if (amount == null || amount === 0) return "None";
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency: "PHP",
@@ -40,26 +40,25 @@ export function DeliveryDropoffTimeline({
 
             <div className="drawer-dropoff-card">
               <div className="drawer-dropoff-card-header">
-                <span className="drawer-dropoff-stop-tag">Store Drop-off #{stopNumber}</span>
+                <span className="drawer-dropoff-stop-tag">Stop #{stopNumber}</span>
                 {stop.podSubmitted ? (
-                  <span className="drawer-dropoff-doc-pill has-doc">
+                  <span className="drawer-dropoff-doc-pill has-doc" title="POD attached" aria-label="POD attached">
                     <svg
                       width="11"
                       height="11"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
-                      strokeWidth="2.5"
+                      strokeWidth="2.8"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       aria-hidden="true"
                     >
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    POD attached
                   </span>
                 ) : (
-                  <span className="drawer-dropoff-doc-pill no-doc">
+                  <span className="drawer-dropoff-doc-pill no-doc" title="Missing POD" aria-label="Missing POD">
                     <svg
                       width="11"
                       height="11"
@@ -75,7 +74,7 @@ export function DeliveryDropoffTimeline({
                       <line x1="12" y1="8" x2="12" y2="12" />
                       <line x1="12" y1="16" x2="12.01" y2="16" />
                     </svg>
-                    Missing POD
+                    <span>Missing POD</span>
                   </span>
                 )}
               </div>

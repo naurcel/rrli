@@ -22,6 +22,53 @@ export {
 };
 
 /**
+ * Subtle accessible status warning icon
+ */
+function StatusWarningIcon({
+  size = 12,
+  title = "Pending confirmation",
+}: {
+  size?: number;
+  title?: string;
+}) {
+  return (
+    <span
+      className="status-indicator-icon warning"
+      role="img"
+      aria-label={title}
+      title={title}
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * Subtle accessible neutral badge for not-applicable items
+ */
+function StatusNeutralBadge({ title = "Not applicable" }: { title?: string }) {
+  return (
+    <span className="badge-neutral" role="status" aria-label={title} title={title}>
+      N/A
+    </span>
+  );
+}
+
+/**
  * Reusable Pie Chart visualizing expense distribution
  * Rendered as a full circle pie graph with interactive hover slice readout
  */
@@ -29,7 +76,7 @@ export function ExpenseDonutPieChart({
   slices,
   totalExpenses,
   isComplete,
-  unknownItems: _unknownItems = [],
+  /* unknownItems omitted */
   title = "Trip Expenses Distribution",
   centerLabel = "Total Expenses",
   valueFormatter = formatPeso,
@@ -123,26 +170,18 @@ export function ExpenseDonutPieChart({
                     strokeWidth="1"
                   />
                 )}
-                <g transform="translate(90, 72)" aria-hidden="true">
+                <g transform="translate(88, 88)" aria-hidden="true">
                   <path
-                    d="m10 2 9 16H1L10 2z"
+                    d="m12 2 11 19H1L12 2z"
                     fill="none"
                     stroke="#d97706"
-                    strokeWidth="2"
+                    strokeWidth="2.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  <line x1="10" y1="8" x2="10" y2="12" stroke="#d97706" strokeWidth="2" strokeLinecap="round" />
-                  <circle cx="10" cy="15" r="1" fill="#d97706" />
+                  <line x1="12" y1="9" x2="12" y2="13" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" />
+                  <circle cx="12" cy="17" r="1.2" fill="#d97706" />
                 </g>
-                <text
-                  x="100"
-                  y="114"
-                  textAnchor="middle"
-                  className="donut-center-sub-warn"
-                >
-                  Incomplete
-                </text>
               </g>
             ) : totalExpenses === 0 ? (
               /* Zero expenses confirmed */
@@ -298,23 +337,7 @@ export function ExpenseDonutPieChart({
               </>
             ) : (
               <>
-                <span className="pie-share-pill warn-pill">
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                    <line x1="12" y1="9" x2="12" y2="13" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                  </svg>
-                </span>
+                <StatusWarningIcon size={11} title="Incomplete expenses" />
                 <span className="pie-category-name">Incomplete</span>
               </>
             )}
@@ -355,7 +378,13 @@ export function ExpenseDonutPieChart({
 
                 <div className="legend-item-metrics">
                   <span className={`legend-item-amount ${res.isUnknown ? "warn-pill" : ""}`}>
-                    {res.isUnknown || res.isNotApplicable ? res.text : valueFormatter(slice.amount)}
+                    {res.isUnknown ? (
+                      <StatusWarningIcon size={10} title="Pending confirmation" />
+                    ) : res.isNotApplicable ? (
+                      <StatusNeutralBadge title="Not applicable" />
+                    ) : (
+                      valueFormatter(slice.amount)
+                    )}
                   </span>
                   {isComplete && totalExpenses != null && totalExpenses > 0 && !res.isNotApplicable && !res.isUnknown ? (
                     <span className="legend-item-share">
@@ -545,7 +574,7 @@ export function DeliveryFinancialBreakdown({
             {model.grossRevenue != null ? formatPeso(model.grossRevenue) : "₱0.00"}
           </div>
           <span className="hero-metric-sub">
-            Agreed billing rate per waybill
+            Agreed billing rate
           </span>
         </div>
 
@@ -561,7 +590,7 @@ export function DeliveryFinancialBreakdown({
               : "Incomplete"}
           </div>
           <span className="hero-metric-sub">
-            {model.isFinanciallyComplete ? "Total trip disbursements" : "Incomplete expenses"}
+            {model.isFinanciallyComplete ? "Total trip disbursements" : "Pending resolution"}
           </span>
         </div>
 
@@ -597,7 +626,7 @@ export function DeliveryFinancialBreakdown({
               </span>
             ) : (
               <span className="margin-pill pill-warn" title="Pending expenses">
-                Incomplete Profit Margin
+                Pending
               </span>
             )}
           </div>
@@ -705,14 +734,11 @@ export function DeliveryFinancialBreakdown({
           {/* GROUP A: Direct Transit & Facility Expenses */}
           <div className="breakdown-group-card">
             <div className="group-card-header">
-              <div>
-                <span className="group-eyebrow">DIRECT TRANSIT</span>
-                <h4 className="group-title">Transit &amp; Facility Expenses</h4>
-              </div>
+              <h4 className="group-title">Transit &amp; Facility Expenses</h4>
               {model.isTransitComplete && model.transitSubtotal != null ? (
                 <span className="group-subtotal">{formatPeso(model.transitSubtotal)}</span>
               ) : (
-                <span className="badge-warn">Incomplete</span>
+                <StatusWarningIcon size={12} title="Incomplete transit expenses" />
               )}
             </div>
 
@@ -730,9 +756,9 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.dieselExpenses === "unknown" ? (
-                    <span className="badge-warn" title="Pending fuel receipt">Incomplete</span>
+                    <StatusWarningIcon size={12} title="Pending fuel receipt" />
                   ) : trip.expenseStates.dieselExpenses === "not_applicable" ? (
-                    <span className="badge-neutral">Not applicable</span>
+                    <StatusNeutralBadge title="Not applicable" />
                   ) : (
                     <span className="item-val-bold">{formatPeso(trip.expenses.dieselExpenses)}</span>
                   )}
@@ -752,9 +778,9 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.tollGateExpenses === "unknown" ? (
-                    <span className="badge-warn" title="Pending toll receipts">Incomplete</span>
+                    <StatusWarningIcon size={12} title="Pending toll receipts" />
                   ) : trip.expenseStates.tollGateExpenses === "not_applicable" ? (
-                    <span className="badge-neutral">Not applicable</span>
+                    <StatusNeutralBadge title="Not applicable" />
                   ) : (
                     <span className="item-val-bold">{formatPeso(trip.expenses.tollGateExpenses)}</span>
                   )}
@@ -774,9 +800,9 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.entryFees === "unknown" ? (
-                    <span className="badge-warn" title="Pending entry fees">Incomplete</span>
+                    <StatusWarningIcon size={12} title="Pending entry fees" />
                   ) : trip.expenseStates.entryFees === "not_applicable" ? (
-                    <span className="badge-neutral">Not applicable</span>
+                    <StatusNeutralBadge title="Not applicable" />
                   ) : (
                     <span className="item-val-bold">{formatPeso(trip.expenses.entryFees)}</span>
                   )}
@@ -794,9 +820,9 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.otherExpenses === "unknown" ? (
-                    <span className="badge-warn" title="Pending expenses">Incomplete</span>
+                    <StatusWarningIcon size={12} title="Pending expenses" />
                   ) : trip.expenseStates.otherExpenses === "not_applicable" ? (
-                    <span className="badge-neutral">Not applicable</span>
+                    <StatusNeutralBadge title="Not applicable" />
                   ) : (
                     <span className="item-val-bold">{formatPeso(trip.expenses.otherExpenses)}</span>
                   )}
@@ -808,14 +834,11 @@ export function DeliveryFinancialBreakdown({
           {/* GROUP B: Crew Compensation & Labor Costs */}
           <div className="breakdown-group-card">
             <div className="group-card-header">
-              <div>
-                <span className="group-eyebrow">CREW COMPENSATION</span>
-                <h4 className="group-title">Crew Compensation</h4>
-              </div>
+              <h4 className="group-title">Crew Compensation</h4>
               {model.isCrewComplete && model.crewSubtotal != null ? (
                 <span className="group-subtotal">{formatPeso(model.crewSubtotal)}</span>
               ) : (
-                <span className="badge-warn" title="Incomplete crew expenses">Incomplete</span>
+                <StatusWarningIcon size={12} title="Incomplete crew compensation" />
               )}
             </div>
 
@@ -832,9 +855,9 @@ export function DeliveryFinancialBreakdown({
                   </div>
                   <div className="item-value-box">
                     {!model.isDriverComplete ? (
-                      <span className="badge-warn" title="Pending driver wage">Incomplete</span>
+                      <StatusWarningIcon size={12} title="Pending driver wage" />
                     ) : model.driverTotal === 0 && trip.expenseStates.driverDailyRate === "not_applicable" ? (
-                      <span className="badge-neutral">Not applicable</span>
+                      <StatusNeutralBadge title="Not applicable" />
                     ) : (
                       <span className="item-val-bold">{formatPeso(model.driverTotal)}</span>
                     )}
@@ -847,7 +870,7 @@ export function DeliveryFinancialBreakdown({
                     <span className="sub-label">Daily Wage:</span>
                     <span className="sub-val">
                       {trip.expenseStates.driverDailyRate === "unknown"
-                        ? "Incomplete"
+                        ? "Pending"
                         : trip.expenseStates.driverDailyRate === "not_applicable"
                         ? "N/A"
                         : formatPeso(trip.expenses.driverDailyRate)}
@@ -857,7 +880,7 @@ export function DeliveryFinancialBreakdown({
                     <span className="sub-label">Trip Allowance:</span>
                     <span className="sub-val">
                       {trip.expenseStates.driverAllowance === "unknown"
-                        ? "Incomplete"
+                        ? "Pending"
                         : trip.expenseStates.driverAllowance === "not_applicable"
                         ? "N/A"
                         : formatPeso(trip.expenses.driverAllowance)}
@@ -878,9 +901,9 @@ export function DeliveryFinancialBreakdown({
                   </div>
                   <div className="item-value-box">
                     {!model.isHelperComplete ? (
-                      <span className="badge-warn" title="Pending helper wage">Incomplete</span>
+                      <StatusWarningIcon size={12} title="Pending helper wage" />
                     ) : model.helperTotal === 0 && trip.expenseStates.helperDailyRate === "not_applicable" ? (
-                      <span className="badge-neutral">Not applicable</span>
+                      <StatusNeutralBadge title="Not applicable" />
                     ) : (
                       <span className="item-val-bold">{formatPeso(model.helperTotal)}</span>
                     )}
@@ -893,7 +916,7 @@ export function DeliveryFinancialBreakdown({
                     <span className="sub-label">Daily Wage:</span>
                     <span className="sub-val">
                       {trip.expenseStates.helperDailyRate === "unknown"
-                        ? "Incomplete"
+                        ? "Pending"
                         : trip.expenseStates.helperDailyRate === "not_applicable"
                         ? "N/A"
                         : formatPeso(trip.expenses.helperDailyRate)}
@@ -903,7 +926,7 @@ export function DeliveryFinancialBreakdown({
                     <span className="sub-label">Trip Allowance:</span>
                     <span className="sub-val">
                       {trip.expenseStates.helperAllowance === "unknown"
-                        ? "Incomplete"
+                        ? "Pending"
                         : trip.expenseStates.helperAllowance === "not_applicable"
                         ? "N/A"
                         : formatPeso(trip.expenses.helperAllowance)}

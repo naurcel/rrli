@@ -212,7 +212,7 @@ export function DeliveryPodDocuments({
                 />
                 <div className="delivery-pod-card-info">
                   <div className="delivery-pod-card-title">
-                    <strong>Store Drop-off #{stop.sequence} · {stop.storeName}</strong>
+                    <strong>Stop #{stop.sequence} · {stop.storeName}</strong>
                     {stop.destinationArea ? <small>{stop.destinationArea}</small> : null}
                   </div>
                   {!isPending ? (
@@ -264,14 +264,12 @@ export function DeliveryPodDocuments({
                         <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                       </svg>
                       <span className="pod-label-text">
-                        {isUploading ? "Attaching…" : "Pending upload"}
+                        {isUploading ? "Attaching…" : "Attach POD"}
                       </span>
-                      <span className="pod-status-badge missing">MISSING</span>
                     </button>
                   ) : (
                     <div className="pod-pending-readonly-pill">
                       <span className="pod-label-text">Pending upload</span>
-                      <span className="pod-status-badge missing">MISSING</span>
                     </div>
                   )
                 ) : (

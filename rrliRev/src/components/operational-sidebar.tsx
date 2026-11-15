@@ -63,7 +63,6 @@ export function OperationalSidebar() {
           href="/dashboard"
           className="sidebar-brand-space"
           aria-label="Redeemed Route Logistics Inc."
-          title="Redeemed Route Logistics Inc."
         />
         <button
           className="sidebar-collapse-toggle"

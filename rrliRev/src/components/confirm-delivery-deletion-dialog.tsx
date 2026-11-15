@@ -70,8 +70,8 @@ export function ConfirmDeliveryDeletionDialog({
             Delete waybill <strong>{delivery.waybillNumber}</strong> ({delivery.clientName})?
           </p>
           <div className="delete-delivery-summary">
-            <div><span>Delivery Date</span><strong>{delivery.deliveryDate}</strong></div>
-            <div><span>Plate Number</span><strong>{delivery.plateNumber}</strong></div>
+            <div><span>Date</span><strong>{delivery.deliveryDate}</strong></div>
+            <div><span>Truck</span><strong>{delivery.plateNumber}</strong></div>
             <div><span>Revenue</span><strong>{formatPeso(delivery.deliveryRate)}</strong></div>
             <div><span>Drop-offs</span><strong>{delivery.dropoffs.length}</strong></div>
           </div>
