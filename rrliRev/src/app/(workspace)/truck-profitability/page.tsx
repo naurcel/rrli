@@ -1479,9 +1479,9 @@ export default function TruckProfitabilityPage() {
           </div>
 
           {loading || error ? null : filteredOwnedTrucks.length === 0 ? (
-            <div className="empty-state" title="No matching trucks">
-              <strong>No owned trucks match the selected filters</strong>
-              <span>Try clearing filters or adjusting your search criteria.</span>
+            <div className="empty-state minimal" title="No matching trucks">
+              <strong className="empty-state-title">No owned trucks match the selected filters</strong>
+              <span className="empty-state-desc">Try clearing filters or adjusting your search criteria.</span>
             </div>
           ) : ownedViewMode === "grid" ? (
             <>
@@ -1806,10 +1806,12 @@ export default function TruckProfitabilityPage() {
                   <tr>
                     <td
                       colSpan={canAdd ? 6 : 5}
-                      style={{ textAlign: "center", padding: "24px", color: "var(--color-text-muted)" }}
-                      title="No subcontracted trucks"
+                      className="table-empty-cell"
                     >
-                      No subcontracted trucks registered yet.
+                      <div className="empty-state minimal" title="No subcontracted trucks">
+                        <strong className="empty-state-title">No subcontracted trucks registered</strong>
+                        <span className="empty-state-desc">Subcontracted trucks will appear here once added.</span>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -1979,10 +1981,15 @@ export default function TruckProfitabilityPage() {
               <tbody>
                 {filteredCrew.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: "24px", color: "var(--color-text-muted)" }}>
-                      {crewSearch.trim()
-                        ? `No crew members matching "${crewSearch.trim()}".`
-                        : `No ${crewRoleFilter === "All" ? "crew members" : crewRoleFilter.toLowerCase() + "s"} registered yet.`}
+                    <td colSpan={5} className="table-empty-cell">
+                      <div className="empty-state minimal">
+                        <strong className="empty-state-title">No crew members found</strong>
+                        <span className="empty-state-desc">
+                          {crewSearch.trim()
+                            ? `No crew members matching "${crewSearch.trim()}".`
+                            : `No ${crewRoleFilter === "All" ? "crew members" : crewRoleFilter.toLowerCase() + "s"} registered yet.`}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 ) : (

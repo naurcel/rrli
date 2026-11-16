@@ -87,7 +87,9 @@ export function AccountControl({ className = "" }: { className?: string; collaps
 
   // Sync design preferences across windows and user changes
   useEffect(() => {
-    setPreferences(loadDesignPreferences(actor.id));
+    const current = loadDesignPreferences(actor.id);
+    setPreferences(current);
+    applyDesignPreferences(current, actor.id);
 
     function handlePrefsChange(e: Event) {
       const ce = e as CustomEvent<DesignPreferences>;
@@ -98,7 +100,9 @@ export function AccountControl({ className = "" }: { className?: string; collaps
 
     function handleStorage(e: StorageEvent) {
       if (e.key && e.key.startsWith("routex.design-preferences")) {
-        setPreferences(loadDesignPreferences(actor.id));
+        const next = loadDesignPreferences(actor.id);
+        setPreferences(next);
+        applyDesignPreferences(next, actor.id);
       }
     }
 

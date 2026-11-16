@@ -582,32 +582,34 @@ export default function TruckProfilePage({
                 </div>
                 <GlobalDateRangePicker />
               </div>
-              {sortedTruckTrips.length === 0 ? (
-                <div
-                  className="empty-state"
-                  style={{ padding: "36px 20px" }}
-                  title="No deliveries in date range"
-                >
-                  <strong>No completed deliveries in this range</strong>
-                  <span>No finalized trips have been recorded for {activeTruck.plateNumber} within the selected date range.</span>
-                </div>
-              ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Client" sortKey="client" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <th style={{ width: "40px", textAlign: "center" }}><span className="sr-only">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedTruckTrips.length === 0 ? (
                       <tr>
-                        <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Client" sortKey="client" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Revenue" sortKey="revenue" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Expenses" sortKey="expenses" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <SortableTableHeader label="Net Profit" sortKey="netIncome" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
-                        <th style={{ width: "40px", textAlign: "center" }}><span className="sr-only">Actions</span></th>
+                        <td colSpan={8} className="table-empty-cell">
+                          <div className="empty-state minimal">
+                            <strong className="empty-state-title">No completed deliveries in this range</strong>
+                            <span className="empty-state-desc">
+                              No finalized trips have been recorded for {activeTruck.plateNumber} within the selected date range.
+                            </span>
+                          </div>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedTruckTrips.map((trip, tripIndex) => {
+                    ) : (
+                      paginatedTruckTrips.map((trip, tripIndex) => {
                         const isIncomplete = isDeliveryIncomplete(trip);
                         const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                         return (
@@ -719,11 +721,10 @@ export default function TruckProfilePage({
                             </td>
                           </tr>
                         );
-                      })}
+                      }))}
                     </tbody>
                   </table>
                 </div>
-              )}
               {sortedTruckTrips.length > 0 ? (
                 <TablePagination
                   page={historyPage}

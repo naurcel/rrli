@@ -1013,6 +1013,23 @@ export default function ReportsPage() {
                         </tr>
                       );
 
+                      if (processedReport.rows.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={processedReport.columns.length} className="table-empty-cell">
+                              <div className="empty-state minimal">
+                                <strong className="empty-state-title">No records found</strong>
+                                <span className="empty-state-desc">
+                                  {isDailyTripReport
+                                    ? `No delivery trips recorded on ${formatShortDate(parseDateValue(dailyDate))}.`
+                                    : "No records found within the selected date range or template filters."}
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       if (sortedRows.length > paginatedRows.length) {
                         return (
                           <>
@@ -1044,23 +1061,6 @@ export default function ReportsPage() {
                   itemLabel={activeTemplate.baseType === "trip_ledger" ? "trips" : "records"}
                   itemCountInPage={paginatedRows.length}
                 />
-              ) : null}
-
-              {processedReport.rows.length === 0 ? (
-                <div
-                  className="empty-state report-empty-state"
-                >
-                  <strong>
-                    {isDailyTripReport
-                      ? "No trips recorded for this date"
-                      : "No records in this range"}
-                  </strong>
-                  <span>
-                    {isDailyTripReport
-                      ? `No delivery trips were executed on ${formatShortDate(parseDateValue(dailyDate))}. Use the date selector above to view other days.`
-                      : "Choose a wider date range or adjust template filters to populate this report."}
-                  </span>
-                </div>
               ) : null}
             </section>
 

@@ -363,16 +363,6 @@ export default function PodDocumentsPage() {
               <strong>POD records are unavailable</strong>
               <span>{loadError}</span>
             </div>
-          ) : loading ? (
-            <div className="empty-state" role="status">
-              <strong>Loading documents…</strong>
-              <span>Retrieving completed deliveries and store-level document attachments.</span>
-            </div>
-          ) : filteredStops.length === 0 ? (
-            <div className="empty-state" title="No store drop-offs match the selected document filter or date range">
-              <strong>No drop-offs match this view</strong>
-              <span>Change the document filter or selected date range.</span>
-            </div>
           ) : (
             <div className="table-wrap">
               <table>
@@ -387,7 +377,26 @@ export default function PodDocumentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedStops.map((item) => (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="table-empty-cell">
+                        <div className="empty-state minimal" role="status">
+                          <strong className="empty-state-title">Loading documents…</strong>
+                          <span className="empty-state-desc">Retrieving completed deliveries and store-level document attachments.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredStops.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="table-empty-cell">
+                        <div className="empty-state minimal" title="No store drop-offs match the selected document filter or date range">
+                          <strong className="empty-state-title">No drop-offs match this view</strong>
+                          <span className="empty-state-desc">Change the document filter or selected date range.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedStops.map((item) => (
                     <tr
                       key={item.stop.id}
                       className="record-row"
@@ -433,7 +442,7 @@ export default function PodDocumentsPage() {
                         {item.stop.documentRef || "Pending upload"}
                       </td>
                     </tr>
-                  ))}
+                  )))}
                 </tbody>
               </table>
             </div>

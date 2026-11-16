@@ -7,6 +7,13 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
 import { RoundedSelect, type SelectOption } from "@/components/rounded-select";
 import {
+  applyDesignPreferences,
+  DESIGN_PREFERENCES_EVENT,
+  type DesignPreferences,
+  loadDesignPreferences,
+  resetDesignPreferences,
+} from "@/components/design-preferences";
+import {
   getDefaultAvatarUrl,
   getProfileStorageKey,
   getUserInitials,
@@ -86,6 +93,80 @@ export default function SettingsPage() {
   const [securityPassword, setSecurityPassword] = useState("");
   const [securityFeedback, setSecurityFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [securitySubmitting, setSecuritySubmitting] = useState(false);
+
+  // Design Preferences state & Dark mode sync
+  const [preferences, setPreferences] = useState<DesignPreferences>(() =>
+    loadDesignPreferences(actor.id)
+  );
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    try {
+      const current =
+        document.documentElement.dataset.theme ??
+        window.localStorage.getItem("routex-theme");
+      setIsDark(current === "dark");
+    } catch {
+      // Ignore
+    }
+
+    const currentPrefs = loadDesignPreferences(actor.id);
+    setPreferences(currentPrefs);
+    applyDesignPreferences(currentPrefs, actor.id);
+
+    function handlePrefsChange(e: Event) {
+      const ce = e as CustomEvent<DesignPreferences>;
+      if (ce.detail) {
+        setPreferences(ce.detail);
+      }
+    }
+
+    function handleStorage(e: StorageEvent) {
+      if (e.key === "routex-theme" && e.newValue) {
+        setIsDark(e.newValue === "dark");
+      }
+      if (e.key && e.key.startsWith("routex.design-preferences")) {
+        const next = loadDesignPreferences(actor.id);
+        setPreferences(next);
+        applyDesignPreferences(next, actor.id);
+      }
+    }
+
+    window.addEventListener(DESIGN_PREFERENCES_EVENT, handlePrefsChange);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener(DESIGN_PREFERENCES_EVENT, handlePrefsChange);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [actor.id]);
+
+  function handleUpdatePreferences(partial: Partial<DesignPreferences>) {
+    const next: DesignPreferences = {
+      ...preferences,
+      ...partial,
+    };
+    setPreferences(next);
+    applyDesignPreferences(next, actor.id);
+  }
+
+  function handleResetPreferences() {
+    const defaults = resetDesignPreferences(actor.id);
+    setPreferences(defaults);
+  }
+
+  function handleToggleTheme() {
+    setIsDark((prev) => {
+      const next = !prev;
+      const nextTheme = next ? "dark" : "light";
+      document.documentElement.dataset.theme = nextTheme;
+      try {
+        window.localStorage.setItem("routex-theme", nextTheme);
+      } catch {
+        // Ignore
+      }
+      return next;
+    });
+  }
 
   // Load fresh user data on mount & sync local storage photo
   useEffect(() => {
@@ -526,6 +607,118 @@ export default function SettingsPage() {
 
         {/* Vertically Organized Settings Stack Under Profile */}
         <div className="settings-sections-container">
+          {/* Section 0: Appearance & Design Preferences */}
+          <section className="records-card settings-card-section" aria-label="Appearance and Design Preferences">
+            <div className="settings-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+              <div>
+                <h2>Appearance &amp; Design Preferences</h2>
+                <p>Customize typography scaling, layout density, animations, and color mode.</p>
+              </div>
+              <button
+                type="button"
+                className="profile-prefs-reset-btn"
+                onClick={handleResetPreferences}
+                title="Reset design preferences to system defaults"
+              >
+                Reset to Defaults
+              </button>
+            </div>
+
+            <div className="settings-form-body">
+              <div className="settings-field-row-2col">
+                {/* Font Size */}
+                <div className="settings-form-field">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <label style={{ margin: 0 }}>Font Size</label>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)" }}>
+                      {preferences.fontSize === "small" ? "Small (Scale ~0.92x)" : preferences.fontSize === "large" ? "Large (Scale ~1.08x)" : "Default"}
+                    </span>
+                  </div>
+                  <div className="profile-segmented-control" role="radiogroup" aria-label="Font Size options">
+                    {(["small", "default", "large"] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        role="radio"
+                        aria-checked={preferences.fontSize === opt}
+                        className={`profile-segmented-btn${preferences.fontSize === opt ? " active" : ""}`}
+                        onClick={() => handleUpdatePreferences({ fontSize: opt })}
+                      >
+                        {opt === "small" ? "Small" : opt === "large" ? "Large" : "Default"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Compactness */}
+                <div className="settings-form-field">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <label style={{ margin: 0 }}>Compactness</label>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)" }}>
+                      {preferences.compactness === "compact" ? "Compact (Dense tables & cards)" : "Comfortable"}
+                    </span>
+                  </div>
+                  <div className="profile-segmented-control" role="radiogroup" aria-label="Compactness options">
+                    {(["comfortable", "compact"] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        role="radio"
+                        aria-checked={preferences.compactness === opt}
+                        className={`profile-segmented-btn${preferences.compactness === opt ? " active" : ""}`}
+                        onClick={() => handleUpdatePreferences({ compactness: opt })}
+                      >
+                        {opt === "comfortable" ? "Comfortable" : "Compact"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="settings-field-row-2col" style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--color-border-subtle)" }}>
+                {/* Theme Toggle */}
+                <div className="settings-form-field" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <label style={{ margin: 0, display: "block" }}>Dark Mode</label>
+                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                      {isDark ? "Dark theme active" : "Light theme active"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isDark}
+                    aria-label="Toggle dark mode"
+                    className={`profile-theme-switch${isDark ? " active" : ""}`}
+                    onClick={handleToggleTheme}
+                  >
+                    <span className="profile-theme-knob" />
+                  </button>
+                </div>
+
+                {/* Reduce Motion */}
+                <div className="settings-form-field" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <label style={{ margin: 0, display: "block" }}>Reduce Motion</label>
+                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                      Minimize non-essential UI animations
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={preferences.reduceMotion}
+                    aria-label={preferences.reduceMotion ? "Disable reduced motion" : "Enable reduced motion"}
+                    className={`profile-theme-switch${preferences.reduceMotion ? " active" : ""}`}
+                    onClick={() => handleUpdatePreferences({ reduceMotion: !preferences.reduceMotion })}
+                  >
+                    <span className="profile-theme-knob" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Section 1: Account Details (Change Username) */}
           <section className="records-card settings-card-section" aria-label="Account Details">
             <div className="settings-section-header">

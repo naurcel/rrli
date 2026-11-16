@@ -1039,7 +1039,17 @@ export default function UserManagementPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedUsers.map((user, userIndex) => {
+                    {sortedUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="table-empty-cell">
+                          <div className="empty-state minimal">
+                            <strong className="empty-state-title">No staff accounts found</strong>
+                            <span className="empty-state-desc">No registered staff users match the active view.</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedUsers.map((user, userIndex) => {
                       const isRecoveryActive = Boolean(
                         user.recoveryExpiresAt && new Date(user.recoveryExpiresAt) > new Date(),
                       );
@@ -1250,7 +1260,7 @@ export default function UserManagementPage() {
                           </td>
                         </tr>
                       );
-                    })}
+                    }))}
                   </tbody>
                 </table>
               </div>
@@ -1370,11 +1380,6 @@ export default function UserManagementPage() {
                   <strong>Audit log unavailable</strong>
                   <span>{auditError}</span>
                 </div>
-              ) : auditLoading && auditEntries.length === 0 ? (
-                <div className="empty-state" role="status">
-                  <strong>Loading audit records…</strong>
-                  <span>Retrieving event activity and historical changes.</span>
-                </div>
               ) : (
                 <div className="table-wrap">
                   <table>
@@ -1388,19 +1393,25 @@ export default function UserManagementPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredAuditEntries.length === 0 ? (
+                      {auditLoading && auditEntries.length === 0 ? (
                         <tr>
-                          <td
-                            colSpan={5}
-                            style={{
-                              textAlign: "center",
-                              padding: "36px",
-                              color: "var(--color-text-muted)",
-                            }}
-                          >
-                            <div style={{ display: "grid", gap: "6px", placeItems: "center" }}>
-                              <strong>No audit events match your search criteria.</strong>
-                              <span>Try modifying your search query or reset action and entity filters.</span>
+                          <td colSpan={5} className="table-empty-cell">
+                            <div className="empty-state minimal" role="status">
+                              <strong className="empty-state-title">Loading audit records…</strong>
+                              <span className="empty-state-desc">Retrieving event activity and historical changes.</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : filteredAuditEntries.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="table-empty-cell">
+                            <div className="empty-state minimal">
+                              <strong className="empty-state-title">No audit log events found</strong>
+                              <span className="empty-state-desc">
+                                {auditSearch || actionFilter !== "all" || entityFilter !== "all"
+                                  ? "No audit events match your search query or active action/entity filters."
+                                  : "No system events or configuration changes recorded yet."}
+                              </span>
                               {(auditSearch || actionFilter !== "all" || entityFilter !== "all") ? (
                                 <button
                                   type="button"

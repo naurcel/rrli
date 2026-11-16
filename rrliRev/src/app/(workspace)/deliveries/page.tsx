@@ -1160,13 +1160,6 @@ export default function DeliveriesPage() {
               <strong>Loading delivery ledger…</strong>
               <span>Applying the active client, date, truck, and document filters.</span>
             </div>
-          ) : filteredDeliveries.length === 0 ? (
-            <div className="empty-state">
-              <strong>No deliveries match the active filters</strong>
-              <span>
-                Try clearing the waybill search or selecting All Clients / All Trucks.
-              </span>
-            </div>
           ) : (
             <div className="table-wrap">
               <table>
@@ -1187,7 +1180,19 @@ export default function DeliveriesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedDeliveries.map((trip) => {
+                  {filteredDeliveries.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} className="table-empty-cell">
+                        <div className="empty-state minimal">
+                          <strong className="empty-state-title">No records found</strong>
+                          <span className="empty-state-desc">
+                            No deliveries match the active filters or selected date range.
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedDeliveries.map((trip) => {
                     const isIncomplete = isDeliveryIncomplete(trip);
                     const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                     return (
@@ -1360,7 +1365,7 @@ export default function DeliveriesPage() {
                       </td>
                     </tr>
                   );
-                })}
+                }))}
               </tbody>
               </table>
             </div>

@@ -492,27 +492,28 @@ function DashboardFinancialChart({
         </div>
       </div>
 
-      {hasData ? (
-        <div className="revenue-chart-scroll">
-          <svg
-            className="revenue-chart"
-            viewBox={`0 0 ${width} ${height}`}
-            role="img"
-            aria-label={`${activeConfig.title} for ${periodLabel}`}
-            onPointerEnter={(event) => {
-              chartBoundsRef.current = event.currentTarget.getBoundingClientRect();
-              selectClosestPoint(event.clientX, chartBoundsRef.current);
-            }}
-            onPointerMove={(event) => {
-              const chartBounds = chartBoundsRef.current ?? event.currentTarget.getBoundingClientRect();
-              chartBoundsRef.current = chartBounds;
-              selectClosestPoint(event.clientX, chartBounds);
-            }}
-            onPointerLeave={() => {
-              chartBoundsRef.current = null;
-              setActiveIndex(null);
-            }}
-          >
+      <div className="revenue-chart-scroll">
+        <svg
+          className="revenue-chart"
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label={`${activeConfig.title} for ${periodLabel}`}
+          onPointerEnter={(event) => {
+            if (!hasData) return;
+            chartBoundsRef.current = event.currentTarget.getBoundingClientRect();
+            selectClosestPoint(event.clientX, chartBoundsRef.current);
+          }}
+          onPointerMove={(event) => {
+            if (!hasData) return;
+            const chartBounds = chartBoundsRef.current ?? event.currentTarget.getBoundingClientRect();
+            chartBoundsRef.current = chartBounds;
+            selectClosestPoint(event.clientX, chartBounds);
+          }}
+          onPointerLeave={() => {
+            chartBoundsRef.current = null;
+            setActiveIndex(null);
+          }}
+        >
             <defs>
               <linearGradient id="chart-fill-revenue" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" stopColor="#f59e0b" stopOpacity=".32" />
@@ -600,8 +601,9 @@ function DashboardFinancialChart({
               );
             })}
 
-            {/* View Mode 1: Line / Smooth Area */}
-            {viewMode === "line" ? (
+            {/* Data Layer: Lines or Bars if hasData, otherwise clean minimal overlay */}
+            {hasData ? (
+              viewMode === "line" ? (
               <>
                 {metric !== "comparison" ? (
                   <>
@@ -793,10 +795,40 @@ function DashboardFinancialChart({
                   );
                 })}
               </g>
-            )}
+            )
+          ) : (
+            <g className="chart-empty-state-group" pointerEvents="none">
+              <text
+                x={padding.left + innerWidth / 2}
+                y={padding.top + innerHeight / 2 - 4}
+                textAnchor="middle"
+                className="chart-empty-text-title"
+                style={{
+                  fontSize: "12.5px",
+                  fontWeight: 600,
+                  fill: "var(--color-text-secondary)",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                No records found
+              </text>
+              <text
+                x={padding.left + innerWidth / 2}
+                y={padding.top + innerHeight / 2 + 15}
+                textAnchor="middle"
+                className="chart-empty-text-desc"
+                style={{
+                  fontSize: "11px",
+                  fill: "var(--color-text-muted)",
+                }}
+              >
+                No {activeConfig.label.toLowerCase()} recorded in this date range
+              </text>
+            </g>
+          )}
 
-            {/* Interactive Tooltip */}
-            {selectedPoint && activeIndex !== null && (
+          {/* Interactive Tooltip */}
+          {hasData && selectedPoint && activeIndex !== null && (
               <g
                 className="chart-point-tooltip"
                 pointerEvents="none"
@@ -864,15 +896,6 @@ function DashboardFinancialChart({
             })}
           </svg>
         </div>
-      ) : (
-        <div
-          className="empty-state chart-empty-state"
-          title={`No ${activeConfig.label.toLowerCase()} recorded within the selected date range`}
-        >
-          <strong>{activeConfig.emptyMsg}</strong>
-          <span>Choose a wider date range to view the trend.</span>
-        </div>
-      )}
     </section>
   );
 }
@@ -1243,7 +1266,19 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentDeliveries.map((trip) => {
+                  {recentDeliveries.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="table-empty-cell">
+                        <div className="empty-state minimal">
+                          <strong className="empty-state-title">No records found</strong>
+                          <span className="empty-state-desc">
+                            No delivery trips recorded in this period.
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    recentDeliveries.map((trip) => {
                     const isIncomplete = isDeliveryIncomplete(trip);
                     const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
                     return (
@@ -1301,7 +1336,7 @@ export default function DashboardPage() {
                         </td>
                       </tr>
                     );
-                  })}
+                  }))}
                 </tbody>
               </table>
             </div>
@@ -1427,7 +1462,6 @@ export default function DashboardPage() {
                               className="dashboard-attention-toggle"
                               aria-expanded={isExpanded}
                               aria-label={`${isExpanded ? "Hide" : "Show"} ${issues.length} missing item${issues.length === 1 ? "" : "s"} for ${delivery.waybillNumber}`}
-                              title={`${issues.length} missing item${issues.length === 1 ? "" : "s"}`}
                               onClick={(e) => toggleAttentionItem(delivery.id, e)}
                             >
                               <span>{issues.length}</span>

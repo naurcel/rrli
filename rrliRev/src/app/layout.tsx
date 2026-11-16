@@ -17,18 +17,21 @@ const themeInitScript = `
     if (storedTheme === "dark" || storedTheme === "light") {
       document.documentElement.dataset.theme = storedTheme;
     }
-    for (var i = 0; i < window.localStorage.length; i++) {
-      var k = window.localStorage.key(i);
-      if (k && k.indexOf("routex.design-preferences.") === 0) {
-        var raw = window.localStorage.getItem(k);
-        if (raw) {
-          var p = JSON.parse(raw);
-          if (p.fontSize) document.documentElement.dataset.fontSize = p.fontSize;
-          if (p.compactness) document.documentElement.dataset.compactness = p.compactness;
-          if (typeof p.reduceMotion === "boolean") document.documentElement.dataset.reduceMotion = String(p.reduceMotion);
-          break;
+    var prefRaw = window.localStorage.getItem("routex.design-preferences.default");
+    if (!prefRaw) {
+      for (var i = 0; i < window.localStorage.length; i++) {
+        var k = window.localStorage.key(i);
+        if (k && k.indexOf("routex.design-preferences.") === 0) {
+          prefRaw = window.localStorage.getItem(k);
+          if (prefRaw) break;
         }
       }
+    }
+    if (prefRaw) {
+      var p = JSON.parse(prefRaw);
+      if (p.fontSize) document.documentElement.dataset.fontSize = p.fontSize;
+      if (p.compactness) document.documentElement.dataset.compactness = p.compactness;
+      if (typeof p.reduceMotion === "boolean") document.documentElement.dataset.reduceMotion = String(p.reduceMotion);
     }
     if (!document.documentElement.dataset.reduceMotion && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       document.documentElement.dataset.reduceMotion = "true";

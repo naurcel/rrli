@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
@@ -305,7 +305,7 @@ export default function FinancePage() {
   }
 
   // Handle new expense submission
-  async function handleCreateExpense(e: React.FormEvent) {
+  async function handleCreateExpense(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
@@ -686,21 +686,6 @@ export default function FinancePage() {
               <strong>Loading expense ledger…</strong>
               <span>Retrieving company operating expense records.</span>
             </div>
-          ) : filteredAndSortedExpenses.length === 0 ? (
-            <div className="empty-state">
-              <strong>
-                {expenses.length === 0
-                  ? "No company expenses recorded yet"
-                  : "No expenses match the active filters"}
-              </strong>
-              <span>
-                {expenses.length === 0
-                  ? canManage
-                    ? "Use + Record Expense to add the first company operating expense."
-                    : "No company operating expenses have been recorded yet."
-                  : "Try clearing the search query or selecting All Dates."}
-              </span>
-            </div>
           ) : (
             <div className="table-wrap">
               <table className="finance-ledger-table">
@@ -736,70 +721,87 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedExpenses.map((exp) => (
-                    <tr
-                      key={exp.id}
-                      className="clickable-table-row"
-                      tabIndex={0}
-                      onClick={() => setViewingExpense(exp)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setViewingExpense(exp);
-                        }
-                      }}
-                    >
-                      <td className="cell-date">{exp.expenseDate}</td>
-                      <td>
-                        <strong>
-                          {exp.description || "Total Company Expenses"}
-                        </strong>
+                  {filteredAndSortedExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={canManage ? 6 : 5} className="table-empty-cell">
+                        <div className="empty-state minimal">
+                          <strong className="empty-state-title">No records found</strong>
+                          <span className="empty-state-desc">
+                            {expenses.length === 0
+                              ? "No company operating expenses have been recorded yet."
+                              : "No company expenses match the active search or date filters."}
+                          </span>
+                        </div>
                       </td>
-                      <td className="finance-note-cell">{exp.notes || "—"}</td>
-                      <td>{exp.createdBy || "system"}</td>
-                      <td className="money">
-                        <strong>{formatPeso(exp.amount)}</strong>
-                      </td>
-                      {canManage && (
-                        <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
-                          <div className="truck-row-actions">
-                            <button
-                              type="button"
-                              className="truck-action-icon-btn"
-                              aria-label={`Edit expense: ${exp.description || "Expense"}`}
-                              title="Edit expense"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingExpense(exp);
-                              }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              className="truck-action-icon-btn danger"
-                              aria-label={`Delete expense: ${exp.description || "Expense"}`}
-                              title="Delete expense"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteError(null);
-                                setDeletingExpense(exp);
-                              }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                <line x1="10" y1="11" x2="10" y2="17" />
-                                <line x1="14" y1="11" x2="14" y2="17" />
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                      )}
                     </tr>
-                  ))}
+                  ) : (
+                    paginatedExpenses.map((exp) => {
+                      return (
+                        <tr
+                          key={exp.id}
+                          className="clickable-table-row"
+                          tabIndex={0}
+                          onClick={() => setViewingExpense(exp)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setViewingExpense(exp);
+                            }
+                          }}
+                        >
+                          <td className="cell-date">{exp.expenseDate}</td>
+                          <td>
+                            <strong>
+                              {exp.description || "Total Company Expenses"}
+                            </strong>
+                          </td>
+                          <td className="finance-note-cell">{exp.notes || "—"}</td>
+                          <td>{exp.createdBy || "system"}</td>
+                          <td className="money">
+                            <strong>{formatPeso(exp.amount)}</strong>
+                          </td>
+                          {canManage && (
+                            <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                              <div className="truck-row-actions">
+                                <button
+                                  type="button"
+                                  className="truck-action-icon-btn"
+                                  aria-label={`Edit expense: ${exp.description || "Expense"}`}
+                                  title="Edit expense"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingExpense(exp);
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="truck-action-icon-btn danger"
+                                  aria-label={`Delete expense: ${exp.description || "Expense"}`}
+                                  title="Delete expense"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteError(null);
+                                    setDeletingExpense(exp);
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                    <line x1="10" y1="11" x2="10" y2="17" />
+                                    <line x1="14" y1="11" x2="14" y2="17" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>

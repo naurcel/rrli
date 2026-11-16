@@ -775,9 +775,9 @@ export function ReportCustomizerModal({
               </div>
 
               {previewData.resolvedCols.length === 0 ? (
-                <div className="empty-state">
-                  <strong>No visible columns selected</strong>
-                  <span>Please check at least one column under the Columns tab.</span>
+                <div className="empty-state minimal">
+                  <strong className="empty-state-title">No visible columns selected</strong>
+                  <span className="empty-state-desc">Please check at least one column under the Columns tab.</span>
                 </div>
               ) : (
                 <div
@@ -806,7 +806,17 @@ export function ReportCustomizerModal({
                       </tr>
                     </thead>
                     <tbody>
-                      {previewData.rows.slice(0, 10).map((row, rIdx) => (
+                      {previewData.rows.length === 0 ? (
+                        <tr>
+                          <td colSpan={previewData.resolvedCols.length} className="table-empty-cell">
+                            <div className="empty-state minimal">
+                              <strong className="empty-state-title">No preview records</strong>
+                              <span className="empty-state-desc">No delivery records available to populate this report preview.</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        previewData.rows.slice(0, 10).map((row, rIdx) => (
                         <tr
                           key={rIdx}
                           style={{
@@ -826,7 +836,7 @@ export function ReportCustomizerModal({
                             </td>
                           ))}
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                 </div>

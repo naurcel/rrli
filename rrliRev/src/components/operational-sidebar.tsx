@@ -59,17 +59,17 @@ export function OperationalSidebar() {
         onFocus={() => setHeaderHovered(true)}
         onBlur={() => setHeaderHovered(false)}
       >
-        <Link
-          href="/dashboard"
+        <button
+          type="button"
           className="sidebar-brand-space"
-          aria-label="Redeemed Route Logistics Inc."
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
         />
         <button
           className="sidebar-collapse-toggle"
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           tabIndex={collapsed && !headerHovered ? -1 : 0}
         >
           <Icon>{collapsed ? "›" : "‹"}</Icon>
