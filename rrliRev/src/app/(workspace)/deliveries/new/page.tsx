@@ -1492,7 +1492,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
                 {/* Helper 2 Card (When added) */}
                 {hasSecondHelper ? (
-                  <>
                   <section className="crew-expense-group helper-2-card">
                     <div className="crew-card-title-row">
                       <span className="crew-role-pill helper-2">Helper 2</span>
@@ -1569,14 +1568,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       </div>
                     </div>
                   </section>
-                  <div className="crew-info-card" aria-hidden="true">
-                    <div className="crew-info-badge">2/2 Helpers Active</div>
-                    <p className="crew-info-note">
-                      Maximum crew capacity reached (1 Driver + 2 Helpers).
-                      Rates and allowances for both helpers are automatically computed into the delivery trip expenses.
-                    </p>
-                  </div>
-                  </>
                 ) : (
                   <div className="crew-add-helper-slot">
                     <button

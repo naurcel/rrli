@@ -5726,15 +5726,20 @@ html[data-theme="dark"] .delivery-reference-warning {
   }
 }
 
+.crew-add-helper-slot,
+.helper-2-card {
+  grid-column: 2;
+}
+
 .crew-add-helper-slot {
   display: flex;
   min-height: 142px;
   height: 100%;
-  grid-column: 2;
 }
 
 @media (max-width: 680px) {
-  .crew-add-helper-slot {
+  .crew-add-helper-slot,
+  .helper-2-card {
     grid-column: 1;
   }
 }
