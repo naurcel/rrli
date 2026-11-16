@@ -448,7 +448,7 @@ export function ProfitComparisonBarChart({
               style={{ width: "100%" }}
             />
           </div>
-          <span className="bar-subtext">100% Agreed Customer Billing Baseline</span>
+          <span className="bar-subtext">100% Total revenue</span>
         </div>
 
         {/* Expenses Bar */}
@@ -456,7 +456,7 @@ export function ProfitComparisonBarChart({
           <div className="comparison-bar-header">
             <span className="bar-label">
               <span className="bar-color-dot expenses-dot" />
-              <strong>Trip Expenses</strong>
+              <strong>Expenses</strong>
             </span>
             <strong className={`bar-amount ${isComplete ? "expenses-amount" : "warn-text"}`}>
               {isComplete ? formatPeso(exp) : "Incomplete"}
@@ -474,7 +474,7 @@ export function ProfitComparisonBarChart({
           </div>
           <span className="bar-subtext">
             {isComplete
-              ? `${expensePct.toFixed(1)}% of Revenue Disbursed for Transit & Labor`
+              ? `${expensePct.toFixed(1)}% of revenue`
               : `Incomplete: ${unknownList.join(", ")}`}
           </span>
         </div>
@@ -504,8 +504,8 @@ export function ProfitComparisonBarChart({
           </div>
           <span className="bar-subtext">
             {isComplete && marginPercent != null
-              ? `${marginPercent.toFixed(1)}% Operating Profit Margin Retained`
-              : "Net profit computation deferred until all trip expenses are finalized"}
+              ? `${marginPercent.toFixed(1)}% margin`
+              : "Pending expense confirmation"}
           </span>
         </div>
       </div>
@@ -525,7 +525,7 @@ export function ProfitComparisonBarChart({
         </div>
 
         <div className="comparison-meta-card">
-          <span className="meta-card-label">AVG PER DROP-OFF</span>
+          <span className="meta-card-label">AVG PER STOP</span>
           <strong className="meta-card-val">
             {formatPeso(avgRevPerDropoff)}
           </strong>
@@ -535,13 +535,13 @@ export function ProfitComparisonBarChart({
         </div>
 
         <div className="comparison-meta-card">
-          <span className="meta-card-label">RETENTION RATE</span>
+          <span className="meta-card-label">PROFIT / ₱100</span>
           <strong className="meta-card-val">
             {isComplete && marginPercent != null
               ? `₱${((marginPercent / 100) * 100).toFixed(1)} / ₱100`
               : "—"}
           </strong>
-          <span className="meta-card-sub">Net kept per ₱100 revenue</span>
+          <span className="meta-card-sub">Profit per ₱100 revenue</span>
         </div>
       </div>
     </div>
@@ -574,7 +574,7 @@ export function DeliveryFinancialBreakdown({
             {model.grossRevenue != null ? formatPeso(model.grossRevenue) : "₱0.00"}
           </div>
           <span className="hero-metric-sub">
-            Agreed billing rate
+            Billing rate
           </span>
         </div>
 
@@ -590,7 +590,7 @@ export function DeliveryFinancialBreakdown({
               : "Incomplete"}
           </div>
           <span className="hero-metric-sub">
-            {model.isFinanciallyComplete ? "Total trip disbursements" : "Pending resolution"}
+            {model.isFinanciallyComplete ? "Total trip expenses" : "Pending confirmation"}
           </span>
         </div>
 
@@ -622,7 +622,7 @@ export function DeliveryFinancialBreakdown({
                   model.marginPercent >= 15 ? "pill-success" : model.marginPercent >= 0 ? "pill-neutral" : "pill-warn"
                 }`}
               >
-                {formatPercent(model.marginPercent)} Profit Margin
+                {formatPercent(model.marginPercent)} margin
               </span>
             ) : (
               <span className="margin-pill pill-warn" title="Pending expenses">
@@ -636,11 +636,11 @@ export function DeliveryFinancialBreakdown({
       {/* 3. Visual Revenue Realization / Flow Allocation Bar */}
       <div className="revenue-flow-bar-container">
         <div className="revenue-flow-header">
-          <span className="flow-title">Revenue Realization &amp; Allocation</span>
+          <span className="flow-title">Revenue Allocation</span>
           <span className="flow-badge">
             {model.isFinanciallyComplete && model.marginPercent != null
-              ? `${model.marginPercent.toFixed(1)}% Retained Profit`
-              : "Pending Resolution"}
+              ? `${model.marginPercent.toFixed(1)}% margin`
+              : "Pending confirmation"}
           </span>
         </div>
         <div className="revenue-flow-track" role="progressbar" aria-label="Revenue allocation breakdown">
@@ -671,7 +671,7 @@ export function DeliveryFinancialBreakdown({
             </>
           ) : (
             <div className="flow-segment pending-segment" style={{ width: "100%" }}>
-              <span className="flow-segment-text">Financial allocation deferred until unknown expenses are finalized</span>
+              <span className="flow-segment-text">Pending expense confirmation</span>
             </div>
           )}
         </div>
@@ -690,7 +690,7 @@ export function DeliveryFinancialBreakdown({
                 className={`chart-tab-btn ${chartView === "distribution" ? "active" : ""}`}
                 onClick={() => setChartView("distribution")}
               >
-                Expense Distribution
+                Expenses
               </button>
               <button
                 type="button"
@@ -699,11 +699,11 @@ export function DeliveryFinancialBreakdown({
                 className={`chart-tab-btn ${chartView === "comparison" ? "active" : ""}`}
                 onClick={() => setChartView("comparison")}
               >
-                Profitability Comparison
+                Profitability
               </button>
             </div>
             <span className="section-tag">
-              {model.isFinanciallyComplete ? "Verified Data" : "Pending Verification"}
+              {model.isFinanciallyComplete ? "Confirmed" : "Incomplete"}
             </span>
           </div>
 
@@ -731,24 +731,24 @@ export function DeliveryFinancialBreakdown({
 
         {/* Right: Itemized Financial Breakdown Groups */}
         <div className="breakdown-groups-column">
-          {/* GROUP A: Direct Transit & Facility Expenses */}
+          {/* GROUP A: Trip Expenses */}
           <div className="breakdown-group-card">
             <div className="group-card-header">
-              <h4 className="group-title">Transit &amp; Facility Expenses</h4>
+              <h4 className="group-title">Trip Expenses</h4>
               {model.isTransitComplete && model.transitSubtotal != null ? (
                 <span className="group-subtotal">{formatPeso(model.transitSubtotal)}</span>
               ) : (
-                <StatusWarningIcon size={12} title="Incomplete transit expenses" />
+                <StatusWarningIcon size={12} title="Incomplete trip expenses" />
               )}
             </div>
 
             <div className="group-items-list">
-              {/* Diesel Fuel */}
+              {/* Diesel */}
               <div className="breakdown-item-row">
                 <div className="item-meta">
                   <span className="item-color-indicator" style={{ backgroundColor: "#f59e0b" }} />
                   <div>
-                    <span className="item-name">Diesel Fuel</span>
+                    <span className="item-name">Diesel</span>
                     <span className="item-detail">
                       {trip.fuelRate ? `Fuel rate: ₱${trip.fuelRate.toFixed(2)}/L` : "Trip fuel consumption"}
                     </span>
@@ -765,12 +765,12 @@ export function DeliveryFinancialBreakdown({
                 </div>
               </div>
 
-              {/* Highway Tolls */}
+              {/* Toll Gates */}
               <div className="breakdown-item-row">
                 <div className="item-meta">
                   <span className="item-color-indicator" style={{ backgroundColor: "#6366f1" }} />
                   <div>
-                    <span className="item-name">Highway Tolls</span>
+                    <span className="item-name">Toll Gates</span>
                     <span className="item-detail">
                       {trip.expenses.tollGateBreakdown || "Expressways & pass gates"}
                     </span>
@@ -787,12 +787,12 @@ export function DeliveryFinancialBreakdown({
                 </div>
               </div>
 
-              {/* Store Entry Fees */}
+              {/* Entry Fees */}
               <div className="breakdown-item-row">
                 <div className="item-meta">
                   <span className="item-color-indicator" style={{ backgroundColor: "#10b981" }} />
                   <div>
-                    <span className="item-name">Store Entry Fees</span>
+                    <span className="item-name">Entry Fees</span>
                     <span className="item-detail">
                       {trip.dropoffs.length} store drop-off point{trip.dropoffs.length === 1 ? "" : "s"}
                     </span>
@@ -831,7 +831,7 @@ export function DeliveryFinancialBreakdown({
             </div>
           </div>
 
-          {/* GROUP B: Crew Compensation & Labor Costs */}
+          {/* GROUP B: Crew Compensation */}
           <div className="breakdown-group-card">
             <div className="group-card-header">
               <h4 className="group-title">Crew Compensation</h4>
@@ -843,13 +843,13 @@ export function DeliveryFinancialBreakdown({
             </div>
 
             <div className="group-items-list">
-              {/* Driver Compensation */}
+              {/* Driver */}
               <div className="breakdown-crew-card">
                 <div className="crew-card-head">
                   <div className="item-meta">
                     <span className="item-color-indicator" style={{ backgroundColor: "#0284c7" }} />
                     <div>
-                      <span className="item-name">Driver Compensation</span>
+                      <span className="item-name">Driver</span>
                       {trip.driverName ? <span className="item-detail">{trip.driverName}</span> : null}
                     </div>
                   </div>
@@ -867,7 +867,7 @@ export function DeliveryFinancialBreakdown({
                 {/* Sub-breakdown: Daily Rate + Allowance */}
                 <div className="crew-sub-pills">
                   <div className="crew-sub-pill">
-                    <span className="sub-label">Daily Wage:</span>
+                    <span className="sub-label">Daily rate:</span>
                     <span className="sub-val">
                       {trip.expenseStates.driverDailyRate === "unknown"
                         ? "Pending"
@@ -877,7 +877,7 @@ export function DeliveryFinancialBreakdown({
                     </span>
                   </div>
                   <div className="crew-sub-pill">
-                    <span className="sub-label">Trip Allowance:</span>
+                    <span className="sub-label">Allowance:</span>
                     <span className="sub-val">
                       {trip.expenseStates.driverAllowance === "unknown"
                         ? "Pending"
@@ -889,13 +889,13 @@ export function DeliveryFinancialBreakdown({
                 </div>
               </div>
 
-              {/* Helper Compensation */}
+              {/* Helper */}
               <div className="breakdown-crew-card">
                 <div className="crew-card-head">
                   <div className="item-meta">
                     <span className="item-color-indicator" style={{ backgroundColor: "#0d9488" }} />
                     <div>
-                      <span className="item-name">Helper Compensation</span>
+                      <span className="item-name">Helper</span>
                       {trip.helperName ? <span className="item-detail">{trip.helperName}</span> : <span className="item-detail">None assigned</span>}
                     </div>
                   </div>
@@ -913,7 +913,7 @@ export function DeliveryFinancialBreakdown({
                 {/* Sub-breakdown: Daily Rate + Allowance */}
                 <div className="crew-sub-pills">
                   <div className="crew-sub-pill">
-                    <span className="sub-label">Daily Wage:</span>
+                    <span className="sub-label">Daily rate:</span>
                     <span className="sub-val">
                       {trip.expenseStates.helperDailyRate === "unknown"
                         ? "Pending"
@@ -923,7 +923,7 @@ export function DeliveryFinancialBreakdown({
                     </span>
                   </div>
                   <div className="crew-sub-pill">
-                    <span className="sub-label">Trip Allowance:</span>
+                    <span className="sub-label">Allowance:</span>
                     <span className="sub-val">
                       {trip.expenseStates.helperAllowance === "unknown"
                         ? "Pending"
@@ -966,35 +966,35 @@ export function AggregateExpenseBreakdown({
   const slices: ExpenseCategorySlice[] = [
     {
       id: "diesel",
-      label: "Diesel Fuel",
+      label: "Diesel",
       amount: kpiBreakdown.diesel,
       color: "#f59e0b",
       status: "confirmed",
     },
     {
       id: "tolls",
-      label: "Highway Tolls",
+      label: "Toll Gates",
       amount: kpiBreakdown.toll,
       color: "#6366f1",
       status: "confirmed",
     },
     {
       id: "entry_fees",
-      label: "Store Entry Fees",
+      label: "Entry Fees",
       amount: kpiBreakdown.entryFees,
       color: "#10b981",
       status: "confirmed",
     },
     {
       id: "driver",
-      label: "Driver Crew",
+      label: "Driver",
       amount: kpiBreakdown.driverTotal,
       color: "#0284c7",
       status: "confirmed",
     },
     {
       id: "helper",
-      label: "Helper Crew",
+      label: "Helper",
       amount: kpiBreakdown.helperTotal,
       color: "#0d9488",
       status: "confirmed",

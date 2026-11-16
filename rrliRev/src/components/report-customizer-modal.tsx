@@ -649,8 +649,8 @@ export function ReportCustomizerModal({
                     { key: "showProfitMargin", label: "Profit Margin" },
                     { key: "showActiveTrucks", label: "Active Trucks" },
                     { key: "showStoreDropoffs", label: "Drop-offs" },
-                    { key: "showDieselExpenses", label: "Diesel Fuel" },
-                    { key: "showTollExpenses", label: "Highway Tolls" },
+                    { key: "showDieselExpenses", label: "Diesel" },
+                    { key: "showTollExpenses", label: "Toll Gates" },
                     { key: "showCrewCosts", label: "Crew Compensation" },
                   ].map(({ key, label }) => (
                     <label

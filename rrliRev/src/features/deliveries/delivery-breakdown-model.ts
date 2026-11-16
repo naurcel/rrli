@@ -188,14 +188,14 @@ export function resolveTripFinancialGroups(
 ): TripFinancialResolution {
   const unknownList: string[] = [];
 
-  if (trip.expenseStates.dieselExpenses === "unknown") unknownList.push("Diesel Fuel");
-  if (trip.expenseStates.tollGateExpenses === "unknown") unknownList.push("Highway Tolls");
-  if (trip.expenseStates.entryFees === "unknown") unknownList.push("Store Entry Fees");
+  if (trip.expenseStates.dieselExpenses === "unknown") unknownList.push("Diesel");
+  if (trip.expenseStates.tollGateExpenses === "unknown") unknownList.push("Toll Gates");
+  if (trip.expenseStates.entryFees === "unknown") unknownList.push("Entry Fees");
   if (trip.expenseStates.driverDailyRate === "unknown" || trip.expenseStates.driverAllowance === "unknown") {
-    unknownList.push("Driver Compensation");
+    unknownList.push("Driver");
   }
   if (trip.expenseStates.helperDailyRate === "unknown" || trip.expenseStates.helperAllowance === "unknown") {
-    unknownList.push("Helper Compensation");
+    unknownList.push("Helper");
   }
   if (trip.expenseStates.otherExpenses === "unknown") unknownList.push("Other Expenses");
 
@@ -248,35 +248,35 @@ export function resolveTripFinancialGroups(
   const expenseSlices: ExpenseCategorySlice[] = [
     {
       id: "diesel",
-      label: "Diesel Fuel",
+      label: "Diesel",
       amount: trip.expenseStates.dieselExpenses === "not_applicable" ? 0 : dieselVal,
       color: "#f59e0b",
       status: trip.expenseStates.dieselExpenses,
     },
     {
       id: "tolls",
-      label: "Highway Tolls",
+      label: "Toll Gates",
       amount: trip.expenseStates.tollGateExpenses === "not_applicable" ? 0 : tollVal,
       color: "#6366f1",
       status: trip.expenseStates.tollGateExpenses,
     },
     {
       id: "entry_fees",
-      label: "Store Entry Fees",
+      label: "Entry Fees",
       amount: trip.expenseStates.entryFees === "not_applicable" ? 0 : entryVal,
       color: "#10b981",
       status: trip.expenseStates.entryFees,
     },
     {
       id: "driver",
-      label: "Driver Labor",
+      label: "Driver",
       amount: driverTotal ?? 0,
       color: "#0284c7",
       status: isDriverUnknown ? "unknown" : isDriverNA ? "not_applicable" : "confirmed",
     },
     {
       id: "helper",
-      label: "Helper Labor",
+      label: "Helper",
       amount: helperTotal ?? 0,
       color: "#0d9488",
       status: isHelperUnknown ? "unknown" : isHelperNA ? "not_applicable" : "confirmed",

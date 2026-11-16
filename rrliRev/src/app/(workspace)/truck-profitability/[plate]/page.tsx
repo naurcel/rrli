@@ -569,7 +569,7 @@ export default function TruckProfilePage({
                       ? `${formatPercent(activeTruck.marginPercent)} profit margin`
                       : activeTruck.netProfit < 0 && activeTruck.marginPercent !== null
                         ? `${formatPercent(activeTruck.marginPercent)} loss margin`
-                        : "Net margin after all vehicle expenses"}
+                        : "Net profit after all vehicle expenses"}
                   </span>
                 </article>
               </div>

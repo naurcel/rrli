@@ -474,9 +474,9 @@ function DeliveryDetailsPageContent({
         <section className="records-card delivery-section-card delivery-financial-analytics-card">
           <div className="section-card-header delivery-analytics-header">
             <div>
-              <h2 className="section-card-title">Financial Performance &amp; Analytics</h2>
+              <h2 className="section-card-title">Financial Breakdown</h2>
               <p className="section-card-subtitle">
-                Waybill profitability, revenue realization, and trip expense distribution
+                Trip revenue, expenses, and net profit
               </p>
             </div>
             <div className="delivery-analytics-badges">

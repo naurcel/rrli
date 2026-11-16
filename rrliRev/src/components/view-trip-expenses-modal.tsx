@@ -60,7 +60,7 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
     if (trip.expenses.dieselExpenses != null && trip.expenses.dieselExpenses > 0) {
       list.push({
         id: "diesel",
-        label: "Diesel Fuel",
+        label: "Diesel",
         amount: trip.expenses.dieselExpenses,
         color: "#f59e0b",
         status: "confirmed",
@@ -70,7 +70,7 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
     if (trip.expenses.tollGateExpenses != null && trip.expenses.tollGateExpenses > 0) {
       list.push({
         id: "toll",
-        label: "Highway Tolls",
+        label: "Toll Gates",
         amount: trip.expenses.tollGateExpenses,
         color: "#6366f1",
         status: "confirmed",
@@ -80,7 +80,7 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
     if (trip.expenses.entryFees != null && trip.expenses.entryFees > 0) {
       list.push({
         id: "entry",
-        label: "Store Entry Fees",
+        label: "Entry Fees",
         amount: trip.expenses.entryFees,
         color: "#10b981",
         status: "confirmed",
@@ -476,10 +476,10 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
                 <span>Amount</span>
               </div>
 
-              {/* Diesel Fuel */}
+              {/* Diesel */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Diesel Fuel</strong>
+                  <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Diesel</strong>
                   <span style={{ display: "block", fontSize: "10px", color: "var(--color-text-muted)" }}>
                     Transit fuel consumption
                   </span>
@@ -489,10 +489,10 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
                 </strong>
               </div>
 
-              {/* Highway Tolls */}
+              {/* Toll Gates */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Highway Tolls</strong>
+                  <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Toll Gates</strong>
                   <span style={{ display: "block", fontSize: "10px", color: "var(--color-text-muted)" }}>
                     {trip.expenses.tollGateBreakdown || "Expressway toll fees"}
                   </span>
@@ -502,10 +502,10 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
                 </strong>
               </div>
 
-              {/* Store Entry Fees */}
+              {/* Entry Fees */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Store Entry Fees</strong>
+                  <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Entry Fees</strong>
                   <span style={{ display: "block", fontSize: "10px", color: "var(--color-text-muted)" }}>
                     {trip.dropoffs.length} {trip.dropoffs.length === 1 ? "drop-off stop" : "drop-off stops"}
                   </span>

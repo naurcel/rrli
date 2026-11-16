@@ -581,7 +581,7 @@ export function EditDeliveryModal({
                 />
                 <DialogExpenseField
                   id="corr-toll"
-                  label="Highway tolls"
+                  label="Toll gates"
                   value={expenses.tollGateExpenses ?? ""}
                   status={statuses.tollGateExpenses ?? "confirmed"}
                   onValueChange={(val) => setExpenses((prev) => ({ ...prev, tollGateExpenses: val }))}

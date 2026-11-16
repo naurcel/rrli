@@ -1171,7 +1171,7 @@ export default function DashboardPage() {
                   ? `${formatPercent(totals.companyProfitMargin)} profit margin`
                   : totals.companyNetProfit < 0 && totals.companyProfitMargin !== null
                     ? `${formatPercent(totals.companyProfitMargin)} loss margin`
-                    : "Net income after all expenses"}
+                    : "Net profit after all expenses"}
               </span>
             </Link>
 

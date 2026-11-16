@@ -84,7 +84,7 @@ export function FinancialBreakdownModal({
     return [
       {
         id: "diesel",
-        label: "Diesel Fuel",
+        label: "Diesel",
         amount: kpiBreakdown.diesel,
         color: "#f59e0b",
         status: "confirmed",
@@ -92,7 +92,7 @@ export function FinancialBreakdownModal({
       },
       {
         id: "tolls",
-        label: "Highway Tolls",
+        label: "Toll Gates",
         amount: kpiBreakdown.toll,
         color: "#6366f1",
         status: "confirmed",
@@ -100,7 +100,7 @@ export function FinancialBreakdownModal({
       },
       {
         id: "entry_fees",
-        label: "Store Entry Fees",
+        label: "Entry Fees",
         amount: kpiBreakdown.entryFees,
         color: "#10b981",
         status: "confirmed",
@@ -108,7 +108,7 @@ export function FinancialBreakdownModal({
       },
       {
         id: "driver",
-        label: "Driver Crew",
+        label: "Driver",
         amount: kpiBreakdown.driverTotal,
         color: "#0284c7",
         status: "confirmed",
@@ -116,7 +116,7 @@ export function FinancialBreakdownModal({
       },
       {
         id: "helper",
-        label: "Helper Crew",
+        label: "Helper",
         amount: kpiBreakdown.helperTotal,
         color: "#0d9488",
         status: "confirmed",
@@ -1104,7 +1104,7 @@ export function FinancialBreakdownModal({
                   {/* Revenue Bar */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11.5px" }}>
-                      <span style={{ fontWeight: 650, color: "var(--color-text-secondary)" }}>Gross Revenue Baseline</span>
+                      <span style={{ fontWeight: 650, color: "var(--color-text-secondary)" }}>Revenue</span>
                       <strong style={{ color: "var(--color-text-primary)" }}>{formatPeso(summary.rateTotal)} (100%)</strong>
                     </div>
                     <div style={{ height: "10px", borderRadius: "5px", background: "var(--color-surface-subtle)", overflow: "hidden" }}>
@@ -1115,7 +1115,7 @@ export function FinancialBreakdownModal({
                   {/* Expenses Bar */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11.5px" }}>
-                      <span style={{ fontWeight: 650, color: "var(--color-text-secondary)" }}>Total Trip Expenses</span>
+                      <span style={{ fontWeight: 650, color: "var(--color-text-secondary)" }}>Expenses</span>
                       <strong style={{ color: "#d97706" }}>{formatPeso(summary.expenseTotal)} ({expenseRatio.toFixed(1)}%)</strong>
                     </div>
                     <div style={{ height: "10px", borderRadius: "5px", background: "var(--color-surface-subtle)", overflow: "hidden" }}>
@@ -1126,7 +1126,7 @@ export function FinancialBreakdownModal({
                   {/* Net Profit Bar */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11.5px" }}>
-                      <span style={{ fontWeight: 650, color: "var(--color-text-secondary)" }}>Retained Net Profit</span>
+                      <span style={{ fontWeight: 650, color: "var(--color-text-secondary)" }}>Net Profit</span>
                       <strong style={{ color: summary.netTotal >= 0 ? "#059669" : "#dc2626" }}>
                         {formatPeso(summary.netTotal)} ({profitRatio.toFixed(1)}%)
                       </strong>
@@ -1157,7 +1157,7 @@ export function FinancialBreakdownModal({
                     fontSize: "11.5px",
                   }}
                 >
-                  <span style={{ color: "var(--color-text-muted)" }}>Retained Profit per ₱100 Earned:</span>
+                  <span style={{ color: "var(--color-text-muted)" }}>Profit per ₱100 Revenue:</span>
                   <strong style={{ fontSize: "13px", color: summary.netTotal >= 0 ? "#059669" : "#dc2626" }}>
                     {kpiBreakdown.marginPercent != null ? `₱${kpiBreakdown.marginPercent.toFixed(2)}` : "—"}
                   </strong>
@@ -1189,7 +1189,7 @@ export function FinancialBreakdownModal({
                     >
                       {formatPeso(summary.netTotal)}
                     </strong>
-                    <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>After all disbursements</span>
+                    <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>After all expenses</span>
                   </div>
 
                   <div
@@ -1246,12 +1246,12 @@ export function FinancialBreakdownModal({
                   </strong>
 
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                    <span style={{ color: "var(--color-text-secondary)" }}>Total Client Billing (+)</span>
+                    <span style={{ color: "var(--color-text-secondary)" }}>Revenue (+)</span>
                     <strong style={{ color: "var(--color-text-primary)" }}>{formatPeso(summary.rateTotal)}</strong>
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                    <span style={{ color: "var(--color-text-secondary)" }}>Total Trip Disbursements (−)</span>
+                    <span style={{ color: "var(--color-text-secondary)" }}>Expenses (−)</span>
                     <strong style={{ color: "#d97706" }}>− {formatPeso(summary.expenseTotal)}</strong>
                   </div>
 
@@ -1265,7 +1265,7 @@ export function FinancialBreakdownModal({
                       marginTop: "2px",
                     }}
                   >
-                    <strong style={{ color: "var(--color-text-primary)" }}>Net Operating Income (=)</strong>
+                    <strong style={{ color: "var(--color-text-primary)" }}>Net Profit (=)</strong>
                     <strong style={{ color: summary.netTotal >= 0 ? "#059669" : "#dc2626" }}>
                       {formatPeso(summary.netTotal)}
                     </strong>

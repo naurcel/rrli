@@ -154,7 +154,7 @@ test("RouteX: Delivery Breakdown UI & Visualization Improvements", async (t) => 
 
     const resolution = resolveTripFinancialGroups(incompleteTrip);
     assert.equal(resolution.isFinanciallyComplete, false, "Must flag record as incomplete");
-    assert.deepEqual(resolution.unknownList, ["Highway Tolls"], "Must identify exact unconfirmed items");
+    assert.deepEqual(resolution.unknownList, ["Toll Gates"], "Must identify exact unconfirmed items");
     assert.equal(resolution.totalExpenses, null, "Total expenses must remain null to avoid misrepresentation");
     assert.equal(resolution.netIncome, null, "Net income must remain null");
     assert.equal(resolution.marginPercent, null, "Profit margin must remain null");

@@ -55,11 +55,6 @@ export function DeliveryTruckInfoSection({
               {truckOwnership}
             </span>
           </div>
-          <span
-            className={`truck-capability-pill ${storageCapability === "Refrigerated" ? "reefer" : "dry"}`}
-          >
-            {storageCapability === "Refrigerated" ? "Cold" : "Dry"}
-          </span>
         </div>
 
         <div className="delivery-truck-details-grid">

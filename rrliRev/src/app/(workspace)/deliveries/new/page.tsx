@@ -571,11 +571,11 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       return;
     }
     if (!values.dieselExpenses || Number(values.dieselExpenses) < 0) {
-      setSubmitError("Diesel fuel expense must have a valid value.");
+      setSubmitError("Diesel expense must have a valid value.");
       return;
     }
     if (!values.tollGateExpenses || Number(values.tollGateExpenses) < 0) {
-      setSubmitError("Highway tolls expense must have a valid value.");
+      setSubmitError("Toll gates expense must have a valid value.");
       return;
     }
     if (!values.otherExpenses || Number(values.otherExpenses) < 0) {
@@ -884,11 +884,11 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                   <div className="review-group-title">Trip Expenses</div>
                   <div className="detail-meta-grid detail-meta-grid-4">
                     <div className="detail-meta-item">
-                      <span className="meta-label">Diesel fuel</span>
+                      <span className="meta-label">Diesel</span>
                       <strong className="meta-value">{formatPeso(numberValue(values.dieselExpenses) ?? 0)}</strong>
                     </div>
                     <div className="detail-meta-item">
-                      <span className="meta-label">Highway tolls</span>
+                      <span className="meta-label">Toll gates</span>
                       <strong className="meta-value">{formatPeso(numberValue(values.tollGateExpenses) ?? 0)}</strong>
                     </div>
                     <div className="detail-meta-item">
@@ -934,7 +934,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
               <div className="delivery-financial-review" aria-label="Financial review">
                 <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
-                <div><span>Store Entry Fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
+                <div><span>Entry Fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
                 <div><span>Expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
                 <div className={financialReview.netIncome == null ? "" : financialReview.netIncome < 0 ? "negative" : "positive"}>
                   <span>Net Profit</span>
@@ -1293,7 +1293,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             <h3 className="delivery-finance-group-title wide">Trip Expenses</h3>
             <div className="direct-expense-field">
               <label>
-                <span className="field-label-text">Diesel fuel</span>
+                <span className="field-label-text">Diesel</span>
                 <span className="peso-input-wrap">
                   <span className="peso-prefix" aria-hidden="true">₱</span>
                   <input
@@ -1312,7 +1312,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
             <div className="direct-expense-field">
               <label>
-                <span className="field-label-text">Highway tolls</span>
+                <span className="field-label-text">Toll gates</span>
                 <span className="peso-input-wrap">
                   <span className="peso-prefix" aria-hidden="true">₱</span>
                   <input
@@ -1615,7 +1615,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
           <div className="delivery-financial-review" aria-label="Financial review">
             <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
-            <div><span>Store Entry Fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
+            <div><span>Entry Fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
             <div><span>Expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
             <div className={financialReview.netIncome == null ? "" : financialReview.netIncome < 0 ? "negative" : "positive"}><span>Net Profit</span><strong>{formatPeso(financialReview.netIncome)}</strong></div>
           </div>

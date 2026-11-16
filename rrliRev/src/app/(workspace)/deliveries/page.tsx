@@ -941,7 +941,7 @@ export default function DeliveriesPage() {
             </div>
             <strong>{formatPeso(summary.expenseTotal)}</strong>
             <span className="stat-meta">
-              Diesel, highway tolls, entry fees & crew compensation
+              Diesel, toll gates, entry fees & crew compensation
             </span>
           </button>
           <button
@@ -1558,7 +1558,7 @@ export default function DeliveriesPage() {
                     />
                     <DialogExpenseField
                       id="corr-toll"
-                      label="Highway tolls"
+                      label="Toll gates"
                       value={correctionExpenses.tollGateExpenses ?? ""}
                       status={correctionStatuses.tollGateExpenses ?? "confirmed"}
                       onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, tollGateExpenses: val }))}
