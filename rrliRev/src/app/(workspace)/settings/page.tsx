@@ -95,6 +95,27 @@ export default function SettingsPage() {
   const [securitySubmitting, setSecuritySubmitting] = useState(false);
 
   // Design Preferences state & Dark mode sync
+  type SettingsTab = "account" | "appearance" | "security" | "permissions";
+  const [activeTab, setActiveTab] = useState<SettingsTab>("account");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "").toLowerCase();
+      if (hash === "appearance" || hash === "design") setActiveTab("appearance");
+      else if (hash === "security") setActiveTab("security");
+      else if (hash === "permissions") setActiveTab("permissions");
+      else if (hash === "account") setActiveTab("account");
+    }
+  }, []);
+
+  function handleSelectTab(tab: SettingsTab) {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", '#' + tab);
+    }
+  }
+
+  // Design Preferences state & Dark mode sync
   const [preferences, setPreferences] = useState<DesignPreferences>(() =>
     loadDesignPreferences(actor.id)
   );
@@ -520,7 +541,62 @@ export default function SettingsPage() {
       <OperationalTopbar contextLabel="Settings" showDateFilter={false} />
 
       <div className="content-wrap settings-page-wrap">
-        {/* Profile Centerpiece (Google Account Mobile Inspired - Borderless with Animated Glowing Avatar) */}
+        <div className="settings-layout-grid">
+          {/* Left Navigation: Clean text tabs */}
+          <aside className="settings-tabs-sidebar" aria-label="Settings categories">
+            <nav className="settings-tabs-list" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                id="tab-account"
+                aria-selected={activeTab === "account"}
+                aria-controls="panel-account"
+                className={`settings-tab-btn${activeTab === "account" ? " active" : ""}`}
+                onClick={() => handleSelectTab("account")}
+              >
+                Account
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-appearance"
+                aria-selected={activeTab === "appearance"}
+                aria-controls="panel-appearance"
+                className={`settings-tab-btn${activeTab === "appearance" ? " active" : ""}`}
+                onClick={() => handleSelectTab("appearance")}
+              >
+                Appearance
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-security"
+                aria-selected={activeTab === "security"}
+                aria-controls="panel-security"
+                className={`settings-tab-btn${activeTab === "security" ? " active" : ""}`}
+                onClick={() => handleSelectTab("security")}
+              >
+                Security
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-permissions"
+                aria-selected={activeTab === "permissions"}
+                aria-controls="panel-permissions"
+                className={`settings-tab-btn${activeTab === "permissions" ? " active" : ""}`}
+                onClick={() => handleSelectTab("permissions")}
+              >
+                Permissions
+              </button>
+            </nav>
+          </aside>
+
+          {/* Right Main Content Column */}
+          <div className="settings-tab-content-area">
+            {activeTab === "account" && (
+              <div id="panel-account" role="tabpanel" aria-labelledby="tab-account" className="settings-tab-panel">
+                {/* Profile Centerpiece (Google Account Mobile Inspired - Borderless with Animated Glowing Avatar) */}
         <section className="settings-profile-centerpiece" aria-label="User Profile">
           {/* Centered Avatar with Animated Gradient Glow */}
           <div className="settings-hero-avatar-container">
@@ -604,122 +680,7 @@ export default function SettingsPage() {
             </p>
           )}
         </section>
-
-        {/* Vertically Organized Settings Stack Under Profile */}
-        <div className="settings-sections-container">
-          {/* Section 0: Appearance & Design Preferences */}
-          <section className="records-card settings-card-section" aria-label="Appearance and Design Preferences">
-            <div className="settings-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
-              <div>
-                <h2>Appearance &amp; Design Preferences</h2>
-                <p>Customize typography scaling, layout density, animations, and color mode.</p>
-              </div>
-              <button
-                type="button"
-                className="profile-prefs-reset-btn"
-                onClick={handleResetPreferences}
-                title="Reset design preferences to system defaults"
-              >
-                Reset to Defaults
-              </button>
-            </div>
-
-            <div className="settings-form-body">
-              <div className="settings-field-row-2col">
-                {/* Font Size */}
-                <div className="settings-form-field">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <label style={{ margin: 0 }}>Font Size</label>
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)" }}>
-                      {preferences.fontSize === "small" ? "Small (Scale ~0.92x)" : preferences.fontSize === "large" ? "Large (Scale ~1.08x)" : "Default"}
-                    </span>
-                  </div>
-                  <div className="profile-segmented-control" role="radiogroup" aria-label="Font Size options">
-                    {(["small", "default", "large"] as const).map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        role="radio"
-                        aria-checked={preferences.fontSize === opt}
-                        className={`profile-segmented-btn${preferences.fontSize === opt ? " active" : ""}`}
-                        onClick={() => handleUpdatePreferences({ fontSize: opt })}
-                      >
-                        {opt === "small" ? "Small" : opt === "large" ? "Large" : "Default"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Compactness */}
-                <div className="settings-form-field">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <label style={{ margin: 0 }}>Compactness</label>
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)" }}>
-                      {preferences.compactness === "compact" ? "Compact (Dense tables & cards)" : "Comfortable"}
-                    </span>
-                  </div>
-                  <div className="profile-segmented-control" role="radiogroup" aria-label="Compactness options">
-                    {(["comfortable", "compact"] as const).map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        role="radio"
-                        aria-checked={preferences.compactness === opt}
-                        className={`profile-segmented-btn${preferences.compactness === opt ? " active" : ""}`}
-                        onClick={() => handleUpdatePreferences({ compactness: opt })}
-                      >
-                        {opt === "comfortable" ? "Comfortable" : "Compact"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-field-row-2col" style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--color-border-subtle)" }}>
-                {/* Theme Toggle */}
-                <div className="settings-form-field" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <label style={{ margin: 0, display: "block" }}>Dark Mode</label>
-                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
-                      {isDark ? "Dark theme active" : "Light theme active"}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isDark}
-                    aria-label="Toggle dark mode"
-                    className={`profile-theme-switch${isDark ? " active" : ""}`}
-                    onClick={handleToggleTheme}
-                  >
-                    <span className="profile-theme-knob" />
-                  </button>
-                </div>
-
-                {/* Reduce Motion */}
-                <div className="settings-form-field" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <label style={{ margin: 0, display: "block" }}>Reduce Motion</label>
-                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
-                      Minimize non-essential UI animations
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={preferences.reduceMotion}
-                    aria-label={preferences.reduceMotion ? "Disable reduced motion" : "Enable reduced motion"}
-                    className={`profile-theme-switch${preferences.reduceMotion ? " active" : ""}`}
-                    onClick={() => handleUpdatePreferences({ reduceMotion: !preferences.reduceMotion })}
-                  >
-                    <span className="profile-theme-knob" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Section 1: Account Details (Change Username) */}
+                {/* Section 1: Account Details (Change Username) */}
           <section className="records-card settings-card-section" aria-label="Account Details">
             <div className="settings-section-header">
               <h2>Account Details</h2>
@@ -784,8 +745,7 @@ export default function SettingsPage() {
               </div>
             </form>
           </section>
-
-          {/* Section 1b: Contact Information (Email & Phone Number) */}
+                {/* Section 1b: Contact Information (Email & Phone Number) */}
           <section className="records-card settings-card-section" aria-label="Contact Information">
             <div className="settings-section-header">
               <h2>Contact Information</h2>
@@ -850,8 +810,145 @@ export default function SettingsPage() {
               </div>
             </form>
           </section>
+              </div>
+            )}
 
-          {/* Section 2: Sign-in & Security (Change Password) */}
+            {activeTab === "appearance" && (
+              <div id="panel-appearance" role="tabpanel" aria-labelledby="tab-appearance" className="settings-tab-panel">
+                          <section className="records-card settings-card-section appearance-card" aria-label="Appearance and Design Preferences">
+            <div className="settings-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+              <div>
+                <h2>Appearance &amp; Design</h2>
+                <p>Customize typography scaling, visual density, animations, and color mode across RouteX.</p>
+              </div>
+              <button
+                type="button"
+                className="profile-prefs-reset-btn"
+                onClick={handleResetPreferences}
+                title="Reset design preferences to system defaults"
+              >
+                Reset to Defaults
+              </button>
+            </div>
+
+            <div className="settings-form-body appearance-form-body">
+              {/* Theme Mode Option */}
+              <div className="appearance-section-item">
+                <div className="appearance-item-header">
+                  <div>
+                    <h3 className="appearance-item-title">Color Theme</h3>
+                    <p className="appearance-item-subtext">Toggle between daylight contrast and low-glare obsidian dark mode.</p>
+                  </div>
+                  <span className="appearance-status-tag">{isDark ? "Dark Theme Active" : "Light Theme Active"}</span>
+                </div>
+                <div className="appearance-toggle-box">
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)" }}>Dark Mode</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isDark}
+                    aria-label="Toggle dark mode"
+                    className={`profile-theme-switch${isDark ? " active" : ""}`}
+                    onClick={handleToggleTheme}
+                  >
+                    <span className="profile-theme-knob" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Font Size Scaling */}
+              <div className="appearance-section-item">
+                <div className="appearance-item-header">
+                  <div>
+                    <h3 className="appearance-item-title">Font Size Scaling</h3>
+                    <p className="appearance-item-subtext">
+                      Scales typography proportionally across tables, form inputs, buttons, navigation, and summary cards.
+                    </p>
+                  </div>
+                  <span className="appearance-status-tag">
+                    {preferences.fontSize === "small"
+                      ? "Small (~0.88x Dense)"
+                      : preferences.fontSize === "large"
+                      ? "Large (~1.14x Expanded)"
+                      : "Default (1.0x Baseline)"}
+                  </span>
+                </div>
+                <div className="profile-segmented-control" role="radiogroup" aria-label="Font Size options" style={{ maxWidth: "420px" }}>
+                  {(["small", "default", "large"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      role="radio"
+                      aria-checked={preferences.fontSize === opt}
+                      className={`profile-segmented-btn${preferences.fontSize === opt ? " active" : ""}`}
+                      onClick={() => handleUpdatePreferences({ fontSize: opt })}
+                    >
+                      {opt === "small" ? "Small (Compact)" : opt === "large" ? "Large (Accessible)" : "Default"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Layout Compactness */}
+              <div className="appearance-section-item">
+                <div className="appearance-item-header">
+                  <div>
+                    <h3 className="appearance-item-title">Layout Density &amp; Compactness</h3>
+                    <p className="appearance-item-subtext">
+                      Adjusts whitespace, table row heights, form padding, and grid gaps to maximize visible data on screen.
+                    </p>
+                  </div>
+                  <span className="appearance-status-tag">
+                    {preferences.compactness === "compact"
+                      ? "Compact (Dense tables & cards)"
+                      : "Comfortable (Standard spacing)"}
+                  </span>
+                </div>
+                <div className="profile-segmented-control" role="radiogroup" aria-label="Compactness options" style={{ maxWidth: "340px" }}>
+                  {(["comfortable", "compact"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      role="radio"
+                      aria-checked={preferences.compactness === opt}
+                      className={`profile-segmented-btn${preferences.compactness === opt ? " active" : ""}`}
+                      onClick={() => handleUpdatePreferences({ compactness: opt })}
+                    >
+                      {opt === "comfortable" ? "Comfortable (Spacious)" : "Compact (Dense)"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reduce Motion */}
+              <div className="appearance-section-item">
+                <div className="appearance-item-header">
+                  <div>
+                    <h3 className="appearance-item-title">Reduce Motion</h3>
+                    <p className="appearance-item-subtext">
+                      Disables non-essential view transitions, drawer slides, dropdown animations, and animated spinners.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={preferences.reduceMotion}
+                    aria-label={preferences.reduceMotion ? "Disable reduced motion" : "Enable reduced motion"}
+                    className={`profile-theme-switch${preferences.reduceMotion ? " active" : ""}`}
+                    onClick={() => handleUpdatePreferences({ reduceMotion: !preferences.reduceMotion })}
+                  >
+                    <span className="profile-theme-knob" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+              </div>
+            )}
+
+            {activeTab === "security" && (
+              <div id="panel-security" role="tabpanel" aria-labelledby="tab-security" className="settings-tab-panel">
+                {/* Section 2: Sign-in & Security (Change Password) */}
           <section className="records-card settings-card-section" aria-label="Sign-in & Security">
             <div className="settings-section-header">
               <h2>Sign-in &amp; Security</h2>
@@ -922,8 +1019,7 @@ export default function SettingsPage() {
               </div>
             </form>
           </section>
-
-          {/* Section 3: Recovery & Verification (Security Question) */}
+                {/* Section 3: Recovery & Verification (Security Question) */}
           <section className="records-card settings-card-section" aria-label="Recovery & Verification">
             <div className="settings-section-header">
               <h2>Recovery &amp; Verification</h2>
@@ -1025,8 +1121,7 @@ export default function SettingsPage() {
               </div>
             </form>
           </section>
-
-          {/* Section 4: Account Security Status */}
+                {/* Section 4: Account Security Status */}
           <section className="records-card settings-card-section" aria-label="Account Security Status">
             <div className="settings-section-header">
               <h2>Account Security Status</h2>
@@ -1062,31 +1157,39 @@ export default function SettingsPage() {
               </ul>
             </div>
           </section>
+              </div>
+            )}
 
-          {/* Section 5: Role Permissions Reference */}
+            {activeTab === "permissions" && (
+              <div id="panel-permissions" role="tabpanel" aria-labelledby="tab-permissions" className="settings-tab-panel">
+                {/* Section 5: Role Permissions Reference */}
           <section className="records-card settings-card-section" aria-label="Role Permissions">
             <div className="settings-section-header">
               <h2>Role Permissions</h2>
-              <p>System privileges and operational authority across RouteX roles.</p>
+              <p>System privileges and operational access across roles.</p>
             </div>
 
             <div
               className="settings-role-current-summary"
               style={{
-                margin: "14px 0 18px",
-                padding: "12px 16px",
-                borderRadius: "10px",
+                margin: "12px 0 16px",
+                padding: "10px 14px",
+                borderRadius: "8px",
                 background: "var(--color-surface-subtle, rgba(241, 245, 249, 0.6))",
                 border: "1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.2))",
                 fontSize: "13px",
-                lineHeight: 1.5,
-                color: "var(--color-text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "8px 12px",
               }}
             >
-              <strong style={{ color: "var(--color-text-primary)" }}>
-                Active Session Role ({ROLE_METADATA[actor.role].label}):
-              </strong>{" "}
-              {ROLE_METADATA[actor.role].summary}
+              <span className={`access-pill ${ROLE_METADATA[actor.role].accessLevel}`} style={{ margin: 0 }}>
+                {ROLE_METADATA[actor.role].label}
+              </span>
+              <span style={{ color: "var(--color-text-secondary)" }}>
+                {ROLE_CONCISE_SUMMARY[actor.role]}
+              </span>
             </div>
 
             <div className="table-wrap">
@@ -1094,14 +1197,14 @@ export default function SettingsPage() {
                 <thead>
                   <tr>
                     <th>Role</th>
-                    <th>Access Level</th>
-                    <th>Finance &amp; Expenses</th>
-                    <th>Deliveries &amp; Drop-offs</th>
-                    <th>Excel Import &amp; Review</th>
-                    <th>Fleet &amp; Profitability</th>
-                    <th>POD &amp; Documents</th>
-                    <th>Reports &amp; Analytics</th>
-                    <th>User Management</th>
+                    <th>Level</th>
+                    <th>Deliveries</th>
+                    <th>Finance</th>
+                    <th>Import</th>
+                    <th>Fleet</th>
+                    <th>POD</th>
+                    <th>Reports</th>
+                    <th>Users</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1112,15 +1215,15 @@ export default function SettingsPage() {
                       <tr key={roleKey} className={isCurrentRole ? "settings-current-role-row" : undefined}>
                         <td>
                           <strong>{meta.label}</strong>
-                          {isCurrentRole ? <span className="settings-current-role-tag">(Your Role)</span> : null}
+                          {isCurrentRole ? <span className="settings-current-role-tag">(You)</span> : null}
                         </td>
                         <td>
                           <span className={`access-pill ${meta.accessLevel}`}>
                             {meta.accessLevelLabel}
                           </span>
                         </td>
-                        <td>{renderFinanceCell(roleKey)}</td>
                         <td>{renderDeliveriesCell(roleKey)}</td>
+                        <td>{renderFinanceCell(roleKey)}</td>
                         <td>{renderImportCell(roleKey)}</td>
                         <td>{renderTrucksCell(roleKey)}</td>
                         <td>{renderPodCell(roleKey)}</td>
@@ -1133,66 +1236,78 @@ export default function SettingsPage() {
               </table>
             </div>
           </section>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
   );
 }
 
-function renderFinanceCell(role: UserRole) {
-  if (role === "admin") {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Control (Create, Edit &amp; Delete)</strong>;
-  }
-  if (canManageCompanyExpenses(role)) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Create, Edit &amp; Manage (Finance Page)</strong>;
-  }
-  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
-}
+const ROLE_CONCISE_SUMMARY: Record<UserRole, string> = {
+  admin: "Full administrative control and unrestricted data access.",
+  operations: "Create & edit deliveries, manage fleet trucks, and import trip reports.",
+  finance: "Record & manage company operating expenses and view financial reports.",
+  hr: "View-only access across workspace ledgers and reports.",
+  secretary: "View-only access across workspace ledgers and reports.",
+  customer_representative: "View-only access across workspace ledgers and reports.",
+};
 
 function renderDeliveriesCell(role: UserRole) {
   if (role === "admin") {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Control (No Date Limit)</strong>;
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full</strong>;
   }
   if (canMutateDeliveryRecords(role)) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Create, Edit &amp; View (2-Day Window)</strong>;
+    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Manage</strong>;
   }
-  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
+  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
+}
+
+function renderFinanceCell(role: UserRole) {
+  if (role === "admin") {
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full</strong>;
+  }
+  if (canManageCompanyExpenses(role)) {
+    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Manage</strong>;
+  }
+  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
 }
 
 function renderImportCell(role: UserRole) {
   if (canImportAndReviewExcel(role)) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Upload, Review &amp; Confirm</strong>;
+    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Upload</strong>;
   }
-  return <span style={{ color: "var(--color-text-muted)" }}>No Access</span>;
+  return <span style={{ color: "var(--color-text-muted)" }}>—</span>;
 }
 
 function renderTrucksCell(role: UserRole) {
   if (role === "admin") {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Control (Trucks, Crew &amp; Delete)</strong>;
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full</strong>;
   }
   if (canManageTrucks(role)) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Register Trucks &amp; Crew</strong>;
+    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Manage</strong>;
   }
-  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
+  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
 }
 
 function renderPodCell(role: UserRole) {
   if (canManageDocuments(role)) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Upload &amp; Manage</strong>;
+    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Upload</strong>;
   }
-  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
+  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
 }
 
 function renderReportsCell(role: UserRole) {
   if (hasPermission(role, "reports:export")) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>View &amp; Export (CSV)</strong>;
+    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Export</strong>;
   }
-  return <span style={{ color: "var(--color-text-muted)" }}>View-Only</span>;
+  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
 }
 
 function renderUsersCell(role: UserRole) {
   if (canManageUsers(role)) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full Admin Control</strong>;
+    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full</strong>;
   }
-  return <span style={{ color: "var(--color-text-muted)" }}>Restricted</span>;
+  return <span style={{ color: "var(--color-text-muted)" }}>—</span>;
 }

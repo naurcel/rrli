@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useMemo, useState, type FormEvent } from "react";
+import { use, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
   formatDateRange,
   GlobalDateRangePicker,
+  parseDateValue,
+  toDateKey,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
@@ -27,6 +29,7 @@ import {
   isDeliveryIncomplete,
   summarizeTruckProfitability,
 } from "@/features/deliveries/delivery-domain";
+import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
   getFleetTrucks,
   getTruckStorageCapability,
@@ -58,9 +61,38 @@ export default function TruckProfilePage({
     // Keep malformed segments unchanged so they resolve to the unavailable state.
   }
   const normalizedPlate = decodedPlate.replace(/\+/g, " ").trim().replace(/\s+/g, " ").toUpperCase();
-  const { range } = useGlobalDateRange();
+  const { range, setRange } = useGlobalDateRange();
   const { deliveries, loading, error } = usePersistedDeliveries(range);
   const [historySort, setHistorySort] = useState<{ key: string; direction: TableSortDirection }>({ key: "date", direction: "desc" });
+  const isInitialParamsParsed = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isInitialParamsParsed.current) return;
+    isInitialParamsParsed.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const sortParam = params.get("sort");
+    if (sortParam) {
+      const [key, direction] = sortParam.split(":");
+      if (key) {
+        setHistorySort({
+          key,
+          direction: direction === "asc" ? "asc" : "desc",
+        });
+      }
+    }
+    const pageParam = params.get("truckPage") || params.get("page");
+    if (pageParam && Number(pageParam) > 1) {
+      setHistoryPage(Number(pageParam));
+    }
+    const dateFromParam = params.get("dateFrom");
+    const dateToParam = params.get("dateTo");
+    if (dateFromParam || dateToParam) {
+      setRange({
+        startDate: dateFromParam ? parseDateValue(dateFromParam) : null,
+        endDate: dateToParam ? parseDateValue(dateToParam) : null,
+      });
+    }
+  }, [setRange]);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -223,9 +255,25 @@ export default function TruckProfilePage({
   const HISTORY_PAGE_SIZE = 10;
   const historyPageCount = Math.max(1, Math.ceil(sortedTruckTrips.length / HISTORY_PAGE_SIZE));
 
+  const isMountedRef = useRef(false);
   useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
     setHistoryPage(1);
   }, [range, historySort, normalizedPlate]);
+
+  function navigateToDelivery(trip: DeliveryLedgerItem) {
+    const params = new URLSearchParams();
+    params.set("from", "truck");
+    params.set("truck", normalizedPlate);
+    params.set("sort", `${historySort.key}:${historySort.direction}`);
+    if (historyPage > 1) params.set("truckPage", String(historyPage));
+    if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+    router.push(`/deliveries/${encodeURIComponent(trip.id)}?${params.toString()}`);
+  }
 
   const paginatedTruckTrips = useMemo(() => {
     const start = (historyPage - 1) * HISTORY_PAGE_SIZE;
@@ -618,11 +666,11 @@ export default function TruckProfilePage({
                             className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
                             style={{ position: "relative", zIndex: openRowActionTripId === trip.id ? 150 : undefined }}
                             tabIndex={0}
-                            onClick={() => router.push(`/deliveries/${encodeURIComponent(trip.id)}`)}
+                            onClick={() => navigateToDelivery(trip)}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
-                                router.push(`/deliveries/${encodeURIComponent(trip.id)}`);
+                                navigateToDelivery(trip);
                               }
                             }}
                             title={`View waybill ${trip.waybillNumber}`}
@@ -698,7 +746,7 @@ export default function TruckProfilePage({
                                       role="menuitem"
                                       onClick={() => {
                                         setOpenRowActionTripId(null);
-                                        router.push(`/deliveries/${encodeURIComponent(trip.id)}`);
+                                        navigateToDelivery(trip);
                                       }}
                                     >
                                       View Details

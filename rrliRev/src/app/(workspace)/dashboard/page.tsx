@@ -1070,9 +1070,6 @@ export default function DashboardPage() {
         <header className="page-intro dashboard-welcome">
           <div>
             <h1 suppressHydrationWarning>{greeting}, {actor.fullName ? actor.fullName.split(" ")[0] : (actor.username ?? "there")}</h1>
-            <p className="subtitle">
-              Overview of delivery operations and profitability.
-            </p>
           </div>
           {canWrite ? (
             <div className="fleet-intro-actions">
@@ -1093,7 +1090,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <span className="settings-readonly-pill">
-              View-Only Mode ({actor.roleLabel})
+              View-Only ({actor.roleLabel})
             </span>
           )}
         </header>
@@ -1106,7 +1103,7 @@ export default function DashboardPage() {
         ) : loading ? (
           <section className="notice loading-notice" role="status">
             <span className="notice-icon loading-spin" aria-hidden="true">◌</span>
-            <div><strong>Loading completed deliveries:</strong><span>Refreshing the selected reporting range.</span></div>
+            <div><strong>Loading deliveries…</strong></div>
           </section>
         ) : null}
 
@@ -1116,10 +1113,7 @@ export default function DashboardPage() {
               i
             </span>
             <div>
-              <strong>View-Only Access ({actor.roleLabel}):</strong>
-              <span>
-                Read-only access to deliveries, drop-offs, PODs, trucks, and reports.
-              </span>
+              <strong>View-Only ({actor.roleLabel})</strong>
             </div>
             <button
               type="button"
@@ -1155,8 +1149,8 @@ export default function DashboardPage() {
                 className={`stat-meta ${totals.finalizedCount > 0 ? "positive" : ""}`}
               >
                 {totals.finalizedCount > 0
-                  ? `${totals.finalizedCount} completed ${totals.finalizedCount === 1 ? "trip" : "trips"} · ${totals.totalStops} drop-offs`
-                  : "0 trips recorded in selected range"}
+                  ? `${totals.finalizedCount} trips · ${totals.totalStops} stops`
+                  : "0 trips in range"}
               </span>
             </Link>
 
@@ -1171,8 +1165,8 @@ export default function DashboardPage() {
                 {totals.companyExpenses > 0
                   ? `${formatPeso(totals.deliveryExpenses)} delivery · ${formatPeso(totals.companyExpenses)} company`
                   : totals.deliveryExpenses > 0
-                    ? `${formatPeso(totals.deliveryExpenses)} delivery expenses`
-                    : "No expenses in this range"}
+                    ? `${formatPeso(totals.deliveryExpenses)} delivery`
+                    : "—"}
               </span>
             </Link>
 
@@ -1191,10 +1185,10 @@ export default function DashboardPage() {
                 }`}
               >
                 {totals.earnings > 0 && totals.companyProfitMargin !== null
-                  ? `${formatPercent(totals.companyProfitMargin)} profit margin`
+                  ? `${formatPercent(totals.companyProfitMargin)} margin`
                   : totals.companyNetProfit < 0 && totals.companyProfitMargin !== null
-                    ? `${formatPercent(totals.companyProfitMargin)} loss margin`
-                    : "Net profit after all expenses"}
+                    ? `${formatPercent(totals.companyProfitMargin)} loss`
+                    : "—"}
               </span>
             </Link>
 
@@ -1246,7 +1240,6 @@ export default function DashboardPage() {
             <div className="records-heading">
               <div>
                 <h2>Recent Deliveries</h2>
-                <p>Latest delivery trips.</p>
               </div>
               <Link className="secondary-button" href="/deliveries">
                 View all
@@ -1327,8 +1320,19 @@ export default function DashboardPage() {
                             <span
                               className="profit-amount warning"
                               title="Pending expenses"
+                              style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
                             >
-                              Incomplete
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  width: "6px",
+                                  height: "6px",
+                                  borderRadius: "50%",
+                                  background: "var(--color-warning, #f59e0b)",
+                                  flexShrink: 0,
+                                }}
+                              />
+                              Pending
                             </span>
                           ) : (
                             formatPeso(trip.netIncome)
@@ -1347,9 +1351,6 @@ export default function DashboardPage() {
               <div className="records-heading">
                 <div>
                   <h2>Top Trucks</h2>
-                  <p>
-                    Sorted by {truckRankingLabels[truckRankingMetric].toLowerCase()}
-                  </p>
                 </div>
               </div>
               <div className="metric-tabs truck-ranking-tabs" role="group" aria-label="Rank trucks by">
@@ -1394,19 +1395,22 @@ export default function DashboardPage() {
                 ))}
               </ol>
               <Link className="dashboard-card-link" href="/truck-profitability">
-                Open trucks →
+                View all →
               </Link>
             </section>
 
             <section className="records-card dashboard-attention-card" aria-label="Attention needed">
               <div className="records-heading">
-                <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <h2>Attention Needed</h2>
-                  <p>
-                    {deliveriesWithMissingDetails.length > 0
-                      ? `${deliveriesWithMissingDetails.length} ${deliveriesWithMissingDetails.length === 1 ? "delivery needs" : "deliveries need"} attention.`
-                      : "No pending items."}
-                  </p>
+                  {deliveriesWithMissingDetails.length > 0 && (
+                    <span
+                      className="tab-count-badge warning"
+                      style={{ margin: 0, fontWeight: 700 }}
+                    >
+                      {deliveriesWithMissingDetails.length}
+                    </span>
+                  )}
                 </div>
                 {deliveriesWithMissingDetails.length > 0 && (
                   <button

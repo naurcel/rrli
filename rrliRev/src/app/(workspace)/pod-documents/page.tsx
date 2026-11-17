@@ -283,17 +283,14 @@ export default function PodDocumentsPage() {
         <header className="page-intro">
           <div>
             <h1>POD Documents</h1>
-            <p className="subtitle">
-              Proof of delivery files by store drop-off.
-            </p>
           </div>
           {canManage ? (
             <span className="access-pill operations">
-              Document Management ({actor.roleLabel})
+              Manage ({actor.roleLabel})
             </span>
           ) : (
             <span className="settings-readonly-pill">
-              View-Only Mode ({actor.roleLabel})
+              View-Only ({actor.roleLabel})
             </span>
           )}
         </header>
@@ -324,20 +321,20 @@ export default function PodDocumentsPage() {
           <article className="stat-card">
             <span className="stat-label">STORE DROP-OFFS</span>
             <strong>{counts.total}</strong>
-            <span className="stat-meta">Across {deliveries.length} completed deliveries</span>
+            <span className="stat-meta">{deliveries.length} completed trips</span>
           </article>
           <article className="stat-card">
             <span className="stat-label">POD ATTACHED</span>
             <strong>{counts.attached}</strong>
-            <span className="stat-meta positive">Document stored &amp; accessible</span>
+            <span className="stat-meta positive">Verified files</span>
           </article>
           <article className="stat-card">
             <span className="stat-label">MISSING POD</span>
             <strong>{counts.missing}</strong>
             <span className={`stat-meta ${counts.missing > 0 ? "warning" : "positive"}`}>
               {counts.missing > 0
-                ? "Awaiting document upload"
-                : "All drop-offs have documents attached"}
+                ? "Upload pending"
+                : "Complete"}
             </span>
           </article>
         </section>
@@ -418,9 +415,7 @@ export default function PodDocumentsPage() {
                       <td>{item.clientName}</td>
                       <td className="truck-code">{item.plateNumber}</td>
                       <td>
-                        <strong>
-                          Store Drop-off #{item.stop.sequence}: {item.stop.storeName}
-                        </strong>
+                        <strong>#{item.stop.sequence} · {item.stop.storeName}</strong>
                         <br />
                         <small>{item.stop.destinationArea}</small>
                       </td>
@@ -429,17 +424,14 @@ export default function PodDocumentsPage() {
                           className={`pod-status ${
                             item.hasPod ? "attached" : "missing"
                           }`}
-                          title={
-                            item.hasPod
-                              ? "POD Attached: Proof of delivery document attached for this store drop-off"
-                              : "Missing POD: Proof of delivery document has not been uploaded yet"
-                          }
+                          title={item.hasPod ? "POD attached" : "Missing POD"}
                         >
+                          <i aria-hidden="true" />
                           {item.hasPod ? "Attached" : "Missing"}
                         </span>
                       </td>
-                      <td title={item.stop.documentRef ? `Document file reference: ${item.stop.documentRef}` : "Document pending upload"}>
-                        {item.stop.documentRef || "Pending upload"}
+                      <td title={item.stop.documentRef ? `Document: ${item.stop.documentRef}` : "Pending upload"}>
+                        {item.stop.documentRef || <span className="text-muted" title="Pending upload">—</span>}
                       </td>
                     </tr>
                   )))}

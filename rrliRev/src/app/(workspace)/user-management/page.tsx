@@ -747,9 +747,6 @@ export default function UserManagementPage() {
         <header className="page-intro">
           <div>
             <h1>User Management</h1>
-            <p className="subtitle">
-              Manage staff accounts and permissions.
-            </p>
           </div>
         </header>
 
@@ -847,7 +844,7 @@ export default function UserManagementPage() {
                           required
                         />
                         <span className="user-form-hint">
-                          3-30 letters, numbers, hyphens, dots, underscores (case-insensitive)
+                          3-30 chars (a-z, 0-9, -, _, .)
                         </span>
                       </div>
 
@@ -1013,20 +1010,20 @@ export default function UserManagementPage() {
                         onSort={(key, direction) => setUserSort({ key, direction })}
                       />
                       <SortableTableHeader
-                        label="Assigned Role"
+                        label="Role"
                         sortKey="role"
                         activeSortKey={userSort.key}
                         direction={userSort.direction}
                         onSort={(key, direction) => setUserSort({ key, direction })}
                       />
                       <SortableTableHeader
-                        label="Access Level"
+                        label="Access"
                         sortKey="access"
                         activeSortKey={userSort.key}
                         direction={userSort.direction}
                         onSort={(key, direction) => setUserSort({ key, direction })}
                       />
-                      <th>Setup &amp; Recovery Status</th>
+                      <th>Setup</th>
                       <SortableTableHeader
                         label="Status"
                         sortKey="status"
@@ -1112,7 +1109,7 @@ export default function UserManagementPage() {
                                 }}
                                 title={`Reset authorized until ${new Date(user.recoveryExpiresAt!).toLocaleTimeString()}`}
                               >
-                                Reset Authorized (24h)
+                                Reset active
                               </span>
                             ) : user.mustChangePassword ? (
                               <span
@@ -1122,7 +1119,7 @@ export default function UserManagementPage() {
                                   fontWeight: 500,
                                 }}
                               >
-                                Initial Setup Pending
+                                Pending
                               </span>
                             ) : (
                               <span
@@ -1132,7 +1129,7 @@ export default function UserManagementPage() {
                                   fontWeight: 500,
                                 }}
                               >
-                                Setup Complete
+                                Ready
                               </span>
                             )}
                           </td>
@@ -1142,9 +1139,22 @@ export default function UserManagementPage() {
                                 fontSize: "12px",
                                 color: user.isActive ? "#059669" : "var(--color-text-muted)",
                                 fontWeight: 500,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
                               }}
                             >
-                              {user.isActive ? "Active" : "Deactivated"}
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  width: "6px",
+                                  height: "6px",
+                                  borderRadius: "50%",
+                                  background: user.isActive ? "#10b981" : "var(--color-text-muted)",
+                                  flexShrink: 0,
+                                }}
+                              />
+                              {user.isActive ? "Active" : "Inactive"}
                             </span>
                           </td>
                           <td style={{ textAlign: "right" }}>

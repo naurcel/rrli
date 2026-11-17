@@ -1225,9 +1225,6 @@ export default function TruckProfitabilityPage() {
         <header className="page-intro">
           <div>
             <h1>Trucks</h1>
-            <p className="subtitle">
-              Fleet performance and crew registry.
-            </p>
           </div>
           {canAdd && (
             <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -1304,7 +1301,7 @@ export default function TruckProfitabilityPage() {
               </div>
               <div className="records-heading-meta">
                 <span className="ledger-total-badge">
-                  {filteredOwnedTrucks.length} of {allOwnedTrucks.length} trucks · {refrigeratedCount} Cold · {dryCount} Dry
+                  {filteredOwnedTrucks.length} trucks · {refrigeratedCount} Cold · {dryCount} Dry
                 </span>
                 <div className="chart-view-mode-toggle" role="group" aria-label="Owned trucks display view">
                   <button
