@@ -471,7 +471,6 @@ export default function FinancePage() {
         <header className="page-intro">
           <div>
             <h1>Finance</h1>
-            <p className="subtitle">Company operating expense ledger and records.</p>
           </div>
           <div className="page-intro-actions">
             {canManage ? (
@@ -525,7 +524,7 @@ export default function FinancePage() {
         <section className="stat-grid" aria-label="Company expense summary">
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">TOTAL COMPANY EXPENSES</span>
+              <span className="stat-label">TOTAL EXPENSES</span>
             </div>
             <strong>{formatPeso(expenseMetrics.total)}</strong>
             <span className="stat-meta">
@@ -535,21 +534,21 @@ export default function FinancePage() {
 
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">AVERAGE EXPENSE</span>
+              <span className="stat-label">AVERAGE</span>
             </div>
             <strong>{formatPeso(expenseMetrics.average)}</strong>
-            <span className="stat-meta">Per entry average</span>
+            <span className="stat-meta">{expenseMetrics.count > 0 ? `${expenseMetrics.count} entries` : "—"}</span>
           </article>
 
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">LARGEST EXPENSE</span>
+              <span className="stat-label">LARGEST</span>
             </div>
             <strong>{formatPeso(expenseMetrics.highest)}</strong>
             <span className="stat-meta">
               {expenseMetrics.highestEntry
                 ? expenseMetrics.highestEntry.expenseDate
-                : "No entries recorded"}
+                : "—"}
             </span>
           </article>
         </section>
@@ -701,8 +700,8 @@ export default function FinancePage() {
                       onReset={handleResetSort}
                     />
                     <th>Description</th>
-                    <th>Note / Reference</th>
-                    <th>Recorded By</th>
+                    <th>Notes</th>
+                    <th>User</th>
                     <SortableTableHeader
                       label="Amount"
                       sortKey="amount"
@@ -727,9 +726,7 @@ export default function FinancePage() {
                         <div className="empty-state minimal">
                           <strong className="empty-state-title">No records found</strong>
                           <span className="empty-state-desc">
-                            {expenses.length === 0
-                              ? "No company operating expenses have been recorded yet."
-                              : "No company expenses match the active search or date filters."}
+                            No expenses match the active filters or selected range.
                           </span>
                         </div>
                       </td>

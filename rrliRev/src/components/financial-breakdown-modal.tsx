@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatPercent, formatPeso } from "@/lib/format";
 import {
