@@ -21,7 +21,7 @@ export function DeliveryFilterDropdown({
   selectedTrucks,
   onClientsChange,
   onTrucksChange,
-  onClearAll,
+  onClearAll: _onClearAll,
   className = "",
 }: DeliveryFilterDropdownProps) {
   const [clientOpen, setClientOpen] = useState(false);

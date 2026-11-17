@@ -9,6 +9,7 @@ import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-del
 import {
   formatDateRange,
   GlobalDateRangePicker,
+  parseDateValue,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
@@ -181,12 +182,15 @@ export default function DeliveriesPage() {
 
   function navigateToDelivery(trip: DeliveryLedgerItem) {
     const query = new URLSearchParams();
+    query.set("from", "deliveries");
     if (searchQuery.trim()) query.set("search", searchQuery.trim());
     if (statusFilter !== "all") query.set("status", statusFilter);
     if (sort !== "delivery_date:desc") query.set("sort", sort);
     if (page > 1) query.set("page", String(page));
     if (selectedClients.length > 0) query.set("clients", selectedClients.join(","));
     if (selectedTrucks.length > 0) query.set("trucks", selectedTrucks.join(","));
+    if (range.startDate) query.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) query.set("dateTo", toDateKey(range.endDate));
     const qs = query.toString();
     router.push(`/deliveries/${encodeURIComponent(trip.id)}${qs ? `?${qs}` : ""}`);
   }
@@ -662,6 +666,14 @@ export default function DeliveriesPage() {
       if (trucksParam) {
         setSelectedTrucks(trucksParam.split(",").filter(Boolean));
       }
+      const dateFromParam = params.get("dateFrom");
+      const dateToParam = params.get("dateTo");
+      if (dateFromParam || dateToParam) {
+        setRange({
+          startDate: dateFromParam ? parseDateValue(dateFromParam) : null,
+          endDate: dateToParam ? parseDateValue(dateToParam) : null,
+        });
+      }
     }
 
     if (requestedId && handledEditLink.current !== requestedId) {
@@ -840,9 +852,6 @@ export default function DeliveriesPage() {
         <header className="page-intro">
           <div>
             <h1>Deliveries</h1>
-            <p className="subtitle">
-              Trip records, store drop-offs, and expense tracking.
-            </p>
           </div>
           <div className="fleet-intro-actions">
             {canImport ? (
@@ -923,7 +932,7 @@ export default function DeliveriesPage() {
             </div>
             <strong>{formatPeso(summary.rateTotal)}</strong>
             <span className="stat-meta positive">
-              {kpiBreakdown.financiallyCompleteCount} finalized {kpiBreakdown.financiallyCompleteCount === 1 ? "trip" : "trips"} · {summary.stopCount} drop-offs
+              {kpiBreakdown.financiallyCompleteCount} trips · {summary.stopCount} stops
             </span>
           </button>
           <button
@@ -941,7 +950,7 @@ export default function DeliveriesPage() {
             </div>
             <strong>{formatPeso(summary.expenseTotal)}</strong>
             <span className="stat-meta">
-              Diesel, toll gates, entry fees & crew compensation
+              Fuel, tolls &amp; crew pay
             </span>
           </button>
           <button
@@ -959,7 +968,7 @@ export default function DeliveriesPage() {
             </div>
             <strong>{formatPeso(summary.netTotal)}</strong>
             <span className={`stat-meta ${summary.netTotal >= 0 ? "positive" : "warning"}`}>
-              {kpiBreakdown.marginPercent !== null ? `${formatPercent(kpiBreakdown.marginPercent)} profit margin · ` : ""}For {kpiBreakdown.financiallyCompleteCount} finalized records
+              {kpiBreakdown.marginPercent !== null ? `${formatPercent(kpiBreakdown.marginPercent)} margin · ` : ""}{kpiBreakdown.financiallyCompleteCount} trips
             </span>
           </button>
         </section>
@@ -1228,7 +1237,7 @@ export default function DeliveriesPage() {
                           <span className="truck-plate-label">{trip.plateNumber}</span>
                           <span className="truck-type-meta">{trip.truckType}</span>
                           <span className={`truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
-                            {trip.truckOwnership}
+                            {trip.truckOwnership === "Subcontracted" ? "Subcon" : "Owned"}
                           </span>
                         </div>
                       </td>
@@ -1271,9 +1280,20 @@ export default function DeliveriesPage() {
                         {isFinanciallyIncomplete || trip.totalExpenses == null ? (
                           <span
                             className="profit-amount warning"
-                            title="Incomplete expenses"
+                            title="Pending unresolved expenses"
+                            style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
                           >
-                            Incomplete
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: "6px",
+                                height: "6px",
+                                borderRadius: "50%",
+                                background: "var(--color-warning, #f59e0b)",
+                                flexShrink: 0,
+                              }}
+                            />
+                            Pending
                           </span>
                         ) : (
                           <span className="expenses-clickable-amount" style={{ textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: "3px" }}>
@@ -1286,9 +1306,20 @@ export default function DeliveriesPage() {
                           {isFinanciallyIncomplete || trip.netIncome == null ? (
                             <span
                               className="profit-amount warning"
-                              title="Pending expenses"
+                              title="Pending unresolved expenses"
+                              style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
                             >
-                              Incomplete
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  width: "6px",
+                                  height: "6px",
+                                  borderRadius: "50%",
+                                  background: "var(--color-warning, #f59e0b)",
+                                  flexShrink: 0,
+                                }}
+                              />
+                              Pending
                             </span>
                           ) : (
                             <>

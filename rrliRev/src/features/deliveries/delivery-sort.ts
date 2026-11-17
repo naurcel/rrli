@@ -18,6 +18,7 @@ export function sortDeliveryLedgerItems(
         rightVal = (right.waybillNumber ?? "").toLowerCase();
         break;
       case "delivery_date":
+      case "date":
         leftVal = left.deliveryDate ?? "";
         rightVal = right.deliveryDate ?? "";
         break;
@@ -52,14 +53,17 @@ export function sortDeliveryLedgerItems(
         rightVal = right.distanceKm ?? 0;
         break;
       case "delivery_rate":
+      case "revenue":
         leftVal = left.deliveryRate;
         rightVal = right.deliveryRate;
         break;
       case "total_expenses":
+      case "expenses":
         leftVal = left.totalExpenses;
         rightVal = right.totalExpenses;
         break;
       case "net_income":
+      case "netIncome":
         leftVal = left.netIncome;
         rightVal = right.netIncome;
         break;

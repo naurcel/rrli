@@ -242,4 +242,56 @@ describe("RouteX: Delivery Details Page & Navigator Logic", () => {
     assert.ok(ledgerHref.includes("page=2"));
     assert.ok(ledgerHref.includes("sort=delivery_rate%3Adesc"));
   });
+
+  it("filters deliveries strictly by truck plate when from=truck", () => {
+    const truckTrip1 = createMockTrip({ id: "t-1", plateNumber: "ABC-123", deliveryDate: "2026-11-01" });
+    const truckTrip2 = createMockTrip({ id: "t-2", plateNumber: "ABC 123", deliveryDate: "2026-11-02" });
+    const otherTruckTrip = createMockTrip({ id: "t-3", plateNumber: "XYZ-999", deliveryDate: "2026-11-03" });
+
+    const trips = [truckTrip1, truckTrip2, otherTruckTrip];
+    const targetPlate = "ABC-123";
+    const norm = (s: string) => s.trim().replace(/\s+/g, "").replace(/-/g, "").toUpperCase();
+
+    const filtered = trips.filter((t) => norm(t.plateNumber) === norm(targetPlate));
+    assert.equal(filtered.length, 2);
+    assert.deepEqual(filtered.map((t) => t.id), ["t-1", "t-2"]);
+    assert.ok(!filtered.some((t) => t.id === "t-3"));
+  });
+
+  it("sortDeliveryLedgerItems supports aliases: date, revenue, expenses, netIncome", () => {
+    const trips = [
+      createMockTrip({ id: "1", deliveryDate: "2026-11-01", deliveryRate: 5000, totalExpenses: 2000, netIncome: 3000 }),
+      createMockTrip({ id: "2", deliveryDate: "2026-11-03", deliveryRate: 9000, totalExpenses: 1000, netIncome: 8000 }),
+      createMockTrip({ id: "3", deliveryDate: "2026-11-02", deliveryRate: 7000, totalExpenses: 4000, netIncome: 3000 }),
+    ];
+
+    const sortedByRevenueDesc = sortDeliveryLedgerItems(trips, "revenue", "desc");
+    assert.deepEqual(sortedByRevenueDesc.map((t) => t.id), ["2", "3", "1"]);
+
+    const sortedByExpensesAsc = sortDeliveryLedgerItems(trips, "expenses", "asc");
+    assert.deepEqual(sortedByExpensesAsc.map((t) => t.id), ["2", "1", "3"]);
+
+    const sortedByNetIncomeDesc = sortDeliveryLedgerItems(trips, "netIncome", "desc");
+    assert.deepEqual(sortedByNetIncomeDesc.map((t) => t.id), ["2", "1", "3"]);
+
+    const sortedByDateAsc = sortDeliveryLedgerItems(trips, "date", "asc");
+    assert.deepEqual(sortedByDateAsc.map((t) => t.id), ["1", "3", "2"]);
+  });
+
+  it("builds truck return URL preserving page, sort, and date range", () => {
+    const params = new URLSearchParams();
+    params.set("from", "truck");
+    params.set("truck", "ABC-123");
+    params.set("sort", "revenue:desc");
+    params.set("truckPage", "3");
+    params.set("dateFrom", "2026-11-01");
+    params.set("dateTo", "2026-11-15");
+
+    const truckHref = `/truck-profitability/ABC-123?sort=revenue%3Adesc&page=3&dateFrom=2026-11-01&dateTo=2026-11-15`;
+    assert.ok(truckHref.includes("/truck-profitability/ABC-123"));
+    assert.ok(truckHref.includes("page=3"));
+    assert.ok(truckHref.includes("sort=revenue%3Adesc"));
+    assert.ok(truckHref.includes("dateFrom=2026-11-01"));
+    assert.ok(truckHref.includes("dateTo=2026-11-15"));
+  });
 });

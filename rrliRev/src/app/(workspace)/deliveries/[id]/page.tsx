@@ -11,7 +11,12 @@ import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-brea
 import { DeliveryNavigator } from "@/components/delivery-navigator";
 import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
-import { useGlobalDateRange } from "@/components/global-date-range-picker";
+import {
+  isDateInRange,
+  parseDateValue,
+  toDateKey,
+  useGlobalDateRange,
+} from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import {
   isDeliveryFinanciallyComplete,
@@ -61,7 +66,27 @@ function DeliveryDetailsPageContent({
   const normalizedId = decodedId.trim();
 
   const { range } = useGlobalDateRange();
-  const { deliveries: allDeliveries, loading: deliveriesLoading } = usePersistedDeliveries(range, { allPages: true });
+
+  // Read filter, sort, and context passed from the caller (Deliveries ledger or Truck Details)
+  const fromSource = searchParams.get("from");
+  const singleTruckParam = searchParams.get("truck");
+  const isFromTruck = fromSource === "truck" || Boolean(singleTruckParam && fromSource !== "deliveries");
+
+  const dateFromParam = searchParams.get("dateFrom");
+  const dateToParam = searchParams.get("dateTo");
+
+  // Effective reporting range: prefer explicitly passed date range from URL, fallback to global
+  const effectiveRange = useMemo(() => {
+    if (dateFromParam || dateToParam) {
+      return {
+        startDate: dateFromParam ? parseDateValue(dateFromParam) : null,
+        endDate: dateToParam ? parseDateValue(dateToParam) : null,
+      };
+    }
+    return range;
+  }, [dateFromParam, dateToParam, range]);
+
+  const { deliveries: allDeliveries, loading: deliveriesLoading } = usePersistedDeliveries(effectiveRange, { allPages: true });
 
   const [delivery, setDelivery] = useState<DeliveryLedgerItem | null>(null);
   const [deliveryToDelete, setDeliveryToDelete] = useState<DeliveryLedgerItem | null>(null);
@@ -115,7 +140,7 @@ function DeliveryDetailsPageContent({
     }
   }, [allDeliveries, deliveriesLoading, normalizedId]);
 
-  // Read filter and sort context passed from the delivery ledger
+  // Read filter and sort context passed from the caller
   const searchQuery = searchParams.get("search") || searchParams.get("q") || "";
   const statusFilter = searchParams.get("status") || "all";
   const sortParam = searchParams.get("sort") || "delivery_date:desc";
@@ -128,9 +153,36 @@ function DeliveryDetailsPageContent({
     return raw ? raw.split(",").filter(Boolean) : [];
   }, [searchParams]);
 
+  // Helper to normalize truck plate comparison
+  function normalizePlate(p?: string | null): string {
+    return (p ?? "").trim().replace(/[\s-]+/g, "").toUpperCase();
+  }
+
   // Compute filtered and sorted deliveries for the Delivery Navigator
   const navigatorDeliveries = useMemo(() => {
     let list = [...allDeliveries];
+
+    // If opened from a truck's delivery list, strictly filter to that truck only
+    if (isFromTruck && singleTruckParam) {
+      const cleanPlate = normalizePlate(singleTruckParam);
+      list = list.filter((item) => normalizePlate(item.plateNumber) === cleanPlate);
+    } else {
+      // If opened from Deliveries ledger, apply clients and trucks multi-filters
+      if (clientsFilter.length > 0) {
+        list = list.filter((d) => clientsFilter.includes(d.clientName) || clientsFilter.includes(d.clientId));
+      }
+      if (trucksFilter.length > 0) {
+        list = list.filter((d) => {
+          const itemPlate = normalizePlate(d.plateNumber);
+          return trucksFilter.some((t) => normalizePlate(t) === itemPlate);
+        });
+      }
+    }
+
+    // Filter by date range if explicitly provided in query params
+    if (dateFromParam || dateToParam) {
+      list = list.filter((item) => isDateInRange(item.deliveryDate, effectiveRange));
+    }
 
     // Search query filter
     if (searchQuery.trim()) {
@@ -166,24 +218,58 @@ function DeliveryDetailsPageContent({
       list = list.filter((d) => isDeliveryIncomplete(d) || !isDeliveryFinanciallyComplete(d));
     }
 
-    // Clients filter
-    if (clientsFilter.length > 0) {
-      list = list.filter((d) => clientsFilter.includes(d.clientName));
+    // Ensure currently selected delivery is included if it belongs to this truck/context
+    if (delivery && !list.some((d) => d.id === delivery.id)) {
+      if (!isFromTruck || normalizePlate(delivery.plateNumber) === normalizePlate(singleTruckParam)) {
+        list.push(delivery);
+      }
     }
 
-    // Trucks filter
-    if (trucksFilter.length > 0) {
-      list = list.filter((d) => trucksFilter.includes(d.plateNumber));
-    }
-
-    // Sort
+    // Sort matching exact ledger/truck list order
     const [sortField, direction] = sortParam.split(":") as [string, "asc" | "desc"];
     return sortDeliveryLedgerItems(list, sortField, direction || "desc");
-  }, [allDeliveries, clientsFilter, searchQuery, sortParam, statusFilter, trucksFilter]);
+  }, [
+    allDeliveries,
+    clientsFilter,
+    dateFromParam,
+    dateToParam,
+    delivery,
+    effectiveRange,
+    isFromTruck,
+    searchQuery,
+    singleTruckParam,
+    sortParam,
+    statusFilter,
+    trucksFilter,
+  ]);
 
-  // Ledger query string to preserve all filter/sort state when navigating
-  const ledgerQueryString = searchParams.toString();
-  const backToLedgerHref = `/deliveries${ledgerQueryString ? `?${ledgerQueryString}` : ""}`;
+  // Return URL and label preserving complete caller context
+  const backHref = useMemo(() => {
+    if (isFromTruck && singleTruckParam) {
+      const returnParams = new URLSearchParams();
+      if (dateFromParam) returnParams.set("dateFrom", dateFromParam);
+      if (dateToParam) returnParams.set("dateTo", dateToParam);
+      const truckPage = searchParams.get("truckPage") || searchParams.get("page");
+      if (truckPage && Number(truckPage) > 1) {
+        returnParams.set("page", truckPage);
+      }
+      if (sortParam) {
+        returnParams.set("sort", sortParam);
+      }
+      const qs = returnParams.toString();
+      return `/truck-profitability/${encodeURIComponent(singleTruckParam)}${qs ? `?${qs}` : ""}`;
+    }
+
+    const ledgerQueryString = searchParams.toString();
+    return `/deliveries${ledgerQueryString ? `?${ledgerQueryString}` : ""}`;
+  }, [dateFromParam, dateToParam, isFromTruck, searchParams, singleTruckParam, sortParam]);
+
+  const backLabel = useMemo(() => {
+    if (isFromTruck && singleTruckParam) {
+      return `Back to ${singleTruckParam}`;
+    }
+    return "Back to Deliveries";
+  }, [isFromTruck, singleTruckParam]);
 
   const [switchDirection, setSwitchDirection] = useState<"next" | "prev" | "jump">("jump");
 
@@ -213,6 +299,7 @@ function DeliveryDetailsPageContent({
       setDelivery(nextDelivery);
     }
 
+    // Preserve the exact query string context (caller, filters, sort, date range)
     const query = searchParams.toString();
     router.push(`/deliveries/${encodeURIComponent(targetId)}${query ? `?${query}` : ""}`, { scroll: false });
   }
@@ -263,8 +350,8 @@ function DeliveryDetailsPageContent({
 
     try {
       await deleteDeliveryRecord(deliveryToDelete.id);
-      // Navigate back to the delivery ledger with preserved filter context
-      router.push(backToLedgerHref);
+      // Navigate back to the caller with preserved context
+      router.push(backHref);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Failed to delete delivery.");
       setIsDeleting(false);
@@ -288,8 +375,8 @@ function DeliveryDetailsPageContent({
             <p>
               The requested delivery record (<strong>{normalizedId}</strong>) could not be found. It may have been deleted or the link is invalid.
             </p>
-            <Link href={backToLedgerHref} className="primary-action-button">
-              ← Return to Deliveries
+            <Link href={backHref} className="primary-action-button">
+              ← {backLabel}
             </Link>
           </div>
         </div>
@@ -321,14 +408,14 @@ function DeliveryDetailsPageContent({
         {/* Top Control Bar: Back Link + Compact Delivery Navigator */}
         <div className="delivery-detail-subnav">
           <Link
-            href={backToLedgerHref}
+            href={backHref}
             className="delivery-back-link"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="19" y1="12" x2="5" y2="12" />
               <polyline points="12 19 5 12 12 5" />
             </svg>
-            <span>Back to Deliveries</span>
+            <span>{backLabel}</span>
           </Link>
 
           {navigatorDeliveries.length > 0 ? (
