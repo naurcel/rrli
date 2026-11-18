@@ -193,7 +193,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         helperDailyRate: del.expenses.helperDailyRate != null ? String(del.expenses.helperDailyRate) : "",
         helper2Allowance: (del.expenses as unknown as Record<string, unknown>).helper2Allowance != null ? String((del.expenses as unknown as Record<string, unknown>).helper2Allowance) : "",
         helper2DailyRate: (del.expenses as unknown as Record<string, unknown>).helper2DailyRate != null ? String((del.expenses as unknown as Record<string, unknown>).helper2DailyRate) : "",
-        otherExpenses: del.expenses.otherExpenses != null ? String(del.expenses.otherExpenses) : "",
+        otherExpenses: del.expenses.otherExpenses != null ? String(del.expenses.otherExpenses) : "0",
       });
       setClientName(del.clientName ?? "");
       setPlateNumber(del.plateNumber ?? "");
@@ -557,13 +557,13 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       helper2Allowance: hasSecondHelper ? (numberValue(values.helper2Allowance) ?? 0) : null,
       helper2DailyRate: hasSecondHelper ? numberValue(values.helper2DailyRate) : null,
       helper2Name: hasSecondHelper ? (helper2Name.trim() || null) : null,
-      otherExpenses: numberValue(values.otherExpenses),
-      dieselExpensesStatus: "confirmed" as ExpenseResolutionStatus,
-      tollGateExpensesStatus: "confirmed" as ExpenseResolutionStatus,
+      otherExpenses: numberValue(values.otherExpenses) ?? 0,
+      dieselExpensesStatus: (numberValue(values.dieselExpenses) != null ? "confirmed" : "unknown") as ExpenseResolutionStatus,
+      tollGateExpensesStatus: (numberValue(values.tollGateExpenses) != null ? "confirmed" : "unknown") as ExpenseResolutionStatus,
       driverAllowanceStatus: "confirmed" as ExpenseResolutionStatus,
-      driverDailyRateStatus: "confirmed" as ExpenseResolutionStatus,
+      driverDailyRateStatus: (numberValue(values.driverDailyRate) != null ? "confirmed" : "unknown") as ExpenseResolutionStatus,
       helperAllowanceStatus: "confirmed" as ExpenseResolutionStatus,
-      helperDailyRateStatus: "confirmed" as ExpenseResolutionStatus,
+      helperDailyRateStatus: (numberValue(values.helperDailyRate) != null ? "confirmed" : "unknown") as ExpenseResolutionStatus,
       helper2AllowanceStatus: hasSecondHelper ? ("confirmed" as ExpenseResolutionStatus) : "not_applicable",
       helper2DailyRateStatus: hasSecondHelper ? ("confirmed" as ExpenseResolutionStatus) : "not_applicable",
       otherExpensesStatus: "confirmed" as ExpenseResolutionStatus,
@@ -656,15 +656,15 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       setSubmitError("Rate must have a valid value.");
       return;
     }
-    if (!values.dieselExpenses || Number(values.dieselExpenses) < 0) {
+    if (!isEditMode && (!values.dieselExpenses || Number(values.dieselExpenses) < 0)) {
       setSubmitError("Diesel expense must have a valid value.");
       return;
     }
-    if (!values.tollGateExpenses || Number(values.tollGateExpenses) < 0) {
+    if (!isEditMode && (!values.tollGateExpenses || Number(values.tollGateExpenses) < 0)) {
       setSubmitError("Toll gates expense must have a valid value.");
       return;
     }
-    if (!values.otherExpenses || Number(values.otherExpenses) < 0) {
+    if (!isEditMode && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
       setSubmitError("Other expenses must have a valid value.");
       return;
     }
@@ -672,7 +672,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       setSubmitError("Delivery date cannot be earlier than company foundation year (2024).");
       return;
     }
-    if (!isAdmin && (values.deliveryDate < deliveryDateWindow.min || values.deliveryDate > deliveryDateWindow.max)) {
+    if (!isEditMode && !isAdmin && (values.deliveryDate < deliveryDateWindow.min || values.deliveryDate > deliveryDateWindow.max)) {
       setSubmitError(`Delivery date must be between ${deliveryDateWindow.min} and ${deliveryDateWindow.max}.`);
       return;
     }
@@ -709,7 +709,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             reason: editReason.trim() || "Updated delivery details and expenses.",
             changes: {
               waybillNumber: payload.waybillNumber,
-              deliveryDate: payload.deliveryDate,
               clientName: payload.clientName,
               plateNumber: payload.plateNumber,
               origin: payload.origin,
@@ -760,7 +759,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           const updatedTrip: DeliveryLedgerItem = {
             ...existingDelivery,
             waybillNumber: payload.waybillNumber,
-            deliveryDate: payload.deliveryDate,
+            deliveryDate: existingDelivery.deliveryDate,
             origin: payload.origin,
             distanceKm: payload.distanceKm ?? 0,
             fuelRate: payload.fuelRate ?? 0,
@@ -1135,10 +1134,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
               <span className="field-label-text">Delivery date</span>
               <SingleDatePicker
                 required
-                min={isAdmin ? "2024-01-01" : deliveryDateWindow.min}
+                disabled={isEditMode}
+                min={isAdmin || isEditMode ? "2024-01-01" : deliveryDateWindow.min}
                 max={isAdmin ? undefined : deliveryDateWindow.max}
                 value={values.deliveryDate}
                 onChange={(nextDate) => {
+                  if (isEditMode) return;
                   updateValue("deliveryDate", nextDate);
                 }}
               />
