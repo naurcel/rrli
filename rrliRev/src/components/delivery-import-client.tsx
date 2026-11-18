@@ -34,9 +34,11 @@ type FilterTab = "all" | "ready" | "attention" | "duplicate";
 export function DeliveryExcelImportClient({
   actorRoleLabel: _actorRoleLabel,
   actorFullName: _actorFullName,
+  returnHref,
 }: {
   actorRoleLabel: string;
   actorFullName: string;
+  returnHref?: string;
 }) {
   const [step, setStep] = useState<ImportStep>(1);
   const [batchName, setBatchName] = useState(() => `DTR-Batch-${new Date().toISOString().slice(0, 10)}`);
@@ -921,7 +923,10 @@ export function DeliveryExcelImportClient({
               <button type="button" className="secondary-button" onClick={resetImportFlow}>
                 Import Another Batch
               </button>
-              <Link className="primary-action-button" href="/deliveries">
+              <Link
+                className="primary-action-button"
+                href={returnHref && returnHref.startsWith("/deliveries") ? returnHref : "/deliveries"}
+              >
                 View in Deliveries →
               </Link>
             </div>

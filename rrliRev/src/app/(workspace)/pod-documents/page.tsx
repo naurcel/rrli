@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
   GlobalDateRangePicker,
   isDateInRange,
+  parseDateValue,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
@@ -18,6 +20,7 @@ import { isImageDocument, triggerDocumentDownload } from "@/features/deliveries/
 import { derivePodVerificationStatus } from "@/features/deliveries/delivery-domain";
 import { upsertBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
 import { canManageDocuments } from "@/lib/auth/rbac";
+import { withReturnContext } from "@/lib/navigation/return-context";
 
 function toDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -28,7 +31,7 @@ function toDateKey(date: Date): string {
 
 export default function PodDocumentsPage() {
   const actor = useAuthenticatedActor();
-  const { range } = useGlobalDateRange();
+  const { range, setRange } = useGlobalDateRange();
   const canManage = canManageDocuments(actor.role);
 
   const [deliveries, setDeliveries] = useState<readonly DeliveryLedgerItem[]>([]);
@@ -152,10 +155,45 @@ export default function PodDocumentsPage() {
   const [podPage, setPodPage] = useState(1);
   const POD_PAGE_SIZE = 10;
   const podPageCount = Math.max(1, Math.ceil(filteredStops.length / POD_PAGE_SIZE));
+  const isInitialPodParamsParsed = useRef(false);
 
   useEffect(() => {
-    setPodPage(1);
+    if (isInitialPodParamsParsed.current) {
+      setPodPage(1);
+    }
   }, [filterStatus, range]);
+
+  useEffect(() => {
+    if (isInitialPodParamsParsed.current) return;
+    isInitialPodParamsParsed.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const statusParam = params.get("status");
+    if (statusParam === "All Drop-offs" || statusParam === "POD Attached" || statusParam === "Missing POD") {
+      setFilterStatus(statusParam);
+    }
+    const pageParam = params.get("page");
+    if (pageParam && Number(pageParam) > 1) {
+      setPodPage(Number(pageParam));
+    }
+    const dateFromParam = params.get("dateFrom");
+    const dateToParam = params.get("dateTo");
+    if (dateFromParam !== null || dateToParam !== null) {
+      setRange({
+        startDate: dateFromParam ? parseDateValue(dateFromParam) : null,
+        endDate: dateToParam ? parseDateValue(dateToParam) : null,
+      });
+    }
+  }, [setRange]);
+
+  function buildCurrentPodUrl(): string {
+    const params = new URLSearchParams();
+    if (filterStatus !== "All Drop-offs") params.set("status", filterStatus);
+    if (podPage > 1) params.set("page", String(podPage));
+    if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+    const qs = params.toString();
+    return qs ? `/pod-documents?${qs}` : "/pod-documents";
+  }
 
   const paginatedStops = useMemo(() => {
     const start = (podPage - 1) * POD_PAGE_SIZE;
@@ -283,6 +321,9 @@ export default function PodDocumentsPage() {
         <header className="page-intro">
           <div>
             <h1>POD Documents</h1>
+            <p className="subtitle">
+              Proof of delivery files by store drop-off.
+            </p>
           </div>
           {canManage ? (
             <span className="access-pill operations">
@@ -648,26 +689,39 @@ export default function PodDocumentsPage() {
               )}
             </div>
 
-            <footer className="routex-dialog-footer">
-              <button
-                type="button"
+            <footer className="routex-dialog-footer" style={{ justifyContent: "space-between" }}>
+              <Link
                 className="secondary-button"
-                disabled={docSubmitting}
-                onClick={() => setInspectingStop(null)}
+                href={withReturnContext(
+                  `/deliveries/${encodeURIComponent(inspectingStop.tripId)}`,
+                  buildCurrentPodUrl(),
+                  "POD Documents",
+                )}
               >
-                Close
-              </button>
+                View Delivery →
+              </Link>
 
-              {canManage && uploadFile ? (
+              <div style={{ display: "inline-flex", gap: "10px", alignItems: "center" }}>
                 <button
                   type="button"
-                  className="primary-action-button"
+                  className="secondary-button"
                   disabled={docSubmitting}
-                  onClick={handleUploadDocument}
+                  onClick={() => setInspectingStop(null)}
                 >
-                  {docSubmitting ? "Uploading…" : "Upload Document"}
+                  Close
                 </button>
-              ) : null}
+
+                {canManage && uploadFile ? (
+                  <button
+                    type="button"
+                    className="primary-action-button"
+                    disabled={docSubmitting}
+                    onClick={handleUploadDocument}
+                  >
+                    {docSubmitting ? "Uploading…" : "Upload Document"}
+                  </button>
+                ) : null}
+              </div>
             </footer>
           </div>
         </div>,

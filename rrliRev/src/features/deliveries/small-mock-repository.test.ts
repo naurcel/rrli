@@ -74,7 +74,7 @@ test("mock repository filters by multiple clients and multiple trucks", () => {
   const multiClient = listSmallMockDeliveryRecords(
     query(`clientIds=${client1},${client2}&pageSize=10`),
   );
-  assert.equal(multiClient.total, 10);
+  assert.equal(multiClient.total, 14);
   assert.ok(
     multiClient.items.every(
       (item) => item.clientId === client1 || item.clientId === client2,

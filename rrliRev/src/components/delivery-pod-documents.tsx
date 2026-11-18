@@ -23,11 +23,15 @@ export function DeliveryPodDocuments({
   canVerify: canManage,
   roleLabel,
   onTripChange,
+  activeStopId,
+  onHoverStop,
 }: {
   trip: DeliveryLedgerItem;
   canVerify: boolean;
   roleLabel: string;
   onTripChange: (trip: DeliveryLedgerItem) => void;
+  activeStopId?: string | null;
+  onHoverStop?: (stopId: string | null) => void;
 }) {
   const [uploadingStopId, setUploadingStopId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -199,20 +203,30 @@ export function DeliveryPodDocuments({
       ) : null}
 
       <div className="delivery-pod-inline-list">
-        {trip.dropoffs.map((stop) => {
+        {trip.dropoffs.map((stop, idx) => {
           const isPending = !stop.podSubmitted || stop.documentRef === "Pending upload" || !stop.documentRef;
           const isUploading = uploadingStopId === stop.id;
+          const isHighlighted = Boolean(activeStopId && activeStopId === stop.id);
+          const stopNumber = stop.sequence || idx + 1;
 
           return (
-            <div key={stop.id} className={`delivery-pod-card ${isPending ? "is-pending" : "is-attached"}`}>
+            <div
+              key={stop.id}
+              id={`pod-doc-stop-${stop.id}`}
+              className={`delivery-pod-card ${isPending ? "is-pending" : "is-attached"} ${isHighlighted ? "is-highlighted" : ""}`}
+              onMouseEnter={() => onHoverStop?.(stop.id)}
+              onMouseLeave={() => onHoverStop?.(null)}
+            >
               <div className="delivery-pod-card-left">
                 <span
-                  className={`delivery-pod-state ${stop.podSubmitted ? "complete" : "attention"}`}
+                  className={`delivery-pod-stop-badge ${stop.podSubmitted ? "complete" : "attention"}`}
                   aria-hidden="true"
-                />
+                >
+                  {stopNumber}
+                </span>
                 <div className="delivery-pod-card-info">
                   <div className="delivery-pod-card-title">
-                    <strong>Stop #{stop.sequence} · {stop.storeName}</strong>
+                    <strong>{stop.storeName}</strong>
                     {stop.destinationArea ? <small>{stop.destinationArea}</small> : null}
                   </div>
                   {!isPending ? (

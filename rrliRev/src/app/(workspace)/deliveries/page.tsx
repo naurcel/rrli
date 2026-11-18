@@ -19,6 +19,8 @@ import { TablePagination } from "@/components/table-pagination";
 import { ViewTripExpensesModal } from "@/components/view-trip-expenses-modal";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { RoundedSelect } from "@/components/rounded-select";
+import { useSearchBuffer } from "@/components/search-buffer";
+import { SimpleLoading } from "@/components/simple-loading";
 import type {
   DeliveryStoreDropoff,
   ExpenseResolutionStatus,
@@ -52,6 +54,11 @@ import {
   sanitizePositiveDecimalInput,
 } from "@/features/deliveries/delivery-input-utils";
 import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
+import {
+  isValidInternalReturnPath,
+  resolveReturnTarget,
+  withReturnContext,
+} from "@/lib/navigation/return-context";
 
 function toDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -167,7 +174,14 @@ export default function DeliveriesPage() {
   const [helpers, setHelpers] = useState<DeliveryFilterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const {
+    value: searchQuery,
+    setValue: setSearchQuery,
+    bufferedQuery: debouncedSearchQuery,
+    isBuffering: isSearchBuffering,
+    clear: clearSearch,
+    reset: resetSearch,
+  } = useSearchBuffer({ delay: 280 });
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedTrucks, setSelectedTrucks] = useState<string[]>([]);
   const [sort, setSort] = useState("delivery_date:desc");
@@ -179,6 +193,26 @@ export default function DeliveriesPage() {
   const [activeKpi, setActiveKpi] = useState<"earnings" | "expenses" | "profit" | null>(null);
   const [financialActionMessage, setFinancialActionMessage] = useState<string | null>(null);
   const [viewingTripExpenses, setViewingTripExpenses] = useState<DeliveryLedgerItem | null>(null);
+  const [returnToParam, setReturnToParam] = useState<string | null>(null);
+  const [returnLabelParam, setReturnLabelParam] = useState<string | null>(null);
+
+  function buildCurrentDeliveriesUrl(): string {
+    const query = new URLSearchParams();
+    if (searchQuery.trim()) query.set("search", searchQuery.trim());
+    if (statusFilter !== "all") query.set("status", statusFilter);
+    if (sort !== "delivery_date:desc") query.set("sort", sort);
+    if (page > 1) query.set("page", String(page));
+    if (selectedClients.length > 0) query.set("clients", selectedClients.join(","));
+    if (selectedTrucks.length > 0) query.set("trucks", selectedTrucks.join(","));
+    if (range.startDate) query.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) query.set("dateTo", toDateKey(range.endDate));
+    if (returnToParam && isValidInternalReturnPath(returnToParam)) {
+      query.set("returnTo", returnToParam);
+      if (returnLabelParam) query.set("returnLabel", returnLabelParam);
+    }
+    const qs = query.toString();
+    return qs ? `/deliveries?${qs}` : "/deliveries";
+  }
 
   function navigateToDelivery(trip: DeliveryLedgerItem) {
     const query = new URLSearchParams();
@@ -191,6 +225,8 @@ export default function DeliveriesPage() {
     if (selectedTrucks.length > 0) query.set("trucks", selectedTrucks.join(","));
     if (range.startDate) query.set("dateFrom", toDateKey(range.startDate));
     if (range.endDate) query.set("dateTo", toDateKey(range.endDate));
+    query.set("returnTo", buildCurrentDeliveriesUrl());
+    query.set("returnLabel", "Deliveries");
     const qs = query.toString();
     router.push(`/deliveries/${encodeURIComponent(trip.id)}${qs ? `?${qs}` : ""}`);
   }
@@ -517,7 +553,7 @@ export default function DeliveriesPage() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => {
       const params = new URLSearchParams({ page: "1", pageSize: "100" });
-      if (searchQuery.trim()) params.set("q", searchQuery.trim());
+      if (debouncedSearchQuery.trim()) params.set("q", debouncedSearchQuery.trim());
       if (selectedClients.length > 0) params.set("clientIds", selectedClients.join(","));
       if (selectedTrucks.length > 0) params.set("truckIds", selectedTrucks.join(","));
       if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
@@ -549,7 +585,7 @@ export default function DeliveriesPage() {
           }
           const local = data.source === "bundled-mock"
             ? selectBrowserPreviewDeliveries({
-                search: searchQuery,
+                search: debouncedSearchQuery,
                 clientIds: selectedClients.length > 0 ? selectedClients : undefined,
                 truckIds: selectedTrucks.length > 0 ? selectedTrucks : undefined,
                 dateFrom: range.startDate ? toDateKey(range.startDate) : undefined,
@@ -619,13 +655,13 @@ export default function DeliveriesPage() {
           setLoadError(error instanceof Error ? error.message : "Unable to load deliveries.");
         })
         .finally(() => setLoading(false));
-    }, 220);
+    }, 50);
 
     return () => {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [range, searchQuery, selectedClients, selectedTrucks, sort]);
+  }, [range, debouncedSearchQuery, selectedClients, selectedTrucks, sort]);
 
   const isInitialParamsParsed = useRef(false);
 
@@ -633,7 +669,7 @@ export default function DeliveriesPage() {
     if (isInitialParamsParsed.current) {
       setPage(1);
     }
-  }, [range, searchQuery, selectedClients, selectedTrucks, sort, statusFilter]);
+  }, [range, debouncedSearchQuery, selectedClients, selectedTrucks, sort, statusFilter]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -644,7 +680,7 @@ export default function DeliveriesPage() {
     if (!isInitialParamsParsed.current) {
       isInitialParamsParsed.current = true;
       if (searchParam) {
-        setSearchQuery(searchParam);
+        resetSearch(searchParam);
       }
       const statusParam = params.get("status");
       if (statusParam === "completed" || statusParam === "incomplete" || statusParam === "all") {
@@ -673,6 +709,12 @@ export default function DeliveriesPage() {
           startDate: dateFromParam ? parseDateValue(dateFromParam) : null,
           endDate: dateToParam ? parseDateValue(dateToParam) : null,
         });
+      }
+      const rt = params.get("returnTo");
+      const rl = params.get("returnLabel");
+      if (rt && isValidInternalReturnPath(rt)) {
+        setReturnToParam(rt);
+        setReturnLabelParam(rl);
       }
     }
 
@@ -840,6 +882,15 @@ export default function DeliveriesPage() {
   const [activeSortKey, activeSortDirection] = sort.split(":") as [string, TableSortDirection];
   const updateTableSort = (key: string, direction: TableSortDirection) => setSort(`${key}:${direction}`);
   const resetTableSort = () => setSort("delivery_date:desc");
+  const parentBackTarget = useMemo(() => {
+    if (!returnToParam || !isValidInternalReturnPath(returnToParam)) return null;
+    return resolveReturnTarget({
+      returnTo: returnToParam,
+      returnLabel: returnLabelParam,
+      fallbackHref: "/dashboard",
+      fallbackLabel: "Back",
+    });
+  }, [returnToParam, returnLabelParam]);
 
   return (
     <>
@@ -851,13 +902,21 @@ export default function DeliveriesPage() {
       <div className="content-wrap">
         <header className="page-intro">
           <div>
+            {parentBackTarget ? (
+              <Link className="back-link" href={parentBackTarget.href}>
+                ← {parentBackTarget.label}
+              </Link>
+            ) : null}
             <h1>Deliveries</h1>
+            <p className="subtitle">
+              Trip records, store drop-offs, and expense tracking.
+            </p>
           </div>
           <div className="fleet-intro-actions">
             {canImport ? (
               <Link
                 className="secondary-button page-intro-action"
-                href="/deliveries/import"
+                href={withReturnContext("/deliveries/import", buildCurrentDeliveriesUrl(), "Deliveries")}
                 aria-label="Import an Excel trip report"
               >
                 Import
@@ -866,7 +925,7 @@ export default function DeliveriesPage() {
             {canWrite ? (
               <Link
                 className="primary-action-button page-intro-action"
-                href="/deliveries/new"
+                href={withReturnContext("/deliveries/new", buildCurrentDeliveriesUrl(), "Deliveries")}
                 aria-label="Record a completed delivery and its trip details"
               >
                 Record delivery
@@ -1014,7 +1073,7 @@ export default function DeliveriesPage() {
           </div>
 
           <div className="filters">
-            <label className="search-box">
+            <label className={`search-box${isSearchBuffering ? " is-buffering" : ""}`}>
               <span className="sr-only">
                 Search by waybill or truck plate number
               </span>
@@ -1040,6 +1099,9 @@ export default function DeliveriesPage() {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
               />
+              {isSearchBuffering && (
+                <span className="search-buffer-indicator" title="Buffering search…" aria-label="Buffering search…" />
+              )}
             </label>
 
             <GlobalDateRangePicker />
@@ -1067,7 +1129,7 @@ export default function DeliveriesPage() {
                 type="button"
                 className="filter-button filter-clear"
                 onClick={() => {
-                  setSearchQuery("");
+                  clearSearch();
                   setSelectedClients([]);
                   setSelectedTrucks([]);
                   setRange({ startDate: null, endDate: null });
@@ -1149,6 +1211,7 @@ export default function DeliveriesPage() {
                 className="filter-chip-clear-all"
                 title="Clear all active filters"
                 onClick={() => {
+                  clearSearch();
                   setSelectedClients([]);
                   setSelectedTrucks([]);
                   setRange({ startDate: null, endDate: null });
@@ -1164,11 +1227,10 @@ export default function DeliveriesPage() {
               <strong>Delivery database is unavailable</strong>
               <span>{loadError}</span>
             </div>
-          ) : loading ? (
-            <div className="empty-state" role="status">
-              <strong>Loading delivery ledger…</strong>
-              <span>Applying the active client, date, truck, and document filters.</span>
-            </div>
+          ) : (loading || isSearchBuffering) ? (
+            <SimpleLoading
+              message={isSearchBuffering ? "Searching deliveries…" : "Loading deliveries…"}
+            />
           ) : (
             <div className="table-wrap">
               <table>
@@ -1348,7 +1410,13 @@ export default function DeliveriesPage() {
                                 title="Edit delivery"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  router.push(`/deliveries/${encodeURIComponent(trip.id)}/edit`);
+                                  router.push(
+                                    withReturnContext(
+                                      `/deliveries/${encodeURIComponent(trip.id)}/edit`,
+                                      buildCurrentDeliveriesUrl(),
+                                      "Deliveries",
+                                    ),
+                                  );
                                 }}
                               >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1408,7 +1476,7 @@ export default function DeliveriesPage() {
             totalItems={filteredDeliveries.length}
             pageSize={10}
             onPageChange={setPage}
-            loading={loading}
+            loading={loading || isSearchBuffering}
             itemLabel="deliveries"
             itemCountInPage={paginatedDeliveries.length}
           />

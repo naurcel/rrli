@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
 import { TruckPhoto } from "@/components/truck-photo";
 import {
@@ -15,12 +16,14 @@ export function DeliveryTruckInfoSection({
   truckTemperature,
   truckOwnership,
   rateBasis: _rateBasis,
+  truckHref,
 }: {
   plateNumber: string;
   truckType: TruckType;
   truckTemperature: string;
   truckOwnership: TruckOwnership;
   rateBasis?: string | null;
+  truckHref?: string;
 }) {
   const truckMeta = useMemo(() => {
     const fleet = getFleetTrucks();
@@ -48,7 +51,18 @@ export function DeliveryTruckInfoSection({
       <div className="delivery-truck-meta">
         <div className="delivery-truck-plate-row">
           <div className="delivery-truck-plate-wrap">
-            <span className="delivery-truck-plate-badge">{plateNumber}</span>
+            {truckHref && truckOwnership === "Owned" ? (
+              <Link
+                href={truckHref}
+                className="delivery-truck-plate-badge"
+                title={`View truck profile for ${plateNumber}`}
+                style={{ textDecoration: "none" }}
+              >
+                {plateNumber}
+              </Link>
+            ) : (
+              <span className="delivery-truck-plate-badge">{plateNumber}</span>
+            )}
             <span
               className={`detail-status ${truckOwnership === "Owned" ? "success" : "warning"}`}
             >

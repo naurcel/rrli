@@ -32,6 +32,10 @@ import {
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import { canManageDocuments, canMutateDeliveryRecords } from "@/lib/auth/rbac";
 import { formatPeso } from "@/lib/format";
+import {
+  resolveReturnTarget,
+  withReturnContext,
+} from "@/lib/navigation/return-context";
 
 export default function DeliveryDetailsPageWrapper({
   params,
@@ -67,10 +71,14 @@ function DeliveryDetailsPageContent({
 
   const { range } = useGlobalDateRange();
 
-  // Read filter, sort, and context passed from the caller (Deliveries ledger or Truck Details)
+  // Read filter, sort, and context passed from the caller (Deliveries ledger, Truck Details, Dashboard, etc.)
   const fromSource = searchParams.get("from");
   const singleTruckParam = searchParams.get("truck");
   const isFromTruck = fromSource === "truck" || Boolean(singleTruckParam && fromSource !== "deliveries");
+  const isFromDashboard = fromSource === "dashboard";
+  const isAttentionMode = searchParams.get("attention") === "1";
+  const returnToParam = searchParams.get("returnTo");
+  const returnLabelParam = searchParams.get("returnLabel");
 
   const dateFromParam = searchParams.get("dateFrom");
   const dateToParam = searchParams.get("dateTo");
@@ -93,13 +101,20 @@ function DeliveryDetailsPageContent({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [activeStopId, setActiveStopId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("updated") === "1" || params.get("updated") === "true") {
         setFeedbackMessage("Delivery updated successfully.");
-        window.history.replaceState({}, "", window.location.pathname);
+        params.delete("updated");
+        const remaining = params.toString();
+        window.history.replaceState(
+          {},
+          "",
+          `${window.location.pathname}${remaining ? `?${remaining}` : ""}`,
+        );
       }
     }
   }, []);
@@ -166,6 +181,9 @@ function DeliveryDetailsPageContent({
     if (isFromTruck && singleTruckParam) {
       const cleanPlate = normalizePlate(singleTruckParam);
       list = list.filter((item) => normalizePlate(item.plateNumber) === cleanPlate);
+    } else if (isFromDashboard && isAttentionMode) {
+      // If opened from Dashboard Attention Needed, filter to incomplete deliveries
+      list = list.filter((d) => isDeliveryIncomplete(d) || !isDeliveryFinanciallyComplete(d));
     } else {
       // If opened from Deliveries ledger, apply clients and trucks multi-filters
       if (clientsFilter.length > 0) {
@@ -225,9 +243,19 @@ function DeliveryDetailsPageContent({
       }
     }
 
-    // Sort matching exact ledger/truck list order
+    // Sort matching exact ledger/truck/dashboard list order
     const [sortField, direction] = sortParam.split(":") as [string, "asc" | "desc"];
-    return sortDeliveryLedgerItems(list, sortField, direction || "desc");
+    const sorted = sortDeliveryLedgerItems(list, sortField, direction || "desc");
+
+    if (isFromDashboard && !isAttentionMode) {
+      const topRecent = sorted.slice(0, 6);
+      if (delivery && !topRecent.some((d) => d.id === delivery.id)) {
+        topRecent.push(delivery);
+      }
+      return topRecent;
+    }
+
+    return sorted;
   }, [
     allDeliveries,
     clientsFilter,
@@ -235,6 +263,8 @@ function DeliveryDetailsPageContent({
     dateToParam,
     delivery,
     effectiveRange,
+    isAttentionMode,
+    isFromDashboard,
     isFromTruck,
     searchQuery,
     singleTruckParam,
@@ -244,7 +274,10 @@ function DeliveryDetailsPageContent({
   ]);
 
   // Return URL and label preserving complete caller context
-  const backHref = useMemo(() => {
+  const { href: backHref, label: backLabel } = useMemo(() => {
+    let fallbackHref = "/deliveries";
+    let fallbackLabel = "Back to Deliveries";
+
     if (isFromTruck && singleTruckParam) {
       const returnParams = new URLSearchParams();
       if (dateFromParam) returnParams.set("dateFrom", dateFromParam);
@@ -257,19 +290,43 @@ function DeliveryDetailsPageContent({
         returnParams.set("sort", sortParam);
       }
       const qs = returnParams.toString();
-      return `/truck-profitability/${encodeURIComponent(singleTruckParam)}${qs ? `?${qs}` : ""}`;
+      fallbackHref = `/truck-profitability/${encodeURIComponent(singleTruckParam)}${qs ? `?${qs}` : ""}`;
+      fallbackLabel = `Back to ${singleTruckParam}`;
+    } else if (isFromDashboard) {
+      const dashParams = new URLSearchParams();
+      if (dateFromParam) dashParams.set("dateFrom", dateFromParam);
+      if (dateToParam) dashParams.set("dateTo", dateToParam);
+      if (sortParam) dashParams.set("deliverySort", sortParam);
+      const qs = dashParams.toString();
+      fallbackHref = `/dashboard${qs ? `?${qs}` : ""}`;
+      fallbackLabel = "Back to Dashboard";
+    } else {
+      const ledgerParams = new URLSearchParams(searchParams.toString());
+      ledgerParams.delete("returnTo");
+      ledgerParams.delete("returnLabel");
+      ledgerParams.delete("from");
+      const qs = ledgerParams.toString();
+      fallbackHref = `/deliveries${qs ? `?${qs}` : ""}`;
+      fallbackLabel = "Back to Deliveries";
     }
 
-    const ledgerQueryString = searchParams.toString();
-    return `/deliveries${ledgerQueryString ? `?${ledgerQueryString}` : ""}`;
-  }, [dateFromParam, dateToParam, isFromTruck, searchParams, singleTruckParam, sortParam]);
-
-  const backLabel = useMemo(() => {
-    if (isFromTruck && singleTruckParam) {
-      return `Back to ${singleTruckParam}`;
-    }
-    return "Back to Deliveries";
-  }, [isFromTruck, singleTruckParam]);
+    return resolveReturnTarget({
+      returnTo: returnToParam,
+      returnLabel: returnLabelParam,
+      fallbackHref,
+      fallbackLabel,
+    });
+  }, [
+    dateFromParam,
+    dateToParam,
+    isFromDashboard,
+    isFromTruck,
+    returnLabelParam,
+    returnToParam,
+    searchParams,
+    singleTruckParam,
+    sortParam,
+  ]);
 
   const [switchDirection, setSwitchDirection] = useState<"next" | "prev" | "jump">("jump");
 
@@ -528,7 +585,15 @@ function DeliveryDetailsPageContent({
                 aria-label={`Edit delivery #${delivery.waybillNumber}`}
                 title="Edit delivery"
                 onClick={() => {
-                  router.push(`/deliveries/${encodeURIComponent(delivery.id)}/edit`);
+                  const qs = searchParams.toString();
+                  const currentUrl = `/deliveries/${encodeURIComponent(delivery.id)}${qs ? `?${qs}` : ""}`;
+                  router.push(
+                    withReturnContext(
+                      `/deliveries/${encodeURIComponent(delivery.id)}/edit`,
+                      currentUrl,
+                      `Waybill #${delivery.waybillNumber}`,
+                    ),
+                  );
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -577,38 +642,32 @@ function DeliveryDetailsPageContent({
           <DeliveryFinancialBreakdown trip={delivery} />
         </section>
 
-        {/* 2. Operational Fulfillment & Fleet Specifications (Balanced 2-Column Grid) */}
-        <div className="delivery-detail-grid">
-          {/* Left Column: Store Drop-offs Fulfillment & POD Documents */}
+        {/* 2. Vehicle & Trip Specifications (Balanced Fixed-Height 2-Column Grid) */}
+        <div className="delivery-detail-grid delivery-specs-grid">
+          {/* Left Column: Truck Specifications */}
           <div className="delivery-detail-column">
-            {/* Store Drop-offs Sequence */}
-            <section className="records-card delivery-section-card">
+            <section className="records-card delivery-section-card delivery-equal-card">
               <div className="section-card-header">
-                <h2 className="section-card-title">
-                  Store Drop-offs ({delivery.dropoffs.length})
-                </h2>
+                <h2 className="section-card-title">Truck</h2>
               </div>
-              <DeliveryDropoffTimeline dropoffs={delivery.dropoffs} />
-            </section>
-
-            {/* POD & Supporting Documents */}
-            <section className="records-card delivery-section-card">
-              <div className="section-card-header">
-                <h2 className="section-card-title">POD &amp; Supporting Documents</h2>
-              </div>
-              <DeliveryPodDocuments
-                trip={delivery}
-                canVerify={canManageDocs}
-                roleLabel={actor.roleLabel}
-                onTripChange={handleTripUpdated}
+              <DeliveryTruckInfoSection
+                plateNumber={delivery.plateNumber}
+                truckType={delivery.truckType}
+                truckTemperature={delivery.truckTemperature}
+                truckOwnership={delivery.truckOwnership}
+                rateBasis={delivery.rateBasis}
+                truckHref={withReturnContext(
+                  `/truck-profitability/${encodeURIComponent(delivery.plateNumber)}`,
+                  `/deliveries/${encodeURIComponent(delivery.id)}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
+                  `Waybill #${delivery.waybillNumber}`,
+                )}
               />
             </section>
           </div>
 
-          {/* Right Column: Route, Vehicle & Crew Specifications */}
+          {/* Right Column: Trip Information */}
           <div className="delivery-detail-column">
-            {/* Trip Overview Card */}
-            <section className="records-card delivery-section-card">
+            <section className="records-card delivery-section-card delivery-equal-card">
               <div className="section-card-header">
                 <h2 className="section-card-title">Trip Information</h2>
               </div>
@@ -635,22 +694,89 @@ function DeliveryDetailsPageContent({
                 </div>
               </div>
             </section>
-
-            {/* Truck */}
-            <section className="records-card delivery-section-card">
-              <div className="section-card-header">
-                <h2 className="section-card-title">Truck</h2>
-              </div>
-              <DeliveryTruckInfoSection
-                plateNumber={delivery.plateNumber}
-                truckType={delivery.truckType}
-                truckTemperature={delivery.truckTemperature}
-                truckOwnership={delivery.truckOwnership}
-                rateBasis={delivery.rateBasis}
-              />
-            </section>
           </div>
         </div>
+
+        {/* 3. Unified Store Drop-offs & Documents Card (Scalable Bottom Section) */}
+        <section
+          className="records-card delivery-section-card delivery-fulfillment-unified-card"
+          aria-label="Store Drop-offs and POD Documents"
+        >
+          <div className="section-card-header delivery-fulfillment-header">
+            <div>
+              <h2 className="section-card-title">
+                Store Drop-offs &amp; Documents
+              </h2>
+              <p className="section-card-subtitle">
+                Stop sequence, entry fees, and proof of delivery records
+              </p>
+            </div>
+            <div className="delivery-fulfillment-summary-badges">
+              <span className="routex-badge tone-primary">
+                {delivery.dropoffs.length} {delivery.dropoffs.length === 1 ? "STOP" : "STOPS"}
+              </span>
+              <span
+                className={`routex-badge ${
+                  delivery.dropoffs.every((s) => s.podSubmitted) ? "tone-success" : "tone-warning"
+                }`}
+              >
+                {delivery.dropoffs.filter((s) => s.podSubmitted).length}/{delivery.dropoffs.length} POD
+              </span>
+            </div>
+          </div>
+
+          <div className="delivery-fulfillment-split-grid">
+            {/* Left Pane: Store Drop-offs Sequence */}
+            <div className="delivery-fulfillment-pane is-dropoffs">
+              <div className="delivery-fulfillment-pane-header">
+                <h3 className="delivery-fulfillment-pane-title">
+                  Store Drop-offs ({delivery.dropoffs.length})
+                </h3>
+                <span className="delivery-fulfillment-pane-hint">
+                  Hover or click a stop to highlight its POD
+                </span>
+              </div>
+              <div className="delivery-fulfillment-scroll">
+                <DeliveryDropoffTimeline
+                  dropoffs={delivery.dropoffs}
+                  activeStopId={activeStopId}
+                  onHoverStop={setActiveStopId}
+                  onSelectStop={(stop) => {
+                    setActiveStopId(stop.id);
+                    const el = document.getElementById(`pod-doc-stop-${stop.id}`);
+                    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Right Pane: POD & Supporting Documents */}
+            <div className="delivery-fulfillment-pane is-documents">
+              <div className="delivery-fulfillment-pane-header">
+                <h3 className="delivery-fulfillment-pane-title">
+                  POD &amp; Supporting Documents
+                </h3>
+                <span className="delivery-fulfillment-pane-hint">
+                  {delivery.supportingDocuments?.length
+                    ? `${delivery.supportingDocuments.length} supporting ${
+                        delivery.supportingDocuments.length === 1 ? "file" : "files"
+                      }`
+                    : "Per-stop receipts & files"}
+                </span>
+              </div>
+              <div className="delivery-fulfillment-scroll">
+                <DeliveryPodDocuments
+                  trip={delivery}
+                  canVerify={canManageDocs}
+                  roleLabel={actor.roleLabel}
+                  onTripChange={handleTripUpdated}
+                  activeStopId={activeStopId}
+                  onHoverStop={setActiveStopId}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
         </div>
       </div>
 

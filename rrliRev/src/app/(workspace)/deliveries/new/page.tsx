@@ -29,6 +29,12 @@ import {
   sanitizeSignedDecimalInput,
 } from "@/features/deliveries/delivery-input-utils";
 import { formatPeso } from "@/lib/format";
+import {
+  appendQueryParam,
+  isValidInternalReturnPath,
+  resolveReturnTarget,
+  withReturnContext,
+} from "@/lib/navigation/return-context";
 
 type DropoffDraft = {
   id: string;
@@ -116,15 +122,45 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
   const [draggedStopIndex, setDraggedStopIndex] = useState<number | null>(null);
 
   const [existingDelivery, setExistingDelivery] = useState<DeliveryLedgerItem | null>(null);
+  const [returnToParam, setReturnToParam] = useState<string | null>(null);
+  const [returnLabelParam, setReturnLabelParam] = useState<string | null>(null);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const rt = searchParams.get("returnTo");
+      const rl = searchParams.get("returnLabel");
+      if (rt && isValidInternalReturnPath(rt)) {
+        setReturnToParam(rt);
+        setReturnLabelParam(rl);
+      }
+      if (!propEditDeliveryId) {
+        const q = searchParams.get("edit");
+        if (q) setResolvedEditId(q);
+      }
+    }
     if (propEditDeliveryId) {
       setResolvedEditId(propEditDeliveryId);
-    } else if (typeof window !== "undefined") {
-      const q = new URLSearchParams(window.location.search).get("edit");
-      if (q) setResolvedEditId(q);
     }
   }, [propEditDeliveryId]);
+
+  const backTarget = useMemo(
+    () =>
+      resolveReturnTarget({
+        returnTo: returnToParam,
+        returnLabel: returnLabelParam,
+        fallbackHref:
+          isEditMode && resolvedEditId
+            ? `/deliveries/${encodeURIComponent(resolvedEditId)}`
+            : "/deliveries",
+        fallbackLabel: isEditMode
+          ? existingDelivery?.waybillNumber
+            ? `Back to Waybill #${existingDelivery.waybillNumber}`
+            : "Back to delivery"
+          : "Back to deliveries",
+      }),
+    [returnToParam, returnLabelParam, isEditMode, resolvedEditId, existingDelivery?.waybillNumber],
+  );
 
   useEffect(() => {
     if (!resolvedEditId) return;
@@ -707,7 +743,19 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           };
           upsertBrowserPreviewDelivery(updatedTrip);
         }
-        router.push(`/deliveries/${encodeURIComponent(resolvedEditId)}?updated=1`);
+        const encodedEditId = encodeURIComponent(resolvedEditId);
+        if (returnToParam && isValidInternalReturnPath(returnToParam)) {
+          if (
+            returnToParam.startsWith(`/deliveries/${encodedEditId}`) ||
+            returnToParam.startsWith(`/deliveries/${resolvedEditId}`)
+          ) {
+            router.push(appendQueryParam(returnToParam, "updated", "1"));
+          } else {
+            router.push(returnToParam);
+          }
+        } else {
+          router.push(`/deliveries/${encodedEditId}?updated=1`);
+        }
         return;
       } catch (error) {
         setSubmitError(error instanceof Error ? error.message : "Unable to update delivery record.");
@@ -737,7 +785,16 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         throw new Error(result.message ?? "Unable to record the completed delivery.");
       }
       if (result.previewRecord) upsertBrowserPreviewDelivery(result.previewRecord);
-      router.push(`/deliveries?created=${encodeURIComponent(result.deliveryId ?? "")}`);
+      if (result.deliveryId) {
+        const dest = `/deliveries/${encodeURIComponent(result.deliveryId)}`;
+        if (returnToParam && isValidInternalReturnPath(returnToParam)) {
+          router.push(withReturnContext(dest, returnToParam, returnLabelParam));
+        } else {
+          router.push(dest);
+        }
+      } else {
+        router.push(returnToParam && isValidInternalReturnPath(returnToParam) ? returnToParam : "/deliveries");
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to record the completed delivery.");
       setSubmitting(false);
@@ -977,9 +1034,9 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         <div>
           <Link
             className="back-link"
-            href={isEditMode && resolvedEditId ? `/deliveries/${encodeURIComponent(resolvedEditId)}` : "/deliveries"}
+            href={backTarget.href}
           >
-            {isEditMode ? "← Back to delivery" : "← Back to deliveries"}
+            ← {backTarget.label}
           </Link>
           <h1>{isEditMode ? "Edit delivery" : "Record delivery"}</h1>
           <p className="subtitle">
@@ -1635,7 +1692,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         <div className="delivery-form-actions">
           <Link
             className="secondary-button"
-            href={isEditMode && resolvedEditId ? `/deliveries/${encodeURIComponent(resolvedEditId)}` : "/deliveries"}
+            href={backTarget.href}
           >
             Cancel
           </Link>

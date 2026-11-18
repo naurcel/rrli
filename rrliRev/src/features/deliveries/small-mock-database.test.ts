@@ -6,6 +6,7 @@ import {
   filterSmallMockDeliveries,
   getMockClients,
   registerMockClient,
+  SMALL_MOCK_COMPANY_EXPENSES,
   SMALL_MOCK_DATABASE,
   SMALL_MOCK_PERIOD,
   validateSmallMockDatabase,
@@ -40,19 +41,19 @@ test("keeps the RouteX mock database intentionally small and internally related"
   );
   assert.equal(SMALL_MOCK_DATABASE.drivers.length, 2);
   assert.equal(SMALL_MOCK_DATABASE.helpers.length, 2);
-  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 15);
+  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 21);
   assert.equal(
     SMALL_MOCK_DATABASE.deliveries.reduce(
       (count, delivery) => count + delivery.record.dropoffs.length,
       0,
     ),
-    18,
+    24,
   );
 });
 
-test("returns exactly five deliveries per client and honors the current seven-day filter", () => {
+test("returns exactly seven deliveries per client and honors the date range filter", () => {
   for (const client of SMALL_MOCK_DATABASE.clients) {
-    assert.equal(filterSmallMockDeliveries({ clientId: client.id }).length, 5);
+    assert.equal(filterSmallMockDeliveries({ clientId: client.id }).length, 7);
   }
 
   assert.equal(
@@ -60,7 +61,7 @@ test("returns exactly five deliveries per client and honors the current seven-da
       dateFrom: SMALL_MOCK_PERIOD.start,
       dateTo: SMALL_MOCK_PERIOD.end,
     }).length,
-    15,
+    21,
   );
   assert.equal(
     filterSmallMockDeliveries({ dateFrom: "2026-10-29", dateTo: "2026-10-31" }).length,
@@ -102,10 +103,34 @@ test("excludes the incomplete trip from confirmed truck profitability", () => {
   const summaries = summarizeTruckProfitability(records);
 
   assert.equal(summaries.length, 7);
-  assert.equal(summaries.reduce((count, truck) => count + truck.completedTrips, 0), 14);
+  assert.equal(summaries.reduce((count, truck) => count + truck.completedTrips, 0), 20);
   for (const summary of summaries) {
     assert.equal(summary.netProfit, summary.totalEarnings - summary.totalExpenses);
+    assert.ok(summary.netProfit > 0, `Truck ${summary.plateNumber} should have positive net profit`);
   }
+});
+
+test("maintains positive delivery and company net profit across All Time, October, November, and recent periods", () => {
+  const finalized = SMALL_MOCK_DATABASE.deliveries
+    .map((d) => d.record)
+    .filter((r) => r.financialState === "finalized");
+
+  for (const record of finalized) {
+    assert.ok((record.netIncome ?? 0) > 0, `${record.waybillNumber} must have positive net profit`);
+  }
+
+  const allRevenue = finalized.reduce((sum, r) => sum + (r.deliveryRate ?? 0), 0);
+  const allDeliveryExp = finalized.reduce((sum, r) => sum + (r.totalExpenses ?? 0), 0);
+  const allCompanyExp = SMALL_MOCK_COMPANY_EXPENSES.reduce((sum, e) => sum + e.amount, 0);
+  assert.ok(allRevenue - allDeliveryExp - allCompanyExp > 0, "All Time company net profit must be positive");
+
+  const novDeliveries = finalized.filter((r) => r.deliveryDate.startsWith("2026-11-"));
+  const novRevenue = novDeliveries.reduce((sum, r) => sum + (r.deliveryRate ?? 0), 0);
+  const novDeliveryExp = novDeliveries.reduce((sum, r) => sum + (r.totalExpenses ?? 0), 0);
+  const novCompanyExp = SMALL_MOCK_COMPANY_EXPENSES
+    .filter((e) => e.expenseDate.startsWith("2026-11-"))
+    .reduce((sum, e) => sum + e.amount, 0);
+  assert.ok(novRevenue - novDeliveryExp - novCompanyExp > 0, "November 2026 company net profit must be positive");
 });
 
 test("represents every requested POD document state with explicitly fictional metadata", () => {
