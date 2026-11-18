@@ -839,7 +839,6 @@ export default function SettingsPage() {
                     <h3 className="appearance-item-title">Color Theme</h3>
                     <p className="appearance-item-subtext">Toggle between daylight contrast and low-glare obsidian dark mode.</p>
                   </div>
-                  <span className="appearance-status-tag">{isDark ? "Dark Theme Active" : "Light Theme Active"}</span>
                 </div>
                 <div className="appearance-toggle-box">
                   <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)" }}>Dark Mode</span>
@@ -865,13 +864,6 @@ export default function SettingsPage() {
                       Scales typography proportionally across tables, form inputs, buttons, navigation, and summary cards.
                     </p>
                   </div>
-                  <span className="appearance-status-tag">
-                    {preferences.fontSize === "small"
-                      ? "Small (~0.88x Dense)"
-                      : preferences.fontSize === "large"
-                      ? "Large (~1.14x Expanded)"
-                      : "Default (1.0x Baseline)"}
-                  </span>
                 </div>
                 <div className="profile-segmented-control" role="radiogroup" aria-label="Font Size options" style={{ maxWidth: "420px" }}>
                   {(["small", "default", "large"] as const).map((opt) => (
@@ -898,11 +890,6 @@ export default function SettingsPage() {
                       Adjusts whitespace, table row heights, form padding, and grid gaps to maximize visible data on screen.
                     </p>
                   </div>
-                  <span className="appearance-status-tag">
-                    {preferences.compactness === "compact"
-                      ? "Compact (Dense tables & cards)"
-                      : "Comfortable (Standard spacing)"}
-                  </span>
                 </div>
                 <div className="profile-segmented-control" role="radiogroup" aria-label="Compactness options" style={{ maxWidth: "340px" }}>
                   {(["comfortable", "compact"] as const).map((opt) => (

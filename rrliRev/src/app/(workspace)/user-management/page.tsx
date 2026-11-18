@@ -8,6 +8,8 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
 import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
+import { useSearchBuffer } from "@/components/search-buffer";
+import { SimpleLoading } from "@/components/simple-loading";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { AuditStateChanges } from "@/components/audit-state-changes";
 import {
@@ -126,7 +128,13 @@ export default function UserManagementPage() {
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
-  const [auditSearch, setAuditSearch] = useState("");
+  const {
+    value: auditSearch,
+    setValue: setAuditSearch,
+    bufferedQuery: debouncedAuditSearch,
+    isBuffering: isAuditSearchBuffering,
+    clear: clearAuditSearch,
+  } = useSearchBuffer({ delay: 280 });
   const [actionFilter, setActionFilter] = useState("all");
   const [entityFilter, setEntityFilter] = useState("all");
   const [selectedAuditEntry, setSelectedAuditEntry] = useState<AuditEntry | null>(null);
@@ -262,7 +270,7 @@ export default function UserManagementPage() {
   }, [selectedAuditEntry]);
 
   const filteredAuditEntries = useMemo(() => {
-    const q = auditSearch.trim().toLowerCase();
+    const q = debouncedAuditSearch.trim().toLowerCase();
     return auditEntries.filter((entry) => {
       if (actionFilter && actionFilter !== "all" && actionFilter !== "All Actions") {
         const normalizedAction = actionFilter.toLowerCase().replace(/\s+/g, "_");
@@ -289,7 +297,7 @@ export default function UserManagementPage() {
         entry.changes ? JSON.stringify(entry.changes) : "",
       ].some((val) => (val ?? "").toLowerCase().includes(q));
     });
-  }, [auditEntries, auditSearch, actionFilter, entityFilter]);
+  }, [auditEntries, debouncedAuditSearch, actionFilter, entityFilter]);
 
   const [auditPage, setAuditPage] = useState(1);
   const AUDIT_PAGE_SIZE = 10;
@@ -297,7 +305,7 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     setAuditPage(1);
-  }, [auditSearch, actionFilter, entityFilter]);
+  }, [debouncedAuditSearch, actionFilter, entityFilter]);
 
   const paginatedAuditEntries = useMemo(() => {
     const start = (auditPage - 1) * AUDIT_PAGE_SIZE;
@@ -747,6 +755,9 @@ export default function UserManagementPage() {
         <header className="page-intro">
           <div>
             <h1>User Management</h1>
+            <p className="subtitle">
+              Manage staff accounts and permissions.
+            </p>
           </div>
         </header>
 
@@ -1323,7 +1334,7 @@ export default function UserManagementPage() {
               </div>
 
               <div className="filters" aria-label="Filter audit records">
-                <label className="search-box">
+                <label className={`search-box${isAuditSearchBuffering ? " is-buffering" : ""}`}>
                   <svg
                     viewBox="0 0 24 24"
                     aria-hidden="true"
@@ -1343,13 +1354,16 @@ export default function UserManagementPage() {
                     value={auditSearch}
                     onChange={(event) => setAuditSearch(event.target.value)}
                   />
+                  {isAuditSearchBuffering && (
+                    <span className="search-buffer-indicator" title="Buffering search…" aria-label="Buffering search…" />
+                  )}
                   {auditSearch ? (
                     <button
                       type="button"
                       className="search-clear-btn"
                       aria-label="Clear search query"
                       title="Clear search"
-                      onClick={() => setAuditSearch("")}
+                      onClick={() => clearAuditSearch()}
                     >
                       ×
                     </button>
@@ -1403,13 +1417,10 @@ export default function UserManagementPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {auditLoading && auditEntries.length === 0 ? (
+                      {(auditLoading || isAuditSearchBuffering) ? (
                         <tr>
-                          <td colSpan={5} className="table-empty-cell">
-                            <div className="empty-state minimal" role="status">
-                              <strong className="empty-state-title">Loading audit records…</strong>
-                              <span className="empty-state-desc">Retrieving event activity and historical changes.</span>
-                            </div>
+                          <td colSpan={5} className="table-loading-cell">
+                            <SimpleLoading message={isAuditSearchBuffering ? "Searching audit records…" : "Loading audit records…"} />
                           </td>
                         </tr>
                       ) : filteredAuditEntries.length === 0 ? (

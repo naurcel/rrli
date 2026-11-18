@@ -8,6 +8,7 @@ import { useAuthenticatedActor } from "@/components/auth-context";
 import {
   formatDateRange,
   GlobalDateRangePicker,
+  parseDateValue,
   toDateKey,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
@@ -41,6 +42,7 @@ import {
   canMutateDeliveryRecords,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
+import { withReturnContext } from "@/lib/navigation/return-context";
 
 type TruckRankingMetric = "revenue" | "netIncome" | "expenses" | "profitMargin";
 
@@ -903,7 +905,7 @@ function DashboardFinancialChart({
 export default function DashboardPage() {
   const router = useRouter();
   const actor = useAuthenticatedActor();
-  const { range } = useGlobalDateRange();
+  const { range, setRange } = useGlobalDateRange();
   const { deliveries, loading, error } = usePersistedDeliveries(range);
   const { summary: persistedSummary } = useDeliveryProfitabilitySummary(range);
   const [accessNoticeDismissed, setAccessNoticeDismissed] = useState(false);
@@ -916,7 +918,58 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setGreeting(getTimeOfDayGreeting());
-  }, []);
+    const params = new URLSearchParams(window.location.search);
+    const sortParam = params.get("sort");
+    if (sortParam && sortParam.includes(":")) {
+      const [key, direction] = sortParam.split(":");
+      if (key && (direction === "asc" || direction === "desc")) {
+        setDeliverySort({ key, direction });
+      }
+    }
+    const truckMetricParam = params.get("truckMetric");
+    if (
+      truckMetricParam === "revenue" ||
+      truckMetricParam === "netIncome" ||
+      truckMetricParam === "expenses" ||
+      truckMetricParam === "profitMargin"
+    ) {
+      setTruckRankingMetric(truckMetricParam);
+    }
+    const dateFromParam = params.get("dateFrom");
+    const dateToParam = params.get("dateTo");
+    if (dateFromParam !== null || dateToParam !== null) {
+      setRange({
+        startDate: dateFromParam ? parseDateValue(dateFromParam) : null,
+        endDate: dateToParam ? parseDateValue(dateToParam) : null,
+      });
+    }
+  }, [setRange]);
+
+  function buildCurrentDashboardUrl(): string {
+    const params = new URLSearchParams();
+    if (deliverySort.key !== "date" || deliverySort.direction !== "desc") {
+      params.set("sort", `${deliverySort.key}:${deliverySort.direction}`);
+    }
+    if (truckRankingMetric !== "netIncome") {
+      params.set("truckMetric", truckRankingMetric);
+    }
+    if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+    const qs = params.toString();
+    return qs ? `/dashboard?${qs}` : "/dashboard";
+  }
+
+  function navigateToDashboardDelivery(tripId: string, isAttention = false) {
+    const params = new URLSearchParams();
+    params.set("from", "dashboard");
+    params.set("sort", `${deliverySort.key}:${deliverySort.direction}`);
+    if (isAttention) params.set("attention", "1");
+    if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+    params.set("returnTo", buildCurrentDashboardUrl());
+    params.set("returnLabel", "Dashboard");
+    router.push(`/deliveries/${encodeURIComponent(tripId)}?${params.toString()}`);
+  }
 
   const toggleAttentionItem = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -1070,19 +1123,22 @@ export default function DashboardPage() {
         <header className="page-intro dashboard-welcome">
           <div>
             <h1 suppressHydrationWarning>{greeting}, {actor.fullName ? actor.fullName.split(" ")[0] : (actor.username ?? "there")}</h1>
+            <p className="subtitle">
+              Overview of delivery operations and profitability.
+            </p>
           </div>
           {canWrite ? (
             <div className="fleet-intro-actions">
               <Link
                 className="secondary-button page-intro-action"
-                href="/deliveries/import"
+                href={withReturnContext("/deliveries/import", buildCurrentDashboardUrl(), "Dashboard")}
                 aria-label="Import an Excel trip report"
               >
                 Import
               </Link>
               <Link
                 className="primary-action-button page-intro-action"
-                href="/deliveries/new"
+                href={withReturnContext("/deliveries/new", buildCurrentDashboardUrl(), "Dashboard")}
                 aria-label="Record a completed delivery and its trip details"
               >
                 Record delivery
@@ -1279,11 +1335,11 @@ export default function DashboardPage() {
                         key={trip.id}
                         className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
                         tabIndex={0}
-                        onClick={() => router.push(`/deliveries/${encodeURIComponent(trip.id)}`)}
+                        onClick={() => navigateToDashboardDelivery(trip.id, false)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
-                            router.push(`/deliveries/${encodeURIComponent(trip.id)}`);
+                            navigateToDashboardDelivery(trip.id, false);
                           }
                         }}
                       >
@@ -1376,7 +1432,11 @@ export default function DashboardPage() {
                   <li className={idx === 0 ? "is-top-truck" : undefined} key={truck.plate_number}>
                     <Link
                       className="top-truck-link"
-                      href={`/truck-profitability/${truck.plate_number}`}
+                      href={withReturnContext(
+                        `/truck-profitability/${encodeURIComponent(truck.plate_number)}?from=dashboard`,
+                        buildCurrentDashboardUrl(),
+                        "Dashboard",
+                      )}
                       title={`View ${truck.plate_number}`}
                     >
                       <span className="truck-rank">{idx + 1}</span>
@@ -1438,11 +1498,11 @@ export default function DashboardPage() {
                         className={`dashboard-attention-item${isExpanded ? " is-expanded" : ""}`}
                         role="button"
                         tabIndex={0}
-                        onClick={() => router.push(`/deliveries/${encodeURIComponent(delivery.id)}`)}
+                        onClick={() => navigateToDashboardDelivery(delivery.id, true)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            router.push(`/deliveries/${encodeURIComponent(delivery.id)}`);
+                            navigateToDashboardDelivery(delivery.id, true);
                           }
                         }}
                         aria-label={`View delivery ${delivery.waybillNumber} for ${delivery.clientName}`}
@@ -1494,7 +1554,7 @@ export default function DashboardPage() {
                                 <button
                                   type="button"
                                   className="dashboard-attention-resolve-btn"
-                                  onClick={() => router.push(`/deliveries/${encodeURIComponent(delivery.id)}`)}
+                                  onClick={() => navigateToDashboardDelivery(delivery.id, true)}
                                 >
                                   Review delivery details →
                                 </button>

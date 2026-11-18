@@ -603,6 +603,9 @@ export default function ReportsPage() {
         <header className="page-intro report-intro">
           <div>
             <h1>Reports</h1>
+            <p className="subtitle">
+              Print and export delivery reports.
+            </p>
           </div>
           <div className="report-actions">
             {canExportReports(actor.role) && (
