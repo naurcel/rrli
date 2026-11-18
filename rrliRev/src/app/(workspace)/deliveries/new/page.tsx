@@ -42,6 +42,9 @@ type DropoffDraft = {
   destinationArea: string;
   entryFee: string;
   entryFeeStatus: ExpenseResolutionStatus;
+  podSubmitted?: boolean;
+  supportingDocsComplete?: boolean;
+  documentRef?: string;
 };
 
 type ReferenceData = {
@@ -164,6 +167,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
   useEffect(() => {
     if (!resolvedEditId) return;
+    let decodedEditId = resolvedEditId;
+    try {
+      decodedEditId = decodeURIComponent(resolvedEditId);
+    } catch {
+      decodedEditId = resolvedEditId;
+    }
 
     function applyDelivery(del: DeliveryLedgerItem) {
       setExistingDelivery(del);
@@ -177,7 +186,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         additionalCharges: (del as unknown as Record<string, unknown>).additionalCharges != null ? String((del as unknown as Record<string, unknown>).additionalCharges) : "",
         dieselExpenses: del.expenses.dieselExpenses != null ? String(del.expenses.dieselExpenses) : "",
         tollGateExpenses: del.expenses.tollGateExpenses != null ? String(del.expenses.tollGateExpenses) : "",
-        tollGateBreakdown: "",
+        tollGateBreakdown: del.expenses.tollGateBreakdown ?? "",
         driverAllowance: del.expenses.driverAllowance != null ? String(del.expenses.driverAllowance) : "",
         driverDailyRate: del.expenses.driverDailyRate != null ? String(del.expenses.driverDailyRate) : "",
         helperAllowance: del.expenses.helperAllowance != null ? String(del.expenses.helperAllowance) : "",
@@ -191,10 +200,20 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       setTruckTemperature(del.truckTemperature ? String(del.truckTemperature).replace("°C", "") : "");
       setDriverName(del.driverName ?? "");
 
-      const hasH2 = Boolean((del.expenses as unknown as Record<string, unknown>).helper2DailyRate != null || (del as unknown as Record<string, unknown>).helper2Name);
+      const rawHelperParts = (del.helperName ?? "")
+        .split(/[,/&]/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const explicitHelper2 = (del as unknown as Record<string, unknown>).helper2Name
+        ? String((del as unknown as Record<string, unknown>).helper2Name)
+        : rawHelperParts[1] ?? "";
+      const hasH2 = Boolean(
+        (del.expenses as unknown as Record<string, unknown>).helper2DailyRate != null ||
+          explicitHelper2,
+      );
       setHasSecondHelper(hasH2);
-      setHelper1Name(del.helperName ?? "");
-      setHelper2Name((del as unknown as Record<string, unknown>).helper2Name ? String((del as unknown as Record<string, unknown>).helper2Name) : "");
+      setHelper1Name(rawHelperParts[0] ?? del.helperName ?? "");
+      setHelper2Name(explicitHelper2);
 
       if (del.expenseStates) {
         setExpenseStatuses((prev) => ({
@@ -211,21 +230,29 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             destinationArea: d.destinationArea,
             entryFee: d.entryFee != null ? String(d.entryFee) : "",
             entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
+            podSubmitted: d.podSubmitted,
+            supportingDocsComplete: d.supportingDocsComplete,
+            documentRef: d.documentRef,
           }))
         );
       }
     }
 
-    const local = readBrowserPreviewDeliveries().find((d) => d.id === resolvedEditId);
+    const local = readBrowserPreviewDeliveries().find(
+      (d) => d.id === resolvedEditId || d.id === decodedEditId,
+    );
     if (local) {
       applyDelivery(local);
       return;
     }
 
-    fetch("/api/deliveries?page=1&pageSize=50")
+    fetch("/api/deliveries?page=1&pageSize=100")
       .then((res) => res.json())
       .then((data) => {
-        const found = data.deliveries?.find((d: DeliveryLedgerItem) => d.id === resolvedEditId);
+        const list = (data.items ?? data.deliveries ?? []) as DeliveryLedgerItem[];
+        const found = list.find(
+          (d: DeliveryLedgerItem) => d.id === resolvedEditId || d.id === decodedEditId,
+        );
         if (found) {
           applyDelivery(found);
         }
@@ -540,16 +567,39 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       helper2AllowanceStatus: hasSecondHelper ? ("confirmed" as ExpenseResolutionStatus) : "not_applicable",
       helper2DailyRateStatus: hasSecondHelper ? ("confirmed" as ExpenseResolutionStatus) : "not_applicable",
       otherExpensesStatus: "confirmed" as ExpenseResolutionStatus,
-      supportingDocuments: supportingFiles.map((file) => file.name),
-      dropoffs: dropoffs.map((dropoff, index) => ({
-        storeName: dropoff.storeName,
-        destinationArea: dropoff.destinationArea,
-        entryFee: numberValue(dropoff.entryFee) ?? 0,
-        entryFeeStatus: "confirmed" as ExpenseResolutionStatus,
-        podSubmitted: Boolean(firstPodName && index === 0),
-        supportingDocsComplete: supportingFiles.length > 0,
-        documentRef: index === 0 && firstPodName ? firstPodName : "Pending upload",
-      })),
+      supportingDocuments:
+        supportingFiles.length > 0
+          ? [
+              ...(existingDelivery?.supportingDocuments ?? []),
+              ...supportingFiles.map((file) => file.name),
+            ]
+          : (existingDelivery?.supportingDocuments ?? []),
+      dropoffs: dropoffs.map((dropoff, index) => {
+        const existingStop = existingDelivery?.dropoffs.find((s) => s.id === dropoff.id) ?? existingDelivery?.dropoffs[index];
+        const uploadedPod = index === 0 && firstPodName ? firstPodName : null;
+        const resolvedDocRef =
+          uploadedPod ??
+          dropoff.documentRef ??
+          existingStop?.documentRef ??
+          "Pending upload";
+        const resolvedPodSubmitted =
+          Boolean(uploadedPod) ||
+          Boolean(dropoff.podSubmitted ?? existingStop?.podSubmitted);
+        const resolvedSupportingComplete =
+          supportingFiles.length > 0 ||
+          Boolean(dropoff.supportingDocsComplete ?? existingStop?.supportingDocsComplete);
+        return {
+          id: dropoff.id || existingStop?.id || crypto.randomUUID(),
+          sequence: index + 1,
+          storeName: dropoff.storeName,
+          destinationArea: dropoff.destinationArea,
+          entryFee: numberValue(dropoff.entryFee) ?? 0,
+          entryFeeStatus: (dropoff.entryFeeStatus ?? "confirmed") as ExpenseResolutionStatus,
+          podSubmitted: resolvedPodSubmitted,
+          supportingDocsComplete: resolvedSupportingComplete,
+          documentRef: resolvedDocRef,
+        };
+      }),
     };
   }
 
@@ -639,6 +689,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     const payload = buildPayload();
 
     if (isEditMode && resolvedEditId) {
+      const combinedHelperName =
+        hasSecondHelper && payload.helper2Name
+          ? `${payload.helperName}, ${payload.helper2Name}`
+          : payload.helperName;
       try {
         const response = await fetch("/api/deliveries", {
           method: "PATCH",
@@ -654,18 +708,29 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             idempotencyKey: crypto.randomUUID(),
             reason: editReason.trim() || "Updated delivery details and expenses.",
             changes: {
+              waybillNumber: payload.waybillNumber,
+              deliveryDate: payload.deliveryDate,
+              clientName: payload.clientName,
+              plateNumber: payload.plateNumber,
+              origin: payload.origin,
+              distanceKm: payload.distanceKm,
+              fuelRate: payload.fuelRate,
+              truckTemperature: Number(truckTemperature) || 0,
               deliveryRate: payload.deliveryRate,
               driverName: payload.driverName || null,
-              helperName: payload.helperName || null,
+              helperName: combinedHelperName || null,
+              supportingDocuments: payload.supportingDocuments,
               expenses: {
                 dieselExpenses: payload.dieselExpenses,
                 tollGateExpenses: payload.tollGateExpenses,
-                tollGateBreakdown: existingDelivery?.expenses?.tollGateBreakdown ?? "",
+                tollGateBreakdown: payload.tollGateBreakdown || existingDelivery?.expenses?.tollGateBreakdown || "",
                 entryFees: financialReview.entryFees,
                 driverAllowance: payload.driverAllowance,
                 driverDailyRate: payload.driverDailyRate,
-                helperAllowance: payload.helperAllowance,
-                helperDailyRate: payload.helperDailyRate,
+                helperAllowance:
+                  (payload.helperAllowance ?? 0) + (hasSecondHelper ? (payload.helper2Allowance ?? 0) : 0),
+                helperDailyRate:
+                  (payload.helperDailyRate ?? 0) + (hasSecondHelper ? (payload.helper2DailyRate ?? 0) : 0),
                 otherExpenses: payload.otherExpenses,
               },
               expenseStates: {
@@ -703,17 +768,20 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             clientName: payload.clientName,
             plateNumber: payload.plateNumber,
             driverName: payload.driverName,
-            helperName: payload.helperName,
+            helperName: combinedHelperName,
+            supportingDocuments: payload.supportingDocuments,
             truckTemperature: `${Number(truckTemperature) || 0}°C` as `${number}°C`,
             expenses: {
               dieselExpenses: payload.dieselExpenses,
               tollGateExpenses: payload.tollGateExpenses,
-              tollGateBreakdown: existingDelivery.expenses.tollGateBreakdown ?? "",
+              tollGateBreakdown: payload.tollGateBreakdown || existingDelivery.expenses.tollGateBreakdown || "",
               entryFees: financialReview.entryFees,
               driverAllowance: payload.driverAllowance,
               driverDailyRate: payload.driverDailyRate,
-              helperAllowance: payload.helperAllowance,
-              helperDailyRate: payload.helperDailyRate,
+              helperAllowance:
+                (payload.helperAllowance ?? 0) + (hasSecondHelper ? (payload.helper2Allowance ?? 0) : 0),
+              helperDailyRate:
+                (payload.helperDailyRate ?? 0) + (hasSecondHelper ? (payload.helper2DailyRate ?? 0) : 0),
               otherExpenses: payload.otherExpenses,
             },
             expenseStates: {
