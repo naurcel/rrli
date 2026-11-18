@@ -115,8 +115,8 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
     return computeDonutArcs(slices, trip.totalExpenses, {
       cx: 100,
       cy: 100,
-      outerRadius: 80,
-      innerRadius: 54,
+      outerRadius: 82,
+      innerRadius: 0,
     });
   }, [slices, trip]);
 
@@ -238,16 +238,16 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
               </span>
             </div>
 
-            {/* Donut SVG */}
+            {/* Whole Circle Pie SVG */}
             <div style={{ position: "relative", width: "170px", height: "170px" }}>
-              <svg viewBox="0 0 200 200" width="170" height="170" style={{ transform: "rotate(-90deg)" }}>
+              <svg viewBox="0 0 200 200" width="170" height="170">
                 <circle
                   cx="100"
                   cy="100"
-                  r="67"
-                  fill="none"
-                  stroke="var(--color-surface-subtle)"
-                  strokeWidth="26"
+                  r="82"
+                  fill="var(--color-surface-subtle)"
+                  stroke="var(--color-border, rgba(148, 163, 184, 0.25))"
+                  strokeWidth="1"
                 />
                 {donutArcs.map((arc) => {
                   const isHovered = hoveredSliceId === arc.slice.id;
@@ -257,7 +257,8 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
                       d={arc.pathD}
                       fill={arc.slice.color}
                       stroke="var(--color-surface)"
-                      strokeWidth="2"
+                      strokeWidth="1.5"
+                      strokeLinejoin="round"
                       style={{
                         cursor: "pointer",
                         transition: "transform 0.15s ease, opacity 0.15s ease",
@@ -271,51 +272,27 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
                   );
                 })}
               </svg>
+            </div>
 
-              {/* Center Readout */}
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  textAlign: "center",
-                  pointerEvents: "none",
-                  padding: "6px",
-                }}
-              >
+            {/* Readout Below Circle */}
+            <div className="breakdown-pie-readout" aria-live="polite" style={{ marginTop: "6px" }}>
+              <div className="breakdown-pie-amount">
+                {activeHoveredSlice
+                  ? formatPeso(activeHoveredSlice.slice.amount)
+                  : trip.totalExpenses != null
+                  ? formatPeso(trip.totalExpenses)
+                  : "Incomplete"}
+              </div>
+              <div className="breakdown-pie-label">
                 {activeHoveredSlice ? (
                   <>
-                    <span
-                      style={{
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        color: activeHoveredSlice.slice.color,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {activeHoveredSlice.slice.label}
-                    </span>
-                    <strong style={{ fontSize: "14px", fontWeight: 800, color: "var(--color-text-primary)" }}>
-                      {formatPeso(activeHoveredSlice.slice.amount)}
-                    </strong>
-                    <span style={{ fontSize: "10.5px", fontWeight: 700, color: "var(--color-accent-deep)" }}>
-                      {activeHoveredSlice.percentage.toFixed(1)}%
-                    </span>
+                    <span className="pie-share-pill">{activeHoveredSlice.percentage.toFixed(1)}%</span>
+                    <span className="pie-category-name">{activeHoveredSlice.slice.label}</span>
                   </>
                 ) : (
                   <>
-                    <span style={{ fontSize: "9.5px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-text-muted)" }}>
-                      Total
-                    </span>
-                    <strong style={{ fontSize: "15px", fontWeight: 800, color: "var(--color-accent-deep)" }}>
-                      {trip.totalExpenses != null ? formatPeso(trip.totalExpenses) : "Incomplete"}
-                    </strong>
-                    <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
-                      Disbursements
-                    </span>
+                    <span className="pie-share-pill">100%</span>
+                    <span className="pie-category-name">Total Costs</span>
                   </>
                 )}
               </div>

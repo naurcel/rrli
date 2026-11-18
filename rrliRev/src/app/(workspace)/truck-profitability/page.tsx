@@ -2,18 +2,23 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
   formatDateRange,
   GlobalDateRangePicker,
+  parseDateValue,
+  toDateKey,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
+import { withReturnContext } from "@/lib/navigation/return-context";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
+import { useSearchBuffer } from "@/components/search-buffer";
+import { SimpleLoading } from "@/components/simple-loading";
 import {
   SortableTableHeader,
   type TableSortDirection,
@@ -85,7 +90,14 @@ export default function TruckProfitabilityPage() {
   const { deliveries: dateFilteredTrips, loading, error } = usePersistedDeliveries(range);
 
   // Filter & sort states
-  const [plateSearch, setPlateSearch] = useState("");
+  const {
+    value: plateSearch,
+    setValue: setPlateSearch,
+    bufferedQuery: debouncedPlateSearch,
+    isBuffering: isPlateSearchBuffering,
+    clear: clearPlateSearch,
+    reset: resetPlateSearch,
+  } = useSearchBuffer({ delay: 280 });
   const [classificationFilter, setClassificationFilter] = useState<TruckClassificationFilterKey>("all");
   const [performanceFilter, setPerformanceFilter] = useState<TruckPerformanceFilterKey>("all");
   const [ownedTruckSort, setOwnedTruckSort] = useState<OwnedTruckSort>("netProfit");
@@ -275,8 +287,13 @@ export default function TruckProfitabilityPage() {
   const [crewPage, setCrewPage] = useState(1);
   const CREW_PAGE_SIZE = 10;
   const crewPageCount = Math.max(1, Math.ceil(filteredCrew.length / CREW_PAGE_SIZE));
+  const isCrewMountedRef = useRef(false);
 
   useEffect(() => {
+    if (!isCrewMountedRef.current) {
+      isCrewMountedRef.current = true;
+      return;
+    }
     setCrewPage(1);
   }, [crewRoleFilter, crewSearch]);
 
@@ -767,7 +784,7 @@ export default function TruckProfitabilityPage() {
   }, [allOwnedTrucks, deletedPlates, ownedTruckSort, truckSummaries, ownedViewMode, ownedListSort]);
 
   const filteredOwnedTrucks = useMemo(() => {
-    const cleanSearch = plateSearch.trim().toLowerCase().replace(/\s+/g, "");
+    const cleanSearch = debouncedPlateSearch.trim().toLowerCase().replace(/\s+/g, "");
 
     return sortedTruckSummaries.filter((truck) => {
       // 1. Plate Search
@@ -804,7 +821,7 @@ export default function TruckProfitabilityPage() {
 
       return true;
     });
-  }, [classificationFilter, performanceFilter, plateSearch, sortedTruckSummaries]);
+  }, [classificationFilter, performanceFilter, debouncedPlateSearch, sortedTruckSummaries]);
 
   const sortedSubcontractedTrucks = useMemo(() => {
     const direction = subcontractedSort.direction === "asc" ? 1 : -1;
@@ -842,25 +859,30 @@ export default function TruckProfitabilityPage() {
         return true;
       });
     }
-    if (!plateSearch.trim()) return result;
-    const clean = plateSearch.trim().toLowerCase().replace(/\s+/g, "");
+    if (!debouncedPlateSearch.trim()) return result;
+    const clean = debouncedPlateSearch.trim().toLowerCase().replace(/\s+/g, "");
     return result.filter(
       (t) =>
-        t.plateNumber.toLowerCase().includes(plateSearch.trim().toLowerCase()) ||
+        t.plateNumber.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase()) ||
         t.plateNumber.replace(/\s+/g, "").toLowerCase().includes(clean) ||
-        (t.provider && t.provider.toLowerCase().includes(plateSearch.trim().toLowerCase())) ||
+        (t.provider && t.provider.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())) ||
         (t.contactPerson &&
-          t.contactPerson.toLowerCase().includes(plateSearch.trim().toLowerCase())),
+          t.contactPerson.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())),
     );
-  }, [classificationFilter, plateSearch, sortedSubcontractedTrucks]);
+  }, [classificationFilter, debouncedPlateSearch, sortedSubcontractedTrucks]);
 
   const [ownedPage, setOwnedPage] = useState(1);
   const OWNED_PAGE_SIZE = 10;
   const ownedPageCount = Math.max(1, Math.ceil(filteredOwnedTrucks.length / OWNED_PAGE_SIZE));
+  const isOwnedMountedRef = useRef(false);
 
   useEffect(() => {
+    if (!isOwnedMountedRef.current) {
+      isOwnedMountedRef.current = true;
+      return;
+    }
     setOwnedPage(1);
-  }, [plateSearch, classificationFilter, performanceFilter, ownedTruckSort]);
+  }, [debouncedPlateSearch, classificationFilter, performanceFilter, ownedTruckSort]);
 
   const paginatedOwnedTrucks = useMemo(() => {
     const start = (ownedPage - 1) * OWNED_PAGE_SIZE;
@@ -870,10 +892,130 @@ export default function TruckProfitabilityPage() {
   const [subcontractedPage, setSubcontractedPage] = useState(1);
   const SUBCONTRACTED_PAGE_SIZE = 10;
   const subcontractedPageCount = Math.max(1, Math.ceil(filteredSubcontractedTrucks.length / SUBCONTRACTED_PAGE_SIZE));
+  const isSubMountedRef = useRef(false);
 
   useEffect(() => {
+    if (!isSubMountedRef.current) {
+      isSubMountedRef.current = true;
+      return;
+    }
     setSubcontractedPage(1);
-  }, [plateSearch, subcontractedSort]);
+  }, [debouncedPlateSearch, subcontractedSort]);
+
+  const isInitialUrlHydrated = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || isInitialUrlHydrated.current) return;
+    isInitialUrlHydrated.current = true;
+    const params = new URLSearchParams(window.location.search);
+
+    const qParam = params.get("q") || params.get("search");
+    if (qParam) resetPlateSearch(qParam);
+
+    const classParam = params.get("class");
+    if (classParam === "all" || classParam === "cold" || classParam === "dry" || classParam === "refrigerated") {
+      setClassificationFilter(classParam);
+    }
+
+    const perfParam = params.get("perf");
+    if (perfParam === "all" || perfParam === "top_performing" || perfParam === "high_value" || perfParam === "active") {
+      setPerformanceFilter(perfParam);
+    }
+
+    const sortParam = params.get("sort") as OwnedTruckSort | null;
+    if (sortParam && OWNED_TRUCK_SORT_OPTIONS.some((o) => o.value === sortParam)) {
+      setOwnedTruckSort(sortParam);
+    }
+
+    const listSortParam = params.get("listSort");
+    if (listSortParam) {
+      const [key, dir] = listSortParam.split(":");
+      if (key) {
+        setOwnedListSort({ key, direction: dir === "asc" ? "asc" : "desc" });
+      }
+    }
+
+    const viewParam = params.get("view");
+    if (viewParam === "grid" || viewParam === "list") {
+      setOwnedViewMode(viewParam);
+    }
+
+    const pageParam = params.get("page");
+    if (pageParam && Number(pageParam) > 1) {
+      setOwnedPage(Number(pageParam));
+    }
+
+    const subSortParam = params.get("subSort");
+    if (subSortParam) {
+      const [key, dir] = subSortParam.split(":");
+      if (key) {
+        setSubcontractedSort({
+          key: key as SubcontractedTruckSortKey,
+          direction: dir === "desc" ? "desc" : "asc",
+        });
+      }
+    }
+
+    const subPageParam = params.get("subPage");
+    if (subPageParam && Number(subPageParam) > 1) {
+      setSubcontractedPage(Number(subPageParam));
+    }
+
+    const crewQParam = params.get("crewQ");
+    if (crewQParam) setCrewSearch(crewQParam);
+
+    const crewRoleParam = params.get("crewRole");
+    if (crewRoleParam === "All" || crewRoleParam === "Driver" || crewRoleParam === "Helper") {
+      setCrewRoleFilter(crewRoleParam);
+    }
+
+    const crewPageParam = params.get("crewPage");
+    if (crewPageParam && Number(crewPageParam) > 1) {
+      setCrewPage(Number(crewPageParam));
+    }
+
+    const dateFromParam = params.get("dateFrom");
+    const dateToParam = params.get("dateTo");
+    if (dateFromParam || dateToParam) {
+      setRange({
+        startDate: dateFromParam ? parseDateValue(dateFromParam) : null,
+        endDate: dateToParam ? parseDateValue(dateToParam) : null,
+      });
+    }
+  }, [resetPlateSearch, setRange]);
+
+  function buildCurrentTrucksPageUrl(): string {
+    const params = new URLSearchParams();
+    if (plateSearch.trim()) params.set("q", plateSearch.trim());
+    if (classificationFilter !== "all") params.set("class", classificationFilter);
+    if (performanceFilter !== "all") params.set("perf", performanceFilter);
+    if (ownedTruckSort !== "netProfit") params.set("sort", ownedTruckSort);
+    if (ownedViewMode === "list") {
+      params.set("view", "list");
+      params.set("listSort", `${ownedListSort.key}:${ownedListSort.direction}`);
+    }
+    if (ownedPage > 1) params.set("page", String(ownedPage));
+    if (subcontractedSort.key !== "plateNumber" || subcontractedSort.direction !== "asc") {
+      params.set("subSort", `${subcontractedSort.key}:${subcontractedSort.direction}`);
+    }
+    if (subcontractedPage > 1) params.set("subPage", String(subcontractedPage));
+    if (crewSearch.trim()) params.set("crewQ", crewSearch.trim());
+    if (crewRoleFilter !== "All") params.set("crewRole", crewRoleFilter);
+    if (crewPage > 1) params.set("crewPage", String(crewPage));
+    if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+    const qs = params.toString();
+    return `/truck-profitability${qs ? `?${qs}` : ""}`;
+  }
+
+  function buildTruckDetailHref(plate: string): string {
+    const params = new URLSearchParams();
+    params.set("from", "trucks");
+    if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+    params.set("returnTo", buildCurrentTrucksPageUrl());
+    params.set("returnLabel", "Trucks");
+    return `/truck-profitability/${encodeURIComponent(plate)}?${params.toString()}`;
+  }
 
   const paginatedSubcontractedTrucks = useMemo(() => {
     const start = (subcontractedPage - 1) * SUBCONTRACTED_PAGE_SIZE;
@@ -900,7 +1042,7 @@ export default function TruckProfitabilityPage() {
   );
 
   function handleResetFilters() {
-    setPlateSearch("");
+    clearPlateSearch();
     setClassificationFilter("all");
     setPerformanceFilter("all");
     setRange({ startDate: null, endDate: null });
@@ -1225,6 +1367,9 @@ export default function TruckProfitabilityPage() {
         <header className="page-intro">
           <div>
             <h1>Trucks</h1>
+            <p className="subtitle">
+              Fleet performance and crew registry.
+            </p>
           </div>
           {canAdd && (
             <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -1339,7 +1484,7 @@ export default function TruckProfitabilityPage() {
             </div>
 
             <div className="filters truck-filters">
-              <label className="search-box">
+              <label className={`search-box${isPlateSearchBuffering ? " is-buffering" : ""}`}>
                 <span className="sr-only">Search by plate number</span>
                 <svg
                   width="14"
@@ -1363,6 +1508,9 @@ export default function TruckProfitabilityPage() {
                   value={plateSearch}
                   onChange={(e) => setPlateSearch(e.target.value)}
                 />
+                {isPlateSearchBuffering && (
+                  <span className="search-buffer-indicator" title="Buffering search…" aria-label="Buffering search…" />
+                )}
               </label>
 
               <GlobalDateRangePicker />
@@ -1426,7 +1574,7 @@ export default function TruckProfitabilityPage() {
                       className="filter-chip-remove"
                       aria-label="Remove plate search"
                       title="Clear plate filter"
-                      onClick={() => setPlateSearch("")}
+                      onClick={() => clearPlateSearch()}
                     >
                       ×
                     </button>
@@ -1475,7 +1623,9 @@ export default function TruckProfitabilityPage() {
             )}
           </div>
 
-          {loading || error ? null : filteredOwnedTrucks.length === 0 ? (
+          {error ? null : (loading || isPlateSearchBuffering) ? (
+            <SimpleLoading message={isPlateSearchBuffering ? "Searching trucks…" : "Loading trucks…"} />
+          ) : filteredOwnedTrucks.length === 0 ? (
             <div className="empty-state minimal" title="No matching trucks">
               <strong className="empty-state-title">No owned trucks match the selected filters</strong>
               <span className="empty-state-desc">Try clearing filters or adjusting your search criteria.</span>
@@ -1497,7 +1647,7 @@ export default function TruckProfitabilityPage() {
                     >
                       <Link
                         className="fleet-card-link"
-                        href={`/truck-profitability/${truck.plateNumber}`}
+                        href={buildTruckDetailHref(truck.plateNumber)}
                         title={`View ${truck.plateNumber} details`}
                       >
                         <div className="truck-card-photo-wrap" style={{ overflow: "hidden", borderRadius: "23px 23px 0 0" }}>
@@ -1661,7 +1811,7 @@ export default function TruckProfitabilityPage() {
                           <tr
                             key={truck.plateNumber}
                             className="clickable-table-row"
-                            onClick={() => router.push(`/truck-profitability/${encodeURIComponent(truck.plateNumber)}`)}
+                            onClick={() => router.push(buildTruckDetailHref(truck.plateNumber))}
                             style={{
                               position: "relative",
                               cursor: "pointer",
@@ -2042,7 +2192,13 @@ export default function TruckProfitabilityPage() {
                                 role="menuitem"
                                 onClick={() => {
                                   setOpenCrewActionId(null);
-                                  router.push(`/deliveries?search=${encodeURIComponent(member.fullName)}`);
+                                  router.push(
+                                    withReturnContext(
+                                      `/deliveries?search=${encodeURIComponent(member.fullName)}`,
+                                      buildCurrentTrucksPageUrl(),
+                                      "Trucks",
+                                    ),
+                                  );
                                 }}
                               >
                                 View Deliveries

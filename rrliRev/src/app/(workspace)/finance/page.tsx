@@ -20,6 +20,8 @@ import {
   type TableSortDirection,
 } from "@/components/sortable-table-header";
 import { TablePagination } from "@/components/table-pagination";
+import { useSearchBuffer } from "@/components/search-buffer";
+import { SimpleLoading } from "@/components/simple-loading";
 import {
   handlePositiveDecimalKeyDown,
   sanitizePositiveDecimalInput,
@@ -62,7 +64,13 @@ export default function FinancePage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Table filtering & sorting state
-  const [searchQuery, setSearchQuery] = useState("");
+  const {
+    value: searchQuery,
+    setValue: setSearchQuery,
+    bufferedQuery: debouncedSearchQuery,
+    isBuffering: isSearchBuffering,
+    clear: clearSearch,
+  } = useSearchBuffer({ delay: 280 });
   const [actorFilter, setActorFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<"date" | "amount">("date");
   const [sortDirection, setSortDirection] = useState<TableSortDirection>("desc");
@@ -225,8 +233,8 @@ export default function FinancePage() {
       });
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase().trim();
       result = result.filter(
         (e) =>
           e.description.toLowerCase().includes(q) ||
@@ -249,7 +257,7 @@ export default function FinancePage() {
     });
 
     return result;
-  }, [dateFilteredExpenses, searchQuery, actorFilter, sortField, sortDirection]);
+  }, [dateFilteredExpenses, debouncedSearchQuery, actorFilter, sortField, sortDirection]);
 
   // Pagination slice
   const totalItems = filteredAndSortedExpenses.length;
@@ -270,7 +278,7 @@ export default function FinancePage() {
   );
 
   function clearFilters() {
-    setSearchQuery("");
+    clearSearch();
     setActorFilter("all");
     setPage(1);
   }
@@ -471,6 +479,7 @@ export default function FinancePage() {
         <header className="page-intro">
           <div>
             <h1>Finance</h1>
+            <p className="subtitle">Company operating expense ledger and records.</p>
           </div>
           <div className="page-intro-actions">
             {canManage ? (
@@ -569,7 +578,7 @@ export default function FinancePage() {
 
           <div className="filters" aria-label="Filter company expenses">
             <label
-              className="search-box"
+              className={`search-box${isSearchBuffering ? " is-buffering" : ""}`}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -593,6 +602,9 @@ export default function FinancePage() {
                   setPage(1);
                 }}
               />
+              {isSearchBuffering && (
+                <span className="search-buffer-indicator" title="Buffering search…" aria-label="Buffering search…" />
+              )}
               {searchQuery ? (
                 <button
                   type="button"
@@ -600,7 +612,7 @@ export default function FinancePage() {
                   aria-label="Clear search query"
                   title="Clear search"
                   onClick={() => {
-                    setSearchQuery("");
+                    clearSearch();
                     setPage(1);
                   }}
                 >
@@ -680,11 +692,10 @@ export default function FinancePage() {
             </div>
           ) : null}
 
-          {loading ? (
-            <div className="empty-state" role="status">
-              <strong>Loading expense ledger…</strong>
-              <span>Retrieving company operating expense records.</span>
-            </div>
+          {(loading || isSearchBuffering) ? (
+            <SimpleLoading
+              message={isSearchBuffering ? "Searching expenses…" : "Loading expense ledger…"}
+            />
           ) : (
             <div className="table-wrap">
               <table className="finance-ledger-table">
@@ -810,7 +821,7 @@ export default function FinancePage() {
             totalItems={totalItems}
             pageSize={PAGE_SIZE}
             onPageChange={setPage}
-            loading={loading}
+            loading={loading || isSearchBuffering}
             itemLabel="expenses"
             itemCountInPage={paginatedExpenses.length}
           />

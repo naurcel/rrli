@@ -45,6 +45,10 @@ import {
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import { canManageTrucks } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
+import {
+  resolveReturnTarget,
+  withReturnContext,
+} from "@/lib/navigation/return-context";
 
 export default function TruckProfilePage({
   params,
@@ -64,12 +68,18 @@ export default function TruckProfilePage({
   const { range, setRange } = useGlobalDateRange();
   const { deliveries, loading, error } = usePersistedDeliveries(range);
   const [historySort, setHistorySort] = useState<{ key: string; direction: TableSortDirection }>({ key: "date", direction: "desc" });
+  const [returnToParam, setReturnToParam] = useState<string | null>(null);
+  const [returnLabelParam, setReturnLabelParam] = useState<string | null>(null);
+  const [fromParam, setFromParam] = useState<string | null>(null);
   const isInitialParamsParsed = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined" || isInitialParamsParsed.current) return;
     isInitialParamsParsed.current = true;
     const params = new URLSearchParams(window.location.search);
+    setReturnToParam(params.get("returnTo"));
+    setReturnLabelParam(params.get("returnLabel"));
+    setFromParam(params.get("from"));
     const sortParam = params.get("sort");
     if (sortParam) {
       const [key, direction] = sortParam.split(":");
@@ -264,6 +274,40 @@ export default function TruckProfilePage({
     setHistoryPage(1);
   }, [range, historySort, normalizedPlate]);
 
+  const { href: backHref, label: backLabel } = useMemo(() => {
+    const dateParams = new URLSearchParams();
+    if (range.startDate) dateParams.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) dateParams.set("dateTo", toDateKey(range.endDate));
+    const dateQs = dateParams.toString();
+
+    const fallbackHref =
+      fromParam === "dashboard"
+        ? `/dashboard${dateQs ? `?${dateQs}` : ""}`
+        : `/truck-profitability${dateQs ? `?${dateQs}` : ""}`;
+    const fallbackLabel =
+      fromParam === "dashboard" ? "Back to Dashboard" : "Back to Trucks";
+
+    return resolveReturnTarget({
+      returnTo: returnToParam,
+      returnLabel: returnLabelParam,
+      fallbackHref,
+      fallbackLabel,
+    });
+  }, [fromParam, range.endDate, range.startDate, returnLabelParam, returnToParam]);
+
+  function buildCurrentTruckUrl(): string {
+    const params = new URLSearchParams();
+    params.set("sort", `${historySort.key}:${historySort.direction}`);
+    if (historyPage > 1) params.set("truckPage", String(historyPage));
+    if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
+    if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+    if (returnToParam) params.set("returnTo", returnToParam);
+    if (returnLabelParam) params.set("returnLabel", returnLabelParam);
+    if (fromParam) params.set("from", fromParam);
+    const qs = params.toString();
+    return `/truck-profitability/${encodeURIComponent(normalizedPlate)}${qs ? `?${qs}` : ""}`;
+  }
+
   function navigateToDelivery(trip: DeliveryLedgerItem) {
     const params = new URLSearchParams();
     params.set("from", "truck");
@@ -272,6 +316,8 @@ export default function TruckProfilePage({
     if (historyPage > 1) params.set("truckPage", String(historyPage));
     if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
     if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+    params.set("returnTo", buildCurrentTruckUrl());
+    params.set("returnLabel", normalizedPlate);
     router.push(`/deliveries/${encodeURIComponent(trip.id)}?${params.toString()}`);
   }
 
@@ -369,9 +415,10 @@ export default function TruckProfilePage({
       setIsEditModalOpen(false);
 
       if (updatedTruck.ownershipType === "Subcontracted") {
-        router.push("/truck-profitability");
+        router.push(backHref);
       } else if (updatedTruck.plateNumber.toUpperCase() !== activeTruck.plateNumber.toUpperCase()) {
-        router.push(`/truck-profitability/${encodeURIComponent(updatedTruck.plateNumber)}`);
+        const qs = typeof window !== "undefined" ? window.location.search : "";
+        router.push(`/truck-profitability/${encodeURIComponent(updatedTruck.plateNumber)}${qs}`);
       }
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to update truck.");
@@ -409,7 +456,7 @@ export default function TruckProfilePage({
       }
 
       deleteBrowserPreviewTruck(activeTruck.plateNumber);
-      router.push("/truck-profitability");
+      router.push(backHref);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Failed to delete truck.");
       setIsDeleting(false);
@@ -465,8 +512,8 @@ export default function TruckProfilePage({
       <OperationalTopbar contextLabel={`Truck ${normalizedPlate}`} />
 
       <div className="content-wrap fleet-detail-page truck-profile-page">
-        <Link className="back-link" href="/truck-profitability">
-          ← Back to Trucks
+        <Link className="back-link" href={backHref}>
+          ← {backLabel}
         </Link>
 
         {loading ? (
@@ -483,7 +530,7 @@ export default function TruckProfilePage({
           <section className="fallback-panel truck-profile-unavailable">
             <h1>Truck profile unavailable</h1>
             <p>No fleet record or finalized deliveries for {normalizedPlate} were found.</p>
-            <Link className="fallback-link" href="/truck-profitability">Back to trucks</Link>
+            <Link className="fallback-link" href={backHref}>{backLabel}</Link>
           </section>
         ) : (
           <>
@@ -757,7 +804,13 @@ export default function TruckProfilePage({
                                         role="menuitem"
                                         onClick={() => {
                                           setOpenRowActionTripId(null);
-                                          router.push(`/deliveries?edit=${encodeURIComponent(trip.id)}`);
+                                          router.push(
+                                            withReturnContext(
+                                              `/deliveries/${encodeURIComponent(trip.id)}/edit`,
+                                              buildCurrentTruckUrl(),
+                                              normalizedPlate,
+                                            ),
+                                          );
                                         }}
                                       >
                                         Edit Financials

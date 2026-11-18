@@ -137,8 +137,8 @@ export function FinancialBreakdownModal({
     return computeDonutArcs(expenseSlices, summary.expenseTotal, {
       cx: 100,
       cy: 100,
-      outerRadius: 80,
-      innerRadius: 54,
+      outerRadius: 82,
+      innerRadius: 0,
     });
   }, [expenseSlices, summary.expenseTotal]);
 
@@ -399,20 +399,20 @@ export function FinancialBreakdownModal({
                   </span>
                 </div>
 
-                {/* Donut SVG */}
-                <div style={{ position: "relative", width: "190px", height: "190px" }}>
-                  <svg viewBox="0 0 200 200" width="190" height="190" style={{ transform: "rotate(-90deg)" }}>
-                    {/* Background Track */}
+                {/* Whole Circle Pie SVG */}
+                <div style={{ position: "relative", width: "184px", height: "184px" }}>
+                  <svg viewBox="0 0 200 200" width="184" height="184">
+                    {/* Background Circle */}
                     <circle
                       cx="100"
                       cy="100"
-                      r="67"
-                      fill="none"
-                      stroke="var(--color-surface-subtle)"
-                      strokeWidth="26"
+                      r="82"
+                      fill="var(--color-surface-subtle)"
+                      stroke="var(--color-border, rgba(148, 163, 184, 0.25))"
+                      strokeWidth="1"
                     />
 
-                    {/* Arcs */}
+                    {/* Pie Slices */}
                     {expenseArcs.map((arc) => {
                       const isHovered = hoveredSliceId === arc.slice.id;
                       return (
@@ -421,7 +421,8 @@ export function FinancialBreakdownModal({
                           d={arc.pathD}
                           fill={arc.slice.color}
                           stroke="var(--color-surface)"
-                          strokeWidth="2"
+                          strokeWidth="1.5"
+                          strokeLinejoin="round"
                           tabIndex={0}
                           role="graphics-symbol"
                           aria-label={`${arc.slice.label}: ${formatPeso(arc.slice.amount)} (${arc.percentage.toFixed(1)}%)`}
@@ -438,74 +439,25 @@ export function FinancialBreakdownModal({
                       );
                     })}
                   </svg>
+                </div>
 
-                  {/* Center Text Readout */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      pointerEvents: "none",
-                      padding: "8px",
-                    }}
-                  >
+                {/* Readout Below Circle */}
+                <div className="breakdown-pie-readout" aria-live="polite" style={{ marginTop: "6px" }}>
+                  <div className="breakdown-pie-amount">
+                    {activeHoveredSlice
+                      ? formatPeso(activeHoveredSlice.slice.amount)
+                      : formatPeso(summary.expenseTotal)}
+                  </div>
+                  <div className="breakdown-pie-label">
                     {activeHoveredSlice ? (
                       <>
-                        <span
-                          style={{
-                            fontSize: "10.5px",
-                            fontWeight: 700,
-                            color: activeHoveredSlice.slice.color,
-                            textTransform: "uppercase",
-                            letterSpacing: "0.04em",
-                          }}
-                        >
-                          {activeHoveredSlice.slice.label}
-                        </span>
-                        <strong
-                          style={{
-                            fontSize: "15px",
-                            fontWeight: 800,
-                            color: "var(--color-text-primary)",
-                            margin: "1px 0",
-                          }}
-                        >
-                          {formatPeso(activeHoveredSlice.slice.amount)}
-                        </strong>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-accent-deep)" }}>
-                          {activeHoveredSlice.percentage.toFixed(1)}% Share
-                        </span>
+                        <span className="pie-share-pill">{activeHoveredSlice.percentage.toFixed(1)}%</span>
+                        <span className="pie-category-name">{activeHoveredSlice.slice.label}</span>
                       </>
                     ) : (
                       <>
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            fontWeight: 700,
-                            textTransform: "uppercase",
-                            color: "var(--color-text-muted)",
-                            letterSpacing: "0.05em",
-                          }}
-                        >
-                          Total Costs
-                        </span>
-                        <strong
-                          style={{
-                            fontSize: "16px",
-                            fontWeight: 800,
-                            color: "var(--color-accent-deep)",
-                            margin: "1px 0",
-                          }}
-                        >
-                          {formatPeso(summary.expenseTotal)}
-                        </strong>
-                        <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
-                          6 Categories
-                        </span>
+                        <span className="pie-share-pill">100%</span>
+                        <span className="pie-category-name">Total Costs</span>
                       </>
                     )}
                   </div>
