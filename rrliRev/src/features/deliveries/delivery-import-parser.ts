@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import type { TruckTemperature } from "./delivery-domain";
 
 export type StagedDropoff = {
@@ -266,6 +267,12 @@ export function validateStagedRow(
  */
 export function parseDeliveryImport(
   text: string,
+/**
+ * Parses and validates tabular rows into StagedDeliveryRows.
+ * Groups multi-stop deliveries sharing the same Waybill Number.
+ */
+export function parseDeliveryImportFromTable(
+  table: string[][],
   existingWaybills?: Set<string>,
 ): ImportParseResult {
   const table = parseDelimitedText(text);
@@ -459,6 +466,91 @@ export function parseDeliveryImport(
     duplicateCount,
     errors: [],
   };
+}
+
+/**
+ * Parses and validates an entire CSV/TSV spreadsheet into StagedDeliveryRows.
+ */
+export function parseDeliveryImport(
+  text: string,
+  existingWaybills?: Set<string>,
+): ImportParseResult {
+  const table = parseDelimitedText(text);
+  return parseDeliveryImportFromTable(table, existingWaybills);
+}
+
+/**
+ * Parses binary Excel .xlsx or .xls buffer into a 2D string array.
+ */
+export function parseXlsxToTable(data: ArrayBuffer | Uint8Array): string[][] {
+  try {
+    const workbook = XLSX.read(data, { type: "array", cellDates: true });
+    const sheetName =
+      workbook.SheetNames.find((s) => /deliver|trip|dtr|sheet1/i.test(s)) ||
+      workbook.SheetNames[0];
+    if (!sheetName) return [];
+    const worksheet = workbook.Sheets[sheetName];
+    if (!worksheet) return [];
+
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+      header: 1,
+      defval: "",
+      raw: false,
+      dateNF: "yyyy-mm-dd",
+    });
+
+    return rawRows
+      .map((row) =>
+        Array.isArray(row)
+          ? row.map((cell) => {
+              if (cell instanceof Date) {
+                return cell.toISOString().slice(0, 10);
+              }
+              return String(cell ?? "").trim();
+            })
+          : [],
+      )
+      .filter((row) => row.some((c) => c.length > 0));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Parses and validates an Excel (.xlsx / .xls) buffer into StagedDeliveryRows.
+ */
+export function parseXlsxDeliveryImport(
+  data: ArrayBuffer | Uint8Array,
+  existingWaybills?: Set<string>,
+): ImportParseResult {
+  const table = parseXlsxToTable(data);
+  if (table.length === 0) {
+    return {
+      rows: [],
+      totalRawRows: 0,
+      totalGroupedDeliveries: 0,
+      readyCount: 0,
+      attentionCount: 0,
+      duplicateCount: 0,
+      errors: [
+        "Unable to read Excel file (.xlsx). Please ensure the spreadsheet has at least one sheet with valid column headers.",
+      ],
+    };
+  }
+  return parseDeliveryImportFromTable(table, existingWaybills);
+}
+
+/**
+ * Generates sample Excel .xlsx binary workbook data.
+ */
+export function generateSampleXlsx(): Uint8Array {
+  const sampleCsv = generateSampleCsv();
+  const rows = parseDelimitedText(sampleCsv);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "Deliveries");
+  const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  return new Uint8Array(wbOut);
 }
 
 /**

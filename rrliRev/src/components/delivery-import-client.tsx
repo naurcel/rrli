@@ -6,7 +6,9 @@ import type { TruckTemperature } from "@/features/deliveries/delivery-domain";
 import {
   generateImportErrorReport,
   generateSampleCsv,
+  generateSampleXlsx,
   parseDeliveryImport,
+  parseXlsxDeliveryImport,
   validateStagedRow,
   type StagedDeliveryRow,
 } from "@/features/deliveries/delivery-import-parser";
@@ -111,6 +113,29 @@ export function DeliveryExcelImportClient({
     }
   }
 
+  // Process binary Excel workbook into parsed rows
+  function processFileBuffer(buffer: ArrayBuffer, name: string) {
+    setErrorMessage(null);
+    setFileName(name);
+
+    try {
+      const result = parseXlsxDeliveryImport(buffer, existingWaybills);
+      if (result.errors.length > 0 && result.rows.length === 0) {
+        setErrorMessage(result.errors.join(". "));
+        return;
+      }
+      if (result.rows.length === 0) {
+        setErrorMessage("No valid delivery trip records could be found in the uploaded Excel file.");
+        return;
+      }
+
+      setStagedRows(result.rows);
+      setStep(2);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Failed to parse Excel spreadsheet.");
+    }
+  }
+
   function handleFileSelected(file: File) {
     if (file.size > MAX_FILE_SIZE_BYTES) {
       setErrorMessage("File exceeds the maximum allowed size of 10MB.");
@@ -131,6 +156,32 @@ export function DeliveryExcelImportClient({
       setErrorMessage("Unable to read the uploaded file.");
     };
     reader.readAsText(file);
+    const isExcel = /\.xlsx?$/i.test(file.name);
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const buffer = e.target?.result;
+        if (buffer instanceof ArrayBuffer) {
+          processFileBuffer(buffer, file.name);
+        }
+      };
+      reader.onerror = () => {
+        setErrorMessage("Unable to read the uploaded Excel file.");
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result;
+        if (typeof text === "string") {
+          processFileText(text, file.name);
+        }
+      };
+      reader.onerror = () => {
+        setErrorMessage("Unable to read the uploaded file.");
+      };
+      reader.readAsText(file);
+    }
   }
 
   function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -157,6 +208,21 @@ export function DeliveryExcelImportClient({
     const link = document.createElement("a");
     link.href = url;
     link.setAttribute("download", "routex_daily_trip_report_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadXlsxTemplate() {
+    const bytes = generateSampleXlsx();
+    const blob = new Blob([bytes as unknown as BlobPart], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "routex_daily_trip_report_template.xlsx");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -388,8 +454,17 @@ export function DeliveryExcelImportClient({
             <div>
               <h2>Select Daily Trip Report File</h2>
               <p>Upload a CSV, TSV, or spreadsheet export containing completed delivery trips.</p>
+              <p>Upload an Excel (.xlsx), CSV, or TSV spreadsheet containing completed delivery trips.</p>
             </div>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <button type="button" className="secondary-button" onClick={downloadXlsxTemplate}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Download Excel (.xlsx) Template
+              </button>
               <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -452,8 +527,10 @@ export function DeliveryExcelImportClient({
               </strong>
               <span className="import-dropzone-desc">
                 Supports standard CSV, TSV, and delimited text files up to 10MB.
+                Supports Microsoft Excel (.xlsx), CSV, and TSV spreadsheet files up to 10MB.
               </span>
               <div className="import-dropzone-badges">
+                <span className="import-badge">.XLSX</span>
                 <span className="import-badge">.CSV</span>
                 <span className="import-badge">.TSV</span>
                 <span className="import-badge">.TXT</span>
@@ -462,6 +539,7 @@ export function DeliveryExcelImportClient({
               <input
                 type="file"
                 accept=".csv,.tsv,.txt"
+                accept=".xlsx,.xls,.csv,.tsv,.txt"
                 onChange={handleFileInputChange}
                 style={{ display: "none" }}
               />

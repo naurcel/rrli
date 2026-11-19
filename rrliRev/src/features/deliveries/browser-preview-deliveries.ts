@@ -1,5 +1,6 @@
 import {
   calculateProfitMargin,
+  calculateTripExpenseTotal,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
   summarizeTruckProfitability,
@@ -27,23 +28,37 @@ export type BrowserDeliveryFilters = {
 };
 
 function reconcileDeliveryFinancialState(item: DeliveryLedgerItem): DeliveryLedgerItem {
-  if (item.financialState === "incomplete") {
-    const hasUnknownExpenses = Object.values(item.expenseStates ?? {}).some(
-      (st) => st === "unknown"
-    );
-    const hasUnconfirmedAmount = Object.entries(item.expenseStates ?? {}).some(
-      ([key, st]) => st === "confirmed" && (item.expenses as unknown as Record<string, unknown>)?.[key] == null
-    );
-    const hasIssues = (item.financialIntegrityIssues?.length ?? 0) > 0;
-    if (!hasUnknownExpenses && !hasUnconfirmedAmount && !hasIssues && item.deliveryRate != null && item.deliveryRate > 0) {
-      return {
-        ...item,
-        financialState: "finalized",
-        financialIntegrityIssues: [],
-      };
+  const nextStates = { ...(item.expenseStates ?? {}) };
+  const expensesObj = (item.expenses ?? {}) as unknown as Record<string, unknown>;
+  for (const key of Object.keys(nextStates) as Array<keyof typeof nextStates>) {
+    if (typeof expensesObj[key] === "number" && Number.isFinite(expensesObj[key] as number)) {
+      nextStates[key] = "confirmed";
     }
   }
-  return item;
+  const hasUnknownExpenses = Object.values(nextStates).some((st) => st === "unknown");
+  const hasUnconfirmedAmount = Object.entries(nextStates).some(
+    ([key, st]) => st === "confirmed" && expensesObj[key] == null,
+  );
+  if (!hasUnknownExpenses && !hasUnconfirmedAmount && item.deliveryRate != null && item.deliveryRate > 0) {
+    const recomputedTotal = calculateTripExpenseTotal(item.expenses, nextStates);
+    const recomputedNet =
+      recomputedTotal != null && item.deliveryRate != null
+        ? item.deliveryRate - recomputedTotal
+        : item.netIncome;
+    return {
+      ...item,
+      expenseStates: nextStates,
+      totalExpenses: recomputedTotal,
+      netIncome: recomputedNet,
+      marginPercent: calculateProfitMargin(item.deliveryRate, recomputedNet),
+      financialState: "finalized",
+      financialIntegrityIssues: [],
+    };
+  }
+  return {
+    ...item,
+    expenseStates: nextStates,
+  };
 }
 
 export function readBrowserPreviewDeliveries(): DeliveryLedgerItem[] {

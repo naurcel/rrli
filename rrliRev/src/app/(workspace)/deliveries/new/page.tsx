@@ -18,6 +18,8 @@ import {
 import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
 import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
 import {
+  calculateProfitMargin,
+  derivePodVerificationStatus,
   type ExpenseResolutionStatus,
 } from "@/features/deliveries/delivery-domain";
 import { getDeliveryDateWindow } from "@/features/deliveries/delivery-recording-policy";
@@ -120,11 +122,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
   const [truckTemperature, setTruckTemperature] = useState("");
   const [dropoffs, setDropoffs] = useState<DropoffDraft[]>([initialDropoff]);
   const [resolvedEditId, setResolvedEditId] = useState<string | undefined>(propEditDeliveryId);
-  const isEditMode = Boolean(resolvedEditId);
-  const editReason = "Updated delivery details and expenses.";
-  const [draggedStopIndex, setDraggedStopIndex] = useState<number | null>(null);
-
   const [existingDelivery, setExistingDelivery] = useState<DeliveryLedgerItem | null>(null);
+  const isEditMode = Boolean(resolvedEditId || propEditDeliveryId || existingDelivery);
+  const [editReason, setEditReason] = useState("");
+  const [draggedStopIndex, setDraggedStopIndex] = useState<number | null>(null);
   const [returnToParam, setReturnToParam] = useState<string | null>(null);
   const [returnLabelParam, setReturnLabelParam] = useState<string | null>(null);
 
@@ -219,6 +220,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         setExpenseStatuses((prev) => ({
           ...prev,
           ...del.expenseStates,
+          otherExpenses: del.expenseStates.otherExpenses === "unknown" ? "unknown" : "confirmed",
         }));
       }
 
@@ -228,8 +230,8 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             id: d.id,
             storeName: d.storeName,
             destinationArea: d.destinationArea,
-            entryFee: d.entryFee != null ? String(d.entryFee) : "",
-            entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
+            entryFee: d.entryFee != null ? String(d.entryFee) : "0",
+            entryFeeStatus: d.entryFeeStatus === "unknown" ? "unknown" : "confirmed",
             podSubmitted: d.podSubmitted,
             supportingDocsComplete: d.supportingDocsComplete,
             documentRef: d.documentRef,
@@ -457,9 +459,18 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
   }, [references.trucks]);
 
   const financialReview = useMemo(() => {
-    const entryFeesComplete = dropoffs.every((stop) => stop.entryFeeStatus !== "unknown");
+    const entryFeesComplete = dropoffs.every(
+      (stop) => stop.entryFeeStatus !== "unknown" || numberValue(stop.entryFee) != null,
+    );
     const entryFees = entryFeesComplete
-      ? dropoffs.reduce((sum, stop) => sum + (stop.entryFeeStatus === "confirmed" ? numberValue(stop.entryFee) ?? 0 : 0), 0)
+      ? dropoffs.reduce(
+          (sum, stop) =>
+            sum +
+            (stop.entryFeeStatus === "confirmed" || numberValue(stop.entryFee) != null
+              ? numberValue(stop.entryFee) ?? 0
+              : 0),
+          0,
+        )
       : null;
 
     // Active keys accounting for Helper 1 and conditionally Helper 2 without duplication
@@ -478,19 +489,21 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     }
 
     const expensesComplete = activeExpenseKeys.every((key) => {
-      const status = expenseStatuses[key];
+      const num = numberValue(values[key]);
+      const status = num != null ? "confirmed" : expenseStatuses[key];
       const isAllowance = key === "driverAllowance" || key === "helperAllowance" || key === "helper2Allowance";
       if (isAllowance) {
         return status === "not_applicable" || status === "confirmed";
       }
-      return status === "not_applicable" || (status === "confirmed" && numberValue(values[key]) != null);
+      return status === "not_applicable" || (status === "confirmed" && num != null);
     });
 
     const totalExpenses = entryFees == null || !expensesComplete
       ? null
       : activeExpenseKeys.reduce((sum, key) => {
-          const status = expenseStatuses[key];
-          return sum + (status === "confirmed" ? numberValue(values[key]) ?? 0 : 0);
+          const num = numberValue(values[key]);
+          const status = num != null ? "confirmed" : expenseStatuses[key];
+          return sum + (status === "confirmed" ? (num ?? 0) : 0);
         }, entryFees);
 
     const revenue = numberValue(values.deliveryRate);
@@ -505,6 +518,13 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
   function updateValue(name: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
+    if (name in expenseStatuses) {
+      const parsed = numberValue(value);
+      setExpenseStatuses((current) => ({
+        ...current,
+        [name]: parsed != null ? "confirmed" : "unknown",
+      }));
+    }
   }
 
   function moveDropoff(index: number, direction: "up" | "down") {
@@ -520,7 +540,14 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
   function updateDropoff(id: string, field: keyof Omit<DropoffDraft, "id">, value: string) {
     setDropoffs((current) =>
-      current.map((dropoff) => (dropoff.id === id ? { ...dropoff, [field]: value } : dropoff)),
+      current.map((dropoff) => {
+        if (dropoff.id !== id) return dropoff;
+        const next = { ...dropoff, [field]: value };
+        if (field === "entryFee") {
+          next.entryFeeStatus = numberValue(value) != null ? "confirmed" : "unknown";
+        }
+        return next;
+      }),
     );
   }
 
@@ -576,15 +603,17 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           : (existingDelivery?.supportingDocuments ?? []),
       dropoffs: dropoffs.map((dropoff, index) => {
         const existingStop = existingDelivery?.dropoffs.find((s) => s.id === dropoff.id) ?? existingDelivery?.dropoffs[index];
-        const uploadedPod = index === 0 && firstPodName ? firstPodName : null;
+        const previouslyHadPod = Boolean(dropoff.podSubmitted ?? existingStop?.podSubmitted);
+        const uploadedPod =
+          podFiles[index]?.name ??
+          (firstPodName && (!previouslyHadPod || index === 0) ? firstPodName : null);
         const resolvedDocRef =
           uploadedPod ??
           dropoff.documentRef ??
           existingStop?.documentRef ??
           "Pending upload";
         const resolvedPodSubmitted =
-          Boolean(uploadedPod) ||
-          Boolean(dropoff.podSubmitted ?? existingStop?.podSubmitted);
+          Boolean(uploadedPod) || previouslyHadPod;
         const resolvedSupportingComplete =
           supportingFiles.length > 0 ||
           Boolean(dropoff.supportingDocsComplete ?? existingStop?.supportingDocsComplete);
@@ -594,7 +623,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           storeName: dropoff.storeName,
           destinationArea: dropoff.destinationArea,
           entryFee: numberValue(dropoff.entryFee) ?? 0,
-          entryFeeStatus: (dropoff.entryFeeStatus ?? "confirmed") as ExpenseResolutionStatus,
+          entryFeeStatus: (numberValue(dropoff.entryFee) != null ? "confirmed" : (dropoff.entryFeeStatus ?? "confirmed")) as ExpenseResolutionStatus,
           podSubmitted: resolvedPodSubmitted,
           supportingDocsComplete: resolvedSupportingComplete,
           documentRef: resolvedDocRef,
@@ -676,6 +705,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       setSubmitError(`Delivery date must be between ${deliveryDateWindow.min} and ${deliveryDateWindow.max}.`);
       return;
     }
+    if (isEditMode && editReason.trim().length < 5) {
+      setSubmitError("Please provide a reason for editing this delivery (at least 5 characters).");
+      return;
+    }
     buildPayload();
     setPreviewing(true);
     if (typeof window !== "undefined") {
@@ -688,7 +721,8 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     setSubmitting(true);
     const payload = buildPayload();
 
-    if (isEditMode && resolvedEditId) {
+    const editId = resolvedEditId || existingDelivery?.id || propEditDeliveryId;
+    if (isEditMode && editId) {
       const combinedHelperName =
         hasSecondHelper && payload.helper2Name
           ? `${payload.helperName}, ${payload.helper2Name}`
@@ -703,10 +737,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           },
           body: JSON.stringify({
             action: "correct_financials",
-            deliveryId: resolvedEditId,
+            deliveryId: editId,
             expectedVersion: existingDelivery?.version ?? 1,
             idempotencyKey: crypto.randomUUID(),
-            reason: editReason.trim() || "Updated delivery details and expenses.",
+            reason: editReason.trim(),
             changes: {
               waybillNumber: payload.waybillNumber,
               clientName: payload.clientName,
@@ -756,6 +790,28 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           throw new Error(result.message ?? "Unable to update delivery record.");
         }
         if (existingDelivery) {
+          const resolvedDropoffs = payload.dropoffs.map((d, i) => ({
+            id: d.id || existingDelivery.dropoffs[i]?.id || crypto.randomUUID(),
+            sequence: i + 1,
+            storeName: d.storeName,
+            destinationArea: d.destinationArea,
+            entryFee: d.entryFee,
+            entryFeeStatus: d.entryFeeStatus,
+            podSubmitted: d.podSubmitted,
+            supportingDocsComplete: d.supportingDocsComplete,
+            documentRef: d.documentRef,
+          }));
+          const remainingIntegrityIssues: string[] = [];
+          if (payload.dieselExpensesStatus === "unknown") remainingIntegrityIssues.push("dieselExpenses is unknown");
+          if (payload.tollGateExpensesStatus === "unknown") remainingIntegrityIssues.push("tollGateExpenses is unknown");
+          if (payload.driverDailyRateStatus === "unknown") remainingIntegrityIssues.push("driverDailyRate is unknown");
+          if (payload.helperDailyRateStatus === "unknown") remainingIntegrityIssues.push("helperDailyRate is unknown");
+          const isFinanciallyResolved =
+            financialReview.totalExpenses != null &&
+            payload.deliveryRate != null &&
+            payload.deliveryRate > 0 &&
+            remainingIntegrityIssues.length === 0;
+
           const updatedTrip: DeliveryLedgerItem = {
             ...existingDelivery,
             waybillNumber: payload.waybillNumber,
@@ -795,26 +851,21 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             },
             totalExpenses: financialReview.totalExpenses,
             netIncome: financialReview.netIncome,
-            dropoffs: payload.dropoffs.map((d, i) => ({
-              id: existingDelivery.dropoffs[i]?.id ?? crypto.randomUUID(),
-              sequence: i + 1,
-              storeName: d.storeName,
-              destinationArea: d.destinationArea,
-              entryFee: d.entryFee,
-              entryFeeStatus: d.entryFeeStatus,
-              podSubmitted: d.podSubmitted,
-              supportingDocsComplete: d.supportingDocsComplete,
-              documentRef: d.documentRef,
-            })),
+            marginPercent: calculateProfitMargin(payload.deliveryRate, financialReview.netIncome),
+            financialState: isFinanciallyResolved ? "finalized" : "incomplete",
+            financialIntegrityIssues: remainingIntegrityIssues,
+            dropoffs: resolvedDropoffs,
+            podStatus: derivePodVerificationStatus(resolvedDropoffs),
             version: (existingDelivery.version ?? 1) + 1,
           };
           upsertBrowserPreviewDelivery(updatedTrip);
         }
-        const encodedEditId = encodeURIComponent(resolvedEditId);
+        const finalEditId = editId || resolvedEditId || existingDelivery?.id || "";
+        const encodedEditId = encodeURIComponent(finalEditId);
         if (returnToParam && isValidInternalReturnPath(returnToParam)) {
           if (
             returnToParam.startsWith(`/deliveries/${encodedEditId}`) ||
-            returnToParam.startsWith(`/deliveries/${resolvedEditId}`)
+            (finalEditId && returnToParam.startsWith(`/deliveries/${finalEditId}`))
           ) {
             router.push(appendQueryParam(returnToParam, "updated", "1"));
           } else {
@@ -1072,6 +1123,20 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
               <DeliveryFilePreview podFiles={podFiles} supportingFiles={supportingFiles} />
             </section>
 
+            {isEditMode ? (
+              <section className="delivery-form-section">
+                <FormHeading number="05" title="Reason for edit" />
+                <div className="review-meta-groups">
+                  <div className="review-meta-group">
+                    <div className="detail-meta-item">
+                      <span className="meta-label">Reason</span>
+                      <strong className="meta-value">{editReason.trim()}</strong>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             <div className="delivery-form-actions">
               <button
                 type="button"
@@ -1136,7 +1201,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                 required
                 disabled={isEditMode}
                 min={isAdmin || isEditMode ? "2024-01-01" : deliveryDateWindow.min}
-                max={isAdmin ? undefined : deliveryDateWindow.max}
+                max={isAdmin || isEditMode ? undefined : deliveryDateWindow.max}
                 value={values.deliveryDate}
                 onChange={(nextDate) => {
                   if (isEditMode) return;
@@ -1757,6 +1822,28 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             />
           </div>
         </section>
+
+        {isEditMode ? (
+          <section className="delivery-form-section">
+            <FormHeading number="05" title="Reason for edit" />
+            <div className="delivery-field-grid">
+              <label style={{ gridColumn: "1 / -1" }}>
+                <span className="field-label-text">
+                  Reason <span style={{ color: "var(--color-danger, #dc2626)" }}>*</span>
+                </span>
+                <input
+                  type="text"
+                  required
+                  minLength={5}
+                  value={editReason}
+                  onChange={(event) => setEditReason(event.target.value)}
+                  placeholder="Describe why this delivery is being updated (minimum 5 characters)"
+                  aria-label="Reason for editing delivery"
+                />
+              </label>
+            </div>
+          </section>
+        ) : null}
 
         <div className="delivery-form-actions">
           <Link

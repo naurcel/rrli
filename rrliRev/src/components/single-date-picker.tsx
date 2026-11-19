@@ -137,17 +137,29 @@ export function SingleDatePicker({
   }, [value, placeholder]);
 
   return (
-    <div className={`single-date-picker-wrap ${className}`} ref={containerRef}>
+    <div className={`single-date-picker-wrap${disabled ? " is-disabled" : ""} ${className}`} ref={containerRef}>
       <button
         id={id}
         type="button"
-        className={`single-date-picker-trigger${isOpen ? " is-open" : ""}`}
+        className={`single-date-picker-trigger${isOpen ? " is-open" : ""}${disabled ? " is-disabled" : ""}`}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         disabled={disabled}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         aria-controls={dialogId}
         aria-label={ariaLabel}
+        style={
+          disabled
+            ? {
+                background: "var(--color-surface-subtle, rgba(148, 163, 184, 0.14))",
+                color: "var(--color-text-muted, #64748b)",
+                borderColor: "var(--color-border-subtle, rgba(148, 163, 184, 0.25))",
+                opacity: 0.68,
+                cursor: "not-allowed",
+                boxShadow: "none",
+              }
+            : undefined
+        }
       >
         <span className={`single-date-picker-text${!value ? " is-placeholder" : ""}`}>
           {displayLabel}

@@ -4,8 +4,10 @@ import test from "node:test";
 import {
   generateImportErrorReport,
   generateSampleCsv,
+  generateSampleXlsx,
   parseDelimitedText,
   parseDeliveryImport,
+  parseXlsxDeliveryImport,
   validateStagedRow,
 } from "./delivery-import-parser.ts";
 import { canImportAndReviewExcel } from "../../lib/auth/rbac.ts";
@@ -221,4 +223,19 @@ test("Operations and Admin roles have full authorization to import deliveries", 
   assert.equal(canImportAndReviewExcel("admin"), true);
   assert.equal(canRoleAccessPath("operations", "/deliveries/import"), true);
   assert.equal(canRoleAccessPath("operations", "/api/deliveries/import"), true);
+});
+
+test("generateSampleXlsx and parseXlsxDeliveryImport successfully roundtrip Excel spreadsheets", () => {
+  const xlsxBytes = generateSampleXlsx();
+  assert.ok(xlsxBytes.length > 500, "XLSX binary should be generated");
+
+  const result = parseXlsxDeliveryImport(xlsxBytes);
+  assert.equal(result.errors.length, 0);
+  assert.ok(result.totalGroupedDeliveries >= 4, "Should parse at least 4 sample deliveries");
+  assert.ok(result.readyCount >= 4, "Sample deliveries should be ready for staging");
+
+  const first = result.rows[0];
+  assert.ok(first.waybillNumber.startsWith("WB-2611-"));
+  assert.equal(first.status, "ready");
+  assert.ok(first.dropoffs.length >= 1);
 });
