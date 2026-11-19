@@ -6,6 +6,7 @@
  * altering or duplicating source delivery records.
  */
 
+import * as XLSX from "xlsx";
 import {
   type DeliveryTripRecord,
   isDeliveryFinanciallyComplete,
@@ -495,6 +496,154 @@ export function downloadReportCsvFile(
   const dateStr = new Date().toISOString().slice(0, 10);
   link.setAttribute("href", url);
   link.setAttribute("download", `routex_${cleanName}_${dateStr}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Generates an Excel workbook (.xlsx binary buffer) from a processed report.
+ */
+export function generateReportXlsx(
+  processed: ProcessedReportResult,
+  dateRangeLabel: string,
+): Uint8Array {
+  const wb = XLSX.utils.book_new();
+
+  // Header metadata block
+  const rows: Array<Array<string | number>> = [
+    ["REDEEMED ROUTE LOGISTICS INC. · ROUTEX"],
+    [processed.template.layout.title.toUpperCase()],
+  ];
+  if (processed.template.layout.subtitle) {
+    rows.push([processed.template.layout.subtitle]);
+  }
+  rows.push([`Period: ${dateRangeLabel}`]);
+  rows.push([`Generated: ${new Date().toLocaleString()}`]);
+  rows.push([]);
+
+  // Summary Metrics Block
+  const summaryHeaders: string[] = [];
+  const summaryValues: Array<string | number> = [];
+
+  if (processed.template.breakdown.showGrossEarnings) {
+    summaryHeaders.push("Delivery Revenue (PHP)");
+    summaryValues.push(processed.totals.grossEarnings);
+  }
+  if (processed.template.breakdown.showTotalExpenses) {
+    summaryHeaders.push("Trip Expenses (PHP)");
+    summaryValues.push(processed.totals.totalExpenses);
+  }
+  if (processed.template.breakdown.showNetProfit) {
+    summaryHeaders.push("Net Profit (PHP)");
+    summaryValues.push(processed.totals.netProfit);
+  }
+  if (processed.template.breakdown.showProfitMargin) {
+    summaryHeaders.push("Profit Margin");
+    summaryValues.push(
+      processed.totals.marginPercent != null ? `${processed.totals.marginPercent.toFixed(1)}%` : "N/A",
+    );
+  }
+  if (processed.template.breakdown.showActiveTrucks) {
+    summaryHeaders.push("Active Trucks");
+    summaryValues.push(processed.totals.activeTruckCount);
+  }
+  if (processed.template.breakdown.showStoreDropoffs) {
+    summaryHeaders.push("Store Drop-offs");
+    summaryValues.push(processed.totals.totalStoreDropoffs);
+  }
+  if ((processed.totals.totalCompanyExpenses ?? 0) > 0) {
+    summaryHeaders.push("Company Expenses (PHP)");
+    summaryValues.push(processed.totals.totalCompanyExpenses ?? 0);
+    summaryHeaders.push("Company Net Profit (PHP)");
+    summaryValues.push(processed.totals.companyNetProfit ?? 0);
+  }
+
+  if (summaryHeaders.length > 0) {
+    rows.push(summaryHeaders);
+    rows.push(summaryValues);
+    rows.push([]);
+  }
+
+  // Column Headers using Custom Labels
+  rows.push(processed.columns.map((c) => c.label));
+
+  // Data Rows
+  for (const row of processed.rows) {
+    const rowValues = processed.columns.map((c) => {
+      const rawVal = row[c.id];
+      if (typeof rawVal === "number") return rawVal;
+      return String(rawVal ?? "");
+    });
+    rows.push(rowValues);
+  }
+
+  // Summary Totals Row if applicable
+  const totalsRow: Array<string | number> = processed.columns.map((c, index) => {
+    if (index === 0) return "TOTALS";
+    if (c.id === "revenue" || c.id === "grossEarnings") {
+      return processed.totals.grossEarnings;
+    }
+    if (c.id === "expenses" || c.id === "totalExpenses") {
+      return processed.totals.totalExpenses;
+    }
+    if (c.id === "netProfit" || c.id === "netIncome") {
+      return processed.totals.netProfit;
+    }
+    if (c.id === "margin") {
+      return processed.totals.marginPercent != null ? `${processed.totals.marginPercent.toFixed(1)}%` : "—";
+    }
+    if (c.id === "deliveries" || c.id === "completedTrips") {
+      return processed.totals.totalTrips;
+    }
+    if (c.id === "dropoffs" || c.id === "storesServed" || c.id === "dropoffCount") {
+      return processed.totals.totalStoreDropoffs;
+    }
+    if (c.id === "diesel" || c.id === "dieselExpenses") {
+      return processed.totals.totalDieselExpenses;
+    }
+    if (c.id === "toll" || c.id === "tollExpenses") {
+      return processed.totals.totalTollExpenses;
+    }
+    if (c.id === "crewCost" || c.id === "crewCosts") {
+      return processed.totals.totalCrewCosts;
+    }
+    return "";
+  });
+
+  rows.push(totalsRow);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "Report");
+  const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  return new Uint8Array(wbOut);
+}
+
+/**
+ * Triggers an immediate browser download of the report in Excel (.xlsx) format.
+ */
+export function downloadReportXlsxFile(
+  processed: ProcessedReportResult,
+  dateRangeLabel: string,
+): void {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+  const xlsxBytes = generateReportXlsx(processed, dateRangeLabel);
+  const blob = new Blob([xlsxBytes as unknown as BlobPart], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  const cleanName = processed.template.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const dateStr = new Date().toISOString().slice(0, 10);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `routex_${cleanName}_${dateStr}.xlsx`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

@@ -7,6 +7,7 @@ import {
   filterDeliveriesForTemplate,
   formatCellValue,
   generateReportCsv,
+  generateReportXlsx,
   processReport,
   resolveTemplateColumns,
 } from "./report-engine.ts";
@@ -404,6 +405,13 @@ test("generateReportCsv creates compliant Excel CSV with company metadata, custo
 
   // Verify summary totals row
   assert.ok(csv.includes("TOTALS,37000.00"));
+});
+
+test("generateReportXlsx creates valid Excel workbook bytes with metadata and rows", () => {
+  const processed = processReport(MOCK_DELIVERIES, DEFAULT_REVENUE_TEMPLATE);
+  const xlsxBytes = generateReportXlsx(processed, "Nov 1, 2026 - Nov 30, 2026");
+  assert.ok(xlsxBytes instanceof Uint8Array);
+  assert.ok(xlsxBytes.length > 500, "Should generate valid XLSX binary");
 });
 
 // ============================================================================

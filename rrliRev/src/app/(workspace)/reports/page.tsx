@@ -23,6 +23,7 @@ import {
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import {
   downloadReportCsvFile,
+  downloadReportXlsxFile,
   formatCellValue,
   processReport,
 } from "@/features/reports/report-engine";
@@ -38,14 +39,23 @@ import {
   readBrowserPreviewExpenses,
   ROUTEX_COMPANY_EXPENSES_CHANGED,
 } from "@/features/finance/browser-preview-expenses";
+import { ReportsDataExportTab } from "@/components/reports-data-export-tab";
+import {
+  canAccessDataExportTab,
+  readExportRequests,
+  ROUTEX_EXPORT_REQUESTS_CHANGED,
+} from "@/features/reports/data-export-engine";
 import { canExportReports } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
+
+const ALL_TIME_RANGE: DateRange = { startDate: null, endDate: null };
 
 export default function ReportsPage() {
   const actor = useAuthenticatedActor();
   const { range } = useGlobalDateRange();
 
   const [activeTemplateId, setActiveTemplateId] = useState<string>("default-revenue");
+  const isDataExportTab = activeTemplateId === "data-export";
 
   // Daily trip report fixed-date state (defaults to today's date YYYY-MM-DD)
   const [dailyDate, setDailyDate] = useState<string>(() => toDateKey(new Date()));
@@ -58,7 +68,7 @@ export default function ReportsPage() {
     );
   }, [activeTemplateId]);
 
-  const isDailyTripReport = activeTemplate.id === "default-daily-trip";
+  const isDailyTripReport = !isDataExportTab && activeTemplate.id === "default-daily-trip";
 
   // For Daily Trip Report, the effective date range is strictly fixed to that single day,
   // completely ignoring whatever date filter is selected in the global topbar.
@@ -71,6 +81,22 @@ export default function ReportsPage() {
   }, [isDailyTripReport, dailyDate, range]);
 
   const { deliveries: filteredDeliveries, loading, error } = usePersistedDeliveries(effectiveRange);
+  const { deliveries: allDeliveries } = usePersistedDeliveries(ALL_TIME_RANGE);
+  const [pendingExportRequestsCount, setPendingExportRequestsCount] = useState(0);
+
+  useEffect(() => {
+    const syncPending = () => {
+      const reqs = readExportRequests();
+      setPendingExportRequestsCount(reqs.filter((r) => r.status === "pending").length);
+    };
+    syncPending();
+    window.addEventListener(ROUTEX_EXPORT_REQUESTS_CHANGED, syncPending);
+    window.addEventListener("storage", syncPending);
+    return () => {
+      window.removeEventListener(ROUTEX_EXPORT_REQUESTS_CHANGED, syncPending);
+      window.removeEventListener("storage", syncPending);
+    };
+  }, []);
 
   // Table sorting
   const [reportSort, setReportSort] = useState<{ key: string; direction: TableSortDirection }>({
@@ -144,6 +170,8 @@ export default function ReportsPage() {
           "truck-profitability": "default-profitability",
           "client-deliveries": "default-revenue",
           "pod-completeness": "default-activity",
+          export: "data-export",
+          "data-export": "data-export",
         };
         if (tabToId[tabParam]) {
           setActiveTemplateId(tabToId[tabParam]);
@@ -608,7 +636,7 @@ export default function ReportsPage() {
             </p>
           </div>
           <div className="report-actions">
-            {canExportReports(actor.role) && (
+            {!isDataExportTab && canExportReports(actor.role) && (
               <button
                 type="button"
                 className="page-intro-action report-export-action"
@@ -622,6 +650,34 @@ export default function ReportsPage() {
               >
                 <span aria-hidden="true">↓</span> Export CSV
               </button>
+              <>
+                <button
+                  type="button"
+                  className="page-intro-action report-export-action"
+                  aria-label="Export report to Excel (.xlsx)"
+                  onClick={() =>
+                    downloadReportXlsxFile(
+                      processedReport,
+                      formatDateRange(effectiveRange),
+                    )
+                  }
+                >
+                  <span aria-hidden="true">↓</span> Export Excel (.xlsx)
+                </button>
+                <button
+                  type="button"
+                  className="page-intro-action report-export-action"
+                  aria-label="Export report to Excel CSV"
+                  onClick={() =>
+                    downloadReportCsvFile(
+                      processedReport,
+                      formatDateRange(effectiveRange),
+                    )
+                  }
+                >
+                  <span aria-hidden="true">↓</span> Export CSV
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -670,6 +726,37 @@ export default function ReportsPage() {
                     : tpl.layout.title.replace(" Report", "")}
                 </button>
               ))}
+              {canAccessDataExportTab(actor.role) && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isDataExportTab}
+                  className={isDataExportTab ? "active" : undefined}
+                  onClick={() => setActiveTemplateId("data-export")}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  <span>Export Data</span>
+                  {actor.role === "admin" && pendingExportRequestsCount > 0 ? (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        minWidth: "18px",
+                        height: "18px",
+                        padding: "0 5px",
+                        borderRadius: "999px",
+                        fontSize: "10.5px",
+                        fontWeight: 700,
+                        background: "var(--color-accent, #b45309)",
+                        color: "#ffffff",
+                      }}
+                    >
+                      {pendingExportRequestsCount}
+                    </span>
+                  ) : null}
+                </button>
+              )}
             </div>
 
             <div className="report-tabs-bar-controls">
@@ -677,6 +764,17 @@ export default function ReportsPage() {
             </div>
           </div>
 
+          {isDataExportTab ? (
+            <ReportsDataExportTab
+              actor={actor}
+              allDeliveries={allDeliveries}
+              allCompanyExpenses={companyExpenses}
+              dateFrom={range.startDate ? toDateKey(range.startDate) : null}
+              dateTo={range.endDate ? toDateKey(range.endDate) : null}
+              periodLabel={formatDateRange(range)}
+            />
+          ) : (
+            <>
           {/* Daily Trip Fixed-Day Date Navigation Controls */}
           {isDailyTripReport && (
             <div className="daily-trip-date-bar">
@@ -1069,6 +1167,8 @@ export default function ReportsPage() {
               <span>Redeemed Route Logistics Inc.</span>
             </footer>
           </article>
+            </>
+          )}
         </div>
       </div>
     </>
