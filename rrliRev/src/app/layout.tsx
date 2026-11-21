@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { GlobalTooltip } from "@/components/global-tooltip";
+import { RouteScrollToTop } from "@/components/route-scroll-to-top";
+import { ToasterProvider } from "@/components/toaster-provider";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
@@ -59,8 +62,12 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <Suspense fallback={null}>
+          <RouteScrollToTop />
+        </Suspense>
         {children}
         <GlobalTooltip />
+        <ToasterProvider />
       </body>
     </html>
   );

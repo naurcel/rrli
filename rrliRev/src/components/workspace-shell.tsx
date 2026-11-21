@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 
 import { AuthActorProvider } from "@/components/auth-context";
 import { GlobalDateRangeProvider } from "@/components/global-date-range-picker";
-import { InitialSetupModal } from "@/components/initial-setup-modal";
 import { OperationalSidebar } from "@/components/operational-sidebar";
 import { RouteXFooter } from "@/components/routex-footer";
 import { SidebarStateProvider } from "@/components/sidebar-state";
@@ -15,6 +15,10 @@ export async function WorkspaceShellLayout({
 }) {
   const actor = await requireAuthenticatedActor();
 
+  if (actor.mustChangePassword || !actor.hasSecurityQuestion) {
+    redirect("/initial-setup");
+  }
+
   return (
     <AuthActorProvider actor={actor}>
       <GlobalDateRangeProvider>
@@ -24,9 +28,6 @@ export async function WorkspaceShellLayout({
             <div className="main-content">
               {children}
               <RouteXFooter />
-              {actor.mustChangePassword || !actor.hasSecurityQuestion ? (
-                <InitialSetupModal username={actor.username} />
-              ) : null}
             </div>
           </div>
         </SidebarStateProvider>

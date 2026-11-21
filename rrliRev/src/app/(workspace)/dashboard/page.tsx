@@ -42,6 +42,7 @@ import {
   canMutateDeliveryRecords,
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
+import { CompactMoney } from "@/components/compact-money";
 import { withReturnContext } from "@/lib/navigation/return-context";
 
 type TruckRankingMetric = "revenue" | "netIncome" | "expenses" | "profitMargin";
@@ -1200,7 +1201,7 @@ export default function DashboardPage() {
               href="/deliveries"
             >
               <span className="stat-label">REVENUE</span>
-              <strong>{formatPeso(totals.earnings)}</strong>
+              <strong><CompactMoney value={totals.earnings} /></strong>
               <span
                 className={`stat-meta ${totals.finalizedCount > 0 ? "positive" : ""}`}
               >
@@ -1216,7 +1217,7 @@ export default function DashboardPage() {
               href="/finance"
             >
               <span className="stat-label">EXPENSES</span>
-              <strong>{formatPeso(totals.deliveryExpenses + totals.companyExpenses)}</strong>
+              <strong><CompactMoney value={totals.deliveryExpenses + totals.companyExpenses} /></strong>
               <span className="stat-meta">
                 {totals.companyExpenses > 0
                   ? `${formatPeso(totals.deliveryExpenses)} delivery · ${formatPeso(totals.companyExpenses)} company`
@@ -1233,7 +1234,7 @@ export default function DashboardPage() {
             >
               <span className="stat-label">PROFIT</span>
               <strong className={totals.companyNetProfit >= 0 ? undefined : "warning"}>
-                {formatPeso(totals.companyNetProfit)}
+                <CompactMoney value={totals.companyNetProfit} />
               </strong>
               <span
                 className={`stat-meta ${
@@ -1366,7 +1367,7 @@ export default function DashboardPage() {
                         </td>
                         <td className="money">
                           {trip.deliveryRate != null && trip.deliveryRate > 0 ? (
-                            formatPeso(trip.deliveryRate)
+                            <CompactMoney value={trip.deliveryRate} />
                           ) : (
                             <span className="text-muted">—</span>
                           )}
@@ -1391,7 +1392,7 @@ export default function DashboardPage() {
                               Pending
                             </span>
                           ) : (
-                            formatPeso(trip.netIncome)
+                            <CompactMoney value={trip.netIncome} />
                           )}
                         </td>
                       </tr>
@@ -1570,7 +1571,11 @@ export default function DashboardPage() {
                 <div
                   className="dashboard-attention-empty"
                 >
-                  <span aria-hidden="true">✓</span>
+                  <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
                   <div>
                     <strong>All caught up</strong>
                     <small>No pending items in this range.</small>

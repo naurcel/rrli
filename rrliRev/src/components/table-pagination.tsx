@@ -34,6 +34,11 @@ export function TablePagination({
   const safePageCount = Math.max(1, pageCount);
   const displayedCount = itemCountInPage ?? Math.min(pageSize, Math.max(0, totalItems - (page - 1) * pageSize));
 
+  function handlePageSelect(newPage: number) {
+    if (newPage === page) return;
+    onPageChange(newPage);
+  }
+
   function commitPageChange(raw: string) {
     const parsed = parseInt(raw, 10);
     if (isNaN(parsed)) {
@@ -43,7 +48,7 @@ export function TablePagination({
     const clamped = Math.max(1, Math.min(safePageCount, parsed));
     setInputValue(String(clamped));
     if (clamped !== page) {
-      onPageChange(clamped);
+      handlePageSelect(clamped);
     }
   }
 
@@ -75,7 +80,7 @@ export function TablePagination({
         <button
           type="button"
           disabled={page <= 1 || loading}
-          onClick={() => onPageChange(Math.max(1, page - 1))}
+          onClick={() => handlePageSelect(Math.max(1, page - 1))}
           className="pagination-btn pagination-prev"
           aria-label="Previous page"
           title="Previous page"
@@ -116,7 +121,7 @@ export function TablePagination({
         <button
           type="button"
           disabled={page >= safePageCount || loading}
-          onClick={() => onPageChange(Math.min(safePageCount, page + 1))}
+          onClick={() => handlePageSelect(Math.min(safePageCount, page + 1))}
           className="pagination-btn pagination-next"
           aria-label="Next page"
           title="Next page"

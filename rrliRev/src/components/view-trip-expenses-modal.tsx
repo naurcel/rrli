@@ -457,9 +457,6 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Diesel</strong>
-                  <span style={{ display: "block", fontSize: "10px", color: "var(--color-text-muted)" }}>
-                    Transit fuel consumption
-                  </span>
                 </div>
                 <strong style={{ fontSize: "12.5px", color: "var(--color-text-primary)" }}>
                   {trip.expenses.dieselExpenses != null ? formatPeso(trip.expenses.dieselExpenses) : "Incomplete"}
@@ -470,9 +467,6 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Toll Gates</strong>
-                  <span style={{ display: "block", fontSize: "10px", color: "var(--color-text-muted)" }}>
-                    {trip.expenses.tollGateBreakdown || "Expressway toll fees"}
-                  </span>
                 </div>
                 <strong style={{ fontSize: "12.5px", color: "var(--color-text-primary)" }}>
                   {trip.expenses.tollGateExpenses != null ? formatPeso(trip.expenses.tollGateExpenses) : "Incomplete"}
@@ -483,9 +477,6 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Entry Fees</strong>
-                  <span style={{ display: "block", fontSize: "10px", color: "var(--color-text-muted)" }}>
-                    {trip.dropoffs.length} {trip.dropoffs.length === 1 ? "drop-off stop" : "drop-off stops"}
-                  </span>
                 </div>
                 <strong style={{ fontSize: "12.5px", color: "var(--color-text-primary)" }}>
                   {trip.expenses.entryFees != null ? formatPeso(trip.expenses.entryFees) : formatPeso(0)}
@@ -496,9 +487,6 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Crew Compensation</strong>
-                  <span style={{ display: "block", fontSize: "10px", color: "var(--color-text-muted)" }}>
-                    Driver &amp; helpers compensation
-                  </span>
                 </div>
                 <strong style={{ fontSize: "12.5px", color: "var(--color-text-primary)" }}>
                   {formatPeso(crewCompensation)}
@@ -510,9 +498,6 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <strong style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Other Expenses</strong>
-                    <span style={{ display: "block", fontSize: "10px", color: "var(--color-text-muted)" }}>
-                      Incidental, parking, permits
-                    </span>
                   </div>
                   <strong style={{ fontSize: "12.5px", color: "var(--color-text-primary)" }}>
                     {formatPeso(trip.expenses.otherExpenses)}

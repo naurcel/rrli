@@ -3,18 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 
 const LOGIN_SLIDES = [
-  { id: 1, src: "/branding/login-slides/slide-1.gif", alt: "RouteX logistics flow - Pink Glow by Erica Anderson" },
-  { id: 2, src: "/branding/login-slides/slide-2.gif", alt: "RouteX logistics flow - Shatter Wave by Erica Anderson" },
-  { id: 3, src: "/branding/login-slides/slide-3.gif", alt: "RouteX logistics flow - Glitch Pink by Erica Anderson" },
-  { id: 4, src: "/branding/login-slides/slide-4.gif", alt: "RouteX logistics flow - Ambient Ether by Erica Anderson" },
-  { id: 5, src: "/branding/login-slides/slide-5.gif", alt: "RouteX logistics flow - Cyber Ripple by Erica Anderson" },
-  { id: 6, src: "/branding/login-slides/slide-6.gif", alt: "RouteX logistics flow - Glow Red Alert by Erica Anderson" },
-  { id: 7, src: "/branding/login-slides/slide-7.gif", alt: "RouteX logistics flow - Liquid Silk by Erica Anderson" },
+  {
+    id: "fleet-team",
+    src: "/branding/login-slides/rrli-fleet-team.jpg",
+    alt: "Redeemed Route Logistics Inc. fleet trucks and dedicated operations crew",
+  },
+  {
+    id: "team-anniversary",
+    src: "/branding/login-slides/rrli-team-anniversary.jpg",
+    alt: "Redeemed Route Logistics Inc. 2nd Year Anniversary team celebration",
+  },
 ] as const;
 
 export function LoginVisualCarousel() {
   const [activeSlide, setActiveSlide] = useState(0);
   const [hoverSide, setHoverSide] = useState<"left" | "right" | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
 
   const goToPrevSlide = useCallback(() => {
     setActiveSlide((prev) => (prev === 0 ? LOGIN_SLIDES.length - 1 : prev - 1));
@@ -26,17 +30,16 @@ export function LoginVisualCarousel() {
 
   // Continuous auto-play motion loop (advances slides like an animated loop, pauses on hover)
   useEffect(() => {
-    if (hoverSide !== null) return;
+    if (isHovered || hoverSide !== null) return;
     const interval = setInterval(() => {
       setActiveSlide((prev) => (prev === LOGIN_SLIDES.length - 1 ? 0 : prev + 1));
-    }, 3800);
+    }, 4500);
     return () => clearInterval(interval);
-  }, [hoverSide]);
+  }, [isHovered, hoverSide]);
 
   // Keyboard navigation when user is on the page
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input
       if (
         document.activeElement?.tagName === "INPUT" ||
         document.activeElement?.tagName === "TEXTAREA"
@@ -58,7 +61,11 @@ export function LoginVisualCarousel() {
     <section
       className="login-visual login-carousel-root"
       aria-label="RouteX logistics visual presentation"
-      onMouseLeave={() => setHoverSide(null)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setHoverSide(null);
+      }}
     >
       {/* 1. Stacked Slide Images with Smooth Cross-Fade & Gentle Scale */}
       {LOGIN_SLIDES.map((slide, index) => (
@@ -86,9 +93,9 @@ export function LoginVisualCarousel() {
         aria-hidden="true"
       />
 
-      {/* 4. Top Indicator Dots showing how many images there are (appears when hovering left or right) */}
+      {/* 4. Top Indicator Dots showing slide progression (visible on hover) */}
       <div
-        className={`login-carousel-indicators ${hoverSide !== null ? "visible" : ""}`}
+        className={`login-carousel-indicators ${isHovered || hoverSide !== null ? "visible" : ""}`}
         role="tablist"
         aria-label="Slide indicators"
       >

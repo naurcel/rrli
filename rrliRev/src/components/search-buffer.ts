@@ -9,7 +9,7 @@ export interface SearchBufferOptions {
 }
 
 export function useSearchBuffer({
-  delay = 250,
+  delay = 500,
   initialValue = "",
   onSearch,
 }: SearchBufferOptions = {}) {

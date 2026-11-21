@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatPercent, formatPeso } from "@/lib/format";
+import { CompactMoney } from "@/components/compact-money";
 import {
   computeDonutArcs,
   type ExpenseCategorySlice,
@@ -198,7 +199,10 @@ export function FinancialBreakdownModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "min(96vw, 980px)",
+          minWidth: "min(96vw, 980px)",
           maxWidth: "980px",
+          height: "min(88vh, 670px)",
+          minHeight: "min(88vh, 670px)",
           maxHeight: "88vh",
           display: "flex",
           flexDirection: "column",
@@ -215,12 +219,16 @@ export function FinancialBreakdownModal({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "12px",
+            flexWrap: "nowrap",
+            gap: "16px",
             flexShrink: 0,
+            height: "72px",
+            minHeight: "72px",
+            maxHeight: "72px",
+            boxSizing: "border-box",
           }}
         >
-          <div>
+          <div style={{ minWidth: 0, flex: "1 1 auto" }}>
             <span
               style={{
                 display: "block",
@@ -238,10 +246,13 @@ export function FinancialBreakdownModal({
               id={headingId}
               style={{
                 margin: 0,
-                fontSize: "19px",
+                fontSize: "18px",
                 fontWeight: 750,
                 color: "var(--color-text-primary)",
                 letterSpacing: "-0.02em",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               {activeTab === "earnings"
@@ -252,7 +263,7 @@ export function FinancialBreakdownModal({
             </h2>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
             {/* Tab Controls */}
             <div
               className="breakdown-tab-controls"
@@ -265,6 +276,7 @@ export function FinancialBreakdownModal({
                 borderRadius: "10px",
                 border: "1px solid var(--color-border)",
                 gap: "2px",
+                flexShrink: 0,
               }}
             >
               <button
@@ -284,6 +296,7 @@ export function FinancialBreakdownModal({
                   color: activeTab === "earnings" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
                   boxShadow: activeTab === "earnings" ? "var(--shadow-soft, 0 1px 3px rgba(0,0,0,0.08))" : "none",
                   transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
                 }}
               >
                 Revenue
@@ -305,6 +318,7 @@ export function FinancialBreakdownModal({
                   color: activeTab === "expenses" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
                   boxShadow: activeTab === "expenses" ? "var(--shadow-soft, 0 1px 3px rgba(0,0,0,0.08))" : "none",
                   transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
                 }}
               >
                 Expenses
@@ -326,6 +340,7 @@ export function FinancialBreakdownModal({
                   color: activeTab === "profit" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
                   boxShadow: activeTab === "profit" ? "var(--shadow-soft, 0 1px 3px rgba(0,0,0,0.08))" : "none",
                   transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
                 }}
               >
                 Net Profit
@@ -338,6 +353,7 @@ export function FinancialBreakdownModal({
               aria-label="Close breakdown dialog"
               title="Close (Esc)"
               onClick={onClose}
+              style={{ flexShrink: 0 }}
             >
               ×
             </button>
@@ -350,11 +366,13 @@ export function FinancialBreakdownModal({
           style={{
             padding: "20px 24px",
             flex: 1,
+            height: "calc(100% - 72px)",
             overflowY: "auto",
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
             gap: "24px",
             alignItems: "start",
+            boxSizing: "border-box",
           }}
         >
           {/* ========================================================================= */}
@@ -544,7 +562,7 @@ export function FinancialBreakdownModal({
                       TOTAL COSTS
                     </span>
                     <strong style={{ display: "block", fontSize: "15px", fontWeight: 800, color: "var(--color-accent-deep)", marginTop: "2px" }}>
-                      {formatPeso(summary.expenseTotal)}
+                      <CompactMoney amount={summary.expenseTotal} />
                     </strong>
                     <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>All disbursements</span>
                   </div>
@@ -605,12 +623,9 @@ export function FinancialBreakdownModal({
                       summary.expenseTotal > 0 ? (slice.amount / summary.expenseTotal) * 100 : 0;
                     return (
                       <div key={slice.id} style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
                           <div>
                             <strong style={{ color: "var(--color-text-primary)" }}>{slice.label}</strong>
-                            <span style={{ display: "block", fontSize: "10.5px", color: "var(--color-text-muted)" }}>
-                              {slice.details}
-                            </span>
                           </div>
                           <div style={{ textAlign: "right" }}>
                             <strong style={{ color: "var(--color-text-primary)" }}>{formatPeso(slice.amount)}</strong>
@@ -924,7 +939,7 @@ export function FinancialBreakdownModal({
                       GROSS REVENUE
                     </span>
                     <strong style={{ display: "block", fontSize: "15px", fontWeight: 800, color: "var(--color-status-success, #059669)", marginTop: "2px" }}>
-                      {formatPeso(summary.rateTotal)}
+                      <CompactMoney amount={summary.rateTotal} />
                     </strong>
                     <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>Agreed billing</span>
                   </div>
@@ -1139,7 +1154,7 @@ export function FinancialBreakdownModal({
                         marginTop: "2px",
                       }}
                     >
-                      {formatPeso(summary.netTotal)}
+                      <CompactMoney amount={summary.netTotal} />
                     </strong>
                     <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>After all expenses</span>
                   </div>
