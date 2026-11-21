@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmExpenseDeletionDialog } from "@/components/confirm-expense-deletion-dialog";
@@ -40,6 +42,7 @@ import {
 } from "@/features/finance/company-expense-domain";
 import { canManageCompanyExpenses } from "@/lib/auth/rbac";
 import { formatPeso } from "@/lib/format";
+import { CompactMoney } from "@/components/compact-money";
 
 const PAGE_SIZE = 10;
 
@@ -70,8 +73,9 @@ export default function FinancePage() {
     bufferedQuery: debouncedSearchQuery,
     isBuffering: isSearchBuffering,
     clear: clearSearch,
-  } = useSearchBuffer({ delay: 280 });
+  } = useSearchBuffer({ delay: 500 });
   const [actorFilter, setActorFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<"date" | "amount">("date");
   const [sortDirection, setSortDirection] = useState<TableSortDirection>("desc");
   const [page, setPage] = useState(1);
@@ -185,6 +189,32 @@ export default function FinancePage() {
     };
   }, [dateFilteredExpenses]);
 
+  // Aggregate incoming, outgoing, and net finance activity
+  const financeActivity = useMemo(() => {
+    let totalIncoming = 0;
+    let incomingCount = 0;
+    let totalOutgoing = 0;
+    let outgoingCount = 0;
+
+    for (const exp of dateFilteredExpenses) {
+      if (exp.transactionType === "Incoming") {
+        totalIncoming += exp.amount;
+        incomingCount++;
+      } else {
+        totalOutgoing += exp.amount;
+        outgoingCount++;
+      }
+    }
+
+    return {
+      totalIncoming,
+      incomingCount,
+      totalOutgoing,
+      outgoingCount,
+      netActivity: totalIncoming - totalOutgoing,
+    };
+  }, [dateFilteredExpenses]);
+
   // Actor filter options derived from unique expense creators
   const actorFilterOptions = useMemo(() => {
     const actors = new Set<string>();
@@ -225,6 +255,10 @@ export default function FinancePage() {
   const filteredAndSortedExpenses = useMemo(() => {
     let result = [...dateFilteredExpenses];
 
+    if (typeFilter !== "all") {
+      result = result.filter((e) => (e.transactionType || "Outgoing") === typeFilter);
+    }
+
     if (actorFilter !== "all") {
       const target = actorFilter.toLowerCase().replace(/^@/, "");
       result = result.filter((e) => {
@@ -257,7 +291,7 @@ export default function FinancePage() {
     });
 
     return result;
-  }, [dateFilteredExpenses, debouncedSearchQuery, actorFilter, sortField, sortDirection]);
+  }, [dateFilteredExpenses, debouncedSearchQuery, actorFilter, typeFilter, sortField, sortDirection]);
 
   // Pagination slice
   const totalItems = filteredAndSortedExpenses.length;
@@ -274,12 +308,13 @@ export default function FinancePage() {
   }, [page, pageCount]);
 
   const hasActiveFilters = Boolean(
-    searchQuery.trim() || actorFilter !== "all",
+    searchQuery.trim() || actorFilter !== "all" || typeFilter !== "all",
   );
 
   function clearFilters() {
     clearSearch();
     setActorFilter("all");
+    setTypeFilter("all");
     setPage(1);
   }
 
@@ -357,9 +392,9 @@ export default function FinancePage() {
           setNewAmount("");
           setNewNotes("");
           setIsRecordModalOpen(false);
-          setFormSuccess(
-            `Recorded ${formatPeso(validation.data.amount)} company expense.`,
-          );
+          const msg = `Recorded ${formatPeso(validation.data.amount)} company expense.`;
+          setFormSuccess(msg);
+          toast.success("Expense recorded", { description: msg });
           setSubmitting(false);
           return;
         }
@@ -387,9 +422,9 @@ export default function FinancePage() {
     setNewAmount("");
     setNewNotes("");
     setIsRecordModalOpen(false);
-    setFormSuccess(
-      `Recorded ${formatPeso(validation.data.amount)} company expense.`,
-    );
+    const msg = `Recorded ${formatPeso(validation.data.amount)} company expense.`;
+    setFormSuccess(msg);
+    toast.success("Expense recorded", { description: msg });
     setSubmitting(false);
   }
 
@@ -411,7 +446,9 @@ export default function FinancePage() {
             prev.map((e) => (e.id === id ? resData.expense : e)),
           );
           setEditingExpense(null);
-          setFormSuccess(`Updated ${formatPeso(data.amount)} company expense.`);
+          const updateMsg = `Updated ${formatPeso(data.amount)} company expense.`;
+          setFormSuccess(updateMsg);
+          toast.success("Expense updated", { description: updateMsg });
           setIsSavingEdit(false);
           return;
         }
@@ -432,7 +469,9 @@ export default function FinancePage() {
       setExpenses((prev) => prev.map((e) => (e.id === id ? updated : e)));
     }
     setEditingExpense(null);
-    setFormSuccess(`Updated ${formatPeso(data.amount)} company expense.`);
+    const updateMsg = `Updated ${formatPeso(data.amount)} company expense.`;
+    setFormSuccess(updateMsg);
+    toast.success("Expense updated", { description: updateMsg });
     setIsSavingEdit(false);
   }
 
@@ -456,6 +495,7 @@ export default function FinancePage() {
         setExpenses((prev) => prev.filter((e) => e.id !== id));
         setDeletingExpense(null);
         setFormSuccess("Deleted company expense record.");
+        toast.success("Expense deleted", { description: "Deleted company expense record." });
         setIsDeleting(false);
         return;
       }
@@ -468,6 +508,7 @@ export default function FinancePage() {
     setExpenses((prev) => prev.filter((e) => e.id !== id));
     setDeletingExpense(null);
     setFormSuccess("Deleted company expense record.");
+    toast.success("Expense deleted", { description: "Deleted company expense record." });
     setIsDeleting(false);
   }
 
@@ -483,13 +524,22 @@ export default function FinancePage() {
           </div>
           <div className="page-intro-actions">
             {canManage ? (
-              <button
-                type="button"
-                className="primary-action-button page-intro-action"
-                onClick={openRecordModal}
-              >
-                + Record Expense
-              </button>
+              <>
+                <Link
+                  className="secondary-button page-intro-action"
+                  href="/finance/import"
+                  aria-label="Import company expenses spreadsheet"
+                >
+                  Import
+                </Link>
+                <button
+                  type="button"
+                  className="primary-action-button page-intro-action"
+                  onClick={openRecordModal}
+                >
+                  + Record Expense
+                </button>
+              </>
             ) : (
               <span className="settings-readonly-pill">
                 View-Only ({actor.roleLabel})
@@ -513,7 +563,9 @@ export default function FinancePage() {
         {formSuccess ? (
           <div className="notice" role="status">
             <span className="notice-icon" aria-hidden="true">
-              ✓
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
             </span>
             <div style={{ flex: 1 }}>
               <span>{formSuccess}</span>
@@ -530,35 +582,49 @@ export default function FinancePage() {
         ) : null}
 
         {/* Summary KPI Cards */}
-        <section className="stat-grid" aria-label="Company expense summary">
+        <section className="stat-grid" aria-label="Company finance summary">
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">TOTAL EXPENSES</span>
+              <span className="stat-label">TOTAL INCOMING</span>
             </div>
-            <strong>{formatPeso(expenseMetrics.total)}</strong>
+            <strong style={{ color: "var(--color-status-success, #059669)" }}>
+              +<CompactMoney value={financeActivity.totalIncoming} />
+            </strong>
             <span className="stat-meta">
-              {formatDateRange(range)}
+              {financeActivity.incomingCount} incoming transactions
             </span>
           </article>
 
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">AVERAGE</span>
+              <span className="stat-label">TOTAL OUTGOING</span>
             </div>
-            <strong>{formatPeso(expenseMetrics.average)}</strong>
-            <span className="stat-meta">{expenseMetrics.count > 0 ? `${expenseMetrics.count} entries` : "—"}</span>
+            <strong style={{ color: "var(--color-danger, #dc2626)" }}>
+              -<CompactMoney value={financeActivity.totalOutgoing} />
+            </strong>
+            <span className="stat-meta">
+              {financeActivity.outgoingCount} outgoing transactions
+            </span>
           </article>
 
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">LARGEST</span>
+              <span className="stat-label">NET FINANCE ACTIVITY</span>
             </div>
-            <strong>{formatPeso(expenseMetrics.highest)}</strong>
+            <strong style={{ color: financeActivity.netActivity >= 0 ? "var(--color-status-success, #059669)" : "var(--color-danger, #dc2626)" }}>
+              {financeActivity.netActivity >= 0 ? "+" : ""}<CompactMoney value={financeActivity.netActivity} />
+            </strong>
             <span className="stat-meta">
-              {expenseMetrics.highestEntry
-                ? expenseMetrics.highestEntry.expenseDate
-                : "—"}
+              Net cash flow for period
             </span>
+          </article>
+
+          <article className="stat-card">
+            <div className="stat-card-header">
+              <span className="stat-label">TOTAL TRANSACTIONS</span>
+            </div>
+            <strong>{dateFilteredExpenses.length}</strong>
+            <span className="stat-meta">{formatDateRange(range)}</span>
           </article>
         </section>
 
@@ -634,6 +700,21 @@ export default function FinancePage() {
               className="finance-actor-filter"
             />
 
+            <RoundedSelect
+              value={typeFilter}
+              options={[
+                { value: "all", label: "All Types" },
+                { value: "Incoming", label: "Incoming Only" },
+                { value: "Outgoing", label: "Outgoing Only" },
+              ]}
+              onChange={(val) => {
+                setTypeFilter(val);
+                setPage(1);
+              }}
+              ariaLabel="Filter transactions by incoming or outgoing type"
+              className="finance-type-filter"
+            />
+
             {hasActiveFilters ? (
               <button
                 type="button"
@@ -682,6 +763,23 @@ export default function FinancePage() {
                   </button>
                 </span>
               ) : null}
+              {typeFilter !== "all" ? (
+                <span className="filter-chip">
+                  <span className="filter-chip-category">Type:</span>{" "}
+                  {typeFilter}
+                  <button
+                    type="button"
+                    className="filter-chip-remove"
+                    aria-label="Remove type filter"
+                    onClick={() => {
+                      setTypeFilter("all");
+                      setPage(1);
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ) : null}
               <button
                 type="button"
                 className="filter-chip-clear-all"
@@ -710,6 +808,7 @@ export default function FinancePage() {
                       onSort={handleSort}
                       onReset={handleResetSort}
                     />
+                    <th style={{ width: "105px" }}>Type</th>
                     <th>Description</th>
                     <th>Notes</th>
                     <th>User</th>
@@ -733,7 +832,7 @@ export default function FinancePage() {
                 <tbody>
                   {filteredAndSortedExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={canManage ? 6 : 5} className="table-empty-cell">
+                      <td colSpan={canManage ? 7 : 6} className="table-empty-cell">
                         <div className="empty-state minimal">
                           <strong className="empty-state-title">No records found</strong>
                           <span className="empty-state-desc">
@@ -759,6 +858,18 @@ export default function FinancePage() {
                         >
                           <td className="cell-date">{exp.expenseDate}</td>
                           <td>
+                            <span
+                              className={`routex-badge ${
+                                exp.transactionType === "Incoming"
+                                  ? "tone-success"
+                                  : "tone-warning"
+                              }`}
+                              style={{ fontSize: "10px", fontWeight: 700 }}
+                            >
+                              {exp.transactionType === "Incoming" ? "INCOMING" : "OUTGOING"}
+                            </span>
+                          </td>
+                          <td>
                             <strong>
                               {exp.description || "Total Company Expenses"}
                             </strong>
@@ -766,7 +877,10 @@ export default function FinancePage() {
                           <td className="finance-note-cell">{exp.notes || "—"}</td>
                           <td>{exp.createdBy || "system"}</td>
                           <td className="money">
-                            <strong>{formatPeso(exp.amount)}</strong>
+                            <strong style={{ color: exp.transactionType === "Incoming" ? "var(--color-status-success, #059669)" : "inherit" }}>
+                              {exp.transactionType === "Incoming" ? "+ " : "- "}
+                              <CompactMoney value={exp.amount} />
+                            </strong>
                           </td>
                           {canManage && (
                             <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>

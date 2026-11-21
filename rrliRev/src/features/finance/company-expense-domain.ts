@@ -5,6 +5,8 @@
  * and calculates overall company net profit and margin.
  */
 
+export type FinanceTransactionType = "Incoming" | "Outgoing";
+
 export type CompanyExpense = {
   readonly id: string;
   readonly description: string;
@@ -15,6 +17,10 @@ export type CompanyExpense = {
   readonly createdAt: string; // ISO timestamp
   readonly updatedAt: string; // ISO timestamp
   readonly createdBy?: string | null;
+  readonly transactionType?: FinanceTransactionType;
+  readonly sourceSheet?: string | null;
+  readonly sourceRow?: number | null;
+  readonly sourceRef?: string | null;
 };
 
 export type CompanyExpenseInput = {
@@ -23,6 +29,10 @@ export type CompanyExpenseInput = {
   expenseDate: string;
   category?: string;
   notes?: string | null;
+  transactionType?: FinanceTransactionType;
+  sourceSheet?: string | null;
+  sourceRow?: number | null;
+  sourceRef?: string | null;
 };
 
 export type ValidatedCompanyExpense = {
@@ -31,6 +41,10 @@ export type ValidatedCompanyExpense = {
   expenseDate: string;
   category: string;
   notes: string | null;
+  transactionType?: FinanceTransactionType;
+  sourceSheet?: string | null;
+  sourceRow?: number | null;
+  sourceRef?: string | null;
 };
 
 export type CompanyExpenseValidationResult =
@@ -79,8 +93,6 @@ export function validateCompanyExpenseInput(input: unknown): CompanyExpenseValid
     errors.push("Amount must be a valid monetary number.");
   } else if (numAmount <= 0) {
     errors.push("Expense amount must be greater than zero.");
-  } else if (numAmount > 100_000_000) {
-    errors.push("Expense amount exceeds maximum allowable limit (₱100,000,000).");
   }
 
   // 3. Date validation
@@ -104,6 +116,24 @@ export function validateCompanyExpenseInput(input: unknown): CompanyExpenseValid
   // 5. Notes
   const notes = typeof raw.notes === "string" ? raw.notes.trim() || null : null;
 
+  // 6. Transaction Type ("Incoming" | "Outgoing", defaults to "Outgoing")
+  let transactionType: FinanceTransactionType = "Outgoing";
+  if (typeof raw.transactionType === "string") {
+    const rawType = raw.transactionType.trim().toLowerCase();
+    if (rawType === "incoming") {
+      transactionType = "Incoming";
+    } else if (rawType === "outgoing") {
+      transactionType = "Outgoing";
+    } else {
+      errors.push("Transaction type must be either 'Incoming' or 'Outgoing'.");
+    }
+  }
+
+  // 7. Source sheet, row, and reference metadata (optional)
+  const sourceSheet = typeof raw.sourceSheet === "string" ? raw.sourceSheet.trim() || null : null;
+  const sourceRow = typeof raw.sourceRow === "number" && Number.isFinite(raw.sourceRow) ? raw.sourceRow : null;
+  const sourceRef = typeof raw.sourceRef === "string" ? raw.sourceRef.trim() || null : null;
+
   if (errors.length > 0 || numAmount === null) {
     return { success: false, errors };
   }
@@ -119,6 +149,10 @@ export function validateCompanyExpenseInput(input: unknown): CompanyExpenseValid
       expenseDate,
       category,
       notes,
+      transactionType,
+      sourceSheet,
+      sourceRow,
+      sourceRef,
     },
   };
 }
@@ -169,6 +203,36 @@ export function calculateCompanyProfitability({
     companyExpenses: safeCompanyExpenses,
     companyNetProfit,
     companyProfitMargin,
+  };
+}
+
+/**
+ * Calculates finance summary for incoming, outgoing, and net activity.
+ */
+export function calculateFinanceActivity(expenses: readonly CompanyExpense[]) {
+  let totalIncoming = 0;
+  let incomingCount = 0;
+  let totalOutgoing = 0;
+  let outgoingCount = 0;
+
+  for (const exp of expenses) {
+    if (exp.transactionType === "Incoming") {
+      totalIncoming += exp.amount;
+      incomingCount++;
+    } else {
+      totalOutgoing += exp.amount;
+      outgoingCount++;
+    }
+  }
+
+  const netFinanceActivity = totalIncoming - totalOutgoing;
+
+  return {
+    totalIncoming: Math.round(totalIncoming * 100) / 100,
+    incomingCount,
+    totalOutgoing: Math.round(totalOutgoing * 100) / 100,
+    outgoingCount,
+    netFinanceActivity: Math.round(netFinanceActivity * 100) / 100,
   };
 }
 

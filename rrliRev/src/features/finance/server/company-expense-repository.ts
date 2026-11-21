@@ -261,6 +261,10 @@ export async function createCompanyExpense(
     expenseDate: validated.expenseDate,
     category: validated.category,
     notes: validated.notes,
+    transactionType: validated.transactionType ?? "Outgoing",
+    sourceSheet: validated.sourceSheet ?? null,
+    sourceRow: validated.sourceRow ?? null,
+    sourceRef: validated.sourceRef ?? null,
     createdBy: actorEmail,
     createdAt: now,
     updatedAt: now,
@@ -317,6 +321,72 @@ export async function createCompanyExpense(
   });
 
   return newExpense;
+}
+
+export async function batchCreateCompanyExpenses(
+  expenses: ValidatedCompanyExpense[],
+  actorEmail: string,
+  batchName?: string,
+): Promise<{ committed: CompanyExpense[]; count: number }> {
+  const now = new Date().toISOString();
+  const createdList: CompanyExpense[] = expenses.map((validated, idx) => ({
+    id: `comp-exp-${Date.now()}-${idx}-${crypto.randomUUID().slice(0, 8)}`,
+    description: validated.description,
+    amount: validated.amount,
+    expenseDate: validated.expenseDate,
+    category: validated.category,
+    notes: validated.notes,
+    transactionType: validated.transactionType ?? "Outgoing",
+    sourceSheet: validated.sourceSheet ?? null,
+    sourceRow: validated.sourceRow ?? null,
+    sourceRef: validated.sourceRef ?? null,
+    createdBy: actorEmail,
+    createdAt: now,
+    updatedAt: now,
+  }));
+
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = await getSupabaseClient();
+      if (supabase && createdList.length > 0) {
+        const rows = createdList.map((e) => ({
+          id: e.id,
+          description: e.description,
+          amount: e.amount,
+          expense_date: e.expenseDate,
+          category: e.category,
+          notes: e.notes,
+          created_by: e.createdBy,
+          created_at: e.createdAt,
+          updated_at: e.updatedAt,
+        }));
+        await supabase.from("company_expenses").insert(rows);
+      }
+    } catch (err) {
+      console.warn("Supabase batch insert failed, falling back to in-memory:", err);
+    }
+  }
+
+  const store = getMockExpensesStore();
+  store.unshift(...createdList);
+
+  const totalAmount = createdList.reduce((sum, e) => sum + e.amount, 0);
+
+  recordAuditEntry({
+    actorId: actorEmail,
+    actorEmail,
+    action: "company_expense.created",
+    entityType: "company_expense",
+    entityId: createdList[0]?.id ?? "batch",
+    summary: `Batch imported ${createdList.length} company expenses (${batchName ?? "Spreadsheet Import"}) totaling ₱${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}.`,
+    changes: {
+      count: createdList.length,
+      totalAmount,
+      batchName,
+    },
+  });
+
+  return { committed: createdList, count: createdList.length };
 }
 
 export async function updateCompanyExpense(

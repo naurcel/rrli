@@ -104,6 +104,18 @@ describe("Company Expense Domain & Profitability Calculations", () => {
     assert.equal(malformedRes.success, false);
   });
 
+  it("permits high monetary amounts without artificial upper limits", () => {
+    const largeRes = validateCompanyExpenseInput({
+      description: "Annual Warehouse Lease",
+      amount: 250_000_000,
+      expenseDate: "2026-11-05",
+    });
+    assert.equal(largeRes.success, true);
+    if (largeRes.success) {
+      assert.equal(largeRes.data.amount, 250_000_000);
+    }
+  });
+
   it("defaults omitted description to Total Company Expenses", () => {
     const emptyRes = validateCompanyExpenseInput({
       description: "   ",

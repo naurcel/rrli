@@ -8,7 +8,7 @@ begin;
 create table if not exists public.company_expenses (
   id uuid primary key default gen_random_uuid(),
   description text not null check (char_length(trim(description)) >= 2 and char_length(description) <= 200),
-  amount numeric(12, 2) not null check (amount > 0 and amount <= 100000000),
+  amount numeric(14, 2) not null check (amount > 0),
   expense_date date not null check (expense_date >= '2024-01-01'),
   category text not null default 'Other Operating Expenses',
   notes text,
