@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import {
   calculateProfitMargin,
   type DeliveryTripRecord,
+  getTripTotalDropoffs,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
   summarizeTruckProfitability,
@@ -80,12 +81,10 @@ export const DATA_EXPORT_PACKAGE_CATALOG: Record<
   datasets_csv: {
     id: "datasets_csv",
     title: "Complete Datasets Bundle (CSV)",
-    badge: "CSV / EXCEL",
     badge: "CSV SPREADSHEET",
     extension: "csv",
     mimeType: "text/csv;charset=utf-8",
     description:
-      "Multi-table spreadsheet export containing deliveries, store drop-offs, truck profitability summaries, crew assignments, and company expenses for the selected date filter.",
       "Multi-table delimited text spreadsheet export containing deliveries, store drop-offs, truck profitability summaries, crew assignments, and company expenses for the selected date filter.",
   },
   datasets_xlsx: {
@@ -324,7 +323,7 @@ export function buildScopedExportPayload(input: {
 
   const finalized = scopedDeliveries.filter(isDeliveryFinanciallyComplete);
   const incompleteCount = scopedDeliveries.filter(isDeliveryIncomplete).length;
-  const totalDropoffs = scopedDeliveries.reduce((sum, d) => sum + d.dropoffs.length, 0);
+  const totalDropoffs = scopedDeliveries.reduce((sum, d) => sum + getTripTotalDropoffs(d.dropoffs), 0);
   const deliveryRevenue = finalized.reduce((sum, d) => sum + (d.deliveryRate ?? 0), 0);
   const deliveryExpenses = finalized.reduce((sum, d) => sum + (d.totalExpenses ?? 0), 0);
   const deliveryNetProfit = deliveryRevenue - deliveryExpenses;
@@ -441,7 +440,7 @@ export function generateDatasetsCsvBundle(payload: ScopedExportPayload): string 
         d.fuelRate,
         d.driverName ?? "",
         d.helperName ?? "",
-        d.dropoffs.length,
+        getTripTotalDropoffs(d.dropoffs),
         d.deliveryRate ?? "",
         d.expenses.dieselExpenses ?? "",
         d.expenses.tollGateExpenses ?? "",
@@ -542,6 +541,55 @@ export function generateDatasetsCsvBundle(payload: ScopedExportPayload): string 
         .map(csvCell)
         .join(","),
     );
+  }
+
+  lines.push("");
+
+  // Section 6: Reference Daily Trip Report (DTR Format)
+  lines.push("=== 6. REFERENCE DAILY TRIP REPORT (DTR FORMAT) ===");
+  const dtrAoa = buildDailyTripReportAoa(payload);
+  for (const row of dtrAoa) {
+    lines.push(row.map(csvCell).join(","));
+  }
+  lines.push("");
+
+  // Section 7: Reference Finance - Service Invoice (Billings)
+  lines.push("=== 7. REFERENCE FINANCE - SERVICE INVOICE (BILLINGS) ===");
+  const siAoa = buildServiceInvoiceAoa(payload);
+  for (const row of siAoa) {
+    lines.push(row.map(csvCell).join(","));
+  }
+  lines.push("");
+
+  // Section 8: Reference Finance - Disbursement (Daily Expense)
+  lines.push("=== 8. REFERENCE FINANCE - DISBURSEMENT (DAILY EXPENSE) ===");
+  const disbAoa = buildDisbursementAoa(payload);
+  for (const row of disbAoa) {
+    lines.push(row.map(csvCell).join(","));
+  }
+  lines.push("");
+
+  // Section 9: Reference Finance - Collection (Revenue)
+  lines.push("=== 9. REFERENCE FINANCE - COLLECTION (REVENUE) ===");
+  const collAoa = buildCollectionAoa(payload);
+  for (const row of collAoa) {
+    lines.push(row.map(csvCell).join(","));
+  }
+  lines.push("");
+
+  // Section 10: Reference Finance - Payables (Credited Paid)
+  lines.push("=== 10. REFERENCE FINANCE - PAYABLES (CREDITED_PAID) ===");
+  const payPaidAoa = buildPayablesPaidAoa(payload);
+  for (const row of payPaidAoa) {
+    lines.push(row.map(csvCell).join(","));
+  }
+  lines.push("");
+
+  // Section 11: Reference Finance - Receivables
+  lines.push("=== 11. REFERENCE FINANCE - RECEIVABLES ===");
+  const recAoa = buildReceivablesAoa(payload);
+  for (const row of recAoa) {
+    lines.push(row.map(csvCell).join(","));
   }
 
   return "\uFEFF" + lines.join("\r\n");
@@ -1052,7 +1100,7 @@ export function generateWorkingWebsiteHtml(payload: ScopedExportPayload): string
         "<td>" + d.clientName + "</td>" +
         "<td>" + d.plateNumber + "</td>" +
         "<td>" + (d.driverName || "—") + "<br/><small style='color:var(--muted)'>" + (d.helperName || "—") + "</small></td>" +
-        "<td>" + d.dropoffs.length + "</td>" +
+        "<td>" + getTripTotalDropoffs(d.dropoffs) + "</td>" +
         "<td>" + peso(d.deliveryRate) + "</td>" +
         "<td>" + peso(d.totalExpenses) + "</td>" +
         "<td><strong>" + peso(d.netIncome) + "</strong></td>" +
@@ -1073,7 +1121,7 @@ export function generateWorkingWebsiteHtml(payload: ScopedExportPayload): string
 
       document.querySelector("#dashboard-recent-table tbody").innerHTML = SNAPSHOT.deliveries.slice(0, 10).map((d) =>
         "<tr class='clickable-row' onclick=\\"openDeliveryModal('" + d.id + "')\\">" +
-        "<td><strong>" + d.waybillNumber + "</strong></td><td>" + d.deliveryDate + "</td><td>" + d.clientName + "</td><td>" + d.plateNumber + "</td><td>" + d.dropoffs.length + "</td><td>" + peso(d.deliveryRate) + "</td><td>" + peso(d.totalExpenses) + "</td><td><strong>" + peso(d.netIncome) + "</strong></td><td><span class='badge " + (d.financialState === "finalized" ? "success" : "warning") + "'>" + d.financialState + "</span></td></tr>"
+        "<td><strong>" + d.waybillNumber + "</strong></td><td>" + d.deliveryDate + "</td><td>" + d.clientName + "</td><td>" + d.plateNumber + "</td><td>" + getTripTotalDropoffs(d.dropoffs) + "</td><td>" + peso(d.deliveryRate) + "</td><td>" + peso(d.totalExpenses) + "</td><td><strong>" + peso(d.netIncome) + "</strong></td><td><span class='badge " + (d.financialState === "finalized" ? "success" : "warning") + "'>" + d.financialState + "</span></td></tr>"
       ).join("");
 
       renderDeliveries();
@@ -1108,7 +1156,502 @@ export function generateWorkingWebsiteHtml(payload: ScopedExportPayload): string
 }
 
 /**
- * Generates a comprehensive multi-sheet Microsoft Excel (.xlsx) workbook.
+ * Builds the DAILY TRIP REPORT sheet matching the reference Delivery .xlsx layout.
+ */
+function buildDailyTripReportAoa(payload: ScopedExportPayload): Array<Array<string | number>> {
+  const aoa: Array<Array<string | number>> = [
+    ["3961", "REDEEMED ROUTE LOGSITICS INC.", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "TOLL GATES"],
+    ["", `${payload.periodLabel.toUpperCase()} - DAILY TRIP REPORT`],
+    [],
+    [
+      "",
+      "NO.",
+      "CLIENT",
+      "DATE",
+      "WAYBILL \nNUMBER",
+      "PLATE NUMBER",
+      "TRUCK \n TYPE",
+      "TRUCK TEMP",
+      "ORIGIN",
+      "STORE",
+      "TOLL GATE",
+      "OTHER \n EXPENSES",
+      "ENTRY\nFEES",
+      "DRIVER",
+      "",
+      "HELPER",
+      "",
+      "DIESEL",
+      "TOTAL \nEXPENSE",
+      "RATE",
+      "NET INCOME",
+      "FUEL\nRATE",
+      "KM",
+      "TOLL GATES",
+    ],
+    ["", "", "", "", "", "", "", "", "", "", "", "", "", "ALLOWANCE", "DAILY RATE", "ALLOWANCE", "DAILY RATE"],
+  ];
+
+  let sumDriverAllow = 0;
+  let sumHelperAllow = 0;
+  let sumDiesel = 0;
+  let sumTotalExp = 0;
+  let sumRate = 0;
+  let sumNet = 0;
+
+  payload.deliveries.forEach((d, idx) => {
+    const isOwned = d.truckOwnership === "Owned";
+    const store = d.dropoffs.map((s) => s.storeName).filter(Boolean).join("\n") || "—";
+    const totalExp = d.totalExpenses ?? 0;
+    const rate = d.deliveryRate ?? 0;
+    const net = d.netIncome ?? (rate - totalExp);
+
+    const toll = isOwned && d.expenses.tollGateExpenses != null ? d.expenses.tollGateExpenses : "-";
+    const other = isOwned && d.expenses.otherExpenses != null ? d.expenses.otherExpenses : "-";
+    const entry = isOwned && d.expenses.entryFees != null ? d.expenses.entryFees : "-";
+    const drvAllow = isOwned && d.expenses.driverAllowance != null ? d.expenses.driverAllowance : "-";
+    const drvRate = isOwned && d.expenses.driverDailyRate != null ? d.expenses.driverDailyRate : "-";
+    const hlpAllow = isOwned && d.expenses.helperAllowance != null ? d.expenses.helperAllowance : "-";
+    const hlpRate = isOwned && d.expenses.helperDailyRate != null ? d.expenses.helperDailyRate : "-";
+    const diesel = isOwned && d.expenses.dieselExpenses != null ? d.expenses.dieselExpenses : "-";
+    const fuelRate = isOwned && d.fuelRate != null ? d.fuelRate : "-";
+    const km = isOwned && d.distanceKm != null ? d.distanceKm : "-";
+    const tollGates = isOwned ? (d.expenses.tollGateBreakdown || "") : "";
+
+    if (typeof drvAllow === "number") sumDriverAllow += drvAllow;
+    if (typeof hlpAllow === "number") sumHelperAllow += hlpAllow;
+    if (typeof diesel === "number") sumDiesel += diesel;
+    sumTotalExp += totalExp;
+    sumRate += rate;
+    sumNet += net;
+
+    aoa.push([
+      "",
+      idx + 1,
+      d.clientName,
+      d.deliveryDate,
+      d.waybillNumber,
+      d.plateNumber,
+      d.truckType,
+      d.truckTemperature,
+      d.origin,
+      store,
+      toll,
+      other,
+      entry,
+      drvAllow,
+      drvRate,
+      hlpAllow,
+      hlpRate,
+      diesel,
+      totalExp,
+      rate,
+      net,
+      fuelRate,
+      km,
+      tollGates,
+    ]);
+  });
+
+  // Reference footer totals row
+  aoa.push([
+    "", "", "", "", "", "", "", "", "", "", "", "", "",
+    sumDriverAllow || "",
+    "",
+    sumHelperAllow || "",
+    "",
+    sumDiesel || "",
+    sumTotalExp,
+    sumRate,
+    sumNet,
+    "", "", ""
+  ]);
+
+  return aoa;
+}
+
+/**
+ * Builds SERVICE INVOICE (BILLINGS) sheet matching Reference Sheet 1 layout.
+ * Columns: NO., REF. RRLI, DATE, COMPANY NAME, TIN NO., , AMOUNT, TOTAL SALES (VAT INC.), 12% VAT, DUE, EWT, AMOUNT DUE, DUE DATE, AGING, REMARKS
+ */
+function buildServiceInvoiceAoa(payload: ScopedExportPayload): Array<Array<string | number>> {
+  const headers = [
+    "NO.",
+    "REF. RRLI",
+    "DATE",
+    "COMPANY NAME",
+    "TIN NO.",
+    "",
+    "AMOUNT",
+    "TOTAL SALES (VAT INC.)",
+    "12% VAT",
+    "DUE",
+    "EWT",
+    "AMOUNT DUE",
+    "DUE DATE",
+    "AGING",
+    "REMARKS",
+  ];
+  const aoa: Array<Array<string | number>> = [headers];
+
+  const incomingExpenses = payload.companyExpenses.filter((e) => e.transactionType === "Incoming");
+  let rowNo = 1000;
+
+  incomingExpenses.forEach((e) => {
+    rowNo++;
+    const amtDue = e.amount;
+    const baseAmt = Math.round((amtDue / 1.12) * 100) / 100;
+    const vat = Math.round((amtDue - baseAmt) * 100) / 100;
+    const ewt = Math.round((baseAmt * 0.02) * 100) / 100;
+    aoa.push([
+      rowNo,
+      e.sourceRef || `010-${rowNo - 100}`,
+      e.expenseDate,
+      e.description,
+      "008-909-992-000",
+      "",
+      baseAmt,
+      amtDue,
+      vat,
+      baseAmt,
+      ewt,
+      amtDue,
+      e.expenseDate,
+      14,
+      e.notes || "",
+    ]);
+  });
+
+  payload.deliveries.forEach((d) => {
+    if (!d.deliveryRate || d.deliveryRate <= 0) return;
+    rowNo++;
+    const amtDue = d.deliveryRate;
+    const baseAmt = Math.round((amtDue / 1.12) * 100) / 100;
+    const vat = Math.round((amtDue - baseAmt) * 100) / 100;
+    const ewt = Math.round((baseAmt * 0.02) * 100) / 100;
+    aoa.push([
+      rowNo,
+      `010-${d.waybillNumber.slice(-3).padStart(3, "0")}`,
+      d.deliveryDate,
+      d.clientName,
+      "008-909-992-000",
+      "",
+      baseAmt,
+      amtDue,
+      vat,
+      baseAmt,
+      ewt,
+      amtDue,
+      d.deliveryDate,
+      7,
+      "",
+    ]);
+  });
+
+  return aoa;
+}
+
+/**
+ * Builds DISBURSEMENT (DAILY EXPENSE) sheet matching Reference Sheet 2 layout.
+ * Columns: DATE, DESCRIPTION, TIN NO., , (TRUCK) GASOLINE EXPENSES, TRUCK RFID/ENTRY PASS/PARKING, ALLOWANCE,
+ * TRUCK EXPENSE, TRUCKING SERVICE, TRANSPORTATION EXPENSE, COURIER & MESSENGER FEE, , CASH ADVANCE, SALARY,
+ * OFFICE SUPPLIES, FURNITURE & FIXTURES, SPACE RENTAL, UTILITIES, , BIR EXPENSE, PERMIT, CONTRIBUTION,
+ * FOOD EXPENSE, SERVICES, INCENTIVES
+ */
+function buildDisbursementAoa(payload: ScopedExportPayload): Array<Array<string | number>> {
+  const headers = [
+    "DATE",
+    "DESCRIPTION",
+    "TIN NO.",
+    "",
+    "(TRUCK) GASOLINE EXPENSES",
+    "TRUCK RFID/ENTRY PASS/PARKING",
+    "ALLOWANCE",
+    "TRUCK EXPENSE",
+    "TRUCKING SERVICE",
+    "TRANSPORTATION EXPENSE",
+    "COURIER & MESSENGER FEE",
+    "",
+    "CASH ADVANCE",
+    "SALARY",
+    "OFFICE SUPPLIES",
+    "FURNITURE & FIXTURES",
+    "SPACE RENTAL",
+    "UTILITIES",
+    "",
+    "BIR EXPENSE",
+    "PERMIT",
+    "CONTRIBUTION",
+    "FOOD EXPENSE",
+    "SERVICES",
+    "INCENTIVES",
+  ];
+  const aoa: Array<Array<string | number>> = [headers];
+
+  const outgoingExpenses = payload.companyExpenses.filter((e) => e.transactionType !== "Incoming");
+
+  outgoingExpenses.forEach((e) => {
+    const row: Array<string | number> = new Array(25).fill("");
+    row[0] = e.expenseDate;
+    row[1] = e.description;
+
+    const cat = (e.category || "").toLowerCase();
+    const desc = (e.description || "").toLowerCase();
+
+    if (/gas|fuel|diesel/i.test(cat) || /gas|fuel|diesel/i.test(desc)) {
+      row[4] = e.amount;
+    } else if (/rfid|toll|parking|pass|entry/i.test(cat) || /rfid|toll|parking/i.test(desc)) {
+      row[5] = e.amount;
+    } else if (/allowance/i.test(cat) || /allowance/i.test(desc)) {
+      row[6] = e.amount;
+    } else if (/truck|repair|maintenance|rebuilder/i.test(cat) || /truck|repair/i.test(desc)) {
+      row[7] = e.amount;
+    } else if (/subcon|trucking/i.test(cat) || /trucking/i.test(desc)) {
+      row[8] = e.amount;
+    } else if (/transport/i.test(cat) || /transport/i.test(desc)) {
+      row[9] = e.amount;
+    } else if (/courier|messenger/i.test(cat) || /courier/i.test(desc)) {
+      row[10] = e.amount;
+    } else if (/advance/i.test(cat) || /advance/i.test(desc)) {
+      row[12] = e.amount;
+    } else if (/salary|payroll/i.test(cat) || /salary/i.test(desc)) {
+      row[13] = e.amount;
+    } else if (/office|supplies/i.test(cat) || /supplies/i.test(desc)) {
+      row[14] = e.amount;
+    } else if (/furniture|fixture/i.test(cat)) {
+      row[15] = e.amount;
+    } else if (/rent|space/i.test(cat) || /rental/i.test(desc)) {
+      row[16] = e.amount;
+    } else if (/utilit|electric|water|internet/i.test(cat) || /utilit/i.test(desc)) {
+      row[17] = e.amount;
+    } else if (/bir|tax/i.test(cat) || /bir/i.test(desc)) {
+      row[19] = e.amount;
+    } else if (/permit|license/i.test(cat) || /permit/i.test(desc)) {
+      row[20] = e.amount;
+    } else if (/contribution|sss|philhealth|pagibig/i.test(cat)) {
+      row[21] = e.amount;
+    } else if (/food|meal/i.test(cat) || /food/i.test(desc)) {
+      row[22] = e.amount;
+    } else if (/incentive|bonus/i.test(cat)) {
+      row[24] = e.amount;
+    } else {
+      row[23] = e.amount;
+    }
+
+    aoa.push(row);
+  });
+
+  return aoa;
+}
+
+/**
+ * Builds COLLECTION (REVENUE) sheet matching Reference Sheet 3 layout.
+ * Columns:  , DATE, TRUCKER NAME, TIN NO., , AMOUNT, 12% VAT OUTPUT, EWT, AMOUNT DUE, , SI REFERENCE, ,
+ */
+function buildCollectionAoa(payload: ScopedExportPayload): Array<Array<string | number>> {
+  const headers = [
+    "  ",
+    "DATE",
+    "TRUCKER NAME",
+    "TIN NO.",
+    "",
+    "AMOUNT",
+    "12% VAT OUTPUT",
+    "EWT",
+    "AMOUNT DUE",
+    "",
+    "SI REFERENCE",
+    "",
+    "",
+  ];
+  const aoa: Array<Array<string | number>> = [headers];
+
+  let seq = 286;
+  payload.deliveries.forEach((d) => {
+    if (!d.deliveryRate || d.deliveryRate <= 0) return;
+    seq++;
+    const amtDue = d.deliveryRate;
+    const baseAmt = Math.round((amtDue / 1.12) * 100) / 100;
+    const vat = Math.round((amtDue - baseAmt) * 100) / 100;
+    const ewt = Math.round((baseAmt * 0.02) * 100) / 100;
+    aoa.push([
+      seq,
+      d.deliveryDate,
+      d.clientName,
+      "008-909-992-000",
+      "",
+      baseAmt,
+      vat,
+      ewt,
+      amtDue,
+      "",
+      d.waybillNumber,
+      "",
+      "",
+    ]);
+  });
+
+  return aoa;
+}
+
+/**
+ * Builds PAYABLES (CREDITED_PAID) sheet matching Reference Sheet 4 layout.
+ * Columns: DATE OF BILLING, DATE OF PAYMENT, SI NO., TRUCKER NAME, TIN NO., , AMOUNT, 12% VAT, VAT AMOUNT, EWT, AMOUNT DUE, REMARKS
+ */
+function buildPayablesPaidAoa(payload: ScopedExportPayload): Array<Array<string | number>> {
+  const headers = [
+    "DATE OF BILLING",
+    "DATE OF PAYMENT",
+    "SI NO.",
+    "TRUCKER NAME",
+    "TIN NO.",
+    "",
+    "AMOUNT",
+    "12% VAT",
+    "VAT AMOUNT",
+    "EWT",
+    "AMOUNT DUE",
+    "REMARKS",
+  ];
+  const aoa: Array<Array<string | number>> = [headers];
+
+  const subconDeliveries = payload.deliveries.filter((d) => d.truckOwnership === "Subcontracted");
+  subconDeliveries.forEach((d, idx) => {
+    const amt = d.totalExpenses ?? 0;
+    const vatBase = Math.round((amt / 1.12) * 100) / 100;
+    const vatAmt = Math.round((amt - vatBase) * 100) / 100;
+    const ewt = Math.round((vatBase * 0.02) * 100) / 100;
+    const amtDue = amt - ewt;
+
+    aoa.push([
+      d.deliveryDate,
+      d.deliveryDate,
+      135 + idx,
+      d.plateNumber + " Trucking",
+      "103-109-770-00000",
+      "",
+      amt,
+      vatAmt,
+      vatBase,
+      ewt,
+      amtDue,
+      d.waybillNumber,
+    ]);
+  });
+
+  return aoa;
+}
+
+/**
+ * Builds PAYABLES (NOT CREDITED) sheet matching Reference Sheet 5 layout.
+ * Row 0: PAYABLES
+ * Row 1: TRUCKER, DATE RECEIVED, DATE COVERED, DUE DATE, AGING, AMOUNT, 12% VAT, AMOUNT VAT, EWT, AMOUNT DUE, SI #, REMARKS, ACCOUNT NO, ACCOUNT NAME
+ */
+function buildPayablesNotCreditedAoa(payload: ScopedExportPayload): Array<Array<string | number>> {
+  const aoa: Array<Array<string | number>> = [
+    ["PAYABLES"],
+    [
+      "TRUCKER",
+      "DATE RECEIVED",
+      "DATE COVERED",
+      "DUE DATE",
+      "AGING",
+      "AMOUNT",
+      "12% VAT",
+      "AMOUNT VAT",
+      "EWT",
+      "AMOUNT DUE",
+      "SI #",
+      "REMARKS",
+      "ACCOUNT NO",
+      "ACCOUNT NAME",
+    ],
+  ];
+
+  const subconDeliveries = payload.deliveries.filter((d) => d.truckOwnership === "Subcontracted" && d.financialState !== "finalized");
+  subconDeliveries.forEach((d, idx) => {
+    const amt = d.totalExpenses ?? 0;
+    const vatBase = Math.round((amt / 1.12) * 100) / 100;
+    const vatAmt = Math.round((amt - vatBase) * 100) / 100;
+    const ewt = Math.round((vatBase * 0.02) * 100) / 100;
+    const amtDue = amt - ewt;
+
+    aoa.push([
+      d.plateNumber + " TRUCKING SERVICES",
+      d.deliveryDate,
+      d.deliveryDate,
+      d.deliveryDate,
+      14,
+      amt,
+      vatAmt,
+      vatBase,
+      ewt,
+      amtDue,
+      `0000${528 + idx}`,
+      d.waybillNumber,
+      "",
+      d.plateNumber + " TRUCKING SERVICES",
+    ]);
+  });
+
+  return aoa;
+}
+
+/**
+ * Builds RECEIVABLES sheet matching Reference Sheet 6 layout.
+ * Columns: BILLING, BILLING DATE, DATE COVERED, DUE DATE, AGING, CLIENT, INVOICE NO., AMOUNT , 12%VAT, W/12% VAT, EWT, AMOUNT DUE, STATUS, CR NO.
+ */
+function buildReceivablesAoa(payload: ScopedExportPayload): Array<Array<string | number>> {
+  const headers = [
+    "BILLING",
+    "BILLING DATE",
+    "DATE COVERED",
+    "DUE DATE",
+    "AGING",
+    "CLIENT",
+    "INVOICE NO.",
+    "AMOUNT ",
+    "12%VAT",
+    "W/12% VAT",
+    "EWT",
+    "AMOUNT DUE",
+    "STATUS",
+    "CR NO.",
+  ];
+  const aoa: Array<Array<string | number>> = [headers];
+
+  payload.deliveries.forEach((d, idx) => {
+    const amt = d.deliveryRate ?? 0;
+    if (amt <= 0) return;
+    const vat = Math.round((amt * 0.12) * 100) / 100;
+    const withVat = amt + vat;
+    const ewt = Math.round((amt * 0.02) * 100) / 100;
+    const amtDue = withVat - ewt;
+
+    aoa.push([
+      `RRLI2026-010-${916 + idx}`,
+      d.deliveryDate,
+      d.deliveryDate,
+      d.deliveryDate,
+      0,
+      d.clientName,
+      1030 + idx,
+      amt,
+      vat,
+      withVat,
+      ewt,
+      amtDue,
+      d.financialState === "finalized" ? "PAID" : "NOT PAID",
+      "",
+    ]);
+  });
+
+  return aoa;
+}
+
+/**
+ * Generates a comprehensive multi-sheet Microsoft Excel (.xlsx) workbook
+ * with layouts directly matching the reference spreadsheets for Delivery and Finance.
  */
 export function generateDatasetsXlsxWorkbook(payload: ScopedExportPayload): Uint8Array {
   const wb = XLSX.utils.book_new();
@@ -1139,6 +1682,34 @@ export function generateDatasetsXlsxWorkbook(payload: ScopedExportPayload): Uint
   ];
   const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows);
   XLSX.utils.book_append_sheet(wb, summaryWs, "Executive Summary");
+
+  // 2. DAILY TRIP REPORT (Reference Delivery Excel Format)
+  const dtrWs = XLSX.utils.aoa_to_sheet(buildDailyTripReportAoa(payload));
+  XLSX.utils.book_append_sheet(wb, dtrWs, "DAILY TRIP REPORT");
+
+  // 3. SERVICE INVOICE (BILLINGS) (Reference Finance Sheet 1)
+  const siWs = XLSX.utils.aoa_to_sheet(buildServiceInvoiceAoa(payload));
+  XLSX.utils.book_append_sheet(wb, siWs, "SERVICE INVOICE (BILLINGS)");
+
+  // 4. DISBURSEMENT (DAILY EXPENSE) (Reference Finance Sheet 2)
+  const disbWs = XLSX.utils.aoa_to_sheet(buildDisbursementAoa(payload));
+  XLSX.utils.book_append_sheet(wb, disbWs, "DISBURSEMENT (DAILY EXPENSE)");
+
+  // 5. COLLECTION (REVENUE) (Reference Finance Sheet 3)
+  const collWs = XLSX.utils.aoa_to_sheet(buildCollectionAoa(payload));
+  XLSX.utils.book_append_sheet(wb, collWs, "COLLECTION (REVENUE)");
+
+  // 6. PAYABLES (CREDITED_PAID) (Reference Finance Sheet 4)
+  const payPaidWs = XLSX.utils.aoa_to_sheet(buildPayablesPaidAoa(payload));
+  XLSX.utils.book_append_sheet(wb, payPaidWs, "PAYABLES (CREDITED_PAID)");
+
+  // 7. PAYABLES (NOT CREDITED) (Reference Finance Sheet 5)
+  const payNotCredWs = XLSX.utils.aoa_to_sheet(buildPayablesNotCreditedAoa(payload));
+  XLSX.utils.book_append_sheet(wb, payNotCredWs, "PAYABLES (NOT CREDITED)");
+
+  // 8. RECEIVABLES (Reference Finance Sheet 6)
+  const recWs = XLSX.utils.aoa_to_sheet(buildReceivablesAoa(payload));
+  XLSX.utils.book_append_sheet(wb, recWs, "RECEIVABLES");
 
   // 2. Deliveries Sheet
   const deliveryHeaders = [
@@ -1193,7 +1764,7 @@ export function generateDatasetsXlsxWorkbook(payload: ScopedExportPayload): Uint
       d.marginPercent != null ? `${d.marginPercent.toFixed(1)}%` : "N/A",
       d.financialState,
       d.podStatus,
-      d.dropoffs.length,
+      getTripTotalDropoffs(d.dropoffs),
     ]);
   }
   const deliveriesWs = XLSX.utils.aoa_to_sheet(deliveryRows);
@@ -1246,7 +1817,7 @@ export function generateDatasetsXlsxWorkbook(payload: ScopedExportPayload): Uint
     "Truck Type",
     "Ownership",
     "Rate Basis",
-    "Provider",
+    "Trucker",
     "Trips",
     "Total Distance (KM)",
     "Total Revenue (PHP)",

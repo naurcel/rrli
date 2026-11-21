@@ -741,7 +741,7 @@ export function ReportCustomizerModal({
                     >
                       <option value="all">All Fleet (Owned &amp; Subcontracted)</option>
                       <option value="owned_only">Owned Fleet Only</option>
-                      <option value="subcontracted_only">Subcontracted Providers Only</option>
+                      <option value="subcontracted_only">Subcontracted Truckers Only</option>
                     </select>
                   </label>
                 </div>

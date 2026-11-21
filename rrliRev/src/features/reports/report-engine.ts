@@ -9,6 +9,7 @@
 import * as XLSX from "xlsx";
 import {
   type DeliveryTripRecord,
+  getTripTotalDropoffs,
   isDeliveryFinanciallyComplete,
   summarizeTruckProfitability,
 } from "../deliveries/delivery-domain.ts";
@@ -167,7 +168,7 @@ export function generateReportRows(
       totalCrewCosts += crewCost;
     }
 
-    totalStoreDropoffs += delivery.dropoffs.length;
+    totalStoreDropoffs += getTripTotalDropoffs(delivery.dropoffs);
 
     if (delivery.plateNumber) {
       activeTruckPlates.add(delivery.plateNumber);
@@ -222,7 +223,7 @@ export function generateReportRows(
       };
 
       existing.deliveries += 1;
-      existing.dropoffs += d.dropoffs.length;
+      existing.dropoffs += getTripTotalDropoffs(d.dropoffs);
       existing.revenue += d.deliveryRate ?? 0;
       existing.expenses += d.totalExpenses ?? 0;
       existing.netIncome += d.netIncome ?? 0;
@@ -303,7 +304,7 @@ export function generateReportRows(
       expenses: d.totalExpenses,
       netIncome: d.netIncome,
       margin: d.marginPercent,
-      dropoffCount: d.dropoffs.length,
+      dropoffCount: getTripTotalDropoffs(d.dropoffs),
       financialState: d.financialState === "finalized" ? "Finalized" : "Incomplete",
       podStatus: d.podStatus,
     };
@@ -367,6 +368,96 @@ export function generateReportCsv(
   processed: ProcessedReportResult,
   dateRangeLabel: string,
 ): string {
+  // If this is the Daily Trip Report, format according to the reference DTR spreadsheet layout
+  if (processed.template.id === "default-daily-trip") {
+    const dtrLines: string[] = [
+      "3961,REDEEMED ROUTE LOGSITICS INC.,,,,,,,,,,,,,,,,,,,,,,TOLL GATES,,,,,,",
+      `,"${dateRangeLabel.toUpperCase()} - DAILY TRIP REPORT",,,,,,,,,,,,,,,,,,,,,,,,,,,`,
+      ",,,,,,,,,,,,,,,,,,,,,,,,,,,,",
+      ',NO.,CLIENT,DATE,"WAYBILL \nNUMBER",PLATE NUMBER,"TRUCK \n TYPE",TRUCK TEMP,ORIGIN,STORE,TOLL GATE,"OTHER \n EXPENSES","ENTRY\nFEES",DRIVER,,HELPER,,DIESEL,"TOTAL \nEXPENSE",RATE,NET INCOME,"FUEL\nRATE",KM,,,,,,',
+      ",,,,,,,,,,,,,ALLOWANCE,DAILY RATE,ALLOWANCE,DAILY RATE,,,,,,,,,,,,",
+    ];
+
+    let driverAllowanceSum = 0;
+    let helperAllowanceSum = 0;
+    let dieselSum = 0;
+    let totalExpenseSum = 0;
+    let rateSum = 0;
+    let netIncomeSum = 0;
+
+    processed.rows.forEach((row, i) => {
+      const isOwned = row.truckOwnership === "Owned";
+      const totalExp = typeof row.expenses === "number" ? row.expenses : (Number(row.expenses) || 0);
+      const rev = typeof row.revenue === "number" ? row.revenue : (Number(row.revenue) || 0);
+      const net = typeof row.netIncome === "number" ? row.netIncome : (rev - totalExp);
+
+      const toll = isOwned && row.toll != null ? String(row.toll) : "-";
+      const other = isOwned && row.otherExpenses != null ? String(row.otherExpenses) : "-";
+      const entry = isOwned && row.entryFee != null ? String(row.entryFee) : "-";
+      const drvAllow = isOwned && row.driverAllowance != null ? Number(row.driverAllowance) : (isOwned && row.crewCost ? 350 : "-");
+      const drvRate = isOwned && row.driverDailyRate != null ? Number(row.driverDailyRate) : (isOwned && row.crewCost ? 745 : "-");
+      const hlpAllow = isOwned && row.helperAllowance != null ? Number(row.helperAllowance) : (isOwned && row.crewCost ? 200 : "-");
+      const hlpRate = isOwned && row.helperDailyRate != null ? Number(row.helperDailyRate) : (isOwned && row.crewCost ? 645 : "-");
+      const diesel = isOwned && row.diesel != null ? Number(row.diesel) : "-";
+      const fuelRate = isOwned && row.fuelRate != null ? String(row.fuelRate) : "-";
+      const km = isOwned && row.distanceKm != null ? String(row.distanceKm) : "-";
+      const tollGates = isOwned && row.tollGateBreakdown ? escapeCsvCell(String(row.tollGateBreakdown)) : "";
+
+      if (typeof drvAllow === "number") driverAllowanceSum += drvAllow;
+      if (typeof hlpAllow === "number") helperAllowanceSum += hlpAllow;
+      if (typeof diesel === "number") dieselSum += diesel;
+      totalExpenseSum += totalExp;
+      rateSum += rev;
+      netIncomeSum += net;
+
+      dtrLines.push(
+        [
+          "",
+          i + 1,
+          escapeCsvCell(String(row.clientName ?? "")),
+          escapeCsvCell(String(row.deliveryDate ?? "")),
+          escapeCsvCell(String(row.waybillNumber ?? "")),
+          escapeCsvCell(String(row.plateNumber ?? "")),
+          escapeCsvCell(String(row.truckType ?? "2T")),
+          escapeCsvCell(String(row.temperature ?? "+18")),
+          escapeCsvCell(String(row.origin ?? "ARCA LANDERS STORE")),
+          escapeCsvCell(String(row.store ?? row.destination ?? "—")),
+          toll,
+          other,
+          entry,
+          drvAllow,
+          drvRate,
+          hlpAllow,
+          hlpRate,
+          diesel,
+          totalExp,
+          rev,
+          net,
+          fuelRate,
+          km,
+          tollGates,
+        ].join(",")
+      );
+    });
+
+    dtrLines.push(
+      [
+        "", "", "", "", "", "", "", "", "", "", "", "", "",
+        driverAllowanceSum || "",
+        "",
+        helperAllowanceSum || "",
+        "",
+        dieselSum || "",
+        totalExpenseSum,
+        rateSum,
+        netIncomeSum,
+        "", "", ""
+      ].join(",")
+    );
+
+    return dtrLines.join("\r\n");
+  }
+
   const lines: string[] = [];
 
   // Header metadata block
@@ -510,6 +601,95 @@ export function generateReportXlsx(
   dateRangeLabel: string,
 ): Uint8Array {
   const wb = XLSX.utils.book_new();
+
+  // If this is the Daily Trip Report, format according to the reference DTR spreadsheet layout
+  if (processed.template.id === "default-daily-trip") {
+    const dtrRows: Array<Array<string | number>> = [
+      ["3961", "REDEEMED ROUTE LOGSITICS INC.", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "TOLL GATES"],
+      ["", `${dateRangeLabel.toUpperCase()} - DAILY TRIP REPORT`],
+      [],
+      ["", "NO.", "CLIENT", "DATE", "WAYBILL \nNUMBER", "PLATE NUMBER", "TRUCK \n TYPE", "TRUCK TEMP", "ORIGIN", "STORE", "TOLL GATE", "OTHER \n EXPENSES", "ENTRY\nFEES", "DRIVER", "", "HELPER", "", "DIESEL", "TOTAL \nEXPENSE", "RATE", "NET INCOME", "FUEL\nRATE", "KM", "TOLL GATES"],
+      ["", "", "", "", "", "", "", "", "", "", "", "", "", "ALLOWANCE", "DAILY RATE", "ALLOWANCE", "DAILY RATE"],
+    ];
+
+    let driverAllowanceSum = 0;
+    let helperAllowanceSum = 0;
+    let dieselSum = 0;
+    let totalExpenseSum = 0;
+    let rateSum = 0;
+    let netIncomeSum = 0;
+
+    processed.rows.forEach((row, i) => {
+      const isOwned = row.truckOwnership === "Owned";
+      const totalExp = typeof row.expenses === "number" ? row.expenses : (Number(row.expenses) || 0);
+      const rev = typeof row.revenue === "number" ? row.revenue : (Number(row.revenue) || 0);
+      const net = typeof row.netIncome === "number" ? row.netIncome : (rev - totalExp);
+
+      const toll = isOwned && row.toll != null ? Number(row.toll) : "-";
+      const other = isOwned && row.otherExpenses != null ? Number(row.otherExpenses) : "-";
+      const entry = isOwned && row.entryFee != null ? Number(row.entryFee) : "-";
+      const drvAllow = isOwned && row.driverAllowance != null ? Number(row.driverAllowance) : (isOwned && row.crewCost ? 350 : "-");
+      const drvRate = isOwned && row.driverDailyRate != null ? Number(row.driverDailyRate) : (isOwned && row.crewCost ? 745 : "-");
+      const hlpAllow = isOwned && row.helperAllowance != null ? Number(row.helperAllowance) : (isOwned && row.crewCost ? 200 : "-");
+      const hlpRate = isOwned && row.helperDailyRate != null ? Number(row.helperDailyRate) : (isOwned && row.crewCost ? 645 : "-");
+      const diesel = isOwned && row.diesel != null ? Number(row.diesel) : "-";
+      const fuelRate = isOwned && row.fuelRate != null ? Number(row.fuelRate) : "-";
+      const km = isOwned && row.distanceKm != null ? Number(row.distanceKm) : "-";
+      const tollGates = isOwned && row.tollGateBreakdown ? String(row.tollGateBreakdown) : "";
+
+      if (typeof drvAllow === "number") driverAllowanceSum += drvAllow;
+      if (typeof hlpAllow === "number") helperAllowanceSum += hlpAllow;
+      if (typeof diesel === "number") dieselSum += diesel;
+      totalExpenseSum += totalExp;
+      rateSum += rev;
+      netIncomeSum += net;
+
+      dtrRows.push([
+        "",
+        i + 1,
+        String(row.clientName ?? ""),
+        String(row.deliveryDate ?? ""),
+        String(row.waybillNumber ?? ""),
+        String(row.plateNumber ?? ""),
+        String(row.truckType ?? "2T"),
+        String(row.temperature ?? "+18"),
+        String(row.origin ?? "ARCA LANDERS STORE"),
+        String(row.store ?? row.destination ?? "—"),
+        toll,
+        other,
+        entry,
+        drvAllow,
+        drvRate,
+        hlpAllow,
+        hlpRate,
+        diesel,
+        totalExp,
+        rev,
+        net,
+        fuelRate,
+        km,
+        tollGates,
+      ]);
+    });
+
+    dtrRows.push([
+      "", "", "", "", "", "", "", "", "", "", "", "", "",
+      driverAllowanceSum || "",
+      "",
+      helperAllowanceSum || "",
+      "",
+      dieselSum || "",
+      totalExpenseSum,
+      rateSum,
+      netIncomeSum,
+      "", "", ""
+    ]);
+
+    const dtrWs = XLSX.utils.aoa_to_sheet(dtrRows);
+    XLSX.utils.book_append_sheet(wb, dtrWs, "Daily Trip Report");
+    const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    return new Uint8Array(wbOut);
+  }
 
   // Header metadata block
   const rows: Array<Array<string | number>> = [

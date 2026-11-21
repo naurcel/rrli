@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import type { useAuthenticatedActor } from "@/components/auth-context";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
@@ -20,7 +21,6 @@ import {
   type DataExportPackageType,
   type DataExportRequest,
 } from "@/features/reports/data-export-engine";
-import { formatPeso } from "@/lib/format";
 
 export interface ReportsDataExportTabProps {
   actor: ReturnType<typeof useAuthenticatedActor>;
@@ -29,6 +29,7 @@ export interface ReportsDataExportTabProps {
   dateFrom: string | null;
   dateTo: string | null;
   periodLabel: string;
+  dateRangePicker?: React.ReactNode;
 }
 
 const PACKAGE_ORDER: readonly DataExportPackageType[] = [
@@ -39,6 +40,47 @@ const PACKAGE_ORDER: readonly DataExportPackageType[] = [
   "website_recreation",
 ];
 
+const SIMPLIFIED_PACKAGES: Record<
+  DataExportPackageType,
+  {
+    title: string;
+    description: string;
+    badge: string;
+    ext: string;
+  }
+> = {
+  datasets_xlsx: {
+    title: "Excel Workbook",
+    description: "Deliveries, store drop-offs, truck profitability, and expenses.",
+    badge: "XLSX",
+    ext: "xlsx",
+  },
+  datasets_csv: {
+    title: "CSV Spreadsheets",
+    description: "Deliveries, stores, trucks, and expenses in comma-separated format.",
+    badge: "CSV",
+    ext: "csv",
+  },
+  database_json: {
+    title: "JSON Database",
+    description: "Structured JSON dump of all records, foreign keys, and tables.",
+    badge: "JSON",
+    ext: "json",
+  },
+  database_sql: {
+    title: "SQL Database Dump",
+    description: "Portable PostgreSQL schema definitions and INSERT statements.",
+    badge: "SQL",
+    ext: "sql",
+  },
+  website_recreation: {
+    title: "Offline Web App",
+    description: "Standalone interactive dashboard with preloaded data.",
+    badge: "HTML",
+    ext: "html",
+  },
+};
+
 export function ReportsDataExportTab({
   actor,
   allDeliveries,
@@ -46,6 +88,7 @@ export function ReportsDataExportTab({
   dateFrom,
   dateTo,
   periodLabel,
+  dateRangePicker,
 }: ReportsDataExportTabProps) {
   const [requests, setRequests] = useState<DataExportRequest[]>(() => readExportRequests());
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
@@ -113,9 +156,11 @@ export function ReportsDataExportTab({
 
   function handleDirectDownload(packageType: DataExportPackageType) {
     const filename = triggerExportPackageDownload(packageType, activeScopedPayload);
-    setFeedbackMessage(
-      `Exported "${DATA_EXPORT_PACKAGE_CATALOG[packageType].title}" for ${periodLabel} (${filename}).`,
-    );
+    const meta = SIMPLIFIED_PACKAGES[packageType];
+    setFeedbackMessage(`Exported ${meta.title} (${filename}).`);
+    toast.success("Export downloaded", {
+      description: `${meta.title} (${filename})`,
+    });
   }
 
   function handleDownloadApprovedRequest(req: DataExportRequest) {
@@ -131,20 +176,26 @@ export function ReportsDataExportTab({
       generatedBy: actor.username,
     });
     const filename = triggerExportPackageDownload(req.packageType, payload);
-    setFeedbackMessage(
-      `Downloaded approved export "${req.packageLabel}" for period ${req.periodLabel} (${filename}).`,
-    );
+    const meta = SIMPLIFIED_PACKAGES[req.packageType];
+    setFeedbackMessage(`Downloaded ${meta?.title ?? req.packageLabel} (${filename}).`);
+    toast.success("Export downloaded", {
+      description: `${meta?.title ?? req.packageLabel} (${filename})`,
+    });
   }
 
   function handleSubmitExportRequest(e: React.FormEvent) {
     e.preventDefault();
     if (!requestingPackage) return;
     if (!canRequest) {
-      setRequestError("Only Operations and Finance roles can submit export requests.");
+      const err = "Only Operations and Finance accounts can request data exports.";
+      setRequestError(err);
+      toast.error(err);
       return;
     }
     if (requestReason.trim().length < 5) {
-      setRequestError("Please enter a reason of at least 5 characters for Admin review.");
+      const err = "Please enter a reason of at least 5 characters.";
+      setRequestError(err);
+      toast.error(err);
       return;
     }
 
@@ -162,9 +213,11 @@ export function ReportsDataExportTab({
     setRequestingPackage(null);
     setRequestReason("");
     setRequestError(null);
-    setFeedbackMessage(
-      `Submitted request for "${created.packageLabel}" (${created.periodLabel}). Awaiting Admin approval.`,
-    );
+    const meta = SIMPLIFIED_PACKAGES[created.packageType];
+    setFeedbackMessage(`Submitted export request for ${meta.title}. Awaiting Admin review.`);
+    toast.success("Request submitted", {
+      description: `${meta.title} submitted for Admin review.`,
+    });
   }
 
   function handleAdminDecision(req: DataExportRequest, decision: "approved" | "rejected") {
@@ -172,8 +225,8 @@ export function ReportsDataExportTab({
     const note =
       reviewNoteDrafts[req.id]?.trim() ||
       (decision === "approved"
-        ? "Approved by Admin for operational/financial review."
-        : "Export request declined by Admin.");
+        ? "Approved by Admin."
+        : "Declined by Admin.");
     reviewDataExportRequest({
       requestId: req.id,
       decision,
@@ -182,75 +235,51 @@ export function ReportsDataExportTab({
       reviewNotes: note,
     });
     setRequests(readExportRequests());
+    const meta = SIMPLIFIED_PACKAGES[req.packageType];
+    const label = meta?.title ?? req.packageLabel;
     setFeedbackMessage(
-      `${decision === "approved" ? "Approved" : "Rejected"} ${req.packageLabel} request from @${req.requestedByUsername} (${req.periodLabel}).`,
+      `${decision === "approved" ? "Approved" : "Rejected"} ${label} for @${req.requestedByUsername}.`,
     );
+    if (decision === "approved") {
+      toast.success("Request approved", {
+        description: `Approved ${label} for @${req.requestedByUsername}.`,
+      });
+    } else {
+      toast.info("Request rejected", {
+        description: `Rejected ${label} for @${req.requestedByUsername}.`,
+      });
+    }
   }
 
   if (!hasAccess) {
     return (
-      <article className="report-document" aria-label="Data export access restricted">
-        <div className="empty-state" style={{ padding: "48px 24px" }}>
-          <strong className="empty-state-title">Data & Website Export Restricted</strong>
-          <span className="empty-state-desc">
-            Dataset exports, database snapshots, and working website recreations are restricted to Admin, Operations, and Finance personnel.
-          </span>
-        </div>
-      </article>
+      <div className="empty-state" style={{ padding: "48px 24px", textAlign: "center" }}>
+        <strong className="empty-state-title" style={{ fontSize: "16px", color: "var(--color-text-primary)" }}>
+          Access Restricted
+        </strong>
+        <p className="empty-state-desc" style={{ marginTop: "6px", color: "var(--color-text-muted)", fontSize: "13px" }}>
+          Data exports are restricted to Admin, Operations, and Finance personnel.
+        </p>
+      </div>
     );
   }
 
   return (
-    <article className="report-document" aria-label="Date-filtered dataset, database, and website export center">
-      <header className="report-document-header">
-        <div>
-          <p>REDEEMED ROUTE LOGISTICS INC. · ROUTEX DATA GOVERNANCE</p>
-          <h2>Data, Database & Website Recreation Export</h2>
-          <span>
-            {isAdmin
-              ? `Admin Export & Approval Console · Prepared for ${actor.fullName} (@${actor.username})`
-              : `Export Request Console (${actor.roleLabel}) · Prepared for ${actor.fullName} (@${actor.username})`}
-          </span>
-          <p style={{ marginTop: "4px", fontSize: "11.5px", color: "var(--color-text-muted)" }}>
-            All exported datasets, relational database snapshots, and standalone working website recreations are dynamically filtered to the active date range ({periodLabel}).
-            {!isAdmin && " Exports require Admin approval before Operations or Finance can download."}
-          </p>
-        </div>
-        <dl>
-          <div>
-            <dt>Active Date Filter</dt>
-            <dd>{periodLabel}</dd>
-          </div>
-          <div>
-            <dt>Scoped Trips</dt>
-            <dd>{activeScopedPayload.summary.totalDeliveries}</dd>
-          </div>
-          <div>
-            <dt>Scoped Drop-offs</dt>
-            <dd>{activeScopedPayload.summary.totalDropoffs}</dd>
-          </div>
-          <div>
-            <dt>Authority</dt>
-            <dd>{isAdmin ? "Admin (Direct & Approve)" : `${actor.roleLabel} (Request)`}</dd>
-          </div>
-        </dl>
-      </header>
-
+    <div className="export-unboxed-container">
       {feedbackMessage ? (
         <div
-          className="notice"
           role="status"
           style={{
-            margin: "0 0 18px",
-            padding: "10px 14px",
+            padding: "9px 14px",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            background: "rgba(16, 185, 129, 0.09)",
-            border: "1px solid rgba(16, 185, 129, 0.3)",
+            background: "rgba(16, 185, 129, 0.08)",
+            border: "1px solid rgba(16, 185, 129, 0.25)",
             borderRadius: "8px",
             color: "var(--color-status-success, #047857)",
-            fontSize: "12.5px",
+            fontSize: "13px",
+            fontWeight: 500,
           }}
         >
           <span>{feedbackMessage}</span>
@@ -263,77 +292,78 @@ export function ReportsDataExportTab({
               cursor: "pointer",
               color: "inherit",
               fontWeight: 700,
-              fontSize: "14px",
+              fontSize: "16px",
+              lineHeight: 1,
+              padding: "2px 6px",
             }}
-            aria-label="Dismiss notification"
+            aria-label="Dismiss"
           >
             ×
           </button>
         </div>
       ) : null}
 
-      {/* Scoped Dataset Summary Metrics for Active Date Filter */}
-      <section className="report-summary" aria-label="Date-filtered export scope totals">
-        <div>
-          <span>Deliveries in Range</span>
-          <strong>{activeScopedPayload.summary.totalDeliveries}</strong>
-        </div>
-        <div>
-          <span>Finalized / Incomplete</span>
-          <strong>
-            {activeScopedPayload.summary.finalizedDeliveries} / {activeScopedPayload.summary.incompleteDeliveries}
-          </strong>
-        </div>
-        <div>
-          <span>Store Drop-offs</span>
-          <strong>{activeScopedPayload.summary.totalDropoffs}</strong>
-        </div>
-        <div>
-          <span>Company Expenses</span>
-          <strong>{activeScopedPayload.companyExpenses.length} records</strong>
-        </div>
-        <div>
-          <span>Scoped Revenue</span>
-          <strong>{formatPeso(activeScopedPayload.summary.deliveryRevenue)}</strong>
-        </div>
-        <div>
-          <span>Scoped Company Net Profit</span>
-          <strong
-            style={{
-              color:
-                activeScopedPayload.summary.companyNetProfit >= 0
-                  ? "var(--color-profit, #059669)"
-                  : "var(--color-danger, #dc2626)",
-            }}
-          >
-            {formatPeso(activeScopedPayload.summary.companyNetProfit)}
-          </strong>
-        </div>
-      </section>
-
-      {/* Export Packages Grid */}
-      <section className="report-table-section" style={{ marginBottom: "24px" }}>
-        <div className="report-table-heading">
+      {/* 1. Export Data Formats Section (Unboxed) */}
+      <section className="export-section" aria-label="Available Export Formats">
+        <div className="export-section-header">
           <div>
-            <h3>Exportable Packages for {periodLabel}</h3>
-            <p>
-              {isAdmin
-                ? "As Admin, you can directly export any date-filtered package below or approve requests from Operations and Finance."
-                : "Select a package below to request Admin approval for the currently selected date filter, or download once approved."}
-            </p>
+            <h2>Export Data</h2>
+            <p>Export operational and financial data for the selected period.</p>
+          </div>
+
+          <div className="export-header-meta">
+            {dateRangePicker}
+            <span
+              className="routex-badge tone-primary"
+              style={{
+                fontSize: "11px",
+                fontWeight: 650,
+                padding: "3px 9px",
+                borderRadius: "6px",
+                background: "var(--color-accent-soft, #fffbeb)",
+                color: "var(--color-accent-deep, #7c2d12)",
+                border: "1px solid rgba(245, 158, 11, 0.25)",
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ marginRight: "4px", verticalAlign: "-1px" }}
+                aria-hidden="true"
+              >
+                <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                <line x1="16" x2="16" y1="2" y2="6" />
+                <line x1="8" x2="8" y1="2" y2="6" />
+                <line x1="3" x2="21" y1="10" y2="10" />
+              </svg>
+              {periodLabel}
+            </span>
+            <span
+              className="routex-badge tone-neutral"
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                padding: "3px 9px",
+                borderRadius: "6px",
+                background: "var(--color-surface-subtle, #f1f5f9)",
+                color: "var(--color-text-secondary)",
+              }}
+            >
+              {activeScopedPayload.summary.totalDeliveries} trips · {activeScopedPayload.companyExpenses.length} expenses
+            </span>
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(265px, 1fr))",
-            gap: "14px",
-            marginTop: "12px",
-          }}
-        >
+        {/* Unboxed Package List */}
+        <div className="export-package-list">
           {PACKAGE_ORDER.map((pkgId) => {
-            const pkg = DATA_EXPORT_PACKAGE_CATALOG[pkgId];
+            const simple = SIMPLIFIED_PACKAGES[pkgId];
             const matchingApprovedReq = !isAdmin
               ? requests.find(
                   (r) =>
@@ -357,127 +387,55 @@ export function ReportsDataExportTab({
               : null;
 
             return (
-              <div
-                key={pkg.id}
-                style={{
-                  border: "1px solid var(--color-border, #e2e8f0)",
-                  borderRadius: "12px",
-                  padding: "16px 18px",
-                  background: "var(--color-surface, #ffffff)",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  gap: "14px",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "8px",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        letterSpacing: "0.04em",
-                        padding: "2px 8px",
-                        borderRadius: "999px",
-                        background: "var(--color-accent-soft, #fffbeb)",
-                        color: "var(--color-accent, #b45309)",
-                      }}
-                    >
-                      {pkg.badge}
-                    </span>
-                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
-                      .{pkg.extension.toUpperCase()}
-                    </span>
+              <div key={pkgId} className="export-package-row">
+                <div className="export-package-left">
+                  <span className="export-format-tag">{simple.badge}</span>
+                  <div className="export-package-meta">
+                    <div className="export-package-title-line">
+                      <span className="export-package-name">{simple.title}</span>
+                      <span className="export-package-ext">.{simple.ext}</span>
+                    </div>
+                    <p className="export-package-desc">{simple.description}</p>
                   </div>
-                  <h4 style={{ margin: "0 0 6px", fontSize: "14.5px", fontWeight: 700 }}>
-                    {pkg.title}
-                  </h4>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "12px",
-                      lineHeight: 1.5,
-                      color: "var(--color-text-secondary)",
-                    }}
-                  >
-                    {pkg.description}
-                  </p>
                 </div>
 
-                <div
-                  style={{
-                    borderTop: "1px solid var(--color-border-subtle, #edf1ee)",
-                    paddingTop: "12px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: "var(--color-text-muted)",
-                      display: "flex",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span>Scope: {periodLabel}</span>
-                    <span>
-                      {activeScopedPayload.summary.totalDeliveries} trips ·{" "}
-                      {activeScopedPayload.companyExpenses.length} expenses
-                    </span>
-                  </div>
-
+                <div className="export-package-action">
                   {isAdmin ? (
                     <button
                       type="button"
                       className="primary-action-button"
-                      style={{ width: "100%", justifyContent: "center" }}
-                      onClick={() => handleDirectDownload(pkg.id)}
+                      onClick={() => handleDirectDownload(pkgId)}
                     >
-                      ↓ Export {pkg.extension.toUpperCase()} ({periodLabel})
+                      Export .{simple.ext}
                     </button>
                   ) : matchingApprovedReq ? (
                     <button
                       type="button"
                       className="primary-action-button"
-                      style={{
-                        width: "100%",
-                        justifyContent: "center",
-                        background: "var(--color-status-success, #059669)",
-                      }}
+                      style={{ background: "var(--color-status-success, #059669)" }}
                       onClick={() => handleDownloadApprovedRequest(matchingApprovedReq)}
                     >
-                      ↓ Download Approved .{pkg.extension.toUpperCase()}
+                      Download .{simple.ext}
                     </button>
                   ) : matchingPendingReq ? (
                     <button
                       type="button"
                       className="secondary-button"
                       disabled
-                      style={{ width: "100%", justifyContent: "center", opacity: 0.75 }}
+                      style={{ opacity: 0.7 }}
                     >
-                      ⏳ Pending Admin Approval ({periodLabel})
+                      Pending Approval
                     </button>
                   ) : (
                     <button
                       type="button"
                       className="secondary-button"
-                      style={{ width: "100%", justifyContent: "center" }}
                       onClick={() => {
-                        setRequestingPackage(pkg.id);
+                        setRequestingPackage(pkgId);
                         setRequestError(null);
                       }}
                     >
-                      Request Admin Approval ({periodLabel})
+                      Request Export
                     </button>
                   )}
                 </div>
@@ -486,33 +444,22 @@ export function ReportsDataExportTab({
           })}
         </div>
 
-        {/* Inline Request Form for Operations & Finance */}
+        {/* Inline Request Form */}
         {requestingPackage && canRequest ? (
-          <form
-            onSubmit={handleSubmitExportRequest}
-            style={{
-              marginTop: "16px",
-              padding: "16px 18px",
-              borderRadius: "12px",
-              border: "1px solid var(--color-accent, #b45309)",
-              background: "var(--color-accent-soft, #fffbeb)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "12px",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <form onSubmit={handleSubmitExportRequest} className="export-request-form">
+            <div className="export-request-form-header">
               <div>
-                <strong style={{ fontSize: "13.5px" }}>
-                  Request Admin Approval: {DATA_EXPORT_PACKAGE_CATALOG[requestingPackage].title}
+                <strong className="export-request-form-title">
+                  Request Export: {SIMPLIFIED_PACKAGES[requestingPackage].title}
                 </strong>
-                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--color-text-secondary)" }}>
-                  Date Filter Scope: <strong>{periodLabel}</strong> ({activeScopedPayload.summary.totalDeliveries} deliveries, {activeScopedPayload.companyExpenses.length} company expenses)
-                </p>
+                <span className="export-request-scope-badge">
+                  {periodLabel} ({activeScopedPayload.summary.totalDeliveries} trips)
+                </span>
               </div>
               <button
                 type="button"
                 className="secondary-button"
+                style={{ padding: "4px 10px", fontSize: "12px" }}
                 onClick={() => {
                   setRequestingPackage(null);
                   setRequestError(null);
@@ -528,58 +475,43 @@ export function ReportsDataExportTab({
               </div>
             ) : null}
 
-            <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <span style={{ fontSize: "12px", fontWeight: 600 }}>
-                Purpose / Reason for Export Request <span style={{ color: "#dc2626" }}>*</span>
-              </span>
+            <div className="export-request-field">
+              <label htmlFor="export-reason-input">Reason for export</label>
               <input
+                id="export-reason-input"
                 type="text"
                 required
                 minLength={5}
                 value={requestReason}
                 onChange={(e) => setRequestReason(e.target.value)}
-                placeholder="e.g., Monthly financial reconciliation or offline operations review for selected period"
-                style={{
-                  padding: "9px 12px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--color-border, #cbd5e1)",
-                  background: "var(--color-surface, #ffffff)",
-                  fontSize: "13px",
-                }}
+                placeholder="e.g. Monthly financial audit or offline operations backup"
+                className="settings-input"
+                style={{ padding: "8px 12px", fontSize: "13px" }}
               />
-            </label>
+            </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-              <button type="submit" className="primary-action-button">
-                Submit Request to Admin
+            <div className="export-request-actions">
+              <button
+                type="submit"
+                className="primary-action-button"
+                style={{ padding: "6px 16px", fontSize: "12.5px" }}
+              >
+                Submit Request
               </button>
             </div>
           </form>
         ) : null}
       </section>
 
-      {/* Approval Queue (Admin) / My Export Requests (Operations & Finance) */}
-      <section className="report-table-section">
-        <div
-          className="report-table-heading"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "12px",
-          }}
-        >
+      {/* 2. Requests & Approvals Queue Section (Unboxed) */}
+      <section className="export-section" aria-label="Export Requests Queue">
+        <div className="export-section-header">
           <div>
-            <h3>
-              {isAdmin
-                ? "Admin Export Approval Queue (Operations & Finance Requests)"
-                : `My Export Requests (${actor.roleLabel})`}
-            </h3>
+            <h2>{isAdmin ? "Approval Queue" : "My Requests"}</h2>
             <p>
               {isAdmin
-                ? "Review and approve or reject export requests from Operations and Finance. Once approved, the requester can download the date-filtered package."
-                : "Track your submitted export requests. Approved packages can be downloaded immediately."}
+                ? "Review and authorize export requests."
+                : "Track authorization status and download approved exports."}
             </p>
           </div>
 
@@ -606,75 +538,54 @@ export function ReportsDataExportTab({
           </div>
         </div>
 
-        <div className="report-table-scroll">
-          <table>
+        {/* Unboxed Table */}
+        <div className="export-unboxed-table-wrap">
+          <table className="export-queue-table">
             <thead>
               <tr>
-                <th>Requested By</th>
-                <th>Export Package</th>
-                <th>Date Filter Scope</th>
-                <th>Reason / Review Notes</th>
-                <th>Status</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
+                <th className="export-th-requester">Requester</th>
+                <th className="export-th-package">Package</th>
+                <th className="export-th-period">Period</th>
+                <th className="export-th-reason">Reason</th>
+                <th className="export-th-status">Status</th>
+                <th className="export-th-actions">Actions</th>
               </tr>
             </thead>
             <tbody>
               {visibleRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="table-empty-cell">
-                    <div className="empty-state minimal">
-                      <strong className="empty-state-title">No export requests in this view</strong>
-                      <span className="empty-state-desc">
-                        {isAdmin
-                          ? "No export requests from Operations or Finance match the selected status filter."
-                          : "Use the cards above to request Admin approval for a dataset, database snapshot, or website recreation."}
-                      </span>
-                    </div>
+                  <td colSpan={6} className="export-empty-cell">
+                    No export requests found.
                   </td>
                 </tr>
               ) : (
                 visibleRequests.map((req) => {
-                  const pkg = DATA_EXPORT_PACKAGE_CATALOG[req.packageType];
+                  const meta = SIMPLIFIED_PACKAGES[req.packageType];
                   const canDownloadThis = canDownloadExportRequest(req, {
                     role: actor.role,
                     username: actor.username,
                   });
                   return (
                     <tr key={req.id}>
-                      <td>
-                        <strong>@{req.requestedByUsername}</strong>
-                        <br />
-                        <small style={{ color: "var(--color-text-muted)", textTransform: "capitalize" }}>
+                      <td className="export-td-requester">
+                        <strong className="export-user-name">@{req.requestedByUsername}</strong>
+                        <div className="export-user-meta">
                           {req.requestedByRole} · {req.requestedAt.slice(0, 10)}
-                        </small>
+                        </div>
                       </td>
-                      <td>
-                        <strong>{req.packageLabel}</strong>
-                        <br />
-                        <small style={{ color: "var(--color-text-muted)" }}>
-                          {pkg?.badge} (.{pkg?.extension.toUpperCase()})
-                        </small>
+                      <td className="export-td-package">
+                        <strong className="export-pkg-title">{meta?.title ?? req.packageLabel}</strong>
+                        <div className="export-pkg-ext">.{meta?.ext ?? ""}</div>
                       </td>
-                      <td>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            padding: "2px 8px",
-                            borderRadius: "6px",
-                            background: "var(--color-surface-subtle, #f1f5f9)",
-                            fontSize: "11.5px",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {req.periodLabel}
-                        </span>
+                      <td className="export-td-period">
+                        <span className="export-period-tag">{req.periodLabel}</span>
                       </td>
-                      <td style={{ maxWidth: "280px" }}>
-                        <div style={{ fontSize: "12.5px" }}>{req.reason}</div>
+                      <td className="export-td-reason">
+                        <div className="export-reason-text">{req.reason}</div>
                         {req.reviewNotes ? (
-                          <small style={{ display: "block", marginTop: "3px", color: "var(--color-text-muted)" }}>
-                            Admin (@{req.reviewedByUsername}): {req.reviewNotes}
-                          </small>
+                          <div className="export-reason-admin-note">
+                            Admin note: {req.reviewNotes}
+                          </div>
                         ) : null}
                         {isAdmin && req.status === "pending" ? (
                           <input
@@ -683,65 +594,35 @@ export function ReportsDataExportTab({
                             onChange={(e) =>
                               setReviewNoteDrafts((prev) => ({ ...prev, [req.id]: e.target.value }))
                             }
-                            placeholder="Optional admin review note…"
+                            placeholder="Optional review note…"
                             aria-label={`Review note for ${req.id}`}
-                            style={{
-                              marginTop: "6px",
-                              width: "100%",
-                              padding: "4px 8px",
-                              fontSize: "11.5px",
-                              borderRadius: "6px",
-                              border: "1px solid var(--color-border, #cbd5e1)",
-                              background: "var(--color-surface, #ffffff)",
-                            }}
+                            className="export-review-input"
                           />
                         ) : null}
                       </td>
-                      <td>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            padding: "3px 9px",
-                            borderRadius: "999px",
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            background:
-                              req.status === "approved"
-                                ? "rgba(16, 185, 129, 0.14)"
-                                : req.status === "rejected"
-                                  ? "rgba(239, 68, 68, 0.14)"
-                                  : "rgba(245, 158, 11, 0.16)",
-                            color:
-                              req.status === "approved"
-                                ? "var(--color-status-success, #059669)"
-                                : req.status === "rejected"
-                                  ? "var(--color-danger, #dc2626)"
-                                  : "var(--color-status-warning, #b45309)",
-                          }}
-                        >
+                      <td className="export-td-status">
+                        <span className={`export-status-pill status-${req.status}`}>
                           {req.status === "approved"
                             ? "Approved"
                             : req.status === "rejected"
                               ? "Rejected"
-                              : "Pending Admin"}
+                              : "Pending"}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+                      <td className="export-td-actions">
+                        <div className="export-actions-group">
                           {isAdmin && req.status === "pending" ? (
                             <>
                               <button
                                 type="button"
-                                className="primary-action-button"
-                                style={{ padding: "5px 11px", fontSize: "11.5px" }}
+                                className="export-btn-approve"
                                 onClick={() => handleAdminDecision(req, "approved")}
                               >
                                 Approve
                               </button>
                               <button
                                 type="button"
-                                className="secondary-button"
-                                style={{ padding: "5px 11px", fontSize: "11.5px", color: "#dc2626" }}
+                                className="export-btn-reject"
                                 onClick={() => handleAdminDecision(req, "rejected")}
                               >
                                 Reject
@@ -752,8 +633,7 @@ export function ReportsDataExportTab({
                           {isAdmin && req.status === "approved" ? (
                             <button
                               type="button"
-                              className="secondary-button"
-                              style={{ padding: "5px 10px", fontSize: "11.5px", color: "#dc2626" }}
+                              className="export-btn-revoke"
                               onClick={() => handleAdminDecision(req, "rejected")}
                             >
                               Revoke
@@ -763,8 +643,7 @@ export function ReportsDataExportTab({
                           {isAdmin && req.status === "rejected" ? (
                             <button
                               type="button"
-                              className="secondary-button"
-                              style={{ padding: "5px 10px", fontSize: "11.5px" }}
+                              className="export-btn-approve-secondary"
                               onClick={() => handleAdminDecision(req, "approved")}
                             >
                               Approve
@@ -774,11 +653,10 @@ export function ReportsDataExportTab({
                           {canDownloadThis ? (
                             <button
                               type="button"
-                              className={isAdmin ? "secondary-button" : "primary-action-button"}
-                              style={{ padding: "5px 11px", fontSize: "11.5px" }}
+                              className={isAdmin ? "export-btn-download-secondary" : "export-btn-download-primary"}
                               onClick={() => handleDownloadApprovedRequest(req)}
                             >
-                              ↓ Download .{pkg?.extension.toUpperCase()}
+                              Download .{meta?.ext ?? ""}
                             </button>
                           ) : null}
                         </div>
@@ -791,11 +669,6 @@ export function ReportsDataExportTab({
           </table>
         </div>
       </section>
-
-      <footer className="report-document-footer">
-        <span>RouteX — Data, Database & Website Recreation Export</span>
-        <span>Redeemed Route Logistics Inc.</span>
-      </footer>
-    </article>
+    </div>
   );
 }

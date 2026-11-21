@@ -16,10 +16,7 @@ import {
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
-import {
-  ExpenseDonutPieChart,
-  type ExpenseCategorySlice,
-} from "@/components/delivery-financial-breakdown";
+import { toast } from "sonner";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import {
   downloadReportCsvFile,
@@ -39,12 +36,6 @@ import {
   readBrowserPreviewExpenses,
   ROUTEX_COMPANY_EXPENSES_CHANGED,
 } from "@/features/finance/browser-preview-expenses";
-import { ReportsDataExportTab } from "@/components/reports-data-export-tab";
-import {
-  canAccessDataExportTab,
-  readExportRequests,
-  ROUTEX_EXPORT_REQUESTS_CHANGED,
-} from "@/features/reports/data-export-engine";
 import { canExportReports } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
@@ -55,7 +46,6 @@ export default function ReportsPage() {
   const { range } = useGlobalDateRange();
 
   const [activeTemplateId, setActiveTemplateId] = useState<string>("default-revenue");
-  const isDataExportTab = activeTemplateId === "data-export";
 
   // Daily trip report fixed-date state (defaults to today's date YYYY-MM-DD)
   const [dailyDate, setDailyDate] = useState<string>(() => toDateKey(new Date()));
@@ -68,7 +58,7 @@ export default function ReportsPage() {
     );
   }, [activeTemplateId]);
 
-  const isDailyTripReport = !isDataExportTab && activeTemplate.id === "default-daily-trip";
+  const isDailyTripReport = activeTemplate.id === "default-daily-trip";
 
   // For Daily Trip Report, the effective date range is strictly fixed to that single day,
   // completely ignoring whatever date filter is selected in the global topbar.
@@ -82,21 +72,6 @@ export default function ReportsPage() {
 
   const { deliveries: filteredDeliveries, loading, error } = usePersistedDeliveries(effectiveRange);
   const { deliveries: allDeliveries } = usePersistedDeliveries(ALL_TIME_RANGE);
-  const [pendingExportRequestsCount, setPendingExportRequestsCount] = useState(0);
-
-  useEffect(() => {
-    const syncPending = () => {
-      const reqs = readExportRequests();
-      setPendingExportRequestsCount(reqs.filter((r) => r.status === "pending").length);
-    };
-    syncPending();
-    window.addEventListener(ROUTEX_EXPORT_REQUESTS_CHANGED, syncPending);
-    window.addEventListener("storage", syncPending);
-    return () => {
-      window.removeEventListener(ROUTEX_EXPORT_REQUESTS_CHANGED, syncPending);
-      window.removeEventListener("storage", syncPending);
-    };
-  }, []);
 
   // Table sorting
   const [reportSort, setReportSort] = useState<{ key: string; direction: TableSortDirection }>({
@@ -236,385 +211,6 @@ export default function ReportsPage() {
     return sortedRows.slice(start, start + REPORT_PAGE_SIZE);
   }, [sortedRows, reportPage]);
 
-  // 1. Expense Distribution Slices (Cost Categories)
-  const expenseBreakdown = useMemo(() => {
-    const totals = processedReport.totals;
-    const totalExp = totals.totalExpenses + (totals.totalCompanyExpenses ?? 0);
-    if (totalExp <= 0) return { slices: [] as ExpenseCategorySlice[], total: 0 };
-
-    const otherAndEntry = Math.max(
-      0,
-      totals.totalExpenses -
-        (totals.totalDieselExpenses + totals.totalTollExpenses + totals.totalCrewCosts),
-    );
-
-    const slices: ExpenseCategorySlice[] = [];
-
-    if (totals.totalDieselExpenses > 0) {
-      slices.push({
-        id: "diesel",
-        label: "Diesel Fuel",
-        amount: totals.totalDieselExpenses,
-        color: "#f59e0b",
-        status: "confirmed",
-      });
-    }
-
-    if (totals.totalTollExpenses > 0) {
-      slices.push({
-        id: "toll",
-        label: "Highway Tolls",
-        amount: totals.totalTollExpenses,
-        color: "#6366f1",
-        status: "confirmed",
-      });
-    }
-
-    if (totals.totalCrewCosts > 0) {
-      slices.push({
-        id: "crew",
-        label: "Crew Compensation",
-        amount: totals.totalCrewCosts,
-        color: "#0284c7",
-        status: "confirmed",
-      });
-    }
-
-    if (otherAndEntry > 0) {
-      slices.push({
-        id: "entry_other",
-        label: "Store Entry & Other",
-        amount: otherAndEntry,
-        color: "#10b981",
-        status: "confirmed",
-      });
-    }
-
-    if ((totals.totalCompanyExpenses ?? 0) > 0) {
-      slices.push({
-        id: "company_exp",
-        label: "Company Expenses",
-        amount: totals.totalCompanyExpenses ?? 0,
-        color: "#ec4899",
-        status: "confirmed",
-      });
-    }
-
-    return { slices, total: totalExp };
-  }, [processedReport.totals]);
-
-  // 2. Contextual Contribution Slices (Revenue / Drops / Allocation)
-  const contextualContribution = useMemo(() => {
-    const totals = processedReport.totals;
-    const baseType = activeTemplate.baseType;
-    const rows = processedReport.rows;
-    const isActivity = activeTemplate.id === "default-activity";
-
-    const PALETTE = [
-      "#f59e0b",
-      "#3b82f6",
-      "#10b981",
-      "#8b5cf6",
-      "#ec4899",
-      "#06b6d4",
-      "#f97316",
-      "#64748b",
-    ];
-
-    if (isActivity) {
-      const totalDrops = totals.totalStoreDropoffs;
-      if (totalDrops <= 0) {
-        return {
-          title: "Store Drop-offs by Client",
-          eyebrow: "CLIENT DROP-OFFS",
-          slices: [] as ExpenseCategorySlice[],
-          total: 0,
-          centerLabel: "Drop-offs",
-          valueFormatter: (n: number) => `${n.toLocaleString()} drop-offs`,
-        };
-      }
-
-      const clientRows = [...rows]
-        .map((r) => ({
-          name: String(r.clientName ?? "Unknown Client"),
-          count: typeof r.dropoffs === "number" ? r.dropoffs : 0,
-        }))
-        .filter((c) => c.count > 0)
-        .sort((a, b) => b.count - a.count);
-
-      const TOP_COUNT = 5;
-      const topClients = clientRows.slice(0, TOP_COUNT);
-      const otherClients = clientRows.slice(TOP_COUNT);
-
-      const slices: ExpenseCategorySlice[] = topClients.map((c, i) => ({
-        id: `client-drop-${i}`,
-        label: c.name,
-        amount: c.count,
-        color: PALETTE[i % PALETTE.length],
-        status: "confirmed",
-      }));
-
-      const otherTotal = otherClients.reduce((sum, c) => sum + c.count, 0);
-      if (otherTotal > 0) {
-        slices.push({
-          id: "client-drop-other",
-          label: `Other Clients (${otherClients.length})`,
-          amount: otherTotal,
-          color: PALETTE[TOP_COUNT % PALETTE.length],
-          status: "confirmed",
-        });
-      }
-
-      return {
-        title: "Store Drop-offs by Client",
-        eyebrow: "CLIENT DROP-OFFS",
-        slices,
-        total: totalDrops,
-        centerLabel: "Drop-offs",
-        valueFormatter: (n: number) => `${n.toLocaleString()} drop-offs`,
-      };
-    }
-
-    if (baseType === "client_summary") {
-      const totalRevenue = totals.grossEarnings;
-      if (totalRevenue <= 0) {
-        return {
-          title: "Revenue by Client",
-          eyebrow: "CLIENT ATTRIBUTION",
-          slices: [] as ExpenseCategorySlice[],
-          total: 0,
-          centerLabel: "Revenue",
-          valueFormatter: formatPeso,
-        };
-      }
-
-      const clientRows = [...rows]
-        .map((r) => ({
-          name: String(r.clientName ?? "Unknown Client"),
-          revenue: typeof r.revenue === "number" ? r.revenue : 0,
-        }))
-        .filter((c) => c.revenue > 0)
-        .sort((a, b) => b.revenue - a.revenue);
-
-      const TOP_COUNT = 5;
-      const topClients = clientRows.slice(0, TOP_COUNT);
-      const otherClients = clientRows.slice(TOP_COUNT);
-
-      const slices: ExpenseCategorySlice[] = topClients.map((c, i) => ({
-        id: `client-rev-${i}`,
-        label: c.name,
-        amount: c.revenue,
-        color: PALETTE[i % PALETTE.length],
-        status: "confirmed",
-      }));
-
-      const otherTotal = otherClients.reduce((sum, c) => sum + c.revenue, 0);
-      if (otherTotal > 0) {
-        slices.push({
-          id: "client-rev-other",
-          label: `Other Clients (${otherClients.length})`,
-          amount: otherTotal,
-          color: PALETTE[TOP_COUNT % PALETTE.length],
-          status: "confirmed",
-        });
-      }
-
-      return {
-        title: "Revenue by Client",
-        eyebrow: "CLIENT ATTRIBUTION",
-        slices,
-        total: totalRevenue,
-        centerLabel: "Revenue",
-        valueFormatter: formatPeso,
-      };
-    }
-
-    if (baseType === "truck_summary") {
-      const totalRevenue = totals.grossEarnings;
-      if (totalRevenue > 0) {
-        const truckRows = [...rows]
-          .map((r) => ({
-            name: String(r.plateNumber ?? "Unknown Plate"),
-            revenue: typeof r.revenue === "number" ? r.revenue : 0,
-          }))
-          .filter((t) => t.revenue > 0)
-          .sort((a, b) => b.revenue - a.revenue);
-
-        const TOP_COUNT = 5;
-        const topTrucks = truckRows.slice(0, TOP_COUNT);
-        const otherTrucks = truckRows.slice(TOP_COUNT);
-
-        const slices: ExpenseCategorySlice[] = topTrucks.map((t, i) => ({
-          id: `truck-rev-${i}`,
-          label: t.name,
-          amount: t.revenue,
-          color: PALETTE[i % PALETTE.length],
-          status: "confirmed",
-        }));
-
-        const otherTotal = otherTrucks.reduce((sum, t) => sum + t.revenue, 0);
-        if (otherTotal > 0) {
-          slices.push({
-            id: "truck-rev-other",
-            label: `Other Trucks (${otherTrucks.length})`,
-            amount: otherTotal,
-            color: PALETTE[TOP_COUNT % PALETTE.length],
-            status: "confirmed",
-          });
-        }
-
-        return {
-          title: "Revenue Contribution by Truck",
-          eyebrow: "FLEET REVENUE",
-          slices,
-          total: totalRevenue,
-          centerLabel: "Revenue",
-          valueFormatter: formatPeso,
-        };
-      }
-
-      const totalExpenses = totals.totalExpenses;
-      if (totalExpenses > 0) {
-        const truckRows = [...rows]
-          .map((r) => ({
-            name: String(r.plateNumber ?? "Unknown Plate"),
-            expenses: typeof r.expenses === "number" ? r.expenses : 0,
-          }))
-          .filter((t) => t.expenses > 0)
-          .sort((a, b) => b.expenses - a.expenses);
-
-        const TOP_COUNT = 5;
-        const topTrucks = truckRows.slice(0, TOP_COUNT);
-        const otherTrucks = truckRows.slice(TOP_COUNT);
-
-        const slices: ExpenseCategorySlice[] = topTrucks.map((t, i) => ({
-          id: `truck-exp-${i}`,
-          label: t.name,
-          amount: t.expenses,
-          color: PALETTE[i % PALETTE.length],
-          status: "confirmed",
-        }));
-
-        const otherTotal = otherTrucks.reduce((sum, t) => sum + t.expenses, 0);
-        if (otherTotal > 0) {
-          slices.push({
-            id: "truck-exp-other",
-            label: `Other Trucks (${otherTrucks.length})`,
-            amount: otherTotal,
-            color: PALETTE[TOP_COUNT % PALETTE.length],
-            status: "confirmed",
-          });
-        }
-
-        return {
-          title: "Expenses by Truck Plate",
-          eyebrow: "FLEET EXPENSES",
-          slices,
-          total: totalExpenses,
-          centerLabel: "Expenses",
-          valueFormatter: formatPeso,
-        };
-      }
-
-      return {
-        title: "Fleet Performance",
-        eyebrow: "FLEET PERFORMANCE",
-        slices: [] as ExpenseCategorySlice[],
-        total: 0,
-        centerLabel: "Revenue",
-        valueFormatter: formatPeso,
-      };
-    }
-
-    // baseType === "trip_ledger" (or Daily Trips) -> Revenue Allocation
-    const totalRev = totals.grossEarnings;
-    if (totalRev <= 0) {
-      return {
-        title: "Revenue Allocation",
-        eyebrow: "FINANCIAL ALLOCATION",
-        slices: [] as ExpenseCategorySlice[],
-        total: 0,
-        centerLabel: "Revenue",
-        valueFormatter: formatPeso,
-      };
-    }
-
-    const slices: ExpenseCategorySlice[] = [];
-
-    if (totals.netProfit > 0) {
-      slices.push({
-        id: "net_profit",
-        label: "Net Profit",
-        amount: totals.netProfit,
-        color: "#10b981",
-        status: "confirmed",
-      });
-    }
-
-    if (totals.totalDieselExpenses > 0) {
-      slices.push({
-        id: "diesel",
-        label: "Diesel Fuel",
-        amount: totals.totalDieselExpenses,
-        color: "#f59e0b",
-        status: "confirmed",
-      });
-    }
-
-    if (totals.totalTollExpenses > 0) {
-      slices.push({
-        id: "toll",
-        label: "Highway Tolls",
-        amount: totals.totalTollExpenses,
-        color: "#6366f1",
-        status: "confirmed",
-      });
-    }
-
-    if (totals.totalCrewCosts > 0) {
-      slices.push({
-        id: "crew",
-        label: "Crew Compensation",
-        amount: totals.totalCrewCosts,
-        color: "#0284c7",
-        status: "confirmed",
-      });
-    }
-
-    const otherAndEntry = Math.max(
-      0,
-      totals.totalExpenses -
-        (totals.totalDieselExpenses + totals.totalTollExpenses + totals.totalCrewCosts),
-    );
-    if (otherAndEntry > 0) {
-      slices.push({
-        id: "other",
-        label: "Store Entry & Other",
-        amount: otherAndEntry,
-        color: "#8b5cf6",
-        status: "confirmed",
-      });
-    }
-
-    if ((totals.totalCompanyExpenses ?? 0) > 0) {
-      slices.push({
-        id: "company",
-        label: "Company Expenses",
-        amount: totals.totalCompanyExpenses ?? 0,
-        color: "#ec4899",
-        status: "confirmed",
-      });
-    }
-
-    return {
-      title: "Revenue Allocation (Profit vs. Costs)",
-      eyebrow: "FINANCIAL ALLOCATION",
-      slices,
-      total: totalRev,
-      centerLabel: "Revenue",
-      valueFormatter: formatPeso,
-    };
-  }, [processedReport.totals, activeTemplate.baseType, activeTemplate.id, processedReport.rows]);
 
   function changeReportSort(key: string, direction: TableSortDirection) {
     setReportSort({ key, direction });
@@ -636,31 +232,21 @@ export default function ReportsPage() {
             </p>
           </div>
           <div className="report-actions">
-            {!isDataExportTab && canExportReports(actor.role) && (
-              <button
-                type="button"
-                className="page-intro-action report-export-action"
-                aria-label="Export report to Excel CSV"
-                onClick={() =>
-                  downloadReportCsvFile(
-                    processedReport,
-                    formatDateRange(effectiveRange),
-                  )
-                }
-              >
-                <span aria-hidden="true">↓</span> Export CSV
-              </button>
+            {canExportReports(actor.role) && (
               <>
                 <button
                   type="button"
                   className="page-intro-action report-export-action"
                   aria-label="Export report to Excel (.xlsx)"
-                  onClick={() =>
+                  onClick={() => {
                     downloadReportXlsxFile(
                       processedReport,
                       formatDateRange(effectiveRange),
-                    )
-                  }
+                    );
+                    toast.success("Excel report downloaded", {
+                      description: `${processedReport.template.name} exported as .xlsx.`,
+                    });
+                  }}
                 >
                   <span aria-hidden="true">↓</span> Export Excel (.xlsx)
                 </button>
@@ -668,12 +254,15 @@ export default function ReportsPage() {
                   type="button"
                   className="page-intro-action report-export-action"
                   aria-label="Export report to Excel CSV"
-                  onClick={() =>
+                  onClick={() => {
                     downloadReportCsvFile(
                       processedReport,
                       formatDateRange(effectiveRange),
-                    )
-                  }
+                    );
+                    toast.success("CSV report downloaded", {
+                      description: `${processedReport.template.name} exported as .csv.`,
+                    });
+                  }}
                 >
                   <span aria-hidden="true">↓</span> Export CSV
                 </button>
@@ -726,37 +315,6 @@ export default function ReportsPage() {
                     : tpl.layout.title.replace(" Report", "")}
                 </button>
               ))}
-              {canAccessDataExportTab(actor.role) && (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={isDataExportTab}
-                  className={isDataExportTab ? "active" : undefined}
-                  onClick={() => setActiveTemplateId("data-export")}
-                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-                >
-                  <span>Export Data</span>
-                  {actor.role === "admin" && pendingExportRequestsCount > 0 ? (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        minWidth: "18px",
-                        height: "18px",
-                        padding: "0 5px",
-                        borderRadius: "999px",
-                        fontSize: "10.5px",
-                        fontWeight: 700,
-                        background: "var(--color-accent, #b45309)",
-                        color: "#ffffff",
-                      }}
-                    >
-                      {pendingExportRequestsCount}
-                    </span>
-                  ) : null}
-                </button>
-              )}
             </div>
 
             <div className="report-tabs-bar-controls">
@@ -764,17 +322,6 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {isDataExportTab ? (
-            <ReportsDataExportTab
-              actor={actor}
-              allDeliveries={allDeliveries}
-              allCompanyExpenses={companyExpenses}
-              dateFrom={range.startDate ? toDateKey(range.startDate) : null}
-              dateTo={range.endDate ? toDateKey(range.endDate) : null}
-              periodLabel={formatDateRange(range)}
-            />
-          ) : (
-            <>
           {/* Daily Trip Fixed-Day Date Navigation Controls */}
           {isDailyTripReport && (
             <div className="daily-trip-date-bar">
@@ -942,77 +489,13 @@ export default function ReportsPage() {
                   </div>
                   <div>
                     <span>Company Net Profit</span>
-                    <strong style={{ color: (processedReport.totals.companyNetProfit ?? 0) >= 0 ? "var(--color-profit, #059669)" : "var(--color-danger, #dc2626)" }}>
+                    <strong>
                       {formatPeso(processedReport.totals.companyNetProfit ?? 0)}
                     </strong>
                   </div>
                 </>
               )}
             </section>
-
-            {/* Visual Breakdown Charts (Donut Pie Charts like Breakdown) */}
-            {processedReport.totals.totalTrips > 0 &&
-              (expenseBreakdown.slices.length > 0 ||
-                contextualContribution.slices.length > 0) && (
-                <section
-                  className="report-breakdown-section"
-                  aria-label="Visual breakdown charts"
-                >
-                  <div className="report-breakdown-grid">
-                    {expenseBreakdown.slices.length > 0 && (
-                      <div className="report-breakdown-card">
-                        <div className="report-breakdown-card-header">
-                          <div>
-                            <span className="report-breakdown-eyebrow">
-                              OPERATIONAL EXPENSES
-                            </span>
-                            <h4>Expense Category Distribution</h4>
-                          </div>
-                          <span className="report-chart-badge">
-                            {formatPeso(expenseBreakdown.total)}
-                          </span>
-                        </div>
-                        <ExpenseDonutPieChart
-                          slices={expenseBreakdown.slices}
-                          totalExpenses={expenseBreakdown.total}
-                          isComplete={true}
-                          title="Report Expense Distribution"
-                          centerLabel="Fleet Expenses"
-                          valueFormatter={formatPeso}
-                          size="standard"
-                        />
-                      </div>
-                    )}
-
-                    {contextualContribution.slices.length > 0 && (
-                      <div className="report-breakdown-card">
-                        <div className="report-breakdown-card-header">
-                          <div>
-                            <span className="report-breakdown-eyebrow">
-                              {contextualContribution.eyebrow}
-                            </span>
-                            <h4>{contextualContribution.title}</h4>
-                          </div>
-                          <span className="report-chart-badge">
-                            {contextualContribution.valueFormatter(
-                              contextualContribution.total,
-                            )}
-                          </span>
-                        </div>
-                        <ExpenseDonutPieChart
-                          slices={contextualContribution.slices}
-                          totalExpenses={contextualContribution.total}
-                          isComplete={true}
-                          title={contextualContribution.title}
-                          centerLabel={contextualContribution.centerLabel}
-                          valueFormatter={contextualContribution.valueFormatter}
-                          size="standard"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </section>
-              )}
 
             <section className="report-table-section">
               <div className="report-table-heading">
@@ -1084,16 +567,19 @@ export default function ReportsPage() {
                           {processedReport.columns.map((col) => {
                             const rawVal = row[col.id];
                             if (col.dataType === "badge") {
-                              const isPositive =
-                                rawVal === "Finalized" || rawVal === "Complete";
                               return (
                                 <td key={col.id} style={{ textAlign: col.align }}>
                                   <span
-                                    className={`report-status-badge ${isPositive ? "status-positive" : "status-neutral"}`}
+                                    className="report-status-badge"
                                     style={{
                                       fontSize: "11px",
                                       fontWeight: 600,
-                                      color: isPositive ? "#059669" : "var(--color-text-muted)",
+                                      color: "var(--color-text-secondary, #475569)",
+                                      padding: "2px 7px",
+                                      borderRadius: "4px",
+                                      background: "var(--color-surface-subtle, #f1f5f9)",
+                                      border: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08))",
+                                      display: "inline-block",
                                     }}
                                   >
                                     {String(rawVal ?? "—")}
@@ -1167,8 +653,6 @@ export default function ReportsPage() {
               <span>Redeemed Route Logistics Inc.</span>
             </footer>
           </article>
-            </>
-          )}
         </div>
       </div>
     </>
