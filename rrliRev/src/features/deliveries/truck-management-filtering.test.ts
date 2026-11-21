@@ -11,20 +11,28 @@ import {
 } from "./truck-registry.ts";
 
 describe("Truck Management and Filtering Improvements", () => {
-  describe("Cold Storage / Refrigerated Capability Classification", () => {
-    it("correctly classifies cold storage (refrigerated) trucks based on operational data", () => {
-      // 4 canonical owned trucks that carry refrigerated/cold chain cargo:
-      assert.equal(getTruckStorageCapability("NGS 4281"), "Refrigerated");
-      assert.equal(getTruckStorageCapability("DAA 7310"), "Refrigerated");
-      assert.equal(getTruckStorageCapability("NBE 9042"), "Refrigerated");
-      assert.equal(getTruckStorageCapability("ABX 2201"), "Refrigerated");
+  describe("Freezer, Chilled, and Dry Cargo Capability Classification", () => {
+    it("correctly classifies freezer trucks based on operational data", () => {
+      // Canonical owned freezer trucks (-18°C):
+      assert.equal(getTruckStorageCapability("NGS 4281"), "Freezer");
+      assert.equal(getTruckStorageCapability("ABX 2201"), "Freezer");
 
-      // Canonical subcontracted reefer units:
-      assert.equal(getTruckStorageCapability("PQR 7156"), "Refrigerated");
-      assert.equal(getTruckStorageCapability("BCD 8642"), "Refrigerated");
-      assert.equal(getTruckStorageCapability("HJK 2207"), "Refrigerated");
-      assert.equal(getTruckStorageCapability("VWX 6385"), "Refrigerated");
-      assert.equal(getTruckStorageCapability("JRS 3760"), "Refrigerated");
+      // Canonical subcontracted freezer units:
+      assert.equal(getTruckStorageCapability("HJK 2207"), "Freezer");
+      assert.equal(getTruckStorageCapability("JRS 3760"), "Freezer");
+      assert.equal(getTruckStorageCapability("BVC 1928"), "Freezer");
+    });
+
+    it("correctly classifies chilled trucks based on operational data", () => {
+      // Canonical owned chilled trucks (2°C - 4°C):
+      assert.equal(getTruckStorageCapability("DAA 7310"), "Chilled");
+      assert.equal(getTruckStorageCapability("NBE 9042"), "Chilled");
+
+      // Canonical subcontracted chilled units:
+      assert.equal(getTruckStorageCapability("PQR 7156"), "Chilled");
+      assert.equal(getTruckStorageCapability("BCD 8642"), "Chilled");
+      assert.equal(getTruckStorageCapability("VWX 6385"), "Chilled");
+      assert.equal(getTruckStorageCapability("XYZ 9102"), "Chilled");
     });
 
     it("correctly classifies dry / ambient cargo trucks based on operational data", () => {
@@ -40,28 +48,31 @@ describe("Truck Management and Filtering Improvements", () => {
     });
 
     it("respects explicit capability parameter and falls back gracefully for unknown plates", () => {
-      assert.equal(getTruckStorageCapability("UNKNOWN-1", "Refrigerated"), "Refrigerated");
-      assert.equal(getTruckStorageCapability("UNKNOWN-2", "Dry"), "Dry");
+      assert.equal(getTruckStorageCapability("UNKNOWN-1", "Freezer"), "Freezer");
+      assert.equal(getTruckStorageCapability("UNKNOWN-2", "Chilled"), "Chilled");
+      assert.equal(getTruckStorageCapability("UNKNOWN-3", "Dry"), "Dry");
       // Default fallback is Dry when completely unknown
       assert.equal(getTruckStorageCapability("RANDOM 999"), "Dry");
     });
 
     it("generates clear human-readable classification labels", () => {
-      assert.equal(getTruckClassificationLabel("6-Wheeler", "Refrigerated"), "6-Wheeler · Cold");
+      assert.equal(getTruckClassificationLabel("6-Wheeler", "Freezer"), "6-Wheeler · Freezer");
+      assert.equal(getTruckClassificationLabel("6-Wheeler", "Chilled"), "6-Wheeler · Chilled");
       assert.equal(getTruckClassificationLabel("10-Wheeler", "Dry"), "10-Wheeler · Dry");
-      assert.equal(getTruckClassificationLabel("4-Wheeler", "Refrigerated"), "4-Wheeler · Cold");
+      assert.equal(getTruckClassificationLabel("4-Wheeler", "Freezer"), "4-Wheeler · Freezer");
       assert.equal(getTruckClassificationLabel("4-Wheeler", "Dry"), "4-Wheeler · Dry");
     });
   });
 
-  describe("Truck Classification Filters (Simplified to Only Dry and Cold)", () => {
-    it("ensures filter options contain only all, dry, and cold options", () => {
+  describe("Truck Classification Filters (Freezer, Chilled, and Dry)", () => {
+    it("ensures filter options contain all, freezer, chilled, and dry options", () => {
       const values = TRUCK_CLASSIFICATION_FILTER_OPTIONS.map((opt) => opt.value);
 
-      // Must include All, Dry, and Cold
+      // Must include All, Freezer, Chilled, and Dry
       assert.ok(values.includes("all"));
+      assert.ok(values.includes("freezer"));
+      assert.ok(values.includes("chilled"));
       assert.ok(values.includes("dry"));
-      assert.ok(values.includes("cold"));
 
       // Wheel-specific combinations must NOT be present
       assert.ok(!values.includes("reefer-6w" as any));
@@ -75,9 +86,12 @@ describe("Truck Management and Filtering Improvements", () => {
       assert.ok(!values.includes("10-Wheeler" as any));
     });
 
-    it("provides clean labels for dry and cold classifications", () => {
-      const coldOption = TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === "cold");
-      assert.equal(coldOption?.label, "Cold");
+    it("provides clean labels for freezer, chilled, and dry classifications", () => {
+      const freezerOption = TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === "freezer");
+      assert.equal(freezerOption?.label, "Freezer");
+
+      const chilledOption = TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === "chilled");
+      assert.equal(chilledOption?.label, "Chilled");
 
       const dryOption = TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === "dry");
       assert.equal(dryOption?.label, "Dry");

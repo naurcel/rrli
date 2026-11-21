@@ -77,3 +77,16 @@ test("mock deliveries have associated truck plates and personnel for delivery de
     assert.equal(parsedHelper.length, 1);
   }
 });
+
+test("deliveries have all required trip and truck parameters for the unified card", () => {
+  for (const delivery of SMALL_MOCK_DATABASE.deliveries) {
+    const record = delivery.record;
+    assert.ok(record.plateNumber, "Must have truck plate");
+    assert.ok(record.truckType, "Must have truck type");
+    assert.ok(record.truckOwnership, "Must have truck ownership");
+    assert.ok(record.clientName, "Must have client name");
+    assert.ok(record.deliveryDate, "Must have delivery date");
+    assert.ok(typeof record.distanceKm === "number", "Distance must be numeric");
+    assert.ok(typeof record.fuelRate === "number", "Fuel rate must be numeric");
+  }
+});

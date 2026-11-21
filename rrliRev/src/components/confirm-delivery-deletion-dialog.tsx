@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
+import { getTripTotalDropoffs } from "@/features/deliveries/delivery-domain";
 import { formatPeso } from "@/lib/format";
 
 export function ConfirmDeliveryDeletionDialog({
@@ -73,7 +74,7 @@ export function ConfirmDeliveryDeletionDialog({
             <div><span>Date</span><strong>{delivery.deliveryDate}</strong></div>
             <div><span>Truck</span><strong>{delivery.plateNumber}</strong></div>
             <div><span>Revenue</span><strong>{formatPeso(delivery.deliveryRate)}</strong></div>
-            <div><span>Drop-offs</span><strong>{delivery.dropoffs.length}</strong></div>
+            <div><span>Drop-offs</span><strong>{getTripTotalDropoffs(delivery.dropoffs)}</strong></div>
           </div>
           <div className="delete-delivery-warning"><strong>Warning:</strong> This removes the record from operational and financial calculations.</div>
         </div>

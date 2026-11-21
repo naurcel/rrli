@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
@@ -52,6 +53,7 @@ import {
 } from "@/features/deliveries/browser-preview-crew";
 import { parsePersonnelNames } from "@/components/delivery-crew-section";
 import {
+  getTripTotalDropoffs,
   isDeliveryFinanciallyComplete,
   summarizeTruckProfitability,
 } from "@/features/deliveries/delivery-domain";
@@ -73,12 +75,15 @@ import {
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import { canManageTrucks } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
+import { CompactMoney } from "@/components/compact-money";
 
 type SubcontractedTruckSortKey =
   | "plateNumber"
   | "truckType"
   | "classification"
   | "provider"
+  | "driverName"
+  | "helperName"
   | "contactPerson";
 
 export default function TruckProfitabilityPage() {
@@ -97,7 +102,7 @@ export default function TruckProfitabilityPage() {
     isBuffering: isPlateSearchBuffering,
     clear: clearPlateSearch,
     reset: resetPlateSearch,
-  } = useSearchBuffer({ delay: 280 });
+  } = useSearchBuffer({ delay: 500 });
   const [classificationFilter, setClassificationFilter] = useState<TruckClassificationFilterKey>("all");
   const [performanceFilter, setPerformanceFilter] = useState<TruckPerformanceFilterKey>("all");
   const [ownedTruckSort, setOwnedTruckSort] = useState<OwnedTruckSort>("netProfit");
@@ -181,10 +186,12 @@ export default function TruckProfitabilityPage() {
   const [editingTruck, setEditingTruck] = useState<FleetTruck | null>(null);
   const [editPlateNumber, setEditPlateNumber] = useState("");
   const [editTruckType, setEditTruckType] = useState<FleetTruck["truckType"]>("6-Wheeler");
-  const [editStorageCapability, setEditStorageCapability] = useState<TruckStorageCapability>("Refrigerated");
+  const [editStorageCapability, setEditStorageCapability] = useState<TruckStorageCapability>("Freezer");
   const [editOwnershipType, setEditOwnershipType] = useState<FleetTruck["ownershipType"]>("Owned");
   const [editProvider, setEditProvider] = useState("");
   const [editContactPerson, setEditContactPerson] = useState("");
+  const [editDriverName, setEditDriverName] = useState("");
+  const [editHelperName, setEditHelperName] = useState("");
   const [editTruckPhotoFile, setEditTruckPhotoFile] = useState<File | null>(null);
   const [editTruckPhotoPreview, setEditTruckPhotoPreview] = useState<string | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
@@ -378,6 +385,9 @@ export default function TruckProfitabilityPage() {
         tone: "success",
         text: `${editCrewRole} "${normalizedName}" details updated successfully.`,
       });
+      toast.success(`${editCrewRole} updated`, {
+        description: `"${normalizedName}" details updated successfully.`,
+      });
       setEditingCrewMember(null);
     } catch (err) {
       setEditCrewError(err instanceof Error ? err.message : "Failed to update crew member.");
@@ -406,12 +416,17 @@ export default function TruckProfitabilityPage() {
         tone: "success",
         text: `${crewToDelete.assignmentType} "${crewToDelete.fullName}" was deleted from fleet roster.`,
       });
+      toast.success("Crew member deleted", {
+        description: `${crewToDelete.assignmentType} "${crewToDelete.fullName}" was removed from the fleet roster.`,
+      });
       setCrewToDelete(null);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to delete crew member.";
       setFeedback({
         tone: "error",
-        text: err instanceof Error ? err.message : "Failed to delete crew member.",
+        text: msg,
       });
+      toast.error(msg);
     } finally {
       setIsDeletingCrew(false);
     }
@@ -428,12 +443,16 @@ export default function TruckProfitabilityPage() {
             tone: "success",
             text: `Contact number (${member.contactNumber}) for ${member.fullName} copied to clipboard.`,
           });
+          toast.success("Copied to clipboard", {
+            description: `Contact number (${member.contactNumber}) copied.`,
+          });
         })
         .catch(() => {
           setFeedback({
             tone: "error",
             text: "Unable to copy to clipboard.",
           });
+          toast.error("Unable to copy to clipboard");
         });
     }
   }
@@ -459,8 +478,13 @@ export default function TruckProfitabilityPage() {
         tone: "success",
         text: `${member.fullName} was ${nextActive ? "reactivated" : "deactivated"}.`,
       });
+      toast.success("Crew status changed", {
+        description: `${member.fullName} is now ${nextActive ? "Active" : "Inactive"}.`,
+      });
     } catch (error) {
-      setFeedback({ tone: "error", text: error instanceof Error ? error.message : "Unable to update crew status." });
+      const msg = error instanceof Error ? error.message : "Unable to update crew status.";
+      setFeedback({ tone: "error", text: msg });
+      toast.error(msg);
     } finally {
       setCrewStatusPendingId(null);
     }
@@ -469,10 +493,12 @@ export default function TruckProfitabilityPage() {
   // Add Truck Form states
   const [plateNumber, setPlateNumber] = useState("");
   const [truckType, setTruckType] = useState<FleetTruck["truckType"]>("6-Wheeler");
-  const [storageCapability, setStorageCapability] = useState<TruckStorageCapability>("Refrigerated");
+  const [storageCapability, setStorageCapability] = useState<TruckStorageCapability>("Freezer");
   const [ownershipType, setOwnershipType] = useState<FleetTruck["ownershipType"]>("Owned");
   const [provider, setProvider] = useState("");
   const [contactPerson, setContactPerson] = useState("");
+  const [driverName, setDriverName] = useState("");
+  const [helperName, setHelperName] = useState("");
   const [truckPhotoFile, setTruckPhotoFile] = useState<File | null>(null);
   const [truckPhotoPreview, setTruckPhotoPreview] = useState<string | null>(null);
 
@@ -639,7 +665,7 @@ export default function TruckProfitabilityPage() {
           t.plateNumber.trim().replace(/\s+/g, " ").toUpperCase() === truck.plateNumber.trim().replace(/\s+/g, " ").toUpperCase() ||
           t.plateNumber.replace(/\s+/g, "").toUpperCase() === truck.plateNumber.replace(/\s+/g, "").toUpperCase(),
       );
-      const dropoffsCount = truckTrips.reduce((sum, t) => sum + (t.dropoffs?.length ?? 0), 0);
+      const dropoffsCount = truckTrips.reduce((sum, t) => sum + getTripTotalDropoffs(t.dropoffs), 0);
       const pendingTrips = truckTrips.filter((t) => !isDeliveryFinanciallyComplete(t));
       const pendingEarnings = pendingTrips.reduce((sum, t) => sum + (t.deliveryRate ?? 0), 0);
 
@@ -704,8 +730,8 @@ export default function TruckProfitabilityPage() {
           case "truckType":
             return String(left.truckType).localeCompare(String(right.truckType)) * mult;
           case "classification": {
-            const leftCap = getTruckStorageCapability(left.plateNumber, left.storageCapability) === "Refrigerated" ? "Cold" : "Dry";
-            const rightCap = getTruckStorageCapability(right.plateNumber, right.storageCapability) === "Refrigerated" ? "Cold" : "Dry";
+            const leftCap = getTruckStorageCapability(left.plateNumber, left.storageCapability);
+            const rightCap = getTruckStorageCapability(right.plateNumber, right.storageCapability);
             const diff = leftCap.localeCompare(rightCap);
             if (diff !== 0) return diff * mult;
             return left.plateNumber.localeCompare(right.plateNumber);
@@ -796,16 +822,15 @@ export default function TruckProfitabilityPage() {
         }
       }
 
-      // 2. Classification Filter (Simplified: only Dry / Cold)
-      const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
-      if (
-        (classificationFilter === "cold" || classificationFilter === "refrigerated") &&
-        capability !== "Refrigerated"
-      ) {
-        return false;
-      }
-      if (classificationFilter === "dry" && capability !== "Dry") {
-        return false;
+      // 2. Classification Filter (Freezer, Chilled, Dry)
+      if (classificationFilter !== "all") {
+        const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
+        const normCap = capability.toLowerCase();
+        if (classificationFilter === "cold" || classificationFilter === "refrigerated") {
+          if (normCap !== "freezer" && normCap !== "chilled") return false;
+        } else if (normCap !== classificationFilter) {
+          return false;
+        }
       }
 
       // 3. Performance / Value Filter
@@ -828,8 +853,8 @@ export default function TruckProfitabilityPage() {
 
     return [...allSubcontractedTrucks].sort((left, right) => {
       if (subcontractedSort.key === "classification") {
-        const leftCap = getTruckStorageCapability(left.plateNumber, left.storageCapability) === "Refrigerated" ? "Cold" : "Dry";
-        const rightCap = getTruckStorageCapability(right.plateNumber, right.storageCapability) === "Refrigerated" ? "Cold" : "Dry";
+        const leftCap = getTruckStorageCapability(left.plateNumber, left.storageCapability);
+        const rightCap = getTruckStorageCapability(right.plateNumber, right.storageCapability);
         const diff = leftCap.localeCompare(rightCap);
         if (diff !== 0) return diff * direction;
         return left.plateNumber.localeCompare(right.plateNumber);
@@ -847,16 +872,11 @@ export default function TruckProfitabilityPage() {
     if (classificationFilter !== "all") {
       result = result.filter((truck) => {
         const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
-        if (
-          (classificationFilter === "cold" || classificationFilter === "refrigerated") &&
-          capability !== "Refrigerated"
-        ) {
-          return false;
+        const normCap = capability.toLowerCase();
+        if (classificationFilter === "cold" || classificationFilter === "refrigerated") {
+          return normCap === "freezer" || normCap === "chilled";
         }
-        if (classificationFilter === "dry" && capability !== "Dry") {
-          return false;
-        }
-        return true;
+        return normCap === classificationFilter;
       });
     }
     if (!debouncedPlateSearch.trim()) return result;
@@ -866,6 +886,8 @@ export default function TruckProfitabilityPage() {
         t.plateNumber.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase()) ||
         t.plateNumber.replace(/\s+/g, "").toLowerCase().includes(clean) ||
         (t.provider && t.provider.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())) ||
+        (t.driverName && t.driverName.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())) ||
+        (t.helperName && t.helperName.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())) ||
         (t.contactPerson &&
           t.contactPerson.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())),
     );
@@ -912,8 +934,15 @@ export default function TruckProfitabilityPage() {
     if (qParam) resetPlateSearch(qParam);
 
     const classParam = params.get("class");
-    if (classParam === "all" || classParam === "cold" || classParam === "dry" || classParam === "refrigerated") {
-      setClassificationFilter(classParam);
+    if (
+      classParam === "all" ||
+      classParam === "freezer" ||
+      classParam === "chilled" ||
+      classParam === "dry" ||
+      classParam === "cold" ||
+      classParam === "refrigerated"
+    ) {
+      setClassificationFilter(classParam as TruckClassificationFilterKey);
     }
 
     const perfParam = params.get("perf");
@@ -1023,15 +1052,18 @@ export default function TruckProfitabilityPage() {
   }, [filteredSubcontractedTrucks, subcontractedPage]);
 
   // Summary counts
-  const refrigeratedCount = useMemo(() => {
-    return filteredOwnedTrucks.filter(
-      (t) => getTruckStorageCapability(t.plateNumber, t.storageCapability) === "Refrigerated",
-    ).length;
+  const { freezerCount, chilledCount, dryCount } = useMemo(() => {
+    let freezer = 0;
+    let chilled = 0;
+    let dry = 0;
+    for (const t of filteredOwnedTrucks) {
+      const cap = getTruckStorageCapability(t.plateNumber, t.storageCapability);
+      if (cap === "Freezer") freezer++;
+      else if (cap === "Chilled") chilled++;
+      else dry++;
+    }
+    return { freezerCount: freezer, chilledCount: chilled, dryCount: dry };
   }, [filteredOwnedTrucks]);
-
-  const dryCount = useMemo(() => {
-    return filteredOwnedTrucks.length - refrigeratedCount;
-  }, [filteredOwnedTrucks.length, refrigeratedCount]);
 
   const hasActiveFilters = Boolean(
     plateSearch.trim() ||
@@ -1077,7 +1109,9 @@ export default function TruckProfitabilityPage() {
           storageCapability,
           ownershipType,
           provider: ownershipType === "Subcontracted" ? provider : null,
-          contactPerson: ownershipType === "Subcontracted" ? contactPerson : null,
+          driverName: ownershipType === "Subcontracted" ? driverName : null,
+          helperName: ownershipType === "Subcontracted" ? helperName : null,
+          contactPerson: ownershipType === "Subcontracted" ? (driverName || contactPerson || null) : null,
         }),
       });
 
@@ -1103,17 +1137,22 @@ export default function TruckProfitabilityPage() {
       }
       setPlateNumber("");
       setTruckType("6-Wheeler");
-      setStorageCapability("Refrigerated");
+      setStorageCapability("Freezer");
       setOwnershipType("Owned");
       setProvider("");
       setContactPerson("");
+      setDriverName("");
+      setHelperName("");
       setTruckPhotoFile(null);
       setTruckPhotoPreview(null);
       setIsAddTruckOpen(false);
 
       setFeedback({
         tone: "success",
-        text: `Truck ${payload.truck.plateNumber} (${payload.truck.ownershipType} ${payload.truck.truckType} · ${storageCapability === "Refrigerated" ? "Cold" : "Dry"}) successfully registered into the fleet.`,
+        text: `Truck ${payload.truck.plateNumber} (${payload.truck.ownershipType} ${payload.truck.truckType} · ${storageCapability}) successfully registered into the fleet.`,
+      });
+      toast.success("Truck registered", {
+        description: `Truck ${payload.truck.plateNumber} (${payload.truck.ownershipType} ${payload.truck.truckType} · ${storageCapability}) registered into the fleet.`,
       });
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to register truck.");
@@ -1129,6 +1168,8 @@ export default function TruckProfitabilityPage() {
     storageCapability?: TruckStorageCapability;
     ownershipType?: FleetTruck["ownershipType"];
     provider?: string | null;
+    driverName?: string | null;
+    helperName?: string | null;
     contactPerson?: string | null;
   }) {
     setEditTruckError(null);
@@ -1145,7 +1186,9 @@ export default function TruckProfitabilityPage() {
       truck.storageCapability ?? fullRecord?.storageCapability,
     );
     const resolvedProvider = truck.provider ?? fullRecord?.provider ?? "";
-    const resolvedContact = truck.contactPerson ?? fullRecord?.contactPerson ?? "";
+    const resolvedDriver = truck.driverName ?? fullRecord?.driverName ?? truck.contactPerson ?? fullRecord?.contactPerson ?? "";
+    const resolvedHelper = truck.helperName ?? fullRecord?.helperName ?? "";
+    const resolvedContact = truck.contactPerson ?? fullRecord?.contactPerson ?? resolvedDriver ?? "";
 
     setEditingTruck({
       id: fullRecord?.id ?? truck.id ?? truck.plateNumber,
@@ -1155,6 +1198,8 @@ export default function TruckProfitabilityPage() {
       ownershipType: resolvedOwnership,
       rateBasis: resolvedOwnership === "Owned" ? "Redeemed Rate" : "Trucker Rate",
       provider: resolvedProvider || null,
+      driverName: resolvedDriver || null,
+      helperName: resolvedHelper || null,
       contactPerson: resolvedContact || null,
     });
     setEditPlateNumber(truck.plateNumber);
@@ -1163,6 +1208,8 @@ export default function TruckProfitabilityPage() {
     setEditOwnershipType(resolvedOwnership);
     setEditProvider(resolvedProvider);
     setEditContactPerson(resolvedContact);
+    setEditDriverName(resolvedDriver);
+    setEditHelperName(resolvedHelper);
     setEditTruckPhotoFile(null);
     setEditTruckPhotoPreview(getTruckPhotoFromStorage(truck.plateNumber));
   }
@@ -1178,7 +1225,7 @@ export default function TruckProfitabilityPage() {
       return;
     }
     if (editOwnershipType === "Subcontracted" && !editProvider.trim()) {
-      setEditTruckError("Provider is required for subcontracted trucks.");
+      setEditTruckError("Trucker is required for subcontracted trucks.");
       return;
     }
 
@@ -1197,7 +1244,9 @@ export default function TruckProfitabilityPage() {
           storageCapability: editStorageCapability,
           ownershipType: editOwnershipType,
           provider: editOwnershipType === "Subcontracted" ? editProvider.trim() : null,
-          contactPerson: editOwnershipType === "Subcontracted" ? (editContactPerson.trim() || null) : null,
+          driverName: editOwnershipType === "Subcontracted" ? (editDriverName.trim() || null) : null,
+          helperName: editOwnershipType === "Subcontracted" ? (editHelperName.trim() || null) : null,
+          contactPerson: editOwnershipType === "Subcontracted" ? (editDriverName.trim() || editContactPerson.trim() || null) : null,
           browserLocal,
         }),
       });
@@ -1243,7 +1292,10 @@ export default function TruckProfitabilityPage() {
 
       setFeedback({
         tone: "success",
-        text: `Truck ${updatedTruck.plateNumber} (${updatedTruck.ownershipType} ${updatedTruck.truckType} · ${editStorageCapability === "Refrigerated" ? "Cold" : "Dry"}) updated successfully.`,
+        text: `Truck ${updatedTruck.plateNumber} (${updatedTruck.ownershipType} ${updatedTruck.truckType} · ${editStorageCapability}) updated successfully.`,
+      });
+      toast.success("Truck updated", {
+        description: `Truck ${updatedTruck.plateNumber} updated successfully.`,
       });
     } catch (err) {
       setEditTruckError(err instanceof Error ? err.message : "Failed to update truck.");
@@ -1285,11 +1337,18 @@ export default function TruckProfitabilityPage() {
         tone: "success",
         text: `Truck ${truckToDelete.plateNumber} was deleted successfully.`,
       });
+      toast.success("Truck deleted", {
+        description: `Truck ${truckToDelete.plateNumber} was removed from the fleet.`,
+      });
       setTruckToDelete(null);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to delete truck.";
       setFeedback({
         tone: "error",
-        text: err instanceof Error ? err.message : "Failed to delete truck.",
+        text: msg,
+      });
+      toast.error("Failed to delete truck", {
+        description: msg,
       });
     } finally {
       setIsDeletingTruck(false);
@@ -1349,6 +1408,9 @@ export default function TruckProfitabilityPage() {
       setFeedback({
         tone: "success",
         text: `${registered.assignmentType} "${registered.fullName}" was successfully registered into the fleet.`,
+      });
+      toast.success(`${registered.assignmentType} registered`, {
+        description: `"${registered.fullName}" added to fleet roster.`,
       });
     } catch (err) {
       setCrewFormError(err instanceof Error ? err.message : `Failed to register ${crewRole.toLowerCase()}.`);
@@ -1446,7 +1508,7 @@ export default function TruckProfitabilityPage() {
               </div>
               <div className="records-heading-meta">
                 <span className="ledger-total-badge">
-                  {filteredOwnedTrucks.length} trucks · {refrigeratedCount} Cold · {dryCount} Dry
+                  {filteredOwnedTrucks.length} trucks · {freezerCount} Freezer · {chilledCount} Chilled · {dryCount} Dry
                 </span>
                 <div className="chart-view-mode-toggle" role="group" aria-label="Owned trucks display view">
                   <button
@@ -1584,7 +1646,7 @@ export default function TruckProfitabilityPage() {
                   <span className="filter-chip">
                     <span className="filter-chip-category">Classification:</span>{" "}
                     {TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === classificationFilter)?.label ??
-                      (classificationFilter === "refrigerated" ? "Cold" : classificationFilter)}
+                      (classificationFilter === "refrigerated" || classificationFilter === "cold" ? "Cold Chain" : classificationFilter)}
                     <button
                       type="button"
                       className="filter-chip-remove"
@@ -1635,7 +1697,6 @@ export default function TruckProfitabilityPage() {
               <div className="fleet-card-grid truck-profitability-card-grid">
                 {paginatedOwnedTrucks.map((truck, index) => {
                   const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
-                  const isRefrigerated = capability === "Refrigerated";
 
                   return (
                     <div
@@ -1652,8 +1713,8 @@ export default function TruckProfitabilityPage() {
                       >
                         <div className="truck-card-photo-wrap" style={{ overflow: "hidden", borderRadius: "23px 23px 0 0" }}>
                           <TruckPhoto plateNumber={truck.plateNumber} />
-                          <span className={`truck-capability-pill ${isRefrigerated ? "refrigerated" : "ambient"}`}>
-                            {isRefrigerated ? "Cold" : "Dry"}
+                          <span className={`truck-capability-pill ${capability.toLowerCase()}`}>
+                            {capability}
                           </span>
                           {isPerformanceSort && (
                             <span className="truck-rank-badge">
@@ -1676,7 +1737,7 @@ export default function TruckProfitabilityPage() {
                           <dl>
                             <div className={`truck-card-revenue truck-card-metric ${ownedTruckSort === "revenue" ? "highlight-active-sort" : ""}`}>
                               <dt>Revenue</dt>
-                              <dd>{formatPeso(truck.totalEarnings)}</dd>
+                              <dd><CompactMoney value={truck.totalEarnings} /></dd>
                               {truck.pendingEarnings > 0 ? (
                                 <span
                                   className="truck-card-pending-revenue"
@@ -1689,17 +1750,17 @@ export default function TruckProfitabilityPage() {
                                     fontWeight: 500,
                                   }}
                                 >
-                                  + {formatPeso(truck.pendingEarnings)}
+                                  + <CompactMoney value={truck.pendingEarnings} />
                                 </span>
                               ) : null}
                             </div>
                             <div className={`truck-card-metric ${ownedTruckSort === "expenses" ? "highlight-active-sort" : ""}`}>
                               <dt>Expenses</dt>
-                              <dd>{formatPeso(truck.totalExpenses)}</dd>
+                              <dd><CompactMoney value={truck.totalExpenses} /></dd>
                             </div>
                             <div className={`truck-card-metric ${ownedTruckSort === "netProfit" ? "highlight-active-sort" : ""}`}>
                               <dt>Net Profit</dt>
-                              <dd>{formatPeso(truck.netProfit)}</dd>
+                              <dd><CompactMoney value={truck.netProfit} /></dd>
                             </div>
                             <div className={`truck-card-metric ${ownedTruckSort === "margin" ? "highlight-active-sort" : ""}`}>
                               <dt>Profit Margin</dt>
@@ -1805,7 +1866,6 @@ export default function TruckProfitabilityPage() {
                     <tbody>
                       {paginatedOwnedTrucks.map((truck) => {
                         const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
-                        const isRefrigerated = capability === "Refrigerated";
 
                         return (
                           <tr
@@ -1821,7 +1881,7 @@ export default function TruckProfitabilityPage() {
                               <strong className="truck-code">{truck.plateNumber}</strong>
                             </td>
                             <td><span className="truck-table-spec">{truck.truckType}</span></td>
-                            <td>{isRefrigerated ? "Cold" : "Dry"}</td>
+                            <td>{capability}</td>
                             <td>
                               <span className="fleet-status">
                                 {truck.completedTrips} trip{truck.completedTrips === 1 ? "" : "s"}
@@ -1829,7 +1889,7 @@ export default function TruckProfitabilityPage() {
                             </td>
                             <td>
                               <div>
-                                <strong>{formatPeso(truck.totalEarnings)}</strong>
+                                <strong><CompactMoney value={truck.totalEarnings} /></strong>
                                 {truck.pendingEarnings > 0 ? (
                                   <span
                                     style={{
@@ -1839,15 +1899,15 @@ export default function TruckProfitabilityPage() {
                                       fontWeight: 500,
                                     }}
                                   >
-                                    + {formatPeso(truck.pendingEarnings)}
+                                    + <CompactMoney value={truck.pendingEarnings} />
                                   </span>
                                 ) : null}
                               </div>
                             </td>
-                            <td>{formatPeso(truck.totalExpenses)}</td>
+                            <td><CompactMoney value={truck.totalExpenses} /></td>
                             <td>
                               <strong style={{ color: truck.netProfit >= 0 ? "var(--color-success, #10b981)" : "var(--color-danger, #ef4444)" }}>
-                                {formatPeso(truck.netProfit)}
+                                <CompactMoney value={truck.netProfit} />
                               </strong>
                             </td>
                             <td>{formatPercent(truck.marginPercent)}</td>
@@ -1939,8 +1999,9 @@ export default function TruckProfitabilityPage() {
                   <SortableTableHeader label="Plate Number" sortKey="plateNumber" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Vehicle Size" sortKey="truckType" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Classification" sortKey="classification" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
-                  <SortableTableHeader label="Provider" sortKey="provider" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
-                  <SortableTableHeader label="Contact Person" sortKey="contactPerson" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
+                  <SortableTableHeader label="Trucker" sortKey="provider" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
+                  <SortableTableHeader label="Driver" sortKey="driverName" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
+                  <SortableTableHeader label="Helper/s" sortKey="helperName" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   {canAdd && (
                     <th style={{ width: actor.role === "admin" ? "76px" : "44px", textAlign: "right" }}>
                       <span className="sr-only">Actions</span>
@@ -1952,7 +2013,7 @@ export default function TruckProfitabilityPage() {
                 {paginatedSubcontractedTrucks.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={canAdd ? 6 : 5}
+                      colSpan={canAdd ? 7 : 6}
                       className="table-empty-cell"
                     >
                       <div className="empty-state minimal" title="No subcontracted trucks">
@@ -1964,7 +2025,6 @@ export default function TruckProfitabilityPage() {
                 ) : (
                   paginatedSubcontractedTrucks.map((truck) => {
                   const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
-                  const isRefrigerated = capability === "Refrigerated";
 
                   return (
                     <tr
@@ -1975,9 +2035,10 @@ export default function TruckProfitabilityPage() {
                     >
                       <td><strong className="truck-code">{truck.plateNumber}</strong></td>
                       <td><span className="truck-table-spec">{truck.truckType}</span></td>
-                      <td>{isRefrigerated ? "Cold" : "Dry"}</td>
+                      <td>{capability}</td>
                       <td>{truck.provider}</td>
-                      <td>{truck.contactPerson}</td>
+                      <td>{truck.driverName || truck.contactPerson || "—"}</td>
+                      <td>{truck.helperName || "—"}</td>
                       {canAdd && (
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
                           <div className="truck-row-actions">
@@ -1994,6 +2055,8 @@ export default function TruckProfitabilityPage() {
                                   storageCapability: capability,
                                   ownershipType: "Subcontracted",
                                   provider: truck.provider,
+                                  driverName: truck.driverName || truck.contactPerson,
+                                  helperName: truck.helperName,
                                   contactPerson: truck.contactPerson,
                                 });
                               }}
@@ -2460,7 +2523,8 @@ export default function TruckProfitabilityPage() {
                     <RoundedSelect
                       value={storageCapability}
                       options={[
-                        { value: "Refrigerated", label: "Cold" },
+                        { value: "Freezer", label: "Freezer" },
+                        { value: "Chilled", label: "Chilled" },
                         { value: "Dry", label: "Dry" },
                       ]}
                       onChange={(value) => setStorageCapability(value as TruckStorageCapability)}
@@ -2470,10 +2534,10 @@ export default function TruckProfitabilityPage() {
                 </div>
 
                 {ownershipType === "Subcontracted" && (
-                  <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     <div className="routex-dialog-field">
                       <label htmlFor="new-truck-provider" style={{ fontWeight: 600, fontSize: "12px" }}>
-                        Hauler / Provider *
+                        Trucker *
                       </label>
                       <input
                         id="new-truck-provider"
@@ -2493,25 +2557,48 @@ export default function TruckProfitabilityPage() {
                       />
                     </div>
 
-                    <div className="routex-dialog-field">
-                      <label htmlFor="new-truck-contact" style={{ fontWeight: 600, fontSize: "12px" }}>
-                        Contact Person
-                      </label>
-                      <input
-                        id="new-truck-contact"
-                        type="text"
-                        placeholder="e.g. Adrian Cruz"
-                        value={contactPerson}
-                        onChange={(e) => setContactPerson(e.target.value)}
-                        style={{
-                          minHeight: "38px",
-                          height: "38px",
-                          padding: "0 12px",
-                          borderRadius: "9px",
-                          border: "1px solid var(--color-border)",
-                          background: "var(--glass-surface-strong)",
-                        }}
-                      />
+                    <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                      <div className="routex-dialog-field">
+                        <label htmlFor="new-truck-driver" style={{ fontWeight: 600, fontSize: "12px" }}>
+                          Driver
+                        </label>
+                        <input
+                          id="new-truck-driver"
+                          type="text"
+                          placeholder="e.g. Adrian Cruz"
+                          value={driverName}
+                          onChange={(e) => setDriverName(e.target.value)}
+                          style={{
+                            minHeight: "38px",
+                            height: "38px",
+                            padding: "0 12px",
+                            borderRadius: "9px",
+                            border: "1px solid var(--color-border)",
+                            background: "var(--glass-surface-strong)",
+                          }}
+                        />
+                      </div>
+
+                      <div className="routex-dialog-field">
+                        <label htmlFor="new-truck-helpers" style={{ fontWeight: 600, fontSize: "12px" }}>
+                          Helper/s
+                        </label>
+                        <input
+                          id="new-truck-helpers"
+                          type="text"
+                          placeholder="e.g. Rogelio Ramos"
+                          value={helperName}
+                          onChange={(e) => setHelperName(e.target.value)}
+                          style={{
+                            minHeight: "38px",
+                            height: "38px",
+                            padding: "0 12px",
+                            borderRadius: "9px",
+                            border: "1px solid var(--color-border)",
+                            background: "var(--glass-surface-strong)",
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2730,7 +2817,8 @@ export default function TruckProfitabilityPage() {
                     <RoundedSelect
                       value={editStorageCapability}
                       options={[
-                        { value: "Refrigerated", label: "Cold" },
+                        { value: "Freezer", label: "Freezer" },
+                        { value: "Chilled", label: "Chilled" },
                         { value: "Dry", label: "Dry" },
                       ]}
                       onChange={(value) => setEditStorageCapability(value as TruckStorageCapability)}
@@ -2740,10 +2828,10 @@ export default function TruckProfitabilityPage() {
                 </div>
 
                 {editOwnershipType === "Subcontracted" && (
-                  <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     <div className="routex-dialog-field">
                       <label htmlFor="edit-truck-provider" style={{ fontWeight: 600, fontSize: "12px" }}>
-                        Hauler / Provider *
+                        Trucker *
                       </label>
                       <input
                         id="edit-truck-provider"
@@ -2763,25 +2851,48 @@ export default function TruckProfitabilityPage() {
                       />
                     </div>
 
-                    <div className="routex-dialog-field">
-                      <label htmlFor="edit-truck-contact" style={{ fontWeight: 600, fontSize: "12px" }}>
-                        Contact Person
-                      </label>
-                      <input
-                        id="edit-truck-contact"
-                        type="text"
-                        placeholder="e.g. Adrian Cruz"
-                        value={editContactPerson}
-                        onChange={(e) => setEditContactPerson(e.target.value)}
-                        style={{
-                          minHeight: "38px",
-                          height: "38px",
-                          padding: "0 12px",
-                          borderRadius: "9px",
-                          border: "1px solid var(--color-border)",
-                          background: "var(--glass-surface-strong)",
-                        }}
-                      />
+                    <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                      <div className="routex-dialog-field">
+                        <label htmlFor="edit-truck-driver" style={{ fontWeight: 600, fontSize: "12px" }}>
+                          Driver
+                        </label>
+                        <input
+                          id="edit-truck-driver"
+                          type="text"
+                          placeholder="e.g. Adrian Cruz"
+                          value={editDriverName}
+                          onChange={(e) => setEditDriverName(e.target.value)}
+                          style={{
+                            minHeight: "38px",
+                            height: "38px",
+                            padding: "0 12px",
+                            borderRadius: "9px",
+                            border: "1px solid var(--color-border)",
+                            background: "var(--glass-surface-strong)",
+                          }}
+                        />
+                      </div>
+
+                      <div className="routex-dialog-field">
+                        <label htmlFor="edit-truck-helpers" style={{ fontWeight: 600, fontSize: "12px" }}>
+                          Helper/s
+                        </label>
+                        <input
+                          id="edit-truck-helpers"
+                          type="text"
+                          placeholder="e.g. Rogelio Ramos"
+                          value={editHelperName}
+                          onChange={(e) => setEditHelperName(e.target.value)}
+                          style={{
+                            minHeight: "38px",
+                            height: "38px",
+                            padding: "0 12px",
+                            borderRadius: "9px",
+                            border: "1px solid var(--color-border)",
+                            background: "var(--glass-surface-strong)",
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

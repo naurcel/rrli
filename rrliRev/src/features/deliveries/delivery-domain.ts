@@ -31,12 +31,20 @@ export type DeliveryStoreDropoff = {
   sequence: number;
   storeName: string;
   destinationArea: string;
+  dropoffCount?: number;
   entryFee: number | null;
   entryFeeStatus: ExpenseResolutionStatus;
   podSubmitted: boolean;
   supportingDocsComplete: boolean;
   documentRef: string;
 };
+
+export function getTripTotalDropoffs(
+  dropoffs: readonly DeliveryStoreDropoff[] | undefined | null,
+): number {
+  if (!dropoffs || dropoffs.length === 0) return 0;
+  return dropoffs.reduce((sum, stop) => sum + Math.max(1, stop.dropoffCount ?? 1), 0);
+}
 
 export type TripExpenseBreakdown = {
   dieselExpenses: number | null;
@@ -51,6 +59,47 @@ export type TripExpenseBreakdown = {
 };
 
 export type TripExpenseStates = Record<ExpenseKey, ExpenseResolutionStatus>;
+
+export type SupportingDocumentRecord = {
+  id?: string;
+  name: string;
+  dropoffId?: string | null;
+  storeName?: string | null;
+  fileUrl?: string | null;
+  uploadedAt?: string;
+};
+
+export type SupportingDocumentItem = string | SupportingDocumentRecord;
+
+export function getSupportingDocName(doc: SupportingDocumentItem): string {
+  return typeof doc === "string" ? doc : doc.name;
+}
+
+export function getSupportingDocDropoffId(doc: SupportingDocumentItem): string | null {
+  return typeof doc === "string" ? null : (doc.dropoffId ?? null);
+}
+
+export function normalizeSupportingDocument(
+  doc: SupportingDocumentItem,
+  index: number = 0,
+): SupportingDocumentRecord {
+  if (typeof doc === "string") {
+    return {
+      id: `doc-${index}-${doc}`,
+      name: doc,
+      dropoffId: null,
+      storeName: null,
+    };
+  }
+  return {
+    id: doc.id || `doc-${index}-${doc.name}`,
+    name: doc.name,
+    dropoffId: doc.dropoffId ?? null,
+    storeName: doc.storeName ?? null,
+    fileUrl: doc.fileUrl,
+    uploadedAt: doc.uploadedAt,
+  };
+}
 
 export type DeliveryTripRecord = {
   id: string;
@@ -77,7 +126,8 @@ export type DeliveryTripRecord = {
   version: number;
   dropoffs: readonly DeliveryStoreDropoff[];
   podStatus: PodVerificationStatus;
-  supportingDocuments?: readonly string[];
+  supportingDocuments?: readonly SupportingDocumentItem[];
+  notes?: string | null;
 };
 
 export type TruckProfitabilitySummary = {
@@ -292,13 +342,15 @@ export function buildDeliveryTripRecord(input: {
   expenseStates?: Partial<TripExpenseStates>;
   financialState?: FinancialState;
   version?: number;
-  supportingDocuments?: readonly string[];
+  supportingDocuments?: readonly SupportingDocumentItem[];
+  notes?: string | null;
   dropoffs: readonly (Omit<DeliveryStoreDropoff, "entryFeeStatus"> & {
     entryFeeStatus?: ExpenseResolutionStatus;
   })[];
 }): DeliveryTripRecord {
   const normalizedDropoffs: DeliveryStoreDropoff[] = input.dropoffs.map((stop) => ({
     ...stop,
+    dropoffCount: Math.max(1, Number(stop.dropoffCount) || 1),
     entryFeeStatus: stop.entryFeeStatus ?? "confirmed",
   }));
   const allEntryFeesNotApplicable = normalizedDropoffs.every(
@@ -369,6 +421,7 @@ export function buildDeliveryTripRecord(input: {
     dropoffs: normalizedDropoffs,
     podStatus: derivePodVerificationStatus(normalizedDropoffs),
     supportingDocuments: input.supportingDocuments ?? [],
+    notes: input.notes ?? null,
   };
 }
 
@@ -640,7 +693,7 @@ export function summarizeTruckProfitability(
         plateNumber: trip.plateNumber,
         truckType: trip.truckType,
         completedTrips: 1,
-        totalStoresServed: trip.dropoffs.length,
+        totalStoresServed: getTripTotalDropoffs(trip.dropoffs),
         totalDistanceKm: trip.distanceKm,
         totalEarnings: trip.deliveryRate,
         totalDieselExpenses: trip.expenses.dieselExpenses ?? 0,
@@ -659,7 +712,7 @@ export function summarizeTruckProfitability(
       byPlate.set(plateKey, {
         ...existing,
         completedTrips: existing.completedTrips + 1,
-        totalStoresServed: existing.totalStoresServed + trip.dropoffs.length,
+        totalStoresServed: existing.totalStoresServed + getTripTotalDropoffs(trip.dropoffs),
         totalDistanceKm: existing.totalDistanceKm + trip.distanceKm,
         totalEarnings,
         totalDieselExpenses: existing.totalDieselExpenses + (trip.expenses.dieselExpenses ?? 0),

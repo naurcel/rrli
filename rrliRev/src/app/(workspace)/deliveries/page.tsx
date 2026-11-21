@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-deletion-dialog";
+import { BackdatingTicketsModal } from "@/components/backdating-tickets-modal";
 import {
   formatDateRange,
   GlobalDateRangePicker,
@@ -16,6 +18,7 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import { FinancialBreakdownModal } from "@/components/financial-breakdown-modal";
 import { DeliveryFilterDropdown } from "@/components/delivery-filter-dropdown";
 import { TablePagination } from "@/components/table-pagination";
+import { EditDeliveryModal } from "@/components/edit-delivery-modal";
 import { ViewTripExpensesModal } from "@/components/view-trip-expenses-modal";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { RoundedSelect } from "@/components/rounded-select";
@@ -30,6 +33,7 @@ import {
   calculateProfitMargin,
   calculateTripExpenseTotal,
   derivePodVerificationStatus,
+  getTripTotalDropoffs,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
 } from "@/features/deliveries/delivery-domain";
@@ -53,6 +57,10 @@ import {
   sanitizePersonNameInput,
   sanitizePositiveDecimalInput,
 } from "@/features/deliveries/delivery-input-utils";
+import {
+  countUnresolvedDeliveryAttentionFlags,
+  DELIVERY_FLAGS_CHANGED_EVENT,
+} from "@/features/deliveries/delivery-attention-flags";
 import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
 import {
   isValidInternalReturnPath,
@@ -121,8 +129,8 @@ function sortDeliveryLedgerItems(
         rightVal = (right.origin ?? "").toLowerCase();
         break;
       case "dropoffs":
-        leftVal = left.dropoffs?.length ?? 0;
-        rightVal = right.dropoffs?.length ?? 0;
+        leftVal = getTripTotalDropoffs(left.dropoffs);
+        rightVal = getTripTotalDropoffs(right.dropoffs);
         break;
       case "distance":
         leftVal = left.distanceKm ?? 0;
@@ -181,7 +189,7 @@ export default function DeliveriesPage() {
     isBuffering: isSearchBuffering,
     clear: clearSearch,
     reset: resetSearch,
-  } = useSearchBuffer({ delay: 280 });
+  } = useSearchBuffer({ delay: 500 });
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedTrucks, setSelectedTrucks] = useState<string[]>([]);
   const [sort, setSort] = useState("delivery_date:desc");
@@ -195,6 +203,20 @@ export default function DeliveriesPage() {
   const [viewingTripExpenses, setViewingTripExpenses] = useState<DeliveryLedgerItem | null>(null);
   const [returnToParam, setReturnToParam] = useState<string | null>(null);
   const [returnLabelParam, setReturnLabelParam] = useState<string | null>(null);
+  const [backdatingModalOpen, setBackdatingModalOpen] = useState(false);
+  const [, setFlagsVersion] = useState(0);
+
+  useEffect(() => {
+    function handleFlags() {
+      setFlagsVersion((v) => v + 1);
+    }
+    window.addEventListener(DELIVERY_FLAGS_CHANGED_EVENT, handleFlags);
+    window.addEventListener("storage", handleFlags);
+    return () => {
+      window.removeEventListener(DELIVERY_FLAGS_CHANGED_EVENT, handleFlags);
+      window.removeEventListener("storage", handleFlags);
+    };
+  }, []);
 
   function buildCurrentDeliveriesUrl(): string {
     const query = new URLSearchParams();
@@ -232,78 +254,7 @@ export default function DeliveriesPage() {
   }
 
   const [correctingTrip, setCorrectingTrip] = useState<DeliveryLedgerItem | null>(null);
-  const [correctionReason, setCorrectionReason] = useState("");
-  const [correctionDeliveryRate, setCorrectionDeliveryRate] = useState<string>("");
-  const [correctionDriverName, setCorrectionDriverName] = useState("");
-  const [correctionHelperName, setCorrectionHelperName] = useState("");
-  const [correctionExpenses, setCorrectionExpenses] = useState<{ [key: string]: string }>({});
-  const [correctionStatuses, setCorrectionStatuses] = useState<{ [key: string]: "confirmed" | "not_applicable" | "unknown" }>({});
-  const [correctionExistingSupportingDocs, setCorrectionExistingSupportingDocs] = useState<string[]>([]);
-  const [correctionSupportingFiles, setCorrectionSupportingFiles] = useState<File[]>([]);
-  const [correctionDropoffs, setCorrectionDropoffs] = useState<CorrectionDropoffDraft[]>([]);
-  const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
-  const [correctionError, setCorrectionError] = useState<string | null>(null);
   const handledEditLink = useRef<string | null>(null);
-
-  function addCorrectionDropoff() {
-    setCorrectionDropoffs((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        storeName: "",
-        destinationArea: "",
-        entryFee: "",
-        entryFeeStatus: "not_applicable",
-        podSubmitted: false,
-        supportingDocsComplete: false,
-        documentRef: "",
-      },
-    ]);
-  }
-
-  function removeCorrectionDropoff(index: number) {
-    setCorrectionDropoffs((prev) => {
-      if (prev.length <= 1) return prev;
-      return prev.filter((_, i) => i !== index);
-    });
-  }
-
-  function updateCorrectionDropoff(
-    index: number,
-    field: keyof CorrectionDropoffDraft,
-    val: any,
-  ) {
-    setCorrectionDropoffs((prev) =>
-      prev.map((item, i) => {
-        if (i !== index) return item;
-        const updated = { ...item, [field]: val };
-        if (field === "entryFeeStatus" && val !== "confirmed") {
-          updated.entryFee = "";
-        }
-        return updated;
-      }),
-    );
-  }
-
-  const correctionEntryFeeSummary = useMemo(() => {
-    const hasUnknown = correctionDropoffs.some((d) => d.entryFeeStatus === "unknown");
-    const allNa = correctionDropoffs.length > 0 && correctionDropoffs.every((d) => d.entryFeeStatus === "not_applicable");
-    if (hasUnknown) return "Incomplete";
-    if (allNa) return "Not applicable";
-    const total = correctionDropoffs.reduce((sum, d) => {
-      if (d.entryFeeStatus === "confirmed" && d.entryFee !== "") {
-        const num = Number(d.entryFee);
-        return sum + (Number.isFinite(num) ? num : 0);
-      }
-      return sum;
-    }, 0);
-    return formatPeso(total);
-  }, [correctionDropoffs]);
-
-  function closeCorrectionModal() {
-    if (correctionSubmitting) return;
-    setCorrectingTrip(null);
-  }
 
   function openDeleteDeliveryModal(trip: DeliveryLedgerItem) {
     setDeleteDeliveryError(null);
@@ -316,222 +267,6 @@ export default function DeliveriesPage() {
     setDeliveryToDelete(null);
   }
 
-  async function submitCorrection(e: React.FormEvent) {
-    e.preventDefault();
-    if (!correctingTrip || correctionSubmitting) return;
-
-    if (correctionReason.trim().length < 5) {
-      setCorrectionError("A correction reason of at least 5 characters is required for audit integrity.");
-      return;
-    }
-
-    const numRate = Number(correctionDeliveryRate);
-    if (!Number.isFinite(numRate) || numRate <= 0) {
-      setCorrectionError("Please enter a valid positive delivery revenue.");
-      return;
-    }
-
-    if (correctionDropoffs.length === 0) {
-      setCorrectionError("At least one store drop-off is required.");
-      return;
-    }
-
-    for (let i = 0; i < correctionDropoffs.length; i++) {
-      const stop = correctionDropoffs[i];
-      if (!stop.storeName.trim()) {
-        setCorrectionError(`Store name is required for Store Drop-off #${i + 1}.`);
-        return;
-      }
-      if (!stop.destinationArea.trim()) {
-        setCorrectionError(`Destination area is required for Store Drop-off #${i + 1}.`);
-        return;
-      }
-      if (stop.entryFeeStatus === "confirmed") {
-        const feeNum = stop.entryFee === "" ? null : Number(stop.entryFee);
-        if (feeNum === null || !Number.isFinite(feeNum) || feeNum < 0) {
-          setCorrectionError(`Please enter a valid positive entry fee for Store Drop-off #${i + 1}.`);
-          return;
-        }
-      }
-    }
-
-    setCorrectionSubmitting(true);
-    setCorrectionError(null);
-
-    const expensesPayload: Record<string, number | null> = {};
-    for (const [key, val] of Object.entries(correctionExpenses)) {
-      const status = correctionStatuses[key];
-      if (status === "confirmed") {
-        const num = val === "" ? null : Number(val);
-        if (num !== null && (!Number.isFinite(num) || num < 0)) {
-          setCorrectionError(`Please enter a valid amount for ${key}.`);
-          setCorrectionSubmitting(false);
-          return;
-        }
-        expensesPayload[key] = num;
-      } else {
-        expensesPayload[key] = null;
-      }
-    }
-
-    const finalSupportingDocs = [
-      ...correctionExistingSupportingDocs,
-      ...correctionSupportingFiles.map((f) => f.name),
-    ];
-    const hasSupporting = finalSupportingDocs.length > 0;
-    const updatedDropoffs: DeliveryStoreDropoff[] = correctionDropoffs.map((stop, index) => {
-      const feeNum = stop.entryFeeStatus === "confirmed" && stop.entryFee !== ""
-        ? Number(stop.entryFee)
-        : null;
-      return {
-        id: stop.id,
-        sequence: index + 1,
-        storeName: stop.storeName.trim(),
-        destinationArea: stop.destinationArea.trim(),
-        entryFee: feeNum,
-        entryFeeStatus: stop.entryFeeStatus,
-        podSubmitted: stop.podSubmitted,
-        supportingDocsComplete: hasSupporting || stop.supportingDocsComplete,
-        documentRef: stop.documentRef || "",
-      };
-    });
-
-    const hasUnknownEntryFee = updatedDropoffs.some((d) => d.entryFeeStatus === "unknown");
-    const allNaEntryFee = updatedDropoffs.length > 0 && updatedDropoffs.every((d) => d.entryFeeStatus === "not_applicable");
-    let aggregatedEntryFeeTotal: number | null = null;
-    let aggregatedEntryFeeStatus: ExpenseResolutionStatus = "confirmed";
-
-    if (hasUnknownEntryFee) {
-      aggregatedEntryFeeTotal = null;
-      aggregatedEntryFeeStatus = "unknown";
-    } else if (allNaEntryFee) {
-      aggregatedEntryFeeTotal = null;
-      aggregatedEntryFeeStatus = "not_applicable";
-    } else {
-      aggregatedEntryFeeTotal = updatedDropoffs.reduce((sum, d) => sum + (d.entryFee ?? 0), 0);
-      aggregatedEntryFeeStatus = "confirmed";
-    }
-
-    expensesPayload.entryFees = aggregatedEntryFeeTotal;
-    const finalStatuses: Record<string, ExpenseResolutionStatus> = {
-      ...correctionStatuses,
-      entryFees: aggregatedEntryFeeStatus,
-    };
-
-    const nextPodStatus = derivePodVerificationStatus(updatedDropoffs);
-    const updatedExpenses = { ...correctingTrip.expenses, ...expensesPayload };
-    const updatedStates = { ...correctingTrip.expenseStates, ...finalStatuses };
-    const totalExp = calculateTripExpenseTotal(updatedExpenses, updatedStates);
-    const net = totalExp == null ? null : numRate - totalExp;
-    const margin = calculateProfitMargin(numRate, net);
-    const expenseKeys = [
-      "dieselExpenses",
-      "tollGateExpenses",
-      "entryFees",
-      "driverAllowance",
-      "driverDailyRate",
-      "helperAllowance",
-      "helperDailyRate",
-      "otherExpenses",
-    ] as const;
-    const financialIntegrityIssues = expenseKeys.flatMap((key) => {
-      const status = updatedStates[key];
-      if (status === "unknown") return [`${key} is unresolved.`];
-      if (status === "confirmed" && updatedExpenses[key] == null) {
-        return [`${key} has no confirmed amount.`];
-      }
-      return [];
-    });
-    const nextFinancialState: FinancialState =
-      financialIntegrityIssues.length === 0 ? "finalized" : "incomplete";
-
-    try {
-      const response = await fetch("/api/deliveries", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "correct_financials",
-          deliveryId: correctingTrip.id,
-          expectedVersion: correctingTrip.version,
-          idempotencyKey: crypto.randomUUID(),
-          reason: correctionReason.trim(),
-          changes: {
-            deliveryRate: numRate,
-            driverName: correctionDriverName.trim() || null,
-            helperName: correctionHelperName.trim() || null,
-            expenses: expensesPayload,
-            expenseStates: finalStatuses,
-            supportingDocuments: finalSupportingDocs,
-            dropoffs: updatedDropoffs,
-            financialState: nextFinancialState,
-          },
-          fallbackRecord: correctingTrip,
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      let newVersion = correctingTrip.version + 1;
-
-      if (!response.ok || !data.ok) {
-        if (response.status === 409 || data.code === "VERSION_CONFLICT") {
-          setCorrectionError(
-            "Version Conflict: This delivery record was modified concurrently by another user. Your inputs have been preserved. Please review and retry.",
-          );
-          return;
-        }
-
-        const hasBrowserRecord = readBrowserPreviewDeliveries().some(
-          (item) => item.id === correctingTrip.id,
-        );
-        const isNotFound =
-          response.status === 404 ||
-          data.code === "NOT_FOUND" ||
-          String(data.message).includes("NOT_FOUND") ||
-          String(data.message).toLowerCase().includes("delivery_not_found");
-
-        if (!isNotFound || !hasBrowserRecord) {
-          setCorrectionError(data.message ?? "Failed to save correction.");
-          return;
-        }
-      } else {
-        newVersion = data.result?.version ?? correctingTrip.version + 1;
-      }
-
-      const updated = {
-        ...correctingTrip,
-        deliveryRate: numRate,
-        driverName: correctionDriverName.trim() || null,
-        helperName: correctionHelperName.trim() || null,
-        expenses: updatedExpenses,
-        expenseStates: updatedStates,
-        totalExpenses: totalExp,
-        netIncome: net,
-        marginPercent: margin,
-        financialState: nextFinancialState,
-        financialIntegrityIssues,
-        version: newVersion,
-        supportingDocuments: finalSupportingDocs,
-        dropoffs: updatedDropoffs,
-        podStatus: nextPodStatus,
-      };
-
-      setFinancialActionMessage(
-        nextFinancialState === "finalized"
-          ? `Delivery updated and financials resolved (Version ${newVersion}). Reason: "${correctionReason.trim()}".`
-          : `Delivery updated with pending unresolved expenses (Version ${newVersion}). Reason: "${correctionReason.trim()}".`,
-      );
-      upsertBrowserPreviewDelivery(updated);
-      setDeliveries((prev) =>
-        prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
-      );
-      setCorrectingTrip(null);
-    } catch (err) {
-      setCorrectionError(err instanceof Error ? err.message : "Network error while saving correction.");
-    } finally {
-      setCorrectionSubmitting(false);
-    }
-  }
-
   async function handleConfirmDeleteDelivery() {
     if (!deliveryToDelete || isDeletingDelivery) return;
     setIsDeletingDelivery(true);
@@ -540,10 +275,18 @@ export default function DeliveriesPage() {
     try {
       await deleteDeliveryRecord(deliveryToDelete.id);
       setDeliveries((prev) => prev.filter((d) => d.id !== deliveryToDelete.id));
-      setFinancialActionMessage(`Delivery record "${deliveryToDelete.waybillNumber}" was successfully deleted.`);
+      const deletedMsg = `Delivery record "${deliveryToDelete.waybillNumber}" was successfully deleted.`;
+      setFinancialActionMessage(deletedMsg);
+      toast.success("Delivery deleted", {
+        description: deletedMsg,
+      });
       setDeliveryToDelete(null);
     } catch (error) {
-      setDeleteDeliveryError(error instanceof Error ? error.message : "Network error while deleting delivery record.");
+      const errMsg = error instanceof Error ? error.message : "Network error while deleting delivery record.";
+      setDeleteDeliveryError(errMsg);
+      toast.error("Failed to delete delivery", {
+        description: errMsg,
+      });
     } finally {
       setIsDeletingDelivery(false);
     }
@@ -761,13 +504,24 @@ export default function DeliveriesPage() {
     }
   }, [page, filteredPageCount]);
 
+  const truckerByPlate = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of trucks) {
+      if (t.provider) {
+        map.set(t.label.toUpperCase(), t.provider);
+        map.set(t.id, t.provider);
+      }
+    }
+    return map;
+  }, [trucks]);
+
   const summary = useMemo(() => {
     const financiallyComplete = sortedDeliveriesBase.filter(isDeliveryFinanciallyComplete);
     const rateTotal = financiallyComplete.reduce((sum, item) => sum + (item.deliveryRate ?? 0), 0);
     const expenseTotal = financiallyComplete.reduce((sum, item) => sum + (item.totalExpenses ?? 0), 0);
     const netTotal = rateTotal - expenseTotal;
     const stopCount = sortedDeliveriesBase.reduce(
-      (sum, item) => sum + item.dropoffs.length,
+      (sum, item) => sum + getTripTotalDropoffs(item.dropoffs),
       0,
     );
     return { rateTotal, expenseTotal, netTotal, stopCount };
@@ -817,7 +571,7 @@ export default function DeliveriesPage() {
       }
       clientRevenue[client].total += rate;
       clientRevenue[client].trips += 1;
-      clientRevenue[client].stops += trip.dropoffs.length;
+      clientRevenue[client].stops += getTripTotalDropoffs(trip.dropoffs);
 
       const ownership = trip.truckOwnership === "Subcontracted" ? "Subcontracted" : "Owned";
       ownershipRevenue[ownership].total += rate;
@@ -913,6 +667,14 @@ export default function DeliveriesPage() {
             </p>
           </div>
           <div className="fleet-intro-actions">
+            <button
+              type="button"
+              className="secondary-button page-intro-action"
+              onClick={() => setBackdatingModalOpen(true)}
+              title="View or submit delivery backdating approval tickets"
+            >
+              Backdating Tickets
+            </button>
             {canImport ? (
               <Link
                 className="secondary-button page-intro-action"
@@ -1075,7 +837,7 @@ export default function DeliveriesPage() {
           <div className="filters">
             <label className={`search-box${isSearchBuffering ? " is-buffering" : ""}`}>
               <span className="sr-only">
-                Search by waybill or truck plate number
+                Search by waybill, plate, client, or trucker
               </span>
               <svg
                 width="14"
@@ -1094,8 +856,8 @@ export default function DeliveriesPage() {
               </svg>
               <input
                 type="search"
-                placeholder="Search by waybill or plate number…"
-                aria-label="Search deliveries by waybill or plate number"
+                placeholder="Search by waybill, plate, client, or trucker…"
+                aria-label="Search deliveries by waybill, plate, client, or trucker"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
               />
@@ -1286,6 +1048,84 @@ export default function DeliveriesPage() {
                         <td className="cell-waybill">
                           <div className="waybill-badge-stack">
                             <strong className="waybill-code">#{trip.waybillNumber}</strong>
+                            {trip.notes ? (
+                              <span
+                                className="routex-badge tone-info"
+                                style={{
+                                  fontSize: "9px",
+                                  fontWeight: 600,
+                                  gap: "3px",
+                                  padding: "1px 5px",
+                                  borderRadius: "4px",
+                                  marginTop: "2px",
+                                  border: "1px solid rgba(59, 130, 246, 0.25)",
+                                  background: "rgba(59, 130, 246, 0.08)",
+                                  color: "var(--color-primary-text, #1d4ed8)",
+                                  maxWidth: "140px",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                }}
+                                title={`Note: ${trip.notes}`}
+                              >
+                                <svg
+                                  width="9"
+                                  height="9"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  style={{ flexShrink: 0 }}
+                                  aria-hidden="true"
+                                >
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                  <polyline points="14 2 14 8 20 8" />
+                                  <line x1="16" y1="13" x2="8" y2="13" />
+                                  <line x1="16" y1="17" x2="8" y2="17" />
+                                </svg>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{trip.notes}</span>
+                              </span>
+                            ) : null}
+                            {countUnresolvedDeliveryAttentionFlags(trip.id) > 0 ? (
+                              <span
+                                className="routex-badge tone-warning"
+                                style={{
+                                  fontSize: "9px",
+                                  fontWeight: 700,
+                                  gap: "3px",
+                                  padding: "1px 5px",
+                                  borderRadius: "4px",
+                                  marginTop: "2px",
+                                  border: "1px solid rgba(245, 158, 11, 0.3)",
+                                  background: "rgba(245, 158, 11, 0.12)",
+                                  color: "var(--color-accent-deep, #b45309)",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                }}
+                                title={`${countUnresolvedDeliveryAttentionFlags(trip.id)} attention item(s) pending`}
+                              >
+                                <svg
+                                  width="9"
+                                  height="9"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  style={{ flexShrink: 0 }}
+                                  aria-hidden="true"
+                                >
+                                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                                  <line x1="4" y1="22" x2="4" y2="15" />
+                                </svg>
+                                {countUnresolvedDeliveryAttentionFlags(trip.id)}
+                              </span>
+                            ) : null}
                           </div>
                         </td>
                       <td className="cell-date">
@@ -1299,7 +1139,9 @@ export default function DeliveriesPage() {
                           <span className="truck-plate-label">{trip.plateNumber}</span>
                           <span className="truck-type-meta">{trip.truckType}</span>
                           <span className={`truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
-                            {trip.truckOwnership === "Subcontracted" ? "Subcon" : "Owned"}
+                            {trip.truckOwnership === "Subcontracted"
+                              ? (truckerByPlate.get(trip.plateNumber.toUpperCase()) || "Subcon")
+                              : "Owned"}
                           </span>
                         </div>
                       </td>
@@ -1310,23 +1152,34 @@ export default function DeliveriesPage() {
                         <span className="origin-name">{trip.origin}</span>
                       </td>
                       <td className="cell-stores">
-                        <div
-                          className="stores-cell-wrap"
-                          title={trip.dropoffs.map((d) => `#${d.sequence} ${d.storeName} (${d.destinationArea})`).join("\n")}
-                        >
-                          <span className="dropoff-count-badge">
-                            {trip.dropoffs.length} {trip.dropoffs.length === 1 ? "store" : "stores"}
-                          </span>
-                          {trip.dropoffs.length > 0 ? (
-                            <span className="stores-destination-summary">
-                              {trip.dropoffs
-                                .map((d) => d.destinationArea || d.storeName)
-                                .filter(Boolean)
-                                .slice(0, 2)
-                                .join(", ") + (trip.dropoffs.length > 2 ? ` +${trip.dropoffs.length - 2}` : "")}
-                            </span>
-                          ) : null}
-                        </div>
+                        {(() => {
+                          const totalDrops = getTripTotalDropoffs(trip.dropoffs);
+                          return (
+                            <div
+                              className="stores-cell-wrap"
+                              title={trip.dropoffs
+                                .map(
+                                  (d) =>
+                                    `#${d.sequence} ${d.storeName} (${d.destinationArea}) · ${d.dropoffCount ?? 1} drop-off(s)`,
+                                )
+                                .join("\n")}
+                            >
+                              <span className="dropoff-count-badge">
+                                {totalDrops} {totalDrops === 1 ? "drop-off" : "drop-offs"}
+                                {totalDrops !== trip.dropoffs.length ? ` · ${trip.dropoffs.length} locs` : ""}
+                              </span>
+                              {trip.dropoffs.length > 0 ? (
+                                <span className="stores-destination-summary">
+                                  {trip.dropoffs
+                                    .map((d) => d.destinationArea || d.storeName)
+                                    .filter(Boolean)
+                                    .slice(0, 2)
+                                    .join(", ") + (trip.dropoffs.length > 2 ? ` +${trip.dropoffs.length - 2}` : "")}
+                                </span>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="cell-distance">{trip.distanceKm} km</td>
                       <td className="money cell-delivery-rate">{formatPeso(trip.deliveryRate)}</td>
@@ -1423,6 +1276,21 @@ export default function DeliveriesPage() {
                                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                                 </svg>
                               </button>
+                              <button
+                                type="button"
+                                className="truck-action-icon-btn"
+                                aria-label={`Edit financials for delivery #${trip.waybillNumber}`}
+                                title="Edit financials"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCorrectingTrip(trip);
+                                }}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <line x1="12" y1="1" x2="12" y2="23" />
+                                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                                </svg>
+                              </button>
                               {actor.role === "admin" && (
                                 <button
                                   type="button"
@@ -1443,23 +1311,7 @@ export default function DeliveriesPage() {
                                 </button>
                               )}
                             </>
-                          ) : (
-                            <button
-                              type="button"
-                              className="truck-action-icon-btn"
-                              aria-label={`View delivery #${trip.waybillNumber}`}
-                              title="View delivery details"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigateToDelivery(trip);
-                              }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                              </svg>
-                            </button>
-                          )}
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -1503,485 +1355,19 @@ export default function DeliveriesPage() {
       />
 
       {correctingTrip ? (
-        <div className="routex-dialog-layer" role="dialog" aria-modal="true" aria-labelledby="correction-dialog-title">
-          <div className="routex-dialog-backdrop" onClick={closeCorrectionModal} />
-          <div className="routex-dialog edit-delivery-dialog">
-            <header className="routex-dialog-header">
-              <div>
-                <h2 id="correction-dialog-title">Edit Delivery Financials</h2>
-                <p>Waybill: {correctingTrip.waybillNumber} · Current Version: {correctingTrip.version}</p>
-              </div>
-              <button
-                type="button"
-                className="routex-dialog-close"
-                onClick={closeCorrectionModal}
-                aria-label="Close correction modal"
-                title="Close (Esc)"
-              >
-                ×
-              </button>
-            </header>
-
-            <form
-              onSubmit={submitCorrection}
-              style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
-            >
-              <div className="routex-dialog-body" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-                {correctionError ? (
-                  <div className="delivery-form-alert" role="alert">
-                    {correctionError}
-                  </div>
-                ) : null}
-
-                {/* Revenue */}
-                <div className="delivery-rate-banner">
-                  <div className="delivery-rate-banner-header">
-                    <h3 className="delivery-finance-group-title">Revenue</h3>
-                  </div>
-                  <div className="delivery-rate-input-row">
-                    <label htmlFor="corr-rate" className="field-label-text">
-                      Revenue (₱)
-                    </label>
-                    <div className="peso-input-wrap">
-                      <span className="peso-prefix" aria-hidden="true">₱</span>
-                      <input
-                        id="corr-rate"
-                        type="text"
-                        inputMode="decimal"
-                        required
-                        className="no-spin-stepper peso-input"
-                        placeholder="0.00"
-                        value={correctionDeliveryRate}
-                        onKeyDown={handlePositiveDecimalKeyDown}
-                        onChange={(e) => setCorrectionDeliveryRate(sanitizePositiveDecimalInput(e.target.value, 2))}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Route & Store Drop-offs */}
-                <div className="routex-dialog-section">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-                    <div>
-                      <h3 className="delivery-finance-group-title" style={{ margin: 0 }}>Route &amp; Store Drop-offs</h3>
-                      <p style={{ margin: "2px 0 0", fontSize: "11.5px", color: "var(--color-text-muted)" }}>
-                        Drop-offs and store entry fees.
-                      </p>
-                    </div>
-                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-accent-deep)" }}>
-                      Total Entry Fees: {correctionEntryFeeSummary}
-                    </span>
-                  </div>
-
-                  <div className="dropoff-editor">
-                    {correctionDropoffs.map((dropoff, index) => (
-                      <div key={dropoff.id} className="dropoff-row">
-                        <div className="dropoff-row-header">
-                          <span className="dropoff-row-title">Store Drop-off #{index + 1}</span>
-                          {correctionDropoffs.length > 1 ? (
-                            <button
-                              type="button"
-                              className="dropoff-remove"
-                              onClick={() => removeCorrectionDropoff(index)}
-                              title="Remove stop"
-                            >
-                              × Remove
-                            </button>
-                          ) : null}
-                        </div>
-                        <div className="dropoff-fields">
-                          <div className="dropoff-field">
-                            <label htmlFor={`corr-dropoff-store-${index}`} className="field-label-text">
-                              Store Name
-                            </label>
-                            <input
-                              id={`corr-dropoff-store-${index}`}
-                              type="text"
-                              required
-                              placeholder="e.g. Wilcon Depot - Las Piñas"
-                              value={dropoff.storeName}
-                              onChange={(e) => updateCorrectionDropoff(index, "storeName", e.target.value)}
-                            />
-                          </div>
-                          <div className="dropoff-field">
-                            <label htmlFor={`corr-dropoff-dest-${index}`} className="field-label-text">
-                              Destination / Area
-                            </label>
-                            <input
-                              id={`corr-dropoff-dest-${index}`}
-                              type="text"
-                              required
-                              placeholder="e.g. Almanza Uno, Las Piñas"
-                              value={dropoff.destinationArea}
-                              onChange={(e) => updateCorrectionDropoff(index, "destinationArea", e.target.value)}
-                            />
-                          </div>
-                          <div className="dropoff-field dropoff-entry-fee-wrap">
-                            <DialogExpenseField
-                              id={`corr-dropoff-fee-${index}`}
-                              label="Entry Fee / Toll"
-                              value={dropoff.entryFee}
-                              status={dropoff.entryFeeStatus}
-                              onValueChange={(val) => updateCorrectionDropoff(index, "entryFee", val)}
-                              onStatusChange={(st) => updateCorrectionDropoff(index, "entryFeeStatus", st)}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="dropoff-actions-bar" style={{ marginTop: "12px" }}>
-                    <button
-                      type="button"
-                      className="button-tertiary add-dropoff"
-                      onClick={addCorrectionDropoff}
-                    >
-                      + Add Store Drop-off
-                    </button>
-                    <span className="dropoff-counter">
-                      {correctionDropoffs.length} {correctionDropoffs.length === 1 ? "store drop-off" : "store drop-offs"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Trip Expenses */}
-                <div className="routex-dialog-section">
-                  <h3 className="delivery-finance-group-title">Trip Expenses</h3>
-                  <div className="routex-dialog-grid-2">
-                    <DialogExpenseField
-                      id="corr-diesel"
-                      label="Diesel"
-                      value={correctionExpenses.dieselExpenses ?? ""}
-                      status={correctionStatuses.dieselExpenses ?? "confirmed"}
-                      onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, dieselExpenses: val }))}
-                      onStatusChange={(st) => {
-                        setCorrectionStatuses((prev) => ({ ...prev, dieselExpenses: st }));
-                        if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, dieselExpenses: "" }));
-                      }}
-                    />
-                    <DialogExpenseField
-                      id="corr-toll"
-                      label="Toll gates"
-                      value={correctionExpenses.tollGateExpenses ?? ""}
-                      status={correctionStatuses.tollGateExpenses ?? "confirmed"}
-                      onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, tollGateExpenses: val }))}
-                      onStatusChange={(st) => {
-                        setCorrectionStatuses((prev) => ({ ...prev, tollGateExpenses: st }));
-                        if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, tollGateExpenses: "" }));
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Crew Rates & Allowances */}
-                <div className="routex-dialog-section">
-                  <h3 className="delivery-finance-group-title">Crew Rates & Allowances</h3>
-                  <div className="crew-cards-grid">
-                    {/* Driver Card */}
-                    <section className="crew-expense-group">
-                      <div className="crew-card-title-row">
-                        <span className="crew-role-pill driver">Driver</span>
-                        <RoundedSelect
-                          value={correctionDriverName}
-                          options={drivers.map((driver) => ({
-                            value: driver.label,
-                            label: driver.label,
-                          }))}
-                          onChange={(val) => setCorrectionDriverName(sanitizePersonNameInput(val))}
-                          inputFilter={sanitizePersonNameInput}
-                          ariaLabel="Driver name"
-                          className="crew-name-select"
-                          placeholder="Select or add driver"
-                          emptyMessage="No saved drivers"
-                          searchable
-                          allowCustomValue
-                          searchPlaceholder="Search or enter a new driver"
-                        />
-                      </div>
-                      <div className="routex-dialog-grid-2">
-                        <DialogExpenseField
-                          id="corr-driver-rate"
-                          label="Daily rate"
-                          value={correctionExpenses.driverDailyRate ?? ""}
-                          status={correctionStatuses.driverDailyRate ?? "confirmed"}
-                          onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, driverDailyRate: val }))}
-                          onStatusChange={(st) => {
-                            setCorrectionStatuses((prev) => ({ ...prev, driverDailyRate: st }));
-                            if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, driverDailyRate: "" }));
-                          }}
-                        />
-                        <DialogExpenseField
-                          id="corr-driver-allow"
-                          label="Allowance"
-                          value={correctionExpenses.driverAllowance ?? ""}
-                          status={correctionStatuses.driverAllowance ?? "confirmed"}
-                          onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, driverAllowance: val }))}
-                          onStatusChange={(st) => {
-                            setCorrectionStatuses((prev) => ({ ...prev, driverAllowance: st }));
-                            if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, driverAllowance: "" }));
-                          }}
-                        />
-                      </div>
-                    </section>
-
-                    {/* Helper Card */}
-                    <section className="crew-expense-group">
-                      <div className="crew-card-title-row">
-                        <span className="crew-role-pill helper">Helper</span>
-                        <RoundedSelect
-                          value={correctionHelperName}
-                          options={helpers.map((helper) => ({
-                            value: helper.label,
-                            label: helper.label,
-                          }))}
-                          onChange={(val) => setCorrectionHelperName(sanitizePersonNameInput(val))}
-                          inputFilter={sanitizePersonNameInput}
-                          ariaLabel="Helper name"
-                          className="crew-name-select"
-                          placeholder="Select or add helper"
-                          emptyMessage="No saved helpers"
-                          searchable
-                          allowCustomValue
-                          searchPlaceholder="Search or enter a new helper"
-                        />
-                      </div>
-                      <div className="routex-dialog-grid-2">
-                        <DialogExpenseField
-                          id="corr-helper-rate"
-                          label="Daily rate"
-                          value={correctionExpenses.helperDailyRate ?? ""}
-                          status={correctionStatuses.helperDailyRate ?? "confirmed"}
-                          onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, helperDailyRate: val }))}
-                          onStatusChange={(st) => {
-                            setCorrectionStatuses((prev) => ({ ...prev, helperDailyRate: st }));
-                            if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, helperDailyRate: "" }));
-                          }}
-                        />
-                        <DialogExpenseField
-                          id="corr-helper-allow"
-                          label="Allowance"
-                          value={correctionExpenses.helperAllowance ?? ""}
-                          status={correctionStatuses.helperAllowance ?? "confirmed"}
-                          onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, helperAllowance: val }))}
-                          onStatusChange={(st) => {
-                            setCorrectionStatuses((prev) => ({ ...prev, helperAllowance: st }));
-                            if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, helperAllowance: "" }));
-                          }}
-                        />
-                      </div>
-                    </section>
-                  </div>
-                </div>
-
-                {/* Other Expenses */}
-                <div className="routex-dialog-section">
-                  <h3 className="delivery-finance-group-title">Other Expenses</h3>
-                  <DialogExpenseField
-                    id="corr-other"
-                    label="Other expenses"
-                    value={correctionExpenses.otherExpenses ?? ""}
-                    status={correctionStatuses.otherExpenses ?? "confirmed"}
-                    onValueChange={(val) => setCorrectionExpenses((prev) => ({ ...prev, otherExpenses: val }))}
-                    onStatusChange={(st) => {
-                      setCorrectionStatuses((prev) => ({ ...prev, otherExpenses: st }));
-                      if (st !== "confirmed") setCorrectionExpenses((prev) => ({ ...prev, otherExpenses: "" }));
-                    }}
-                  />
-                </div>
-
-                {/* Supporting Documents */}
-                <div className="routex-dialog-section">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
-                    <h3 className="delivery-finance-group-title" style={{ margin: 0 }}>Supporting Documents</h3>
-                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Receiving slips, invoices, or attachments</span>
-                  </div>
-
-                  {correctionExistingSupportingDocs.length > 0 ? (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
-                      {correctionExistingSupportingDocs.map((docName, idx) => (
-                        <span
-                          key={idx}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "5px 10px",
-                            background: "var(--color-surface-subtle, #f3f4f6)",
-                            border: "1px solid var(--line, #e5e7eb)",
-                            borderRadius: "8px",
-                            fontSize: "12px",
-                            color: "var(--color-text-primary)",
-                          }}
-                        >
-                          <svg
-                            width="13"
-                            height="13"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                            style={{ flexShrink: 0 }}
-                          >
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                          </svg>
-                          <strong>{docName}</strong>
-                          <button
-                            type="button"
-                            title={`Remove ${docName}`}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              cursor: "pointer",
-                              color: "#dc2626",
-                              fontSize: "15px",
-                              lineHeight: 1,
-                              padding: "0 2px",
-                            }}
-                            onClick={() => {
-                              setCorrectionExistingSupportingDocs((prev) => prev.filter((_, i) => i !== idx));
-                            }}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {correctionSupportingFiles.length > 0 ? (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
-                      {correctionSupportingFiles.map((file, idx) => (
-                        <span
-                          key={idx}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "5px 10px",
-                            background: "rgba(224, 86, 36, 0.08)",
-                            border: "1px solid rgba(224, 86, 36, 0.25)",
-                            borderRadius: "8px",
-                            fontSize: "12px",
-                            color: "var(--color-brand, #e05624)",
-                          }}
-                        >
-                          <svg
-                            width="13"
-                            height="13"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                            style={{ flexShrink: 0 }}
-                          >
-                            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                          </svg>
-                          <strong>{file.name}</strong>
-                          <small style={{ color: "var(--color-text-muted)" }}>({(file.size / 1024).toFixed(1)} KB)</small>
-                          <button
-                            type="button"
-                            title={`Remove ${file.name}`}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              cursor: "pointer",
-                              color: "#dc2626",
-                              fontSize: "15px",
-                              lineHeight: 1,
-                              padding: "0 2px",
-                            }}
-                            onClick={() => {
-                              setCorrectionSupportingFiles((prev) => prev.filter((_, i) => i !== idx));
-                            }}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <label
-                      htmlFor="corr-supporting-files"
-                      className="secondary-button"
-                      style={{
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "7px 13px",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      <span>+ Add Supporting Document</span>
-                      <input
-                        id="corr-supporting-files"
-                        type="file"
-                        multiple
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        style={{ display: "none" }}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.files ?? []);
-                          if (selected.length > 0) {
-                            setCorrectionSupportingFiles((prev) => [...prev, ...selected]);
-                          }
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
-                      PDF, PNG, or JPG up to 10 MB
-                    </span>
-                  </div>
-                </div>
-
-                {/* Correction Reason */}
-                <div className="routex-dialog-section">
-                  <label htmlFor="corr-reason" className="field-label-text">
-                    Correction Reason <span className="field-required-tag">(Required for audit history · min 5 chars)</span>
-                  </label>
-                  <textarea
-                    id="corr-reason"
-                    rows={3}
-                    required
-                    className="correction-reason-textarea"
-                    placeholder="e.g. Fuel receipt adjustment after monthly reconciliation"
-                    value={correctionReason}
-                    onChange={(e) => setCorrectionReason(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <footer className="routex-dialog-footer" style={{ flexShrink: 0 }}>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={correctionSubmitting}
-                  onClick={closeCorrectionModal}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="primary-action-button"
-                  disabled={correctionSubmitting || correctionReason.trim().length < 5}
-                >
-                  {correctionSubmitting ? "Saving changes…" : "Save changes"}
-                </button>
-              </footer>
-            </form>
-          </div>
-        </div>
+        <EditDeliveryModal
+          delivery={correctingTrip}
+          onClose={() => setCorrectingTrip(null)}
+          onSaved={(updatedTrip, msg) => {
+            setCorrectingTrip(null);
+            setFinancialActionMessage(msg);
+            toast.success("Delivery updated", { description: msg });
+            upsertBrowserPreviewDelivery(updatedTrip);
+            setDeliveries((prev) =>
+              prev.map((item) => (item.id === updatedTrip.id ? { ...item, ...updatedTrip } : item)),
+            );
+          }}
+        />
       ) : null}
 
       <ConfirmDeliveryDeletionDialog
@@ -1991,84 +1377,14 @@ export default function DeliveriesPage() {
         onCancel={closeDeleteDeliveryModal}
         onConfirm={handleConfirmDeleteDelivery}
       />
+
+      <BackdatingTicketsModal
+        isOpen={backdatingModalOpen}
+        onClose={() => setBackdatingModalOpen(false)}
+        currentUserRole={actor.role}
+        currentUsername={actor.username}
+      />
     </>
-  );
-}
-
-function DialogExpenseField({
-  id,
-  label,
-  value,
-  status,
-  onValueChange,
-  onStatusChange,
-}: {
-  id?: string;
-  label: string;
-  value: string;
-  status: "confirmed" | "not_applicable" | "unknown";
-  onValueChange: (val: string) => void;
-  onStatusChange: (st: "confirmed" | "not_applicable" | "unknown") => void;
-}) {
-  const displayLabel = label.includes("₱") ? label : `${label} (₱)`;
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleWrapperClick = () => {
-    if (status !== "confirmed") {
-      onStatusChange("confirmed");
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 0);
-    }
-  };
-
-  return (
-    <div className="expense-resolution-field">
-      <label htmlFor={id} className="field-label-text">{displayLabel}</label>
-      <div className="expense-resolution-controls">
-        <span
-          className={`peso-input-wrap ${status !== "confirmed" ? "is-disabled" : ""}`}
-          onClick={handleWrapperClick}
-          style={status !== "confirmed" ? { cursor: "pointer" } : undefined}
-          title={status !== "confirmed" ? "Enter amount" : undefined}
-        >
-          {status === "confirmed" ? <span className="peso-prefix" aria-hidden="true">₱</span> : null}
-          <input
-            ref={inputRef}
-            id={id}
-            aria-label={`${displayLabel} amount`}
-            disabled={status !== "confirmed"}
-            type="text"
-            inputMode="decimal"
-            className={`no-spin-stepper ${status === "confirmed" ? "peso-input" : ""}`}
-            value={status === "confirmed" ? value : ""}
-            placeholder={status === "confirmed" ? "0.00" : status === "unknown" ? "Amount unknown (click to enter)" : "N/A (click to enter)"}
-            onKeyDown={handlePositiveDecimalKeyDown}
-            onChange={(e) => onValueChange(sanitizePositiveDecimalInput(e.target.value, 2))}
-          />
-        </span>
-        <div className="expense-resolution-options" role="group" aria-label={`${displayLabel} resolution`}>
-          {([
-            ["confirmed", "Amount"],
-            ["not_applicable", "N/A"],
-            ["unknown", "Unknown"],
-          ] as const).map(([val, text]) => (
-            <button
-              type="button"
-              key={val}
-              className={status === val ? "active" : ""}
-              aria-pressed={status === val}
-              onClick={() => {
-                onStatusChange(val);
-                if (val !== "confirmed") onValueChange("");
-              }}
-            >
-              {text}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 

@@ -187,14 +187,24 @@ test("POST-REGRESSION: Late delivery submission auto-evaluates without popup blo
     assert.equal(todayPolicy.isLate, false);
   }
 
-  // 1 day ago is in 2-day window but marked late
+  // 1 working day ago is within rolling 3-working-day window and marked late
   const latePolicy = validateDeliveryDateWindow("2026-11-04", reference, "operations");
   assert.equal(latePolicy.ok, true);
   if (latePolicy.ok) {
     assert.equal(latePolicy.isLate, true);
   }
 
-  // 2 days ago is outside 2-day window for operations
-  const outsidePolicy = validateDeliveryDateWindow("2026-11-03", reference, "operations");
+  // 2 working days ago (2026-11-03) is also within rolling 3-working-day window
+  const twoDaysAgo = validateDeliveryDateWindow("2026-11-03", reference, "operations");
+  assert.equal(twoDaysAgo.ok, true);
+  if (twoDaysAgo.ok) {
+    assert.equal(twoDaysAgo.isLate, true);
+  }
+
+  // 4 working days ago (2026-10-29) is outside rolling 3-working-day window (requires ticket)
+  const outsidePolicy = validateDeliveryDateWindow("2026-10-29", reference, "operations");
   assert.equal(outsidePolicy.ok, false);
+  if (!outsidePolicy.ok) {
+    assert.equal(outsidePolicy.requiresApprovalTicket, true);
+  }
 });

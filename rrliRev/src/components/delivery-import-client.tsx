@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { TruckTemperature } from "@/features/deliveries/delivery-domain";
 import {
   generateImportErrorReport,
@@ -16,6 +17,8 @@ import {
   readBrowserPreviewDeliveries,
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
+import { getFleetTrucks } from "@/features/deliveries/truck-registry";
+import { getFleetCrew } from "@/features/deliveries/driver-registry";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 
 const DELIVERY_TEMPERATURES: readonly TruckTemperature[] = [
@@ -108,8 +111,13 @@ export function DeliveryExcelImportClient({
 
       setStagedRows(result.rows);
       setStep(2);
+      toast.success("Spreadsheet parsed", {
+        description: `Loaded ${result.rows.length} trips (${result.readyCount} ready for import).`,
+      });
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to parse file.");
+      const msg = err instanceof Error ? err.message : "Failed to parse file.";
+      setErrorMessage(msg);
+      toast.error(msg);
     }
   }
 
@@ -131,8 +139,13 @@ export function DeliveryExcelImportClient({
 
       setStagedRows(result.rows);
       setStep(2);
+      toast.success("Excel workbook parsed", {
+        description: `Loaded ${result.rows.length} trips (${result.readyCount} ready for import).`,
+      });
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to parse Excel spreadsheet.");
+      const msg = err instanceof Error ? err.message : "Failed to parse Excel spreadsheet.";
+      setErrorMessage(msg);
+      toast.error(msg);
     }
   }
 
@@ -145,17 +158,6 @@ export function DeliveryExcelImportClient({
     const cleanBaseName = file.name.replace(/\.[^/.]+$/, "");
     setBatchName(`DTR-${cleanBaseName}`);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result;
-      if (typeof text === "string") {
-        processFileText(text, file.name);
-      }
-    };
-    reader.onerror = () => {
-      setErrorMessage("Unable to read the uploaded file.");
-    };
-    reader.readAsText(file);
     const isExcel = /\.xlsx?$/i.test(file.name);
     if (isExcel) {
       const reader = new FileReader();
@@ -288,9 +290,17 @@ export function DeliveryExcelImportClient({
     });
   }, [stagedRows, activeTab, searchQuery]);
 
+  const registeredTrucks = useMemo(() => getFleetTrucks(), []);
+  const registeredCrew = useMemo(() => getFleetCrew(), []);
+
   const readyCount = stagedRows.filter((r) => r.status === "ready").length;
   const attentionCount = stagedRows.filter((r) => r.status === "needs_attention").length;
   const duplicateCount = stagedRows.filter((r) => r.status === "duplicate").length;
+  const readyOwnedCount = stagedRows.filter((r) => r.status === "ready" && r.truckOwnership === "Owned").length;
+  const readySubconCount = stagedRows.filter((r) => r.status === "ready" && r.truckOwnership === "Subcontracted").length;
+  const readyNewTrucksCount = stagedRows.filter((r) => r.status === "ready" && r.isNewTruck).length;
+  const readyMatchedTrucksCount = stagedRows.filter((r) => r.status === "ready" && !r.isNewTruck).length;
+  const readyAutoCompletedCount = stagedRows.filter((r) => r.status === "ready" && r.expectedCompletionStatus === "Completed").length;
 
   async function executeCommit() {
     const readyRows = stagedRows.filter((r) => r.status === "ready");
@@ -306,43 +316,52 @@ export function DeliveryExcelImportClient({
       const payload = {
         batchName,
         idempotencyKey: crypto.randomUUID(),
-        rows: readyRows.map((r) => ({
-          waybillNumber: r.waybillNumber,
-          deliveryDate: r.deliveryDate,
-          clientName: r.clientName,
-          plateNumber: r.plateNumber,
-          truckTemperature: r.truckTemperature,
-          origin: r.origin || "Central Depot",
-          distanceKm: r.distanceKm || 50,
-          fuelRate: r.fuelRate || 85,
-          deliveryRate: r.deliveryRate,
-          dieselExpenses: r.dieselExpenses,
-          dieselExpensesStatus: r.dieselExpenses != null ? "confirmed" : "unknown",
-          tollGateExpenses: r.tollGateExpenses,
-          tollGateExpensesStatus: r.tollGateExpenses != null ? "confirmed" : "not_applicable",
-          tollGateBreakdown: r.tollGateBreakdown || "",
-          driverDailyRate: r.driverDailyRate,
-          driverDailyRateStatus: r.driverDailyRate != null ? "confirmed" : "unknown",
-          driverAllowance: r.driverAllowance,
-          driverAllowanceStatus: r.driverAllowance != null ? "confirmed" : "unknown",
-          driverName: r.driverName,
-          helperDailyRate: r.helperDailyRate,
-          helperDailyRateStatus: r.helperDailyRate != null ? "confirmed" : "unknown",
-          helperAllowance: r.helperAllowance,
-          helperAllowanceStatus: r.helperAllowance != null ? "confirmed" : "unknown",
-          helperName: r.helperName,
-          otherExpenses: r.otherExpenses,
-          otherExpensesStatus: r.otherExpenses != null ? "confirmed" : "not_applicable",
-          dropoffs: r.dropoffs.map((d) => ({
-            storeName: d.storeName,
-            destinationArea: d.destinationArea,
-            entryFee: d.entryFee,
-            entryFeeStatus: d.entryFee != null ? "confirmed" : "not_applicable",
-            podSubmitted: false,
-            supportingDocsComplete: false,
-            documentRef: "Awaiting POD upload",
-          })),
-        })),
+        rows: readyRows.map((r) => {
+          const isSubcon = r.truckOwnership === "Subcontracted";
+          return {
+            waybillNumber: r.waybillNumber,
+            deliveryDate: r.deliveryDate,
+            clientName: r.clientName,
+            plateNumber: r.plateNumber,
+            truckType: r.truckType || "6-Wheeler",
+            truckOwnership: r.truckOwnership || "Owned",
+            truckTemperature: r.truckTemperature,
+            origin: r.origin || "Central Depot",
+            distanceKm: r.distanceKm || 50,
+            fuelRate: r.fuelRate || 85,
+            deliveryRate: r.deliveryRate,
+            totalExpenses: r.totalExpenses,
+            dieselExpenses: isSubcon ? null : r.dieselExpenses,
+            dieselExpensesStatus: isSubcon ? "not_applicable" : (r.dieselExpenses != null ? "confirmed" : "unknown"),
+            tollGateExpenses: isSubcon ? null : r.tollGateExpenses,
+            tollGateExpensesStatus: isSubcon ? "not_applicable" : (r.tollGateExpenses != null ? "confirmed" : "not_applicable"),
+            tollGateBreakdown: isSubcon ? "" : (r.tollGateBreakdown || ""),
+            driverDailyRate: isSubcon ? null : r.driverDailyRate,
+            driverDailyRateStatus: isSubcon ? "not_applicable" : (r.driverDailyRate != null ? "confirmed" : "unknown"),
+            driverAllowance: isSubcon ? null : r.driverAllowance,
+            driverAllowanceStatus: isSubcon ? "not_applicable" : (r.driverAllowance != null ? "confirmed" : "unknown"),
+            driverName: r.driverName,
+            helperDailyRate: isSubcon ? null : r.helperDailyRate,
+            helperDailyRateStatus: isSubcon ? "not_applicable" : (r.helperDailyRate != null ? "confirmed" : "unknown"),
+            helperAllowance: isSubcon ? null : r.helperAllowance,
+            helperAllowanceStatus: isSubcon ? "not_applicable" : (r.helperAllowance != null ? "confirmed" : "unknown"),
+            helperName: r.helperName,
+            otherExpenses: isSubcon ? (r.totalExpenses ?? r.otherExpenses ?? 0) : r.otherExpenses,
+            otherExpensesStatus: isSubcon ? "confirmed" : (r.otherExpenses != null ? "confirmed" : "not_applicable"),
+            entryFees: r.entryFees ?? null,
+            entryFeesStatus: r.entryFees != null ? "confirmed" : "not_applicable",
+            dropoffs: r.dropoffs.map((d) => ({
+              storeName: d.storeName,
+              destinationArea: d.destinationArea,
+              dropoffCount: d.dropoffCount || 1,
+              entryFee: d.entryFee,
+              entryFeeStatus: d.entryFee != null ? "confirmed" : "not_applicable",
+              podSubmitted: true,
+              supportingDocsComplete: true,
+              documentRef: "Imported from spreadsheet",
+            })),
+          };
+        }),
       };
 
       const response = await fetch("/api/deliveries/import", {
@@ -383,9 +402,15 @@ export function DeliveryExcelImportClient({
         errors: data.errors ?? [],
       });
 
+      toast.success("Import completed!", {
+        description: `Committed ${data.committedCount ?? 0} deliveries to RouteX ledger.`,
+      });
+
       setStep(4);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to commit import batch.");
+      const msg = err instanceof Error ? err.message : "Failed to commit import batch.";
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setImporting(false);
     }
@@ -538,7 +563,6 @@ export function DeliveryExcelImportClient({
               </div>
               <input
                 type="file"
-                accept=".csv,.tsv,.txt"
                 accept=".xlsx,.xls,.csv,.tsv,.txt"
                 onChange={handleFileInputChange}
                 style={{ display: "none" }}
@@ -767,13 +791,27 @@ export function DeliveryExcelImportClient({
                         />
                       </td>
                       <td>
-                        <input
-                          type="text"
-                          className={`import-table-input${!row.plateNumber.trim() ? " has-error" : ""}`}
-                          value={row.plateNumber}
-                          onChange={(e) => updateRowField(row.id, "plateNumber", e.target.value)}
-                          style={{ width: "95px", textTransform: "uppercase", fontWeight: 600 }}
-                        />
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <input
+                            type="text"
+                            list="registered-trucks-datalist"
+                            className={`import-table-input${!row.plateNumber.trim() ? " has-error" : ""}`}
+                            value={row.plateNumber}
+                            onChange={(e) => updateRowField(row.id, "plateNumber", e.target.value)}
+                            style={{ width: "95px", textTransform: "uppercase", fontWeight: 600 }}
+                          />
+                          <span
+                            className="routex-badge"
+                            style={{
+                              fontSize: "9px",
+                              width: "fit-content",
+                              color: row.truckOwnership === "Owned" ? "#059669" : "#d97706",
+                            }}
+                          >
+                            {row.truckOwnership === "Owned" ? "Owned" : "Subcon"}
+                            {row.isNewTruck ? " (New)" : ""}
+                          </span>
+                        </div>
                       </td>
                       <td>
                         <select
@@ -840,6 +878,7 @@ export function DeliveryExcelImportClient({
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                           <input
                             type="text"
+                            list="registered-drivers-datalist"
                             className="import-table-input"
                             value={row.driverName ?? ""}
                             placeholder="Driver"
@@ -850,6 +889,7 @@ export function DeliveryExcelImportClient({
                           />
                           <input
                             type="text"
+                            list="registered-helpers-datalist"
                             className="import-table-input"
                             value={row.helperName ?? ""}
                             placeholder="Helper"
@@ -864,7 +904,12 @@ export function DeliveryExcelImportClient({
                         <div style={{ maxWidth: "200px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <span className="routex-badge" style={{ fontSize: "10px" }}>
-                              {row.dropoffs.length} {row.dropoffs.length === 1 ? "Stop" : "Stops"}
+                              {(() => {
+                                const totalDrops = row.dropoffs.reduce((sum, d) => sum + Math.max(1, d.dropoffCount || 1), 0);
+                                return totalDrops === row.dropoffs.length
+                                  ? `${totalDrops} ${totalDrops === 1 ? "Drop-off" : "Drop-offs"}`
+                                  : `${totalDrops} Drops (${row.dropoffs.length} locs)`;
+                              })()}
                             </span>
                           </div>
                           <span
@@ -904,6 +949,28 @@ export function DeliveryExcelImportClient({
                 )}
               </tbody>
             </table>
+
+            <datalist id="registered-trucks-datalist">
+              {registeredTrucks.map((t) => (
+                <option key={t.id} value={t.plateNumber}>
+                  {t.plateNumber} ({t.ownershipType} - {t.truckType})
+                </option>
+              ))}
+            </datalist>
+            <datalist id="registered-drivers-datalist">
+              {registeredCrew
+                .filter((c) => c.assignmentType === "Driver")
+                .map((c) => (
+                  <option key={c.id} value={c.fullName} />
+                ))}
+            </datalist>
+            <datalist id="registered-helpers-datalist">
+              {registeredCrew
+                .filter((c) => c.assignmentType === "Helper")
+                .map((c) => (
+                  <option key={c.id} value={c.fullName} />
+                ))}
+            </datalist>
           </div>
         </section>
       ) : null}
@@ -950,6 +1017,19 @@ export function DeliveryExcelImportClient({
                 <strong style={{ fontSize: "22px", color: "#10b981", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
                   {readyCount} trips
                 </strong>
+                <span style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: "2px" }}>
+                  {readyOwnedCount} Owned · {readySubconCount} Subcon
+                </span>
+              </div>
+
+              <div className="import-metric-card">
+                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Trucks Breakdown</span>
+                <strong style={{ fontSize: "16px", color: "var(--color-text-primary)", marginTop: "4px" }}>
+                  {readyMatchedTrucksCount} matched · {readyNewTrucksCount} new
+                </strong>
+                <span style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: "2px" }}>
+                  {readyAutoCompletedCount} will auto-complete
+                </span>
               </div>
 
               {duplicateCount > 0 ? (

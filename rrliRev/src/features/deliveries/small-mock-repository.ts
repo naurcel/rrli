@@ -6,6 +6,7 @@ import {
   calculateTripExpenseTotal,
   type DeliveryTripRecord,
   derivePodVerificationStatus,
+  getTripTotalDropoffs,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
   summarizeTruckProfitability,
@@ -133,7 +134,7 @@ function sortableValue(item: DeliveryLedgerItem, sort: DeliveryListQuery["sort"]
     return Number.isFinite(num) ? num : raw.toLowerCase();
   }
   if (sort === "origin") return (item.origin ?? "").toLocaleLowerCase();
-  if (sort === "dropoffs") return item.dropoffs?.length ?? 0;
+  if (sort === "dropoffs") return getTripTotalDropoffs(item.dropoffs);
   if (sort === "distance") return item.distanceKm ?? 0;
   if (sort === "delivery_rate") return item.deliveryRate;
   if (sort === "total_expenses") return item.totalExpenses;
@@ -162,12 +163,21 @@ export function listSmallMockDeliveryRecords(input: Partial<DeliveryListQuery> =
   const searchClean = search.replace(/\s+/g, "");
   const matchingBase = ledgerItems().filter((item) => {
     const plateClean = item.plateNumber.toLocaleLowerCase().replace(/\s+/g, "");
+    const regTruck = getFleetTrucks().find(
+      (t) =>
+        t.plateNumber.toUpperCase() === item.plateNumber.toUpperCase() ||
+        t.id === item.truckId,
+    );
+    const truckerName = (regTruck?.provider ?? "").toLocaleLowerCase();
+
     const searchable = [
       item.waybillNumber,
       item.clientName,
       item.plateNumber,
       plateClean,
+      truckerName,
       item.driverName ?? "",
+      item.notes ?? "",
       ...item.dropoffs.flatMap((dropoff) => [dropoff.storeName, dropoff.destinationArea]),
     ].join(" ").toLocaleLowerCase();
 
@@ -255,6 +265,7 @@ export function listSmallMockDeliveryRecords(input: Partial<DeliveryListQuery> =
         id: truck.id,
         label: truck.plateNumber,
         ownershipType: truck.ownershipType,
+        provider: truck.provider,
       })),
       statuses: ["Completed"],
       podStatuses: ["Verified", "Incomplete", "Pending"],
@@ -508,8 +519,16 @@ export function correctSmallMockDelivery(input: {
     const trimmed = input.changes.helperName.trim();
     delivery.helperName = trimmed || null;
     if (trimmed) {
-      registerFleetDriver({ fullName: trimmed, assignmentType: "Helper" });
+      const parts = trimmed.split(/[,/&]/).map((s) => s.trim()).filter(Boolean);
+      for (const part of parts) {
+        registerFleetDriver({ fullName: part, assignmentType: "Helper" });
+      }
     }
+  }
+  if (typeof input.changes.notes === "string") {
+    rec.notes = input.changes.notes.trim() || null;
+  } else if (input.changes.notes === null) {
+    rec.notes = null;
   }
   if (input.changes.expenses && typeof input.changes.expenses === "object") {
     Object.assign(rec.expenses, input.changes.expenses);
@@ -523,25 +542,34 @@ export function correctSmallMockDelivery(input: {
     Object.assign(rec.expenseStates, input.changes.expenseStates);
   }
   if (Array.isArray(input.changes.supportingDocuments)) {
-    rec.supportingDocuments = input.changes.supportingDocuments as string[];
+    rec.supportingDocuments = input.changes.supportingDocuments as typeof rec.supportingDocuments;
   }
   if (Array.isArray(input.changes.dropoffs)) {
     rec.dropoffs = input.changes.dropoffs as typeof rec.dropoffs;
     rec.podStatus = derivePodVerificationStatus(rec.dropoffs);
-    if (!input.changes.expenses || !("entryFees" in (input.changes.expenses as object))) {
-      const hasUnknown = rec.dropoffs.some((d) => d.entryFeeStatus === "unknown");
-      const allNa = rec.dropoffs.length > 0 && rec.dropoffs.every((d) => d.entryFeeStatus === "not_applicable");
-      if (hasUnknown) {
-        rec.expenses.entryFees = null;
-        rec.expenseStates.entryFees = "unknown";
-      } else if (allNa) {
-        rec.expenses.entryFees = null;
-        rec.expenseStates.entryFees = "not_applicable";
-      } else {
-        rec.expenses.entryFees = rec.dropoffs.reduce((sum, d) => sum + (d.entryFee ?? 0), 0);
-        rec.expenseStates.entryFees = "confirmed";
-      }
+    const hasUnknown = rec.dropoffs.some((d) => d.entryFeeStatus === "unknown");
+    const allNa = rec.dropoffs.length > 0 && rec.dropoffs.every((d) => d.entryFeeStatus === "not_applicable");
+    if (hasUnknown) {
+      rec.expenses.entryFees = null;
+      rec.expenseStates.entryFees = "unknown";
+    } else if (allNa) {
+      rec.expenses.entryFees = null;
+      rec.expenseStates.entryFees = "not_applicable";
+    } else {
+      rec.expenses.entryFees = rec.dropoffs.reduce((sum, d) => sum + (d.entryFee ?? 0), 0);
+      rec.expenseStates.entryFees = "confirmed";
     }
+  }
+
+  // Ensure default zero for null allowances if confirmed
+  if (rec.expenseStates.driverAllowance === "confirmed" && rec.expenses.driverAllowance == null) {
+    rec.expenses.driverAllowance = 0;
+  }
+  if (rec.expenseStates.helperAllowance === "confirmed" && rec.expenses.helperAllowance == null) {
+    rec.expenses.helperAllowance = 0;
+  }
+  if (rec.expenseStates.otherExpenses === "confirmed" && rec.expenses.otherExpenses == null) {
+    rec.expenses.otherExpenses = 0;
   }
 
   rec.totalExpenses = calculateTripExpenseTotal(rec.expenses, rec.expenseStates);

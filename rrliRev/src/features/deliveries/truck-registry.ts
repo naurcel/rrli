@@ -6,7 +6,7 @@ import type {
 
 export type { DeliveryRateBasis, TruckOwnership } from "./delivery-domain.ts";
 
-export type TruckStorageCapability = "Refrigerated" | "Dry";
+export type TruckStorageCapability = "Freezer" | "Chilled" | "Dry";
 
 export type FleetTruck = {
   id: string;
@@ -16,76 +16,99 @@ export type FleetTruck = {
   ownershipType: TruckOwnership;
   rateBasis: DeliveryRateBasis;
   provider: string | null;
-  contactPerson: string | null;
+  contactPerson?: string | null;
+  driverName?: string | null;
+  helperName?: string | null;
 };
 
 export const OWNED_TRUCKS = [
-  { id: "20000000-0000-4000-8000-000000000001", plateNumber: "NGS 4281", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
-  { id: "20000000-0000-4000-8000-000000000002", plateNumber: "DAA 7310", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
+  { id: "20000000-0000-4000-8000-000000000001", plateNumber: "NGS 4281", truckType: "6-Wheeler", storageCapability: "Freezer", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
+  { id: "20000000-0000-4000-8000-000000000002", plateNumber: "DAA 7310", truckType: "6-Wheeler", storageCapability: "Chilled", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
   { id: "20000000-0000-4000-8000-000000000003", plateNumber: "CBZ 1187", truckType: "10-Wheeler", storageCapability: "Dry", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
-  { id: "20000000-0000-4000-8000-000000000004", plateNumber: "NBE 9042", truckType: "4-Wheeler", storageCapability: "Refrigerated", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
-  { id: "20000000-0000-4000-8000-000000000005", plateNumber: "ABX 2201", truckType: "4-Wheeler", storageCapability: "Refrigerated", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
+  { id: "20000000-0000-4000-8000-000000000004", plateNumber: "NBE 9042", truckType: "4-Wheeler", storageCapability: "Chilled", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
+  { id: "20000000-0000-4000-8000-000000000005", plateNumber: "ABX 2201", truckType: "4-Wheeler", storageCapability: "Freezer", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
   { id: "20000000-0000-4000-8000-000000000006", plateNumber: "XCY 6612", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Owned", rateBasis: "Redeemed Rate", provider: null, contactPerson: null },
 ] as const satisfies readonly FleetTruck[];
 
 export const SUBCONTRACTED_TRUCKS = [
-  { id: "21000000-0000-4000-8000-000000000001", plateNumber: "KLM 4821", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Northline Hauling", contactPerson: "Adrian Cruz" },
-  { id: "21000000-0000-4000-8000-000000000002", plateNumber: "PQR 7156", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Silverroad Transport", contactPerson: "Maribel Santos" },
-  { id: "21000000-0000-4000-8000-000000000003", plateNumber: "TUV 3098", truckType: "10-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Primeway Logistics", contactPerson: "Leo Navarro" },
-  { id: "21000000-0000-4000-8000-000000000004", plateNumber: "BCD 8642", truckType: "4-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Eastgate Carriers", contactPerson: "Ramon Lim" },
-  { id: "21000000-0000-4000-8000-000000000005", plateNumber: "HJK 2207", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Roadcrest Freight", contactPerson: "Angela Ramos" },
-  { id: "21000000-0000-4000-8000-000000000006", plateNumber: "MNP 5934", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Metrohaul Services", contactPerson: "Joel Mendoza" },
-  { id: "21000000-0000-4000-8000-000000000007", plateNumber: "STX 1479", truckType: "10-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Summit Cargo Lines", contactPerson: "Carla Reyes" },
-  { id: "21000000-0000-4000-8000-000000000008", plateNumber: "VWX 6385", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Harborlink Transport", contactPerson: "Dennis Flores" },
-  { id: "21000000-0000-4000-8000-000000000009", plateNumber: "EFG 9013", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Greenlane Hauling", contactPerson: "Nina Garcia" },
-  { id: "21000000-0000-4000-8000-000000000010", plateNumber: "JRS 3760", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Transpeak Logistics", contactPerson: "Victor Aquino" },
-  { id: "21000000-0000-4000-8000-000000000011", plateNumber: "XYZ 9102", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Apex Cargo Movers", contactPerson: "Danilo Ramos" },
-  { id: "21000000-0000-4000-8000-000000000012", plateNumber: "NKL 3824", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Southwind Freight", contactPerson: "Grace Bautista" },
-  { id: "21000000-0000-4000-8000-000000000013", plateNumber: "WXY 4819", truckType: "10-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Pacific Link Haulers", contactPerson: "Ernesto Dizon" },
-  { id: "21000000-0000-4000-8000-000000000014", plateNumber: "BVC 1928", truckType: "6-Wheeler", storageCapability: "Refrigerated", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Polar Express Logistics", contactPerson: "Theresa Ocampo" },
-  { id: "21000000-0000-4000-8000-000000000015", plateNumber: "QWE 7341", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Golden Route Transport", contactPerson: "Fernando Tan" },
+  { id: "21000000-0000-4000-8000-000000000001", plateNumber: "KLM 4821", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Northline Hauling", driverName: "Adrian Cruz", helperName: "Rogelio Ramos", contactPerson: "Adrian Cruz" },
+  { id: "21000000-0000-4000-8000-000000000002", plateNumber: "PQR 7156", truckType: "6-Wheeler", storageCapability: "Chilled", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Silverroad Transport", driverName: "Maribel Santos", helperName: "Danilo Castro", contactPerson: "Maribel Santos" },
+  { id: "21000000-0000-4000-8000-000000000003", plateNumber: "TUV 3098", truckType: "10-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Primeway Logistics", driverName: "Leo Navarro", helperName: "Nestor Reyes", contactPerson: "Leo Navarro" },
+  { id: "21000000-0000-4000-8000-000000000004", plateNumber: "BCD 8642", truckType: "4-Wheeler", storageCapability: "Chilled", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Eastgate Carriers", driverName: "Ramon Lim", helperName: "Jose Garcia", contactPerson: "Ramon Lim" },
+  { id: "21000000-0000-4000-8000-000000000005", plateNumber: "HJK 2207", truckType: "6-Wheeler", storageCapability: "Freezer", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Roadcrest Freight", driverName: "Angela Ramos", helperName: "Carlos Dizon", contactPerson: "Angela Ramos" },
+  { id: "21000000-0000-4000-8000-000000000006", plateNumber: "MNP 5934", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Metrohaul Services", driverName: "Joel Mendoza", helperName: "Eduardo Cruz", contactPerson: "Joel Mendoza" },
+  { id: "21000000-0000-4000-8000-000000000007", plateNumber: "STX 1479", truckType: "10-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Summit Cargo Lines", driverName: "Carla Reyes", helperName: "Albert Villanueva", contactPerson: "Carla Reyes" },
+  { id: "21000000-0000-4000-8000-000000000008", plateNumber: "VWX 6385", truckType: "6-Wheeler", storageCapability: "Chilled", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Harborlink Transport", driverName: "Dennis Flores", helperName: "Arnel Bautista", contactPerson: "Dennis Flores" },
+  { id: "21000000-0000-4000-8000-000000000009", plateNumber: "EFG 9013", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Greenlane Hauling", driverName: "Nina Garcia", helperName: "Michael Soriano", contactPerson: "Nina Garcia" },
+  { id: "21000000-0000-4000-8000-000000000010", plateNumber: "JRS 3760", truckType: "6-Wheeler", storageCapability: "Freezer", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Transpeak Logistics", driverName: "Victor Aquino", helperName: "Renato Dela Cruz", contactPerson: "Victor Aquino" },
+  { id: "21000000-0000-4000-8000-000000000011", plateNumber: "XYZ 9102", truckType: "6-Wheeler", storageCapability: "Chilled", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Apex Cargo Movers", driverName: "Danilo Ramos", helperName: "Paolo Morales", contactPerson: "Danilo Ramos" },
+  { id: "21000000-0000-4000-8000-000000000012", plateNumber: "NKL 3824", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Southwind Freight", driverName: "Grace Bautista", helperName: "Bryan David", contactPerson: "Grace Bautista" },
+  { id: "21000000-0000-4000-8000-000000000013", plateNumber: "WXY 4819", truckType: "10-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Pacific Link Haulers", driverName: "Ernesto Dizon", helperName: "Felipe Gomez", contactPerson: "Ernesto Dizon" },
+  { id: "21000000-0000-4000-8000-000000000014", plateNumber: "BVC 1928", truckType: "6-Wheeler", storageCapability: "Freezer", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Polar Express Logistics", driverName: "Theresa Ocampo", helperName: "Jerry Pascual", contactPerson: "Theresa Ocampo" },
+  { id: "21000000-0000-4000-8000-000000000015", plateNumber: "QWE 7341", truckType: "4-Wheeler", storageCapability: "Dry", ownershipType: "Subcontracted", rateBasis: "Trucker Rate", provider: "Golden Route Transport", driverName: "Fernando Tan", helperName: "Mark Anthony", contactPerson: "Fernando Tan" },
 ] as const satisfies readonly FleetTruck[];
 
-export const KNOWN_REFRIGERATED_PLATES = new Set([
+export const KNOWN_FREEZER_PLATES = new Set([
   "NGS 4281",
+  "ABX 2201",
+  "HJK 2207",
+  "JRS 3760",
+  "BVC 1928",
+]);
+
+export const KNOWN_CHILLED_PLATES = new Set([
   "DAA 7310",
   "NBE 9042",
-  "ABX 2201",
   "PQR 7156",
   "BCD 8642",
-  "HJK 2207",
   "VWX 6385",
-  "JRS 3760",
   "XYZ 9102",
-  "BVC 1928",
+]);
+
+export const KNOWN_REFRIGERATED_PLATES = new Set([
+  ...KNOWN_FREEZER_PLATES,
+  ...KNOWN_CHILLED_PLATES,
 ]);
 
 export function getTruckStorageCapability(
   plateNumber: string,
-  explicitCapability?: TruckStorageCapability | null,
+  explicitCapability?: TruckStorageCapability | string | null,
 ): TruckStorageCapability {
-  if (explicitCapability) return explicitCapability;
+  if (explicitCapability) {
+    const norm = explicitCapability.trim().toLowerCase();
+    if (norm === "freezer") return "Freezer";
+    if (norm === "chilled") return "Chilled";
+    if (norm === "dry") return "Dry";
+    if (norm === "refrigerated" || norm === "cold") {
+      const normalizedPlate = plateNumber.trim().toUpperCase().replace(/\s+/g, " ");
+      if (KNOWN_CHILLED_PLATES.has(normalizedPlate)) return "Chilled";
+      return "Freezer";
+    }
+  }
   const normalized = plateNumber.trim().toUpperCase().replace(/\s+/g, " ");
-  return KNOWN_REFRIGERATED_PLATES.has(normalized) ? "Refrigerated" : "Dry";
+  if (KNOWN_FREEZER_PLATES.has(normalized)) return "Freezer";
+  if (KNOWN_CHILLED_PLATES.has(normalized)) return "Chilled";
+  return "Dry";
 }
 
 export function getTruckClassificationLabel(
   truckType: TruckType,
   capability: TruckStorageCapability,
 ): string {
-  const simplified = capability === "Refrigerated" ? "Cold" : "Dry";
-  return `${truckType} · ${simplified}`;
+  return `${truckType} · ${capability}`;
 }
 
 export const TRUCK_CLASSIFICATION_FILTER_OPTIONS = [
   { value: "all", label: "All Classifications" },
+  { value: "freezer", label: "Freezer" },
+  { value: "chilled", label: "Chilled" },
   { value: "dry", label: "Dry" },
-  { value: "cold", label: "Cold" },
 ] as const;
 
 export type TruckClassificationFilterKey =
   | (typeof TRUCK_CLASSIFICATION_FILTER_OPTIONS)[number]["value"]
-  | "refrigerated";
+  | "refrigerated"
+  | "cold";
 
 export const TRUCK_PERFORMANCE_FILTER_OPTIONS = [
   { value: "all", label: "All Performance Tiers" },
@@ -147,6 +170,15 @@ export function registerFleetTruck(truck: FleetTruck): { ok: true; truck: FleetT
   const registered: FleetTruck = {
     ...truck,
     plateNumber: normalizedPlate,
+    storageCapability: truck.storageCapability ?? getTruckStorageCapability(normalizedPlate),
+    driverName:
+      truck.ownershipType === "Subcontracted"
+        ? (truck.driverName?.trim() || truck.contactPerson?.trim() || null)
+        : null,
+    helperName:
+      truck.ownershipType === "Subcontracted"
+        ? (truck.helperName?.trim() || null)
+        : null,
   };
   dynamicFleetTrucks.push(registered);
   deletedTruckPlateNumbers.delete(normalizedPlate);
@@ -163,6 +195,8 @@ export function updateFleetTruck(
     rateBasis?: DeliveryRateBasis;
     provider?: string | null;
     contactPerson?: string | null;
+    driverName?: string | null;
+    helperName?: string | null;
   },
 ):
   | { ok: true; truck: FleetTruck }
@@ -205,6 +239,15 @@ export function updateFleetTruck(
     updates.rateBasis ??
     (updates.ownershipType === "Owned" ? "Redeemed Rate" : "Trucker Rate");
 
+  const resolvedDriver =
+    updates.ownershipType === "Subcontracted"
+      ? (updates.driverName?.trim() || updates.contactPerson?.trim() || null)
+      : null;
+  const resolvedHelper =
+    updates.ownershipType === "Subcontracted"
+      ? (updates.helperName?.trim() || null)
+      : null;
+
   const updatedTruck: FleetTruck = {
     ...target,
     plateNumber: normalizedNextPlate,
@@ -213,7 +256,9 @@ export function updateFleetTruck(
     ownershipType: updates.ownershipType,
     rateBasis,
     provider: updates.ownershipType === "Subcontracted" ? (updates.provider?.trim() || null) : null,
-    contactPerson: updates.ownershipType === "Subcontracted" ? (updates.contactPerson?.trim() || null) : null,
+    contactPerson: updates.ownershipType === "Subcontracted" ? (updates.contactPerson?.trim() || resolvedDriver || null) : null,
+    driverName: resolvedDriver,
+    helperName: resolvedHelper,
   };
 
   const dynIndex = dynamicFleetTrucks.findIndex(

@@ -98,6 +98,55 @@ test("truck registry registers subcontracted trucks with provider details", () =
   resetDynamicFleetTrucks();
 });
 
+test("truck registry registers and updates subcontracted trucks with driver and helper/s", () => {
+  resetDynamicFleetTrucks();
+  const initialSubCount = getSubcontractedTrucks().length;
+
+  const subcontractedTruck: FleetTruck = {
+    id: "test-sub-driver-001",
+    plateNumber: "SUB 1234",
+    truckType: "6-Wheeler",
+    ownershipType: "Subcontracted",
+    rateBasis: "Trucker Rate",
+    provider: "Northline Hauling",
+    driverName: "Juan Dela Cruz",
+    helperName: "Pedro Penduko",
+  };
+
+  const registerResult = registerFleetTruck(subcontractedTruck);
+  assert.equal(registerResult.ok, true);
+  if (registerResult.ok) {
+    assert.equal(registerResult.truck.plateNumber, "SUB 1234");
+    assert.equal(registerResult.truck.driverName, "Juan Dela Cruz");
+    assert.equal(registerResult.truck.helperName, "Pedro Penduko");
+  }
+
+  assert.equal(getSubcontractedTrucks().length, initialSubCount + 1);
+
+  // Update driver and helper/s
+  const updateResult = updateFleetTruck("SUB 1234", {
+    plateNumber: "SUB 1234",
+    truckType: "6-Wheeler",
+    ownershipType: "Subcontracted",
+    provider: "Northline Hauling",
+    driverName: "Emilio Aguinaldo",
+    helperName: "Andres Bonifacio",
+  });
+
+  assert.equal(updateResult.ok, true);
+  if (updateResult.ok) {
+    assert.equal(updateResult.truck.driverName, "Emilio Aguinaldo");
+    assert.equal(updateResult.truck.helperName, "Andres Bonifacio");
+  }
+
+  const found = getSubcontractedTrucks().find((t) => t.plateNumber === "SUB 1234");
+  assert.ok(found);
+  assert.equal(found.driverName, "Emilio Aguinaldo");
+  assert.equal(found.helperName, "Andres Bonifacio");
+
+  resetDynamicFleetTrucks();
+});
+
 test("mergeRegisteredTrucks correctly combines base trucks without duplicate plate numbers", () => {
   const baseTrucks: FleetTruck[] = [
     {
@@ -142,7 +191,7 @@ test("updateFleetTruck updates both owned and subcontracted trucks and prevents 
   const subUpdate = updateFleetTruck("KLM 4821", {
     plateNumber: "KLM 9999",
     truckType: "6-Wheeler",
-    storageCapability: "Refrigerated",
+    storageCapability: "Freezer",
     ownershipType: "Subcontracted",
     provider: "Updated Northline Hauling",
     contactPerson: "Updated Adrian Cruz",
@@ -163,7 +212,7 @@ test("updateFleetTruck updates both owned and subcontracted trucks and prevents 
   const duplicateUpdate = updateFleetTruck("KLM 9999", {
     plateNumber: "DAA 7310",
     truckType: "6-Wheeler",
-    storageCapability: "Refrigerated",
+    storageCapability: "Freezer",
     ownershipType: "Subcontracted",
     provider: "Updated Northline Hauling",
     contactPerson: "Updated Adrian Cruz",

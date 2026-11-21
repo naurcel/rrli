@@ -204,3 +204,96 @@ test("dynamic batch deliveries are queryable without corrupting the 21 base seed
   assert.equal(list.items[0]?.waybillNumber, "WB-IMPORT-9999");
   assert.equal(list.items[0]?.deliveryRate, 14500);
 });
+
+test("subcontracted delivery supports adding 2nd helper without requiring owned crew daily rates", () => {
+  const subDelivery = buildDeliveryTripRecord({
+    id: "del-subcon-2helpers-test",
+    waybillNumber: "WB-SUB-2H-01",
+    deliveryDate: "2024-06-15",
+    clientName: "Universal Robina Corporation",
+    plateNumber: "SUB-8821",
+    truckType: "6-Wheeler",
+    truckTemperature: "4°C",
+    truckOwnership: "Subcontracted",
+    rateBasis: "Redeemed Rate",
+    origin: "Laguna Plant",
+    distanceKm: 65,
+    fuelRate: 60,
+    deliveryRate: 18500,
+    expenses: {
+      dieselExpenses: 2800,
+      tollGateExpenses: 450,
+      tollGateBreakdown: "SLEX",
+      driverAllowance: null,
+      driverDailyRate: null,
+      helperAllowance: null,
+      helperDailyRate: null,
+      otherExpenses: 0,
+    },
+    expenseStates: {
+      dieselExpenses: "confirmed",
+      tollGateExpenses: "confirmed",
+      entryFees: "confirmed",
+      driverAllowance: "not_applicable",
+      driverDailyRate: "not_applicable",
+      helperAllowance: "not_applicable",
+      helperDailyRate: "not_applicable",
+      otherExpenses: "confirmed",
+    },
+    financialState: "finalized",
+    dropoffs: [
+      {
+        id: "drop-1",
+        sequence: 1,
+        storeName: "Robinsons Supermarket Galleria",
+        destinationArea: "Pasig",
+        dropoffCount: 1,
+        entryFee: 150,
+        entryFeeStatus: "confirmed",
+        podSubmitted: true,
+        supportingDocsComplete: true,
+        documentRef: "POD-SUB-01.pdf",
+      },
+    ],
+  });
+
+  dynamicMockDeliveries.push({
+    record: subDelivery,
+    clientId: SMALL_MOCK_DATABASE.clients[0].id,
+    truckId: "truck-sub-1",
+    driverId: "",
+    helperId: "",
+    driverName: "Subcontractor Driver",
+    helperName: "Subcontractor Helper 1",
+    scenario: "Subcontracted 2-helper delivery test",
+  });
+
+  // Perform audited correction adding a 2nd helper: "Subcontractor Helper 1, Subcontractor Helper 2"
+  const correction = correctSmallMockDelivery({
+    deliveryId: "del-subcon-2helpers-test",
+    expectedVersion: 1,
+    reason: "Added optional second helper from subcontractor crew",
+    changes: {
+      helperName: "Subcontractor Helper 1, Subcontractor Helper 2",
+      expenses: {
+        helperDailyRate: null,
+        helperAllowance: null,
+      },
+      expenseStates: {
+        helperDailyRate: "not_applicable",
+        helperAllowance: "not_applicable",
+      },
+    },
+  });
+
+  assert.equal(correction.ok, true);
+  if (correction.ok) {
+    assert.equal(correction.version, 2);
+    assert.equal(correction.record.helperName, "Subcontractor Helper 1, Subcontractor Helper 2");
+    assert.equal(correction.record.expenses.helperDailyRate, null);
+    assert.equal(correction.record.expenseStates.helperDailyRate, "not_applicable");
+    assert.equal(correction.record.expenses.helperAllowance, null);
+    assert.equal(correction.record.expenseStates.helperAllowance, "not_applicable");
+    assert.equal(correction.record.financialState, "finalized");
+  }
+});

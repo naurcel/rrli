@@ -8,7 +8,10 @@ import {
   isDeliveryIncomplete,
 } from "./delivery-domain.ts";
 import { parseDeliveryListQuery } from "./delivery-query.ts";
-import { listSmallMockDeliveryRecords } from "./small-mock-repository.ts";
+import {
+  listSmallMockDeliveryRecords,
+  correctSmallMockDelivery,
+} from "./small-mock-repository.ts";
 
 test("incomplete delivery detection rules: required core items vs optional supporting docs", () => {
   // Base complete delivery
@@ -125,4 +128,39 @@ test("financial inclusion rule: only financially complete deliveries are include
   assert.ok(parsedIncomplete.ok);
   const incompleteResult = listSmallMockDeliveryRecords(parsedIncomplete.value);
   assert.ok(incompleteResult.items.every(isDeliveryIncomplete), "Incomplete status must have missing details");
+});
+
+test("editing incomplete delivery: filling missing fields automatically resolves to financially complete", () => {
+  const allTrips = listSmallMockDeliveryRecords({ pageSize: 50 }).items;
+  const incompleteTrip = allTrips.find((t) => isDeliveryIncomplete(t));
+  assert.ok(incompleteTrip, "There must be an incomplete trip in mock data");
+
+  assert.equal(isDeliveryFinanciallyComplete(incompleteTrip), false);
+  assert.equal(isDeliveryIncomplete(incompleteTrip), true);
+
+  // Fill up the incomplete field (WB-261102 has unknown toll receipts)
+  const result = correctSmallMockDelivery({
+    deliveryId: incompleteTrip.id,
+    expectedVersion: incompleteTrip.version,
+    changes: {
+      expenses: {
+        tollGateExpenses: 850,
+      },
+      expenseStates: {
+        tollGateExpenses: "confirmed",
+      },
+      financialState: "finalized",
+    },
+    reason: "Submitted missing CALAX toll receipts",
+  });
+
+  assert.equal(result.ok, true);
+  const updatedTrip = listSmallMockDeliveryRecords({ pageSize: 50 }).items.find((t) => t.id === incompleteTrip.id);
+  assert.ok(updatedTrip);
+  assert.equal(updatedTrip.expenses.tollGateExpenses, 850);
+  assert.equal(updatedTrip.expenseStates.tollGateExpenses, "confirmed");
+  assert.equal(updatedTrip.financialState, "finalized");
+  assert.deepEqual(updatedTrip.financialIntegrityIssues, []);
+  assert.equal(isDeliveryIncomplete(updatedTrip), false, "Delivery must no longer be incomplete");
+  assert.equal(isDeliveryFinanciallyComplete(updatedTrip), true, "Delivery must now be financially complete");
 });

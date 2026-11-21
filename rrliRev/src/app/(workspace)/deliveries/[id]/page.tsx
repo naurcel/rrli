@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, use, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-deletion-dialog";
@@ -10,15 +11,25 @@ import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline"
 import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
 import { DeliveryNavigator } from "@/components/delivery-navigator";
 import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
-import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
+import { DeliverySupportingDocumentsPane } from "@/components/delivery-supporting-documents-pane";
+import { DeliveryTruckTripSection } from "@/components/delivery-truck-trip-section";
+import { DeliveryAttentionFlags } from "@/components/delivery-attention-flags";
+import {
+  countUnresolvedDeliveryAttentionFlags,
+  DELIVERY_FLAGS_CHANGED_EVENT,
+} from "@/features/deliveries/delivery-attention-flags";
 import {
   isDateInRange,
   parseDateValue,
-  toDateKey,
   useGlobalDateRange,
 } from "@/components/global-date-range-picker";
+import { ImageViewerModal } from "@/components/image-viewer-modal";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { generateMockPodSvgReceipt } from "@/features/deliveries/pod-utils";
 import {
+  derivePodVerificationStatus,
+  type DeliveryStoreDropoff,
+  getTripTotalDropoffs,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
 } from "@/features/deliveries/delivery-domain";
@@ -26,6 +37,7 @@ import { deleteDeliveryRecord } from "@/features/deliveries/delivery-deletion-cl
 import { sortDeliveryLedgerItems } from "@/features/deliveries/delivery-sort";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
+  BROWSER_PREVIEW_DELIVERIES_CHANGED,
   readBrowserPreviewDeliveries,
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
@@ -102,12 +114,41 @@ function DeliveryDetailsPageContent({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
+  const [unresolvedFlagCount, setUnresolvedFlagCount] = useState(0);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [viewingImage, setViewingImage] = useState<{
+    url: string;
+    title: string;
+    subtitle?: string;
+    filename?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!delivery?.id) return;
+    function updateCount() {
+      if (delivery) {
+        setUnresolvedFlagCount(countUnresolvedDeliveryAttentionFlags(delivery.id));
+      }
+    }
+    updateCount();
+    window.addEventListener(DELIVERY_FLAGS_CHANGED_EVENT, updateCount);
+    window.addEventListener("storage", updateCount);
+    return () => {
+      window.removeEventListener(DELIVERY_FLAGS_CHANGED_EVENT, updateCount);
+      window.removeEventListener("storage", updateCount);
+    };
+  }, [delivery?.id]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("updated") === "1" || params.get("updated") === "true") {
         setFeedbackMessage("Delivery updated successfully.");
+        toast.success("Delivery updated", {
+          description: "Trip changes saved successfully.",
+        });
         params.delete("updated");
         const remaining = params.toString();
         window.history.replaceState(
@@ -119,12 +160,24 @@ function DeliveryDetailsPageContent({
     }
   }, []);
 
-  // Sync active delivery when id or allDeliveries changes
+  // Sync active delivery when id or allDeliveries changes, prioritizing the latest version
   useEffect(() => {
-    // 1. Try finding in reactive deliveries
-    const matched =
-      allDeliveries.find((d) => d.id === normalizedId || d.waybillNumber === normalizedId) ??
-      readBrowserPreviewDeliveries().find((d) => d.id === normalizedId || d.waybillNumber === normalizedId);
+    const previewMatched = readBrowserPreviewDeliveries().find(
+      (d) => d.id === normalizedId || d.waybillNumber === normalizedId,
+    );
+    const repoMatched = allDeliveries.find(
+      (d) => d.id === normalizedId || d.waybillNumber === normalizedId,
+    );
+
+    let matched: DeliveryLedgerItem | undefined;
+    if (previewMatched && repoMatched) {
+      matched =
+        (previewMatched.version ?? 1) >= (repoMatched.version ?? 1)
+          ? previewMatched
+          : repoMatched;
+    } else {
+      matched = previewMatched ?? repoMatched;
+    }
 
     if (matched) {
       setDelivery(matched);
@@ -134,13 +187,16 @@ function DeliveryDetailsPageContent({
     // 2. Fallback to direct API lookup if not in preview list
     if (!deliveriesLoading) {
       let isMounted = true;
-      fetch(`/api/deliveries?id=${encodeURIComponent(normalizedId)}`)
+      fetch(`/api/deliveries?search=${encodeURIComponent(normalizedId)}&pageSize=10`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (!isMounted) return;
-          if (data?.ok && data.delivery) {
-            setDelivery(data.delivery);
-            upsertBrowserPreviewDelivery(data.delivery);
+          const found = (data?.items as DeliveryLedgerItem[] | undefined)?.find(
+            (d) => d.id === normalizedId || d.waybillNumber === normalizedId,
+          );
+          if (found) {
+            setDelivery(found);
+            upsertBrowserPreviewDelivery(found);
           } else {
             setDelivery(null);
           }
@@ -154,6 +210,22 @@ function DeliveryDetailsPageContent({
       };
     }
   }, [allDeliveries, deliveriesLoading, normalizedId]);
+
+  // Reactive listener for local delivery edits across tabs and preview cache
+  useEffect(() => {
+    function handlePreviewDeliveriesChanged() {
+      const updated = readBrowserPreviewDeliveries().find(
+        (d) => d.id === normalizedId || d.waybillNumber === normalizedId,
+      );
+      if (updated) {
+        setDelivery(updated);
+      }
+    }
+    window.addEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, handlePreviewDeliveriesChanged);
+    return () => {
+      window.removeEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, handlePreviewDeliveriesChanged);
+    };
+  }, [normalizedId]);
 
   // Read filter and sort context passed from the caller
   const searchQuery = searchParams.get("search") || searchParams.get("q") || "";
@@ -407,10 +479,17 @@ function DeliveryDetailsPageContent({
 
     try {
       await deleteDeliveryRecord(deliveryToDelete.id);
+      toast.success("Delivery deleted", {
+        description: `Waybill #${deliveryToDelete.waybillNumber} was successfully deleted.`,
+      });
       // Navigate back to the caller with preserved context
       router.push(backHref);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Failed to delete delivery.");
+      const msg = err instanceof Error ? err.message : "Failed to delete delivery.";
+      setDeleteError(msg);
+      toast.error("Failed to delete delivery", {
+        description: msg,
+      });
       setIsDeleting(false);
     }
   }
@@ -418,6 +497,144 @@ function DeliveryDetailsPageContent({
   function handleTripUpdated(updatedTrip: DeliveryLedgerItem) {
     setDelivery(updatedTrip);
     upsertBrowserPreviewDelivery(updatedTrip);
+    toast.success("Trip documents updated");
+  }
+
+  async function handleSaveNotes() {
+    if (!delivery || savingNotes) return;
+    setSavingNotes(true);
+    const trimmed = noteDraft.trim() || null;
+    const updatedTrip: DeliveryLedgerItem = {
+      ...delivery,
+      notes: trimmed,
+      version: delivery.version + 1,
+    };
+
+    try {
+      await fetch("/api/deliveries", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "correct_financials",
+          deliveryId: delivery.id,
+          expectedVersion: delivery.version,
+          idempotencyKey: crypto.randomUUID(),
+          reason: "Updated trip notes",
+          changes: {
+            notes: trimmed,
+          },
+          fallbackRecord: delivery,
+        }),
+      });
+    } catch {
+      // preview/offline fallback
+    }
+
+    setDelivery(updatedTrip);
+    upsertBrowserPreviewDelivery(updatedTrip);
+    setIsEditingNotes(false);
+    setSavingNotes(false);
+    toast.success(trimmed ? "Trip note saved" : "Trip note cleared", {
+      description: `Waybill #${delivery.waybillNumber} notes updated.`,
+    });
+  }
+
+  async function handleViewPod(stop: DeliveryStoreDropoff) {
+    if (!delivery) return;
+    try {
+      const res = await fetch(`/api/deliveries/documents?deliveryId=${delivery.id}&dropoffId=${stop.id}`);
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; document?: { downloadUrl?: string; filename?: string } } | null;
+      if (res.ok && data?.ok && data.document?.downloadUrl) {
+        setViewingImage({
+          url: data.document.downloadUrl,
+          title: `Proof of Delivery · ${stop.storeName}`,
+          subtitle: `Waybill #${delivery.waybillNumber} · Drop-off #${stop.sequence} (${stop.destinationArea})`,
+          filename: stop.documentRef || data.document.filename || "pod.pdf",
+        });
+        return;
+      }
+    } catch {
+      // fallback
+    }
+    const fallbackUrl = generateMockPodSvgReceipt(delivery, stop, stop.documentRef || "pod.pdf");
+    setViewingImage({
+      url: fallbackUrl,
+      title: `Proof of Delivery Receipt · ${stop.storeName}`,
+      subtitle: `Waybill #${delivery.waybillNumber} · Drop-off #${stop.sequence} (${stop.destinationArea})`,
+      filename: stop.documentRef || "pod.svg",
+    });
+  }
+
+  async function handleAttachPod(stopId: string, file: File) {
+    if (!delivery) return;
+    const stop = delivery.dropoffs.find((s) => s.id === stopId);
+    const storeLabel = stop ? stop.storeName : `Stop`;
+
+    try {
+      const formData = new FormData();
+      formData.append("deliveryId", delivery.id);
+      formData.append("dropoffId", stopId);
+      formData.append("action", "upload");
+      formData.append("file", file);
+
+      const response = await fetch("/api/deliveries/documents", {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+        document?: { filename?: string };
+        dropoff?: Partial<DeliveryStoreDropoff>;
+      } | null;
+
+      const newFilename = payload?.dropoff?.documentRef ?? payload?.document?.filename ?? file.name;
+
+      const nextDropoffs = delivery.dropoffs.map((s) => {
+        if (s.id !== stopId) return s;
+        return {
+          ...s,
+          podSubmitted: true,
+          documentRef: newFilename,
+        };
+      });
+
+      const updatedTrip: DeliveryLedgerItem = {
+        ...delivery,
+        version: delivery.version + 1,
+        dropoffs: nextDropoffs,
+        podStatus: derivePodVerificationStatus(nextDropoffs),
+      };
+
+      setDelivery(updatedTrip);
+      upsertBrowserPreviewDelivery(updatedTrip);
+      toast.success("POD attached", {
+        description: `Attached ${file.name} to ${storeLabel}.`,
+      });
+    } catch {
+      const nextDropoffs = delivery.dropoffs.map((s) => {
+        if (s.id !== stopId) return s;
+        return {
+          ...s,
+          podSubmitted: true,
+          documentRef: file.name,
+        };
+      });
+
+      const updatedTrip: DeliveryLedgerItem = {
+        ...delivery,
+        version: delivery.version + 1,
+        dropoffs: nextDropoffs,
+        podStatus: derivePodVerificationStatus(nextDropoffs),
+      };
+
+      setDelivery(updatedTrip);
+      upsertBrowserPreviewDelivery(updatedTrip);
+      toast.success("POD attached", {
+        description: `Attached ${file.name} to ${storeLabel}.`,
+      });
+    }
   }
 
   // Not Found State
@@ -427,7 +644,12 @@ function DeliveryDetailsPageContent({
         <OperationalTopbar contextLabel="Deliveries / Record Not Found" showDateFilter={false} />
         <div className="content-wrap delivery-detail-page">
           <div className="delivery-detail-not-found records-card">
-            <div className="not-found-icon">🔍</div>
+            <div className="not-found-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
             <h2>Delivery Record Not Found</h2>
             <p>
               The requested delivery record (<strong>{normalizedId}</strong>) could not be found. It may have been deleted or the link is invalid.
@@ -456,6 +678,7 @@ function DeliveryDetailsPageContent({
   const isIncomplete = isDeliveryIncomplete(delivery);
   const isFinanciallyComplete = isDeliveryFinanciallyComplete(delivery);
   const isComplete = !isIncomplete && isFinanciallyComplete;
+  const totalDropoffs = getTripTotalDropoffs(delivery.dropoffs);
 
   return (
     <>
@@ -492,7 +715,11 @@ function DeliveryDetailsPageContent({
           {/* Feedback Alert Banner */}
         {feedbackMessage ? (
           <div className="notice" role="status" style={{ marginBottom: "18px" }}>
-            <span className="notice-icon" aria-hidden="true">✓</span>
+            <span className="notice-icon" aria-hidden="true">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
               <span>{feedbackMessage}</span>
               <button
@@ -566,7 +793,8 @@ function DeliveryDetailsPageContent({
               <span className="simple-hero-badge-sep">·</span>
 
               <span className="simple-hero-badge neutral">
-                {delivery.dropoffs.length} {delivery.dropoffs.length === 1 ? "Drop-off" : "Drop-offs"}
+                {totalDropoffs} {totalDropoffs === 1 ? "Drop-off" : "Drop-offs"}
+                {totalDropoffs !== delivery.dropoffs.length ? ` (${delivery.dropoffs.length} ${delivery.dropoffs.length === 1 ? "Location" : "Locations"})` : ""}
               </span>
 
               <span className="simple-hero-badge-sep">·</span>
@@ -574,11 +802,63 @@ function DeliveryDetailsPageContent({
               <span className="simple-hero-badge neutral">
                 Version {delivery.version}
               </span>
+
+              {unresolvedFlagCount > 0 ? (
+                <>
+                  <span className="simple-hero-badge-sep">·</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById("delivery-attention-flags-card");
+                      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    className="simple-hero-badge warning"
+                    style={{
+                      cursor: "pointer",
+                      background: "rgba(245, 158, 11, 0.12)",
+                      border: "1px solid rgba(245, 158, 11, 0.3)",
+                      borderRadius: "6px",
+                      padding: "2px 8px",
+                      color: "var(--color-accent-deep, #b45309)",
+                      fontWeight: 700,
+                    }}
+                    title="Click to view attention flags and missing items"
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                        <line x1="4" y1="22" x2="4" y2="15" />
+                      </svg>
+                      {unresolvedFlagCount} {unresolvedFlagCount === 1 ? "Item Needs Attention" : "Items Need Attention"}
+                    </span>
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
 
           {canWrite ? (
             <div className="delivery-header-actions" style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ fontSize: "12px", padding: "5px 11px", display: "inline-flex", alignItems: "center", gap: "5px" }}
+                onClick={() => {
+                  const el = document.getElementById("delivery-attention-flags-card");
+                  el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  const input = el?.querySelector("input");
+                  input?.focus();
+                }}
+                title="Flag missing document or attention item for this delivery"
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                    <line x1="4" y1="22" x2="4" y2="15" />
+                  </svg>
+                  Flag Item
+                </span>
+              </button>
               <button
                 type="button"
                 className="truck-action-icon-btn"
@@ -631,7 +911,7 @@ function DeliveryDetailsPageContent({
                 Trip revenue, expenses, and net profit
               </p>
             </div>
-            <div className="delivery-analytics-badges">
+            <div className="delivery-analytics-badges" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               {isComplete && delivery.marginPercent != null ? (
                 <span className="routex-badge tone-primary" style={{ fontWeight: 700 }}>
                   {delivery.marginPercent.toFixed(1)}% MARGIN
@@ -642,62 +922,133 @@ function DeliveryDetailsPageContent({
           <DeliveryFinancialBreakdown trip={delivery} />
         </section>
 
-        {/* 2. Vehicle & Trip Specifications (Balanced Fixed-Height 2-Column Grid) */}
-        <div className="delivery-detail-grid delivery-specs-grid">
-          {/* Left Column: Truck Specifications */}
-          <div className="delivery-detail-column">
-            <section className="records-card delivery-section-card delivery-equal-card">
-              <div className="section-card-header">
-                <h2 className="section-card-title">Truck</h2>
-              </div>
-              <DeliveryTruckInfoSection
-                plateNumber={delivery.plateNumber}
-                truckType={delivery.truckType}
-                truckTemperature={delivery.truckTemperature}
-                truckOwnership={delivery.truckOwnership}
-                rateBasis={delivery.rateBasis}
-                truckHref={withReturnContext(
-                  `/truck-profitability/${encodeURIComponent(delivery.plateNumber)}`,
-                  `/deliveries/${encodeURIComponent(delivery.id)}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
-                  `Waybill #${delivery.waybillNumber}`,
-                )}
-              />
-            </section>
+        {/* 2. Unified Vehicle & Trip Specifications Card */}
+        <section className="records-card delivery-section-card delivery-truck-trip-card">
+          <div className="section-card-header">
+            <div>
+              <h2 className="section-card-title">Truck &amp; Trip Information</h2>
+              <p className="section-card-subtitle">
+                Vehicle assignment, technical specifications, and trip routing parameters
+              </p>
+            </div>
+          </div>
+          <DeliveryTruckTripSection
+            plateNumber={delivery.plateNumber}
+            truckType={delivery.truckType}
+            truckTemperature={delivery.truckTemperature}
+            truckOwnership={delivery.truckOwnership}
+            rateBasis={delivery.rateBasis}
+            truckHref={withReturnContext(
+              `/truck-profitability/${encodeURIComponent(delivery.plateNumber)}`,
+              `/deliveries/${encodeURIComponent(delivery.id)}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
+              `Waybill #${delivery.waybillNumber}`,
+            )}
+            clientName={delivery.clientName}
+            origin={delivery.origin}
+            distanceKm={delivery.distanceKm}
+            fuelRate={delivery.fuelRate}
+            deliveryDate={delivery.deliveryDate}
+            formatPeso={formatPeso}
+          />
+        </section>
+
+        {/* 2b. Operational Notes & Remarks Card */}
+        <section className="records-card delivery-section-card delivery-notes-card">
+          <div className="section-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <h2 className="section-card-title">Trip Notes &amp; Remarks</h2>
+              <p className="section-card-subtitle">
+                Operational instructions, dispatch remarks, and road conditions
+              </p>
+            </div>
+            {canWrite && !isEditingNotes && (
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ fontSize: "12px", padding: "5px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                onClick={() => {
+                  setNoteDraft(delivery.notes ?? "");
+                  setIsEditingNotes(true);
+                }}
+              >
+                <span>{delivery.notes ? "Edit Note" : "+ Add Note"}</span>
+              </button>
+            )}
           </div>
 
-          {/* Right Column: Trip Information */}
-          <div className="delivery-detail-column">
-            <section className="records-card delivery-section-card delivery-equal-card">
-              <div className="section-card-header">
-                <h2 className="section-card-title">Trip Information</h2>
+          <div style={{ padding: "0 20px 20px" }}>
+            {isEditingNotes ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <textarea
+                  rows={3}
+                  className="correction-reason-textarea"
+                  style={{ width: "100%", resize: "vertical", fontSize: "13.5px", lineHeight: "1.5" }}
+                  placeholder="Enter operational notes, special handling, or dispatch instructions for this delivery..."
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  autoFocus
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={savingNotes}
+                    onClick={() => setIsEditingNotes(false)}
+                    style={{ fontSize: "12px", padding: "6px 14px" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-action-button"
+                    disabled={savingNotes}
+                    onClick={handleSaveNotes}
+                    style={{ fontSize: "12px", padding: "6px 16px" }}
+                  >
+                    {savingNotes ? "Saving…" : "Save Note"}
+                  </button>
+                </div>
               </div>
-              <div className="detail-meta-grid">
-                <div className="detail-meta-item">
-                  <span className="meta-label">Client</span>
-                  <strong className="meta-value">{delivery.clientName}</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Origin</span>
-                  <strong className="meta-value">{delivery.origin || "Default Origin"}</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Distance</span>
-                  <strong className="meta-value">{delivery.distanceKm} km</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Fuel Rate</span>
-                  <strong className="meta-value">{formatPeso(delivery.fuelRate)} / L</strong>
-                </div>
-                <div className="detail-meta-item">
-                  <span className="meta-label">Date</span>
-                  <strong className="meta-value">{delivery.deliveryDate}</strong>
-                </div>
+            ) : delivery.notes ? (
+              <div
+                style={{
+                  background: "var(--color-surface-subtle, rgba(0, 0, 0, 0.02))",
+                  border: "1px solid var(--line, #e2e8f0)",
+                  borderRadius: "8px",
+                  padding: "14px 16px",
+                  fontSize: "13.5px",
+                  lineHeight: "1.6",
+                  color: "var(--color-text, #1e293b)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {delivery.notes}
               </div>
-            </section>
+            ) : (
+              <div
+                style={{
+                  color: "var(--color-text-muted, #64748b)",
+                  fontSize: "13px",
+                  fontStyle: "italic",
+                  padding: "8px 0",
+                }}
+              >
+                No operational notes recorded for this delivery trip.
+              </div>
+            )}
           </div>
-        </div>
+        </section>
 
-        {/* 3. Unified Store Drop-offs & Documents Card (Scalable Bottom Section) */}
+        {/* 3. Attention & Missing Items Card */}
+        <DeliveryAttentionFlags
+          deliveryId={delivery.id}
+          waybillNumber={delivery.waybillNumber}
+          canManage={canWrite}
+          currentUser={actor.username || actor.email || "Operations"}
+        />
+
+        {/* 4. Unified Store Drop-offs & Documents Card (Scalable Bottom Section) */}
         <section
           className="records-card delivery-section-card delivery-fulfillment-unified-card"
           aria-label="Store Drop-offs and POD Documents"
@@ -713,8 +1064,13 @@ function DeliveryDetailsPageContent({
             </div>
             <div className="delivery-fulfillment-summary-badges">
               <span className="routex-badge tone-primary">
-                {delivery.dropoffs.length} {delivery.dropoffs.length === 1 ? "STOP" : "STOPS"}
+                {totalDropoffs} {totalDropoffs === 1 ? "DROP-OFF" : "DROP-OFFS"}
               </span>
+              {totalDropoffs !== delivery.dropoffs.length ? (
+                <span className="routex-badge tone-neutral">
+                  {delivery.dropoffs.length} {delivery.dropoffs.length === 1 ? "LOCATION" : "LOCATIONS"}
+                </span>
+              ) : null}
               <span
                 className={`routex-badge ${
                   delivery.dropoffs.every((s) => s.podSubmitted) ? "tone-success" : "tone-warning"
@@ -726,54 +1082,41 @@ function DeliveryDetailsPageContent({
           </div>
 
           <div className="delivery-fulfillment-split-grid">
-            {/* Left Pane: Store Drop-offs Sequence */}
+            {/* Left Pane: Store Drop-offs Sequence & POD */}
             <div className="delivery-fulfillment-pane is-dropoffs">
               <div className="delivery-fulfillment-pane-header">
                 <h3 className="delivery-fulfillment-pane-title">
-                  Store Drop-offs ({delivery.dropoffs.length})
+                  Store Drop-offs &amp; POD ({totalDropoffs} across {delivery.dropoffs.length} {delivery.dropoffs.length === 1 ? "location" : "locations"})
                 </h3>
                 <span className="delivery-fulfillment-pane-hint">
-                  Hover or click a stop to highlight its POD
+                  Click drop-off to view POD document
                 </span>
               </div>
               <div className="delivery-fulfillment-scroll">
                 <DeliveryDropoffTimeline
                   dropoffs={delivery.dropoffs}
+                  supportingDocuments={delivery.supportingDocuments}
                   activeStopId={activeStopId}
                   onHoverStop={setActiveStopId}
                   onSelectStop={(stop) => {
                     setActiveStopId(stop.id);
-                    const el = document.getElementById(`pod-doc-stop-${stop.id}`);
-                    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
                   }}
+                  onViewPod={handleViewPod}
+                  onAttachPod={handleAttachPod}
+                  canManage={canManageDocs}
                 />
               </div>
             </div>
 
-            {/* Right Pane: POD & Supporting Documents */}
+            {/* Right Pane: Supporting Documents */}
             <div className="delivery-fulfillment-pane is-documents">
-              <div className="delivery-fulfillment-pane-header">
-                <h3 className="delivery-fulfillment-pane-title">
-                  POD &amp; Supporting Documents
-                </h3>
-                <span className="delivery-fulfillment-pane-hint">
-                  {delivery.supportingDocuments?.length
-                    ? `${delivery.supportingDocuments.length} supporting ${
-                        delivery.supportingDocuments.length === 1 ? "file" : "files"
-                      }`
-                    : "Per-stop receipts & files"}
-                </span>
-              </div>
-              <div className="delivery-fulfillment-scroll">
-                <DeliveryPodDocuments
-                  trip={delivery}
-                  canVerify={canManageDocs}
-                  roleLabel={actor.roleLabel}
-                  onTripChange={handleTripUpdated}
-                  activeStopId={activeStopId}
-                  onHoverStop={setActiveStopId}
-                />
-              </div>
+              <DeliverySupportingDocumentsPane
+                trip={delivery}
+                canManage={canManageDocs}
+                onTripChange={handleTripUpdated}
+                activeStopId={activeStopId}
+                onSelectStopId={setActiveStopId}
+              />
             </div>
           </div>
         </section>
@@ -787,6 +1130,15 @@ function DeliveryDetailsPageContent({
         error={deleteError}
         onCancel={() => setDeliveryToDelete(null)}
         onConfirm={handleConfirmDelete}
+      />
+
+      <ImageViewerModal
+        isOpen={Boolean(viewingImage)}
+        onClose={() => setViewingImage(null)}
+        imageUrl={viewingImage?.url ?? ""}
+        title={viewingImage?.title ?? ""}
+        subtitle={viewingImage?.subtitle}
+        filename={viewingImage?.filename}
       />
     </>
   );

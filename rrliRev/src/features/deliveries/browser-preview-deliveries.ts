@@ -5,6 +5,8 @@ import {
   isDeliveryIncomplete,
   summarizeTruckProfitability,
 } from "@/features/deliveries/delivery-domain";
+import { FLEET_TRUCKS } from "@/features/deliveries/truck-registry";
+import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import type {
   PersistedProfitabilitySummary,
@@ -109,14 +111,25 @@ export function selectBrowserPreviewDeliveries(
 ): DeliveryLedgerItem[] {
   const search = filters.search?.trim().toLocaleLowerCase() ?? "";
   const searchClean = search.replace(/\s+/g, "");
+  const allTrucks = [...FLEET_TRUCKS, ...readBrowserPreviewTrucks()];
+
   return readBrowserPreviewDeliveries().filter((item) => {
     const plateClean = item.plateNumber.toLocaleLowerCase().replace(/\s+/g, "");
+    const regTruck = allTrucks.find(
+      (t) =>
+        t.plateNumber.toUpperCase() === item.plateNumber.toUpperCase() ||
+        t.id === item.truckId,
+    );
+    const truckerName = (regTruck?.provider ?? "").toLocaleLowerCase();
+
     const searchable = [
       item.waybillNumber,
       item.clientName,
       item.plateNumber,
       plateClean,
+      truckerName,
       item.driverName ?? "",
+      item.notes ?? "",
       ...item.dropoffs.flatMap((dropoff) => [dropoff.storeName, dropoff.destinationArea]),
     ].join(" ").toLocaleLowerCase();
     const matchesClient =

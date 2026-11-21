@@ -23,17 +23,19 @@ const createTruckSchema = z.object({
     .max(12, "Plate number must not exceed 12 characters.")
     .regex(/^[A-Za-z0-9\s-]+$/, "Plate number contains invalid characters."),
   truckType: z.enum(["4-Wheeler", "6-Wheeler", "10-Wheeler"]),
-  storageCapability: z.enum(["Refrigerated", "Dry"]),
+  storageCapability: z.enum(["Freezer", "Chilled", "Dry", "Refrigerated"]).transform((v) => (v === "Refrigerated" ? "Freezer" : v)),
   ownershipType: z.enum(["Owned", "Subcontracted"]).default("Owned"),
   rateBasis: z.enum(["Redeemed Rate", "Trucker Rate"]).optional(),
   provider: z.string().trim().nullable().optional(),
   contactPerson: z.string().trim().nullable().optional(),
+  driverName: z.string().trim().nullable().optional(),
+  helperName: z.string().trim().nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.ownershipType === "Subcontracted" && (!data.provider || !data.provider.trim())) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["provider"],
-      message: "Provider is required for subcontracted trucks.",
+      message: "Trucker is required for subcontracted trucks.",
     });
   }
 });
@@ -47,18 +49,20 @@ const updateTruckSchema = z.object({
     .max(12, "Plate number must not exceed 12 characters.")
     .regex(/^[A-Za-z0-9\s-]+$/, "Plate number contains invalid characters."),
   truckType: z.enum(["4-Wheeler", "6-Wheeler", "10-Wheeler"]),
-  storageCapability: z.enum(["Refrigerated", "Dry"]),
+  storageCapability: z.enum(["Freezer", "Chilled", "Dry", "Refrigerated"]).transform((v) => (v === "Refrigerated" ? "Freezer" : v)),
   ownershipType: z.enum(["Owned", "Subcontracted"]),
   rateBasis: z.enum(["Redeemed Rate", "Trucker Rate"]).optional(),
   provider: z.string().trim().nullable().optional(),
   contactPerson: z.string().trim().nullable().optional(),
+  driverName: z.string().trim().nullable().optional(),
+  helperName: z.string().trim().nullable().optional(),
   browserLocal: z.boolean().optional(),
 }).superRefine((data, ctx) => {
   if (data.ownershipType === "Subcontracted" && (!data.provider || !data.provider.trim())) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["provider"],
-      message: "Provider is required for subcontracted trucks.",
+      message: "Trucker is required for subcontracted trucks.",
     });
   }
 });
@@ -96,7 +100,12 @@ export async function GET() {
       id: row.id,
       plateNumber: row.plate_number,
       truckType: row.truck_type as FleetTruck["truckType"],
-      storageCapability: row.storage_capability === "Dry" ? "Dry" : "Refrigerated",
+      storageCapability:
+        row.storage_capability === "Dry"
+          ? "Dry"
+          : row.storage_capability === "Chilled"
+            ? "Chilled"
+            : "Freezer",
       ownershipType: row.ownership_type === "Subcontracted" ? "Subcontracted" : "Owned",
       rateBasis: row.rate_basis === "Trucker Rate" ? "Trucker Rate" : "Redeemed Rate",
       provider: row.provider ?? null,
@@ -147,6 +156,15 @@ export async function POST(request: Request) {
     parsed.data.rateBasis ??
     (parsed.data.ownershipType === "Owned" ? "Redeemed Rate" : "Trucker Rate");
 
+  const resolvedDriver =
+    parsed.data.ownershipType === "Subcontracted"
+      ? (parsed.data.driverName?.trim() ?? parsed.data.contactPerson?.trim() ?? null)
+      : null;
+  const resolvedHelper =
+    parsed.data.ownershipType === "Subcontracted"
+      ? (parsed.data.helperName?.trim() ?? null)
+      : null;
+
   const newTruck: FleetTruck = {
     id: randomUUID(),
     plateNumber: normalizedPlate,
@@ -155,7 +173,9 @@ export async function POST(request: Request) {
     ownershipType: parsed.data.ownershipType,
     rateBasis,
     provider: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.provider?.trim() ?? null) : null,
-    contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? null) : null,
+    contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? resolvedDriver ?? null) : null,
+    driverName: resolvedDriver,
+    helperName: resolvedHelper,
   };
 
   if (!isSupabaseConfigured()) {
@@ -352,13 +372,13 @@ export async function PATCH(request: Request) {
     );
   }
 
-  // Editing trucks strictly restricted to Admin role
-  if (auth.actor.role !== "admin") {
+  // Editing trucks strictly restricted to Admin and Operations roles
+  if (auth.actor.role !== "admin" && auth.actor.role !== "operations") {
     return NextResponse.json(
       {
         ok: false,
         code: "FORBIDDEN",
-        message: "Only System Administrators are authorized to edit trucks.",
+        message: "Only System Administrators and Operations managers are authorized to edit trucks.",
       },
       { status: 403 },
     );
@@ -387,6 +407,15 @@ export async function PATCH(request: Request) {
     parsed.data.rateBasis ??
     (parsed.data.ownershipType === "Owned" ? "Redeemed Rate" : "Trucker Rate");
 
+  const resolvedDriver =
+    parsed.data.ownershipType === "Subcontracted"
+      ? (parsed.data.driverName?.trim() ?? parsed.data.contactPerson?.trim() ?? null)
+      : null;
+  const resolvedHelper =
+    parsed.data.ownershipType === "Subcontracted"
+      ? (parsed.data.helperName?.trim() ?? null)
+      : null;
+
   if (!isSupabaseConfigured()) {
     const updateResult = updateFleetTruck(normalizedOriginal, {
       plateNumber: normalizedPlate,
@@ -395,7 +424,9 @@ export async function PATCH(request: Request) {
       ownershipType: parsed.data.ownershipType,
       rateBasis,
       provider: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.provider?.trim() ?? null) : null,
-      contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? null) : null,
+      contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? resolvedDriver ?? null) : null,
+      driverName: resolvedDriver,
+      helperName: resolvedHelper,
     });
 
     if (!updateResult.ok) {
@@ -408,7 +439,9 @@ export async function PATCH(request: Request) {
           ownershipType: parsed.data.ownershipType,
           rateBasis,
           provider: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.provider?.trim() ?? null) : null,
-          contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? null) : null,
+          contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? resolvedDriver ?? null) : null,
+          driverName: resolvedDriver,
+          helperName: resolvedHelper,
         };
         const reg = registerFleetTruck(fallbackTruck);
         if (!reg.ok) {
@@ -489,7 +522,7 @@ export async function PATCH(request: Request) {
         ownership_type: parsed.data.ownershipType,
         rate_basis: rateBasis,
         provider: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.provider?.trim() ?? null) : null,
-        contact_person: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? null) : null,
+        contact_person: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? resolvedDriver ?? null) : null,
       })
       .eq("plate_number", normalizedOriginal)
       .select("id, plate_number, truck_type, storage_capability, ownership_type, rate_basis, provider, contact_person")
@@ -511,7 +544,9 @@ export async function PATCH(request: Request) {
       ownershipType: parsed.data.ownershipType,
       rateBasis,
       provider: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.provider?.trim() ?? null) : null,
-      contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? null) : null,
+      contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? resolvedDriver ?? null) : null,
+      driverName: resolvedDriver,
+      helperName: resolvedHelper,
     };
 
     recordAuditEntry({

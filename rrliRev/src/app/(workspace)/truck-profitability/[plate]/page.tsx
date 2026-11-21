@@ -25,6 +25,7 @@ import {
   TruckPhoto,
 } from "@/components/truck-photo";
 import {
+  getTripTotalDropoffs,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
   summarizeTruckProfitability,
@@ -138,7 +139,7 @@ export default function TruckProfilePage({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editPlateNumber, setEditPlateNumber] = useState("");
   const [editTruckType, setEditTruckType] = useState<FleetTruck["truckType"]>("6-Wheeler");
-  const [editStorageCapability, setEditStorageCapability] = useState<TruckStorageCapability>("Refrigerated");
+  const [editStorageCapability, setEditStorageCapability] = useState<TruckStorageCapability>("Freezer");
   const [editOwnershipType, setEditOwnershipType] = useState<FleetTruck["ownershipType"]>("Owned");
   const [editProvider, setEditProvider] = useState("");
   const [editContactPerson, setEditContactPerson] = useState("");
@@ -169,7 +170,7 @@ export default function TruckProfilePage({
   );
 
   const totalDropoffsCount = useMemo(
-    () => truckTrips.reduce((sum, trip) => sum + (trip.dropoffs?.length ?? 0), 0),
+    () => truckTrips.reduce((sum, trip) => sum + getTripTotalDropoffs(trip.dropoffs), 0),
     [truckTrips],
   );
 
@@ -247,7 +248,7 @@ export default function TruckProfilePage({
       const values: Record<string, [string | number, string | number]> = {
         date: [left.deliveryDate, right.deliveryDate],
         client: [left.clientName, right.clientName],
-        dropoffs: [left.dropoffs.length, right.dropoffs.length],
+        dropoffs: [getTripTotalDropoffs(left.dropoffs), getTripTotalDropoffs(right.dropoffs)],
         distance: [left.distanceKm, right.distanceKm],
         revenue: [left.deliveryRate ?? Number.NEGATIVE_INFINITY, right.deliveryRate ?? Number.NEGATIVE_INFINITY],
         expenses: [left.totalExpenses ?? Number.NEGATIVE_INFINITY, right.totalExpenses ?? Number.NEGATIVE_INFINITY],
@@ -356,7 +357,7 @@ export default function TruckProfilePage({
       return;
     }
     if (editOwnershipType === "Subcontracted" && !editProvider.trim()) {
-      setEditError("Provider is required for subcontracted trucks.");
+      setEditError("Trucker is required for subcontracted trucks.");
       return;
     }
 
@@ -540,16 +541,10 @@ export default function TruckProfilePage({
                 <div className="truck-profile-subtitle-wrap">
                   <span className="truck-profile-type-badge">{activeTruck.truckType}</span>
                   <span
-                    className={`truck-capability-pill ${
-                      getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability) === "Refrigerated"
-                        ? "refrigerated"
-                        : "ambient"
-                    }`}
+                    className={`truck-capability-pill ${getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability).toLowerCase()}`}
                     style={{ position: "static", boxShadow: "none" }}
                   >
-                    {getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability) === "Refrigerated"
-                      ? "Cold"
-                      : "Dry"}
+                    {getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability)}
                   </span>
                   <span className="truck-profile-date-range" style={{ color: "var(--color-text-muted)", fontSize: "13px" }}>
                     · {formatDateRange(range)}
@@ -729,7 +724,14 @@ export default function TruckProfilePage({
                               <small>{trip.deliveryDate}</small>
                             </td>
                             <td>{trip.clientName}</td>
-                            <td>{trip.dropoffs.length} drop-offs</td>
+                            <td>
+                              {getTripTotalDropoffs(trip.dropoffs)} drop-offs
+                              {getTripTotalDropoffs(trip.dropoffs) !== (trip.dropoffs?.length ?? 0) ? (
+                                <small style={{ display: "block", color: "var(--muted-foreground)" }}>
+                                  ({trip.dropoffs?.length ?? 0} {trip.dropoffs?.length === 1 ? "location" : "locations"})
+                                </small>
+                              ) : null}
+                            </td>
                             <td>{trip.distanceKm} km</td>
                             <td className="money">{formatPeso(trip.deliveryRate)}</td>
                             <td>
@@ -813,7 +815,7 @@ export default function TruckProfilePage({
                                           );
                                         }}
                                       >
-                                        Edit Financials
+                                        Edit Delivery
                                       </button>
                                     )}
                                   </div>
@@ -1313,7 +1315,8 @@ export default function TruckProfilePage({
                     <RoundedSelect
                       value={editStorageCapability}
                       options={[
-                        { value: "Refrigerated", label: "Cold" },
+                        { value: "Freezer", label: "Freezer" },
+                        { value: "Chilled", label: "Chilled" },
                         { value: "Dry", label: "Dry" },
                       ]}
                       onChange={(value) => setEditStorageCapability(value as TruckStorageCapability)}
@@ -1326,7 +1329,7 @@ export default function TruckProfilePage({
                   <div className="routex-dialog-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     <div className="routex-dialog-field">
                       <label htmlFor="edit-profile-truck-provider" style={{ fontWeight: 600, fontSize: "12px" }}>
-                        Hauler / Provider *
+                        Trucker *
                       </label>
                       <input
                         id="edit-profile-truck-provider"

@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
-import { isDeliveryFinanciallyComplete, isDeliveryIncomplete } from "@/features/deliveries/delivery-domain";
+import {
+  getTripTotalDropoffs,
+  isDeliveryFinanciallyComplete,
+  isDeliveryIncomplete,
+} from "@/features/deliveries/delivery-domain";
 
 export type DeliveryNavigatorProps = {
   currentDeliveryId: string;
@@ -196,7 +200,7 @@ export function DeliveryNavigator({
                         <span className="delivery-nav-item-date">{trip.deliveryDate}</span>
                         <span className="delivery-nav-item-sep">·</span>
                         <span className="delivery-nav-item-stops">
-                          {trip.dropoffs.length} {trip.dropoffs.length === 1 ? "stop" : "stops"}
+                          {getTripTotalDropoffs(trip.dropoffs)} {getTripTotalDropoffs(trip.dropoffs) === 1 ? "drop-off" : "drop-offs"}
                         </span>
                         <span
                           className={`delivery-nav-item-dot ${isComplete ? "positive" : "warning"}`}

@@ -146,6 +146,7 @@ const DELIVERIES = [
         supportingDocsComplete: true,
         documentRef: "SAMPLE-POD-LND-01.pdf",
       }],
+      notes: "Priority early-morning cold chain replenishment. Temperature maintained at -18°C.",
     }),
   },
   {
@@ -198,6 +199,7 @@ const DELIVERIES = [
           documentRef: "SAMPLE-POD-LND-02B.pdf",
         },
       ],
+      notes: "POD rejected due to missing receiving stamp on Stop 1; requesting clean driver re-upload.",
     }),
   },
   {
@@ -293,6 +295,7 @@ const DELIVERIES = [
           documentRef: "SAMPLE-POD-MCC-04B-REJECTED.pdf",
         },
       ],
+      notes: "POD rejected due to missing receiving stamp on Stop 1; requesting clean driver re-upload.",
     }),
   },
   {
@@ -387,6 +390,7 @@ const DELIVERIES = [
           documentRef: "SAMPLE-POD-VGD-06B.pdf",
         },
       ],
+      notes: "POD rejected due to missing receiving stamp on Stop 1; requesting clean driver re-upload.",
     }),
   },
   {

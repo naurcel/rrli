@@ -77,12 +77,12 @@ test("RouteX: Display Truck Picture in Delivery Information", async (t) => {
   });
 
   await t.test("Fleet truck metadata integration for delivery information view", () => {
-    // Owned Reefer Truck
+    // Owned Freezer Truck
     const ownedPlate = "NGS 4281";
     const ownedCapability = getTruckStorageCapability(ownedPlate);
-    assert.equal(ownedCapability, "Refrigerated");
+    assert.equal(ownedCapability, "Freezer");
     const ownedLabel = getTruckClassificationLabel("6-Wheeler", ownedCapability);
-    assert.equal(ownedLabel, "6-Wheeler · Cold");
+    assert.equal(ownedLabel, "6-Wheeler · Freezer");
 
     // Owned Dry Truck
     const dryPlate = "CBZ 1187";
@@ -91,12 +91,12 @@ test("RouteX: Display Truck Picture in Delivery Information", async (t) => {
     const dryLabel = getTruckClassificationLabel("10-Wheeler", dryCapability);
     assert.equal(dryLabel, "10-Wheeler · Dry");
 
-    // Subcontracted Truck with Provider
+    // Subcontracted Truck with Provider (Chilled)
     const subPlate = "PQR 7156";
     const subTruck = SUBCONTRACTED_TRUCKS.find((t) => t.plateNumber === subPlate);
     assert.ok(subTruck);
     assert.equal(subTruck.provider, "Silverroad Transport");
     assert.equal(subTruck.ownershipType, "Subcontracted");
-    assert.equal(getTruckStorageCapability(subPlate), "Refrigerated");
+    assert.equal(getTruckStorageCapability(subPlate), "Chilled");
   });
 });

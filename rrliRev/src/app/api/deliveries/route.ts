@@ -72,6 +72,7 @@ const createDeliverySchema = z.object({
       z.object({
         storeName: z.string().trim().min(2, "Store name is required."),
         destinationArea: z.string().trim().min(2, "Destination area is required."),
+        dropoffCount: z.number().int().min(1).default(1).optional(),
         entryFee: optionalMoneySchema,
         entryFeeStatus: expenseStatusSchema,
         podSubmitted: z.boolean().default(false),
@@ -80,7 +81,23 @@ const createDeliverySchema = z.object({
       }),
     )
     .min(1, "At least one store drop-off is required."),
-  supportingDocuments: z.array(z.string().trim()).optional().default([]),
+  supportingDocuments: z
+    .array(
+      z.union([
+        z.string().trim(),
+        z.object({
+          id: z.string().optional(),
+          name: z.string().trim(),
+          dropoffId: z.string().nullable().optional(),
+          storeName: z.string().nullable().optional(),
+          fileUrl: z.string().nullable().optional(),
+          uploadedAt: z.string().optional(),
+        }),
+      ]),
+    )
+    .optional()
+    .default([]),
+  notes: z.string().trim().nullable().optional(),
 }).superRefine((data, context) => {
   const pairs = [
     ["dieselExpenses", data.dieselExpenses, data.dieselExpensesStatus],
@@ -351,6 +368,7 @@ export async function POST(request: Request) {
         sequence: index + 1,
       })),
       supportingDocuments: parsed.data.supportingDocuments,
+      notes: parsed.data.notes?.trim() || null,
     });
     recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "delivery.created", entityType: "delivery", entityId: record.id, summary: `Recorded completed delivery ${record.waybillNumber}.`, changes: { clientName: record.clientName, plateNumber: record.plateNumber, deliveryRate: record.deliveryRate } });
     if (parsed.data.driverName) {
@@ -744,6 +762,14 @@ export async function PATCH(request: Request) {
     }
   }
 
+  if (mutation.action === "correct_financials" && (typeof mutation.changes.notes === "string" || mutation.changes.notes === null)) {
+    try {
+      await supabase.from("deliveries").update({ notes: mutation.changes.notes }).eq("id", mutation.deliveryId);
+    } catch {
+      // ignore
+    }
+  }
+
   if (mutation.action === "correct_financials" && Array.isArray(mutation.changes.dropoffs)) {
     try {
       await supabase.from("delivery_dropoffs").delete().eq("delivery_id", mutation.deliveryId);
@@ -754,6 +780,7 @@ export async function PATCH(request: Request) {
             sequence_number: idx + 1,
             store_name: d.storeName ?? "",
             destination_area: d.destinationArea ?? "",
+            dropoff_count: Math.max(1, Number(d.dropoffCount) || 1),
             entry_fee: d.entryFee ?? null,
             entry_fee_status: d.entryFeeStatus ?? "confirmed",
             pod_submitted: Boolean(d.podSubmitted),

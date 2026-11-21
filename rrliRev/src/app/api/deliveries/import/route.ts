@@ -10,14 +10,18 @@ import {
   registerMockClient,
   SMALL_MOCK_DATABASE,
 } from "@/features/deliveries/small-mock-database";
-import { buildDeliveryTripRecord, type TruckTemperature } from "@/features/deliveries/delivery-domain";
+import {
+  buildDeliveryTripRecord,
+  isDeliveryIncomplete,
+  type TruckTemperature,
+} from "@/features/deliveries/delivery-domain";
 import {
   dynamicMockDeliveries,
   getAllMockDeliveries,
   savePersistedMockDeliveries,
 } from "@/features/deliveries/small-mock-repository";
-import { getFleetTrucks } from "@/features/deliveries/truck-registry";
-import { getFleetCrew } from "@/features/deliveries/driver-registry";
+import { getFleetTrucks, registerFleetTruck, type FleetTruck } from "@/features/deliveries/truck-registry";
+import { getFleetCrew, registerFleetCrewMember } from "@/features/deliveries/driver-registry";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 
 const importRowSchema = z.object({
@@ -28,6 +32,8 @@ const importRowSchema = z.object({
     .refine((d) => d >= "2024-01-01", "Delivery date cannot be earlier than company foundation year (2024)."),
   clientName: z.string().trim().min(2, "Client name is required."),
   plateNumber: z.string().trim().min(3, "Truck plate number is required."),
+  truckType: z.string().trim().default("6-Wheeler"),
+  truckOwnership: z.enum(["Owned", "Subcontracted"]).default("Owned"),
   truckTemperature: z
     .string()
     .trim()
@@ -36,6 +42,7 @@ const importRowSchema = z.object({
   distanceKm: z.number().min(0).default(50),
   fuelRate: z.number().min(0).default(85),
   deliveryRate: z.number().positive("Delivery revenue must be positive."),
+  totalExpenses: z.number().nullable().optional().default(null),
   dieselExpenses: z.number().nullable().default(null),
   dieselExpensesStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("confirmed"),
   tollGateExpenses: z.number().nullable().default(null),
@@ -53,15 +60,19 @@ const importRowSchema = z.object({
   helperName: z.string().trim().nullable().optional(),
   otherExpenses: z.number().nullable().default(null),
   otherExpensesStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("confirmed"),
+  entryFees: z.number().nullable().optional().default(null),
+  entryFeesStatus: z.enum(["confirmed", "not_applicable", "unknown"]).optional(),
+  notes: z.string().trim().nullable().optional(),
   dropoffs: z.array(
     z.object({
       storeName: z.string().trim().min(2),
       destinationArea: z.string().trim().min(2),
+      dropoffCount: z.number().int().min(1).default(1).optional(),
       entryFee: z.number().nullable().default(null),
       entryFeeStatus: z.enum(["confirmed", "not_applicable", "unknown"]).default("not_applicable"),
-      podSubmitted: z.boolean().default(false),
-      supportingDocsComplete: z.boolean().default(false),
-      documentRef: z.string().trim().default("Pending upload"),
+      podSubmitted: z.boolean().default(true),
+      supportingDocsComplete: z.boolean().default(true),
+      documentRef: z.string().trim().default("Imported POD"),
     })
   ).min(1, "At least one store drop-off is required."),
 });
@@ -128,36 +139,140 @@ export async function POST(request: Request) {
           row.clientName.toLowerCase().includes(c.name.toLowerCase())
         ) ?? registerMockClient(row.clientName);
 
-      const truck =
-        fleetTrucks.find((t) =>
-          t.plateNumber.toLowerCase().replace(/\s+/g, "") ===
-          row.plateNumber.toLowerCase().replace(/\s+/g, "")
-        ) ??
-        SMALL_MOCK_DATABASE.trucks.find((t) =>
-          t.plateNumber.toLowerCase().replace(/\s+/g, "") ===
-          row.plateNumber.toLowerCase().replace(/\s+/g, "")
-        ) ??
-        SMALL_MOCK_DATABASE.trucks[0];
+      // Match or register truck
+      const cleanPlate = row.plateNumber.replace(/\s+/g, "").toUpperCase();
+      let truck =
+        fleetTrucks.find((t) => t.plateNumber.replace(/\s+/g, "").toUpperCase() === cleanPlate) ??
+        SMALL_MOCK_DATABASE.trucks.find((t) => t.plateNumber.replace(/\s+/g, "").toUpperCase() === cleanPlate);
 
-      const matchedDriver = row.driverName
+      if (!truck) {
+        const newTruckId = crypto.randomUUID();
+        const reg = registerFleetTruck({
+          id: newTruckId,
+          plateNumber: row.plateNumber.trim().toUpperCase(),
+          truckType: (row.truckType as any) || "6-Wheeler",
+          storageCapability: "Freezer",
+          ownershipType: row.truckOwnership,
+          rateBasis: row.truckOwnership === "Owned" ? "Redeemed Rate" : "Trucker Rate",
+          provider: row.truckOwnership === "Subcontracted" ? "Subcontracted Partner" : null,
+          driverName: row.driverName || null,
+          helperName: row.helperName || null,
+        });
+
+        truck = reg.ok ? reg.truck : {
+          id: newTruckId,
+          plateNumber: row.plateNumber.trim().toUpperCase(),
+          truckType: (row.truckType as any) || "6-Wheeler",
+          storageCapability: "Freezer",
+          ownershipType: row.truckOwnership,
+          rateBasis: row.truckOwnership === "Owned" ? "Redeemed Rate" : "Trucker Rate",
+          provider: row.truckOwnership === "Subcontracted" ? "Subcontracted Partner" : null,
+          driverName: row.driverName || null,
+          helperName: row.helperName || null,
+        };
+
+        if (!SMALL_MOCK_DATABASE.trucks.some((t) => t.plateNumber.replace(/\s+/g, "").toUpperCase() === cleanPlate)) {
+          (SMALL_MOCK_DATABASE.trucks as FleetTruck[]).push(truck);
+        }
+      }
+
+      // Match or register driver
+      const isUnknownDriver = !row.driverName || row.driverName.toLowerCase().includes("unknown");
+      let matchedDriver = !isUnknownDriver && row.driverName
         ? fleetCrew.find(
             (c) =>
               c.assignmentType === "Driver" &&
-              c.fullName.toLowerCase() === row.driverName?.toLowerCase(),
+              c.fullName.toLowerCase().replace(/\s+/g, " ") === row.driverName?.toLowerCase().replace(/\s+/g, " "),
           )
         : null;
-      const driverId = matchedDriver?.id ?? SMALL_MOCK_DATABASE.drivers[0]?.id ?? "drv-1";
-      const driverName = row.driverName || matchedDriver?.fullName || SMALL_MOCK_DATABASE.drivers[0]?.fullName || "Assigned Driver";
 
-      const matchedHelper = row.helperName
+      if (!isUnknownDriver && row.driverName && !matchedDriver) {
+        const reg = registerFleetCrewMember({
+          fullName: row.driverName.trim(),
+          assignmentType: "Driver",
+        });
+        if (reg.ok) matchedDriver = reg.crewMember;
+      }
+
+      const driverId = isUnknownDriver
+        ? "drv-unknown"
+        : (matchedDriver?.id ?? `drv-${row.driverName!.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+      const driverName = isUnknownDriver
+        ? "Unknown Driver"
+        : (row.driverName || matchedDriver?.fullName || "Unknown Driver");
+
+      // Match or register helper
+      const isUnknownHelper = !row.helperName || row.helperName.toLowerCase().includes("unknown");
+      let matchedHelper = !isUnknownHelper && row.helperName
         ? fleetCrew.find(
             (c) =>
               c.assignmentType === "Helper" &&
-              c.fullName.toLowerCase() === row.helperName?.toLowerCase(),
+              c.fullName.toLowerCase().replace(/\s+/g, " ") === row.helperName?.toLowerCase().replace(/\s+/g, " "),
           )
         : null;
-      const helperId = matchedHelper?.id ?? SMALL_MOCK_DATABASE.helpers[0]?.id ?? "hlp-1";
-      const helperName = row.helperName || matchedHelper?.fullName || SMALL_MOCK_DATABASE.helpers[0]?.fullName || "Assigned Helper";
+
+      if (!isUnknownHelper && row.helperName && !matchedHelper) {
+        const reg = registerFleetCrewMember({
+          fullName: row.helperName.trim(),
+          assignmentType: "Helper",
+        });
+        if (reg.ok) matchedHelper = reg.crewMember;
+      }
+
+      const helperId = isUnknownHelper
+        ? "hlp-unknown"
+        : (matchedHelper?.id ?? `hlp-${row.helperName!.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+      const helperName = isUnknownHelper
+        ? "Unknown Helper"
+        : (row.helperName || matchedHelper?.fullName || "Unknown Helper");
+
+      const isSubcon = truck.ownershipType === "Subcontracted" || row.truckOwnership === "Subcontracted";
+
+      const expenses = isSubcon
+        ? {
+            dieselExpenses: null,
+            tollGateExpenses: null,
+            tollGateBreakdown: "",
+            entryFees: null,
+            driverAllowance: null,
+            driverDailyRate: null,
+            helperAllowance: null,
+            helperDailyRate: null,
+            otherExpenses: row.totalExpenses ?? row.otherExpenses ?? 0,
+          }
+        : {
+            dieselExpenses: row.dieselExpenses,
+            tollGateExpenses: row.tollGateExpenses,
+            tollGateBreakdown: row.tollGateBreakdown,
+            entryFees: row.entryFees ?? (row.dropoffs.reduce((sum, d) => sum + (d.entryFee ?? 0), 0) || null),
+            driverAllowance: row.driverAllowance,
+            driverDailyRate: row.driverDailyRate,
+            helperAllowance: row.helperAllowance,
+            helperDailyRate: row.helperDailyRate,
+            otherExpenses: row.otherExpenses,
+          };
+
+      const expenseStates = isSubcon
+        ? {
+            dieselExpenses: "not_applicable" as const,
+            tollGateExpenses: "not_applicable" as const,
+            entryFees: "not_applicable" as const,
+            driverAllowance: "not_applicable" as const,
+            driverDailyRate: "not_applicable" as const,
+            helperAllowance: "not_applicable" as const,
+            helperDailyRate: "not_applicable" as const,
+            otherExpenses: "confirmed" as const,
+          }
+        : {
+            dieselExpenses: row.dieselExpensesStatus,
+            tollGateExpenses: row.tollGateExpensesStatus,
+            entryFees: row.entryFeesStatus ?? (row.entryFees ? "confirmed" : "not_applicable"),
+            driverAllowance: row.driverAllowanceStatus,
+            driverDailyRate: row.driverDailyRateStatus,
+            helperAllowance: row.helperAllowanceStatus,
+            helperDailyRate: row.helperDailyRateStatus,
+            otherExpenses: row.otherExpensesStatus,
+          };
 
       const id = crypto.randomUUID();
       const record = buildDeliveryTripRecord({
@@ -174,31 +289,18 @@ export async function POST(request: Request) {
         distanceKm: row.distanceKm,
         fuelRate: row.fuelRate,
         deliveryRate: row.deliveryRate,
-        expenses: {
-          dieselExpenses: row.dieselExpenses,
-          tollGateExpenses: row.tollGateExpenses,
-          tollGateBreakdown: row.tollGateBreakdown,
-          driverAllowance: row.driverAllowance,
-          driverDailyRate: row.driverDailyRate,
-          helperAllowance: row.helperAllowance,
-          helperDailyRate: row.helperDailyRate,
-          otherExpenses: row.otherExpenses,
-        },
-        expenseStates: {
-          dieselExpenses: row.dieselExpensesStatus,
-          tollGateExpenses: row.tollGateExpensesStatus,
-          driverAllowance: row.driverAllowanceStatus,
-          driverDailyRate: row.driverDailyRateStatus,
-          helperAllowance: row.helperAllowanceStatus,
-          helperDailyRate: row.helperDailyRateStatus,
-          otherExpenses: row.otherExpensesStatus,
-        },
+        expenses,
+        expenseStates,
         dropoffs: row.dropoffs.map((d, index) => ({
           ...d,
           id: `${id}-stop-${index + 1}`,
           sequence: index + 1,
         })),
+        notes: row.notes?.trim() || null,
       });
+
+      const isIncomplete = isDeliveryIncomplete(record);
+      const deliveryStatus = isIncomplete ? "Incomplete" : "Completed";
 
       const newMockDelivery = {
         record,
@@ -218,7 +320,7 @@ export async function POST(request: Request) {
         ...record,
         clientId: client.id,
         truckId: truck.id,
-        deliveryStatus: "Completed",
+        deliveryStatus,
         driverName,
         helperName,
       });

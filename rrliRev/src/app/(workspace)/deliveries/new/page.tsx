@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { RoundedSelect, type SelectOption } from "@/components/rounded-select";
@@ -12,17 +13,20 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery-repository";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
+  BROWSER_PREVIEW_DELIVERIES_CHANGED,
   readBrowserPreviewDeliveries,
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
 import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
 import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
+import { getFleetTrucks } from "@/features/deliveries/truck-registry";
 import {
   calculateProfitMargin,
   derivePodVerificationStatus,
   type ExpenseResolutionStatus,
 } from "@/features/deliveries/delivery-domain";
 import { getDeliveryDateWindow } from "@/features/deliveries/delivery-recording-policy";
+import { BackdatingTicketsModal } from "@/components/backdating-tickets-modal";
 import {
   handlePositiveDecimalKeyDown,
   handleSignedDecimalKeyDown,
@@ -42,11 +46,13 @@ type DropoffDraft = {
   id: string;
   storeName: string;
   destinationArea: string;
+  dropoffCount: string;
   entryFee: string;
   entryFeeStatus: ExpenseResolutionStatus;
   podSubmitted?: boolean;
   supportingDocsComplete?: boolean;
   documentRef?: string;
+  podFile?: File | null;
 };
 
 type ReferenceData = {
@@ -88,8 +94,12 @@ const initialDropoff: DropoffDraft = {
   id: "dropoff-1",
   storeName: "",
   destinationArea: "",
+  dropoffCount: "1",
   entryFee: "",
   entryFeeStatus: "confirmed",
+  podSubmitted: false,
+  documentRef: "",
+  podFile: null,
 };
 
 function numberValue(value: string): number | null {
@@ -117,10 +127,11 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
   const idempotencyKeyRef = useRef("");
   const [clientName, setClientName] = useState("");
   const [plateNumber, setPlateNumber] = useState("");
-  const [podFiles, setPodFiles] = useState<File[]>([]);
   const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
+  const [supportingFileLinks, setSupportingFileLinks] = useState<Record<string, string>>({});
   const [truckTemperature, setTruckTemperature] = useState("");
   const [dropoffs, setDropoffs] = useState<DropoffDraft[]>([initialDropoff]);
+  const podFiles = useMemo(() => dropoffs.flatMap((d) => (d.podFile ? [d.podFile] : [])), [dropoffs]);
   const [resolvedEditId, setResolvedEditId] = useState<string | undefined>(propEditDeliveryId);
   const [existingDelivery, setExistingDelivery] = useState<DeliveryLedgerItem | null>(null);
   const isEditMode = Boolean(resolvedEditId || propEditDeliveryId || existingDelivery);
@@ -195,6 +206,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         helper2Allowance: (del.expenses as unknown as Record<string, unknown>).helper2Allowance != null ? String((del.expenses as unknown as Record<string, unknown>).helper2Allowance) : "",
         helper2DailyRate: (del.expenses as unknown as Record<string, unknown>).helper2DailyRate != null ? String((del.expenses as unknown as Record<string, unknown>).helper2DailyRate) : "",
         otherExpenses: del.expenses.otherExpenses != null ? String(del.expenses.otherExpenses) : "0",
+        notes: del.notes ?? "",
       });
       setClientName(del.clientName ?? "");
       setPlateNumber(del.plateNumber ?? "");
@@ -230,11 +242,13 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             id: d.id,
             storeName: d.storeName,
             destinationArea: d.destinationArea,
-            entryFee: d.entryFee != null ? String(d.entryFee) : "0",
-            entryFeeStatus: d.entryFeeStatus === "unknown" ? "unknown" : "confirmed",
+            dropoffCount: d.dropoffCount != null ? String(d.dropoffCount) : "1",
+            entryFee: d.entryFee != null ? String(d.entryFee) : "",
+            entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
             podSubmitted: d.podSubmitted,
             supportingDocsComplete: d.supportingDocsComplete,
             documentRef: d.documentRef,
+            podFile: null,
           }))
         );
       }
@@ -298,7 +312,48 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     helper2Allowance: "",
     helper2DailyRate: "",
     otherExpenses: "",
+    notes: "",
   });
+
+  const [backdatingModalOpen, setBackdatingModalOpen] = useState(false);
+  const [approvedTicket, setApprovedTicket] = useState<{ id: string; waybillNumber: string; deliveryDate: string } | null>(null);
+  const isOlderThanWindow = !isAdmin && !isEditMode && values.deliveryDate < deliveryDateWindow.min;
+
+  useEffect(() => {
+    if (!isOlderThanWindow || !values.waybillNumber.trim() || !values.deliveryDate) {
+      if (!isOlderThanWindow) {
+        setApprovedTicket(null);
+      }
+      return;
+    }
+    let cancelled = false;
+    async function checkTicket() {
+      try {
+        const res = await fetch(
+          `/api/deliveries/backdating-tickets?status=approved&waybillNumber=${encodeURIComponent(
+            values.waybillNumber.trim().toUpperCase()
+          )}`
+        );
+        const data = await res.json().catch(() => null);
+        if (!cancelled && data?.ok && Array.isArray(data.tickets)) {
+          const match = data.tickets.find(
+            (t: any) => t.deliveryDate === values.deliveryDate && t.status === "approved"
+          );
+          if (match) {
+            setApprovedTicket(match);
+          } else {
+            setApprovedTicket(null);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    checkTicket();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOlderThanWindow, values.waybillNumber, values.deliveryDate]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -354,8 +409,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         ];
         const browserDrivers = localDeliveries
           .map((delivery) => delivery.driverName?.trim())
-          .filter((name): name is string => Boolean(name));
-        const driverNames = new Set((nextReferences.drivers ?? []).map((driver) => driver.label.toLowerCase()));
+          .filter((name): name is string => Boolean(name && !name.toLowerCase().includes("unknown")));
+        const driverNames = new Set(
+          (nextReferences.drivers ?? [])
+            .filter((d) => !d.label.toLowerCase().includes("unknown"))
+            .map((driver) => driver.label.toLowerCase()),
+        );
         const extraDrivers = browserDrivers
           .filter((name) => {
             const key = name.toLowerCase();
@@ -369,12 +428,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           ...(nextReferences.helpers ?? []),
           ...BASE_HELPERS.map((h) => ({ id: h.id, label: h.fullName })),
           ...getFleetCrew().filter((c) => c.assignmentType === "Helper").map((h) => ({ id: h.id, label: h.fullName })),
-        ];
+        ].filter((h) => !h.label.toLowerCase().includes("unknown"));
         const helperNames = new Set(baseHelpersList.map((h) => h.label.toLowerCase()));
         const browserHelpers = localDeliveries
           .filter((delivery) => Boolean(delivery.helperName))
           .flatMap((delivery) => delivery.helperName!.split(/[,/&]/).map((h) => h.trim()))
-          .filter(Boolean);
+          .filter((name) => Boolean(name) && !name.toLowerCase().includes("unknown"));
         const extraHelpers = browserHelpers
           .filter((name) => {
             const key = name.toLowerCase();
@@ -391,7 +450,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         const mergedReferences = {
           clients: mergedClients,
           trucks: mergedTrucks,
-          drivers: [...(nextReferences.drivers ?? []), ...extraDrivers],
+          drivers: [
+            ...(nextReferences.drivers ?? []).filter((d) => !d.label.toLowerCase().includes("unknown")),
+            ...extraDrivers,
+          ],
           helpers: mergedHelpers,
         };
         setReferences(mergedReferences);
@@ -434,6 +496,30 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     }
   }
 
+  const isSubcontracted = useMemo(() => {
+    const rawPlate = plateNumber.trim().toUpperCase();
+    if (!rawPlate) return false;
+    const selected = references.trucks.find(
+      (t) => t.label.toUpperCase() === rawPlate || t.id.toUpperCase() === rawPlate,
+    );
+    if (selected?.ownershipType) {
+      return selected.ownershipType === "Subcontracted";
+    }
+    if (rawPlate.startsWith("SUB-") || rawPlate.includes("SUBCON")) {
+      return true;
+    }
+    const fleet = getFleetTrucks().find(
+      (t) => t.plateNumber.toUpperCase() === rawPlate || t.id.toUpperCase() === rawPlate,
+    );
+    if (fleet?.ownershipType) {
+      return fleet.ownershipType === "Subcontracted";
+    }
+    if (existingDelivery?.truckOwnership) {
+      return existingDelivery.truckOwnership === "Subcontracted";
+    }
+    return false;
+  }, [plateNumber, references.trucks, existingDelivery?.truckOwnership]);
+
   const groupedTruckOptions = useMemo<SelectOption[]>(() => {
     const owned: SelectOption[] = [];
     const subcontracted: SelectOption[] = [];
@@ -458,20 +544,16 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     return [...owned, ...subcontracted];
   }, [references.trucks]);
 
+  const totalDropoffs = useMemo(() => {
+    return dropoffs.reduce((sum, d) => sum + Math.max(1, parseInt(d.dropoffCount, 10) || 1), 0);
+  }, [dropoffs]);
+
   const financialReview = useMemo(() => {
-    const entryFeesComplete = dropoffs.every(
-      (stop) => stop.entryFeeStatus !== "unknown" || numberValue(stop.entryFee) != null,
-    );
-    const entryFees = entryFeesComplete
-      ? dropoffs.reduce(
-          (sum, stop) =>
-            sum +
-            (stop.entryFeeStatus === "confirmed" || numberValue(stop.entryFee) != null
-              ? numberValue(stop.entryFee) ?? 0
-              : 0),
-          0,
-        )
-      : null;
+    // Live calculation of entry fees from all dropoffs
+    const entryFees = dropoffs.reduce((sum, stop) => {
+      const num = numberValue(stop.entryFee);
+      return sum + (num != null ? num : 0);
+    }, 0);
 
     // Active keys accounting for Helper 1 and conditionally Helper 2 without duplication
     const activeExpenseKeys: ExpenseFormKey[] = [
@@ -488,33 +570,137 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       activeExpenseKeys.push("helper2Allowance", "helper2DailyRate");
     }
 
-    const expensesComplete = activeExpenseKeys.every((key) => {
+    // Live calculation of total expenses (including entryFees)
+    const totalExpenses = activeExpenseKeys.reduce((sum, key) => {
       const num = numberValue(values[key]);
-      const status = num != null ? "confirmed" : expenseStatuses[key];
-      const isAllowance = key === "driverAllowance" || key === "helperAllowance" || key === "helper2Allowance";
-      if (isAllowance) {
-        return status === "not_applicable" || status === "confirmed";
-      }
-      return status === "not_applicable" || (status === "confirmed" && num != null);
-    });
-
-    const totalExpenses = entryFees == null || !expensesComplete
-      ? null
-      : activeExpenseKeys.reduce((sum, key) => {
-          const num = numberValue(values[key]);
-          const status = num != null ? "confirmed" : expenseStatuses[key];
-          return sum + (status === "confirmed" ? (num ?? 0) : 0);
-        }, entryFees);
+      return sum + (num != null ? num : 0);
+    }, entryFees);
 
     const revenue = numberValue(values.deliveryRate);
+    const netIncome = revenue == null ? null : revenue - totalExpenses;
+    const marginPercent =
+      revenue != null && revenue > 0 && netIncome != null
+        ? (netIncome / revenue) * 100
+        : null;
+
     return {
       entryFees,
       totalExpenses,
-      netIncome: revenue == null || totalExpenses == null ? null : revenue - totalExpenses,
+      netIncome,
       revenue,
+      marginPercent,
       additionalCharges: numberValue(values.additionalCharges),
     };
-  }, [dropoffs, expenseStatuses, hasSecondHelper, values]);
+  }, [dropoffs, hasSecondHelper, values]);
+
+  const liveCompleteness = useMemo(() => {
+    const issues: string[] = [];
+
+    // Revenue
+    const rev = numberValue(values.deliveryRate);
+    if (rev == null || rev <= 0) {
+      issues.push("Missing delivery rate");
+    }
+
+    // Driver & Driver Rate
+    const dName = driverName.trim();
+    if (!dName) {
+      issues.push("No driver assigned");
+    } else if (
+      dName.toLowerCase().includes("unknown") &&
+      !existingDelivery?.driverName?.toLowerCase().includes("unknown")
+    ) {
+      issues.push("Real driver required");
+    }
+    if (!isSubcontracted) {
+      const dRate = numberValue(values.driverDailyRate);
+      if (dRate == null || dRate <= 0) {
+        issues.push("Driver daily rate missing");
+      }
+    }
+
+    // Helper 1 & Helper 1 Rate
+    const h1Name = helper1Name.trim();
+    if (!h1Name) {
+      issues.push("No helper assigned");
+    } else if (
+      h1Name.toLowerCase().includes("unknown") &&
+      !existingDelivery?.helperName?.toLowerCase().includes("unknown")
+    ) {
+      issues.push("Real helper required");
+    }
+    if (!isSubcontracted) {
+      const h1Rate = numberValue(values.helperDailyRate);
+      if (h1Rate == null || h1Rate <= 0) {
+        issues.push("Helper daily rate missing");
+      }
+    }
+
+    // Helper 2 if enabled
+    if (hasSecondHelper) {
+      const h2Name = helper2Name.trim();
+      if (!h2Name) {
+        issues.push("Helper 2 name missing");
+      }
+      if (!isSubcontracted) {
+        const h2Rate = numberValue(values.helper2DailyRate);
+        if (h2Rate == null || h2Rate <= 0) {
+          issues.push("Helper 2 daily rate missing");
+        }
+      }
+    }
+
+    // Fuel expenses
+    const dieselVal = numberValue(values.dieselExpenses);
+    if (dieselVal == null || dieselVal < 0) {
+      issues.push("Pending fuel expenses");
+    }
+
+    // Toll fees
+    const tollVal = numberValue(values.tollGateExpenses);
+    if (tollVal == null || tollVal < 0) {
+      issues.push("Pending toll receipts");
+    }
+
+    // Dropoffs POD and entry fees
+    const missingPods = dropoffs.filter(
+      (d) =>
+        !d.podSubmitted &&
+        !d.podFile &&
+        (!d.documentRef || d.documentRef === "Pending upload"),
+    );
+    if (missingPods.length > 0) {
+      if (missingPods.length === 1) {
+        const store = missingPods[0].storeName.trim().split(/\s*[-–—@/(]\s*/)[0].trim() || "Stop 1";
+        issues.push(`Missing POD: ${store}`);
+      } else {
+        issues.push(`Missing PODs (${missingPods.length})`);
+      }
+    }
+
+    const isComplete = issues.length === 0;
+
+    return {
+      isComplete,
+      issues,
+      count: issues.length,
+    };
+  }, [
+    values.deliveryRate,
+    values.driverDailyRate,
+    values.helperDailyRate,
+    values.helper2DailyRate,
+    values.dieselExpenses,
+    values.tollGateExpenses,
+    driverName,
+    helper1Name,
+    helper2Name,
+    hasSecondHelper,
+    dropoffs,
+    existingDelivery?.driverName,
+    existingDelivery?.helperName,
+    isSubcontracted,
+  ]);
 
   function updateValue(name: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -538,13 +724,20 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     });
   }
 
-  function updateDropoff(id: string, field: keyof Omit<DropoffDraft, "id">, value: string) {
+  function updateDropoff(
+    id: string,
+    fieldOrUpdates: keyof Omit<DropoffDraft, "id"> | Partial<Omit<DropoffDraft, "id">>,
+    value?: unknown,
+  ) {
     setDropoffs((current) =>
       current.map((dropoff) => {
         if (dropoff.id !== id) return dropoff;
-        const next = { ...dropoff, [field]: value };
-        if (field === "entryFee") {
-          next.entryFeeStatus = numberValue(value) != null ? "confirmed" : "unknown";
+        if (typeof fieldOrUpdates === "object") {
+          return { ...dropoff, ...fieldOrUpdates };
+        }
+        const next = { ...dropoff, [fieldOrUpdates]: value };
+        if (fieldOrUpdates === "entryFee" && typeof value === "string") {
+          next.entryFeeStatus = "confirmed";
         }
         return next;
       }),
@@ -554,13 +747,47 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
   function addDropoff() {
     setDropoffs((current) => [
       ...current,
-      { id: crypto.randomUUID(), storeName: "", destinationArea: "", entryFee: "", entryFeeStatus: "confirmed" },
+      {
+        id: crypto.randomUUID(),
+        storeName: "",
+        destinationArea: "",
+        dropoffCount: "1",
+        entryFee: "",
+        entryFeeStatus: "confirmed",
+        podSubmitted: false,
+        documentRef: "",
+        podFile: null,
+      },
     ]);
   }
 
   function buildPayload() {
     if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID();
-    const firstPodName = podFiles[0]?.name;
+
+    function resolveExpenseStatus(val: string, status?: ExpenseResolutionStatus, isCrew?: boolean): ExpenseResolutionStatus {
+      if (isSubcontracted && isCrew && numberValue(val) == null) return "not_applicable";
+      if (status === "not_applicable" && numberValue(val) == null) return "not_applicable";
+      return numberValue(val) != null ? "confirmed" : (status ?? "confirmed");
+    }
+
+    const dRateStatus = resolveExpenseStatus(values.driverDailyRate, expenseStatuses.driverDailyRate, true);
+    const dAllowanceStatus = resolveExpenseStatus(values.driverAllowance, expenseStatuses.driverAllowance, true);
+    const hRateStatus = resolveExpenseStatus(values.helperDailyRate, expenseStatuses.helperDailyRate, true);
+    const hAllowanceStatus = resolveExpenseStatus(values.helperAllowance, expenseStatuses.helperAllowance, true);
+    const h2RateStatus = hasSecondHelper
+      ? resolveExpenseStatus(values.helper2DailyRate, expenseStatuses.helper2DailyRate, true)
+      : "not_applicable";
+    const h2AllowanceStatus = hasSecondHelper
+      ? resolveExpenseStatus(values.helper2Allowance, expenseStatuses.helper2Allowance, true)
+      : "not_applicable";
+
+    const dDailyRate = dRateStatus === "not_applicable" ? null : numberValue(values.driverDailyRate);
+    const dAllowance = dAllowanceStatus === "not_applicable" ? null : (numberValue(values.driverAllowance) ?? 0);
+    const hDailyRate = hRateStatus === "not_applicable" ? null : numberValue(values.helperDailyRate);
+    const hAllowance = hAllowanceStatus === "not_applicable" ? null : (numberValue(values.helperAllowance) ?? 0);
+    const h2DailyRate = hasSecondHelper ? (h2RateStatus === "not_applicable" ? null : numberValue(values.helper2DailyRate)) : null;
+    const h2Allowance = hasSecondHelper ? (h2AllowanceStatus === "not_applicable" ? null : (numberValue(values.helper2Allowance) ?? 0)) : null;
+
     return {
       ...values,
       idempotencyKey: idempotencyKeyRef.current,
@@ -574,56 +801,74 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       additionalCharges: numberValue(values.additionalCharges),
       dieselExpenses: numberValue(values.dieselExpenses),
       tollGateExpenses: numberValue(values.tollGateExpenses),
-      driverAllowance: numberValue(values.driverAllowance) ?? 0,
-      driverDailyRate: numberValue(values.driverDailyRate),
+      driverAllowance: dAllowance,
+      driverDailyRate: dDailyRate,
       driverName: driverName.trim() || null,
-      helperAllowance: numberValue(values.helperAllowance) ?? 0,
-      helperDailyRate: numberValue(values.helperDailyRate),
+      helperAllowance: hAllowance,
+      helperDailyRate: hDailyRate,
       helperName: helper1Name.trim(),
       hasSecondHelper,
-      helper2Allowance: hasSecondHelper ? (numberValue(values.helper2Allowance) ?? 0) : null,
-      helper2DailyRate: hasSecondHelper ? numberValue(values.helper2DailyRate) : null,
+      helper2Allowance: h2Allowance,
+      helper2DailyRate: h2DailyRate,
       helper2Name: hasSecondHelper ? (helper2Name.trim() || null) : null,
       otherExpenses: numberValue(values.otherExpenses) ?? 0,
-      dieselExpensesStatus: (numberValue(values.dieselExpenses) != null ? "confirmed" : "unknown") as ExpenseResolutionStatus,
-      tollGateExpensesStatus: (numberValue(values.tollGateExpenses) != null ? "confirmed" : "unknown") as ExpenseResolutionStatus,
-      driverAllowanceStatus: "confirmed" as ExpenseResolutionStatus,
-      driverDailyRateStatus: (numberValue(values.driverDailyRate) != null ? "confirmed" : "unknown") as ExpenseResolutionStatus,
-      helperAllowanceStatus: "confirmed" as ExpenseResolutionStatus,
-      helperDailyRateStatus: (numberValue(values.helperDailyRate) != null ? "confirmed" : "unknown") as ExpenseResolutionStatus,
-      helper2AllowanceStatus: hasSecondHelper ? ("confirmed" as ExpenseResolutionStatus) : "not_applicable",
-      helper2DailyRateStatus: hasSecondHelper ? ("confirmed" as ExpenseResolutionStatus) : "not_applicable",
-      otherExpensesStatus: "confirmed" as ExpenseResolutionStatus,
+      notes: values.notes.trim() || null,
+      dieselExpensesStatus: resolveExpenseStatus(values.dieselExpenses, expenseStatuses.dieselExpenses),
+      tollGateExpensesStatus: resolveExpenseStatus(values.tollGateExpenses, expenseStatuses.tollGateExpenses),
+      driverAllowanceStatus: dAllowanceStatus,
+      driverDailyRateStatus: dRateStatus,
+      helperAllowanceStatus: hAllowanceStatus,
+      helperDailyRateStatus: hRateStatus,
+      helper2AllowanceStatus: h2AllowanceStatus,
+      helper2DailyRateStatus: h2RateStatus,
+      otherExpensesStatus: resolveExpenseStatus(values.otherExpenses, expenseStatuses.otherExpenses),
       supportingDocuments:
         supportingFiles.length > 0
           ? [
               ...(existingDelivery?.supportingDocuments ?? []),
-              ...supportingFiles.map((file) => file.name),
+              ...supportingFiles.map((file) => {
+                const targetDropoffId = supportingFileLinks[file.name];
+                const targetDropoff =
+                  targetDropoffId && targetDropoffId !== "trip"
+                    ? dropoffs.find((d) => d.id === targetDropoffId)
+                    : null;
+                return {
+                  name: file.name,
+                  dropoffId: targetDropoff ? targetDropoff.id : null,
+                  storeName: targetDropoff ? targetDropoff.storeName : null,
+                };
+              }),
             ]
           : (existingDelivery?.supportingDocuments ?? []),
       dropoffs: dropoffs.map((dropoff, index) => {
         const existingStop = existingDelivery?.dropoffs.find((s) => s.id === dropoff.id) ?? existingDelivery?.dropoffs[index];
         const previouslyHadPod = Boolean(dropoff.podSubmitted ?? existingStop?.podSubmitted);
-        const uploadedPod =
-          podFiles[index]?.name ??
-          (firstPodName && (!previouslyHadPod || index === 0) ? firstPodName : null);
+        const uploadedPodName = dropoff.podFile?.name ?? null;
         const resolvedDocRef =
-          uploadedPod ??
-          dropoff.documentRef ??
-          existingStop?.documentRef ??
-          "Pending upload";
+          uploadedPodName ??
+          (dropoff.documentRef && dropoff.documentRef !== "Pending upload" ? dropoff.documentRef : null) ??
+          (existingStop?.documentRef && existingStop?.documentRef !== "Pending upload" ? existingStop?.documentRef : null) ??
+          (previouslyHadPod ? "POD attached" : "Pending upload");
         const resolvedPodSubmitted =
-          Boolean(uploadedPod) || previouslyHadPod;
+          Boolean(uploadedPodName) || previouslyHadPod;
         const resolvedSupportingComplete =
           supportingFiles.length > 0 ||
           Boolean(dropoff.supportingDocsComplete ?? existingStop?.supportingDocsComplete);
+        const entryFeeVal = numberValue(dropoff.entryFee);
+        const resolvedEntryFeeStatus: ExpenseResolutionStatus =
+          entryFeeVal != null
+            ? "confirmed"
+            : dropoff.entryFeeStatus === "not_applicable"
+            ? "not_applicable"
+            : "confirmed";
         return {
           id: dropoff.id || existingStop?.id || crypto.randomUUID(),
           sequence: index + 1,
           storeName: dropoff.storeName,
           destinationArea: dropoff.destinationArea,
-          entryFee: numberValue(dropoff.entryFee) ?? 0,
-          entryFeeStatus: (numberValue(dropoff.entryFee) != null ? "confirmed" : (dropoff.entryFeeStatus ?? "confirmed")) as ExpenseResolutionStatus,
+          dropoffCount: Math.max(1, parseInt(dropoff.dropoffCount, 10) || 1),
+          entryFee: entryFeeVal ?? 0,
+          entryFeeStatus: resolvedEntryFeeStatus,
           podSubmitted: resolvedPodSubmitted,
           supportingDocsComplete: resolvedSupportingComplete,
           documentRef: resolvedDocRef,
@@ -659,7 +904,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       setSubmitError("Select a saved driver or enter a new driver name.");
       return;
     }
-    if (!values.driverDailyRate || Number(values.driverDailyRate) <= 0) {
+    const isExistingUnknownDriver = Boolean(existingDelivery?.driverName && existingDelivery.driverName.toLowerCase().includes("unknown"));
+    if (driverName.trim().toLowerCase().includes("unknown") && !isExistingUnknownDriver) {
+      setSubmitError("Unknown driver is not permitted when adding or editing a delivery. Please select or enter a real driver name.");
+      return;
+    }
+    if (!isSubcontracted && (!values.driverDailyRate || Number(values.driverDailyRate) <= 0)) {
       setSubmitError("Driver daily rate must have a valid value.");
       return;
     }
@@ -667,7 +917,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       setSubmitError("Select a saved helper or enter a new helper name.");
       return;
     }
-    if (!values.helperDailyRate || Number(values.helperDailyRate) <= 0) {
+    const isExistingUnknownHelper1 = Boolean(existingDelivery?.helperName && existingDelivery.helperName.toLowerCase().includes("unknown"));
+    if (helper1Name.trim().toLowerCase().includes("unknown") && !isExistingUnknownHelper1) {
+      setSubmitError("Unknown helper is not permitted when adding or editing a delivery. Please select or enter a real helper name.");
+      return;
+    }
+    if (!isSubcontracted && (!values.helperDailyRate || Number(values.helperDailyRate) <= 0)) {
       setSubmitError("Helper daily rate must have a valid value.");
       return;
     }
@@ -676,7 +931,11 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         setSubmitError("Select or enter a name for Helper 2.");
         return;
       }
-      if (!values.helper2DailyRate || Number(values.helper2DailyRate) <= 0) {
+      if (helper2Name.trim().toLowerCase().includes("unknown")) {
+        setSubmitError("Unknown helper is not permitted when adding or editing a delivery. Please select or enter a real helper name.");
+        return;
+      }
+      if (!isSubcontracted && (!values.helper2DailyRate || Number(values.helper2DailyRate) <= 0)) {
         setSubmitError("Daily rate for Helper 2 must have a valid value.");
         return;
       }
@@ -701,9 +960,17 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       setSubmitError("Delivery date cannot be earlier than company foundation year (2024).");
       return;
     }
-    if (!isEditMode && !isAdmin && (values.deliveryDate < deliveryDateWindow.min || values.deliveryDate > deliveryDateWindow.max)) {
-      setSubmitError(`Delivery date must be between ${deliveryDateWindow.min} and ${deliveryDateWindow.max}.`);
+    if (!isEditMode && !isAdmin && values.deliveryDate > deliveryDateWindow.max) {
+      setSubmitError(`Delivery date cannot be in the future. Today in Manila is ${deliveryDateWindow.max}.`);
       return;
+    }
+    if (!isEditMode && !isAdmin && values.deliveryDate < deliveryDateWindow.min) {
+      if (!approvedTicket) {
+        setSubmitError(
+          `Delivery date precedes the rolling 3-working-day window (${deliveryDateWindow.min}). Please request an Admin Backdating Approval Ticket.`
+        );
+        return;
+      }
     }
     if (isEditMode && editReason.trim().length < 5) {
       setSubmitError("Please provide a reason for editing this delivery (at least 5 characters).");
@@ -727,6 +994,54 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         hasSecondHelper && payload.helper2Name
           ? `${payload.helperName}, ${payload.helper2Name}`
           : payload.helperName;
+
+      const dropoffUnknown = (payload.dropoffs as Array<{ entryFeeStatus?: ExpenseResolutionStatus }>).some((d) => d.entryFeeStatus === "unknown");
+      const dropoffAllNa =
+        payload.dropoffs.length > 0 &&
+        payload.dropoffs.every((d) => d.entryFeeStatus === "not_applicable");
+      const derivedEntryFeeStatus: ExpenseResolutionStatus = dropoffUnknown
+        ? "unknown"
+        : dropoffAllNa
+        ? "not_applicable"
+        : "confirmed";
+
+      const remainingIntegrityIssues: string[] = [];
+      if (payload.dieselExpensesStatus === "unknown" || payload.dieselExpenses == null) remainingIntegrityIssues.push("dieselExpenses is unknown");
+      if (payload.tollGateExpensesStatus === "unknown" || payload.tollGateExpenses == null) remainingIntegrityIssues.push("tollGateExpenses is unknown");
+      if (!isSubcontracted) {
+        if (payload.driverDailyRateStatus === "unknown" || payload.driverDailyRate == null) remainingIntegrityIssues.push("driverDailyRate is unknown");
+        if (payload.helperDailyRateStatus === "unknown" || payload.helperDailyRate == null) remainingIntegrityIssues.push("helperDailyRate is unknown");
+      } else {
+        if (payload.driverDailyRateStatus === "unknown") remainingIntegrityIssues.push("driverDailyRate is unknown");
+        if (payload.helperDailyRateStatus === "unknown") remainingIntegrityIssues.push("helperDailyRate is unknown");
+      }
+      if (derivedEntryFeeStatus === "unknown") remainingIntegrityIssues.push("dropoff entryFee is unknown");
+      const isFinanciallyResolved =
+        payload.deliveryRate != null &&
+        payload.deliveryRate > 0 &&
+        remainingIntegrityIssues.length === 0;
+
+      const combinedHelperAllowanceVal =
+        payload.helperAllowanceStatus === "not_applicable" && (!hasSecondHelper || payload.helper2AllowanceStatus === "not_applicable")
+          ? null
+          : (payload.helperAllowance ?? 0) + (hasSecondHelper ? (payload.helper2Allowance ?? 0) : 0);
+      const combinedHelperDailyRateVal =
+        payload.helperDailyRateStatus === "not_applicable" && (!hasSecondHelper || payload.helper2DailyRateStatus === "not_applicable")
+          ? null
+          : (payload.helperDailyRate ?? 0) + (hasSecondHelper ? (payload.helper2DailyRate ?? 0) : 0);
+      const combinedHelperAllowanceStatusVal: ExpenseResolutionStatus =
+        payload.helperAllowanceStatus === "unknown" || (hasSecondHelper && payload.helper2AllowanceStatus === "unknown")
+          ? "unknown"
+          : payload.helperAllowanceStatus === "confirmed" || (hasSecondHelper && payload.helper2AllowanceStatus === "confirmed")
+          ? "confirmed"
+          : "not_applicable";
+      const combinedHelperDailyRateStatusVal: ExpenseResolutionStatus =
+        payload.helperDailyRateStatus === "unknown" || (hasSecondHelper && payload.helper2DailyRateStatus === "unknown")
+          ? "unknown"
+          : payload.helperDailyRateStatus === "confirmed" || (hasSecondHelper && payload.helper2DailyRateStatus === "confirmed")
+          ? "confirmed"
+          : "not_applicable";
+
       try {
         const response = await fetch("/api/deliveries", {
           method: "PATCH",
@@ -743,6 +1058,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             reason: editReason.trim(),
             changes: {
               waybillNumber: payload.waybillNumber,
+              deliveryDate: payload.deliveryDate,
               clientName: payload.clientName,
               plateNumber: payload.plateNumber,
               origin: payload.origin,
@@ -753,6 +1069,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
               driverName: payload.driverName || null,
               helperName: combinedHelperName || null,
               supportingDocuments: payload.supportingDocuments,
+              notes: payload.notes,
               expenses: {
                 dieselExpenses: payload.dieselExpenses,
                 tollGateExpenses: payload.tollGateExpenses,
@@ -760,24 +1077,22 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                 entryFees: financialReview.entryFees,
                 driverAllowance: payload.driverAllowance,
                 driverDailyRate: payload.driverDailyRate,
-                helperAllowance:
-                  (payload.helperAllowance ?? 0) + (hasSecondHelper ? (payload.helper2Allowance ?? 0) : 0),
-                helperDailyRate:
-                  (payload.helperDailyRate ?? 0) + (hasSecondHelper ? (payload.helper2DailyRate ?? 0) : 0),
+                helperAllowance: combinedHelperAllowanceVal,
+                helperDailyRate: combinedHelperDailyRateVal,
                 otherExpenses: payload.otherExpenses,
               },
               expenseStates: {
                 dieselExpenses: payload.dieselExpensesStatus,
                 tollGateExpenses: payload.tollGateExpensesStatus,
-                entryFees: "confirmed" as ExpenseResolutionStatus,
+                entryFees: derivedEntryFeeStatus,
                 driverAllowance: payload.driverAllowanceStatus,
                 driverDailyRate: payload.driverDailyRateStatus,
-                helperAllowance: payload.helperAllowanceStatus,
-                helperDailyRate: payload.helperDailyRateStatus,
+                helperAllowance: combinedHelperAllowanceStatusVal,
+                helperDailyRate: combinedHelperDailyRateStatusVal,
                 otherExpenses: payload.otherExpensesStatus,
               },
               dropoffs: payload.dropoffs,
-              financialState: financialReview.totalExpenses != null ? "finalized" : "incomplete",
+              financialState: isFinanciallyResolved ? "finalized" : "incomplete",
             },
             fallbackRecord: existingDelivery,
           }),
@@ -785,6 +1100,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         const result = (await response.json().catch(() => ({}))) as {
           ok?: boolean;
           message?: string;
+          result?: { version?: number };
         };
         if (!response.ok || !result.ok) {
           throw new Error(result.message ?? "Unable to update delivery record.");
@@ -795,27 +1111,19 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             sequence: i + 1,
             storeName: d.storeName,
             destinationArea: d.destinationArea,
+            dropoffCount: Math.max(1, (d as any).dropoffCount || 1),
             entryFee: d.entryFee,
             entryFeeStatus: d.entryFeeStatus,
             podSubmitted: d.podSubmitted,
             supportingDocsComplete: d.supportingDocsComplete,
             documentRef: d.documentRef,
+            podFile: null,
           }));
-          const remainingIntegrityIssues: string[] = [];
-          if (payload.dieselExpensesStatus === "unknown") remainingIntegrityIssues.push("dieselExpenses is unknown");
-          if (payload.tollGateExpensesStatus === "unknown") remainingIntegrityIssues.push("tollGateExpenses is unknown");
-          if (payload.driverDailyRateStatus === "unknown") remainingIntegrityIssues.push("driverDailyRate is unknown");
-          if (payload.helperDailyRateStatus === "unknown") remainingIntegrityIssues.push("helperDailyRate is unknown");
-          const isFinanciallyResolved =
-            financialReview.totalExpenses != null &&
-            payload.deliveryRate != null &&
-            payload.deliveryRate > 0 &&
-            remainingIntegrityIssues.length === 0;
 
           const updatedTrip: DeliveryLedgerItem = {
             ...existingDelivery,
             waybillNumber: payload.waybillNumber,
-            deliveryDate: existingDelivery.deliveryDate,
+            deliveryDate: payload.deliveryDate,
             origin: payload.origin,
             distanceKm: payload.distanceKm ?? 0,
             fuelRate: payload.fuelRate ?? 0,
@@ -825,6 +1133,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             driverName: payload.driverName,
             helperName: combinedHelperName,
             supportingDocuments: payload.supportingDocuments,
+            notes: payload.notes,
             truckTemperature: `${Number(truckTemperature) || 0}°C` as `${number}°C`,
             expenses: {
               dieselExpenses: payload.dieselExpenses,
@@ -833,20 +1142,18 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
               entryFees: financialReview.entryFees,
               driverAllowance: payload.driverAllowance,
               driverDailyRate: payload.driverDailyRate,
-              helperAllowance:
-                (payload.helperAllowance ?? 0) + (hasSecondHelper ? (payload.helper2Allowance ?? 0) : 0),
-              helperDailyRate:
-                (payload.helperDailyRate ?? 0) + (hasSecondHelper ? (payload.helper2DailyRate ?? 0) : 0),
+              helperAllowance: combinedHelperAllowanceVal,
+              helperDailyRate: combinedHelperDailyRateVal,
               otherExpenses: payload.otherExpenses,
             },
             expenseStates: {
               dieselExpenses: payload.dieselExpensesStatus,
               tollGateExpenses: payload.tollGateExpensesStatus,
-              entryFees: "confirmed",
+              entryFees: derivedEntryFeeStatus,
               driverAllowance: payload.driverAllowanceStatus,
               driverDailyRate: payload.driverDailyRateStatus,
-              helperAllowance: payload.helperAllowanceStatus,
-              helperDailyRate: payload.helperDailyRateStatus,
+              helperAllowance: combinedHelperAllowanceStatusVal,
+              helperDailyRate: combinedHelperDailyRateStatusVal,
               otherExpenses: payload.otherExpensesStatus,
             },
             totalExpenses: financialReview.totalExpenses,
@@ -856,10 +1163,16 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             financialIntegrityIssues: remainingIntegrityIssues,
             dropoffs: resolvedDropoffs,
             podStatus: derivePodVerificationStatus(resolvedDropoffs),
-            version: (existingDelivery.version ?? 1) + 1,
+            version: result.result?.version ?? (existingDelivery.version ?? 1) + 1,
           };
           upsertBrowserPreviewDelivery(updatedTrip);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event(BROWSER_PREVIEW_DELIVERIES_CHANGED));
+          }
         }
+        toast.success("Delivery updated", {
+          description: `Waybill #${payload.waybillNumber} changes saved.`,
+        });
         const finalEditId = editId || resolvedEditId || existingDelivery?.id || "";
         const encodedEditId = encodeURIComponent(finalEditId);
         if (returnToParam && isValidInternalReturnPath(returnToParam)) {
@@ -903,6 +1216,9 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         throw new Error(result.message ?? "Unable to record the completed delivery.");
       }
       if (result.previewRecord) upsertBrowserPreviewDelivery(result.previewRecord);
+      toast.success("Delivery recorded", {
+        description: `Waybill #${payload.waybillNumber} recorded successfully.`,
+      });
       if (result.deliveryId) {
         const dest = `/deliveries/${encodeURIComponent(result.deliveryId)}`;
         if (returnToParam && isValidInternalReturnPath(returnToParam)) {
@@ -1000,11 +1316,19 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             </section>
 
             <section className="delivery-form-section">
-              <FormHeading number="02" title={`Store drop-offs (${dropoffs.length})`} />
+              <FormHeading
+                number="02"
+                title={
+                  totalDropoffs === dropoffs.length
+                    ? `Locations & drop-offs (${totalDropoffs})`
+                    : `Locations & drop-offs (${totalDropoffs} drop-offs · ${dropoffs.length} locations)`
+                }
+              />
               <div className="drawer-dropoff-timeline" aria-label="Drop-off stops sequence">
                 {dropoffs.map((stop, index) => {
                   const isLast = index === dropoffs.length - 1;
                   const entryFeeVal = numberValue(stop.entryFee) ?? 0;
+                  const countNum = Math.max(1, parseInt(stop.dropoffCount, 10) || 1);
                   return (
                     <div
                       key={stop.id}
@@ -1016,6 +1340,9 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       <div className="drawer-dropoff-card">
                         <div className="drawer-dropoff-card-header">
                           <span className="drawer-dropoff-stop-tag">{getStopLabel(index)}</span>
+                          <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontWeight: 600 }}>
+                            {countNum} {countNum === 1 ? "drop-off" : "drop-offs"}
+                          </span>
                         </div>
                         <div className="drawer-dropoff-body">
                           <strong className="drawer-dropoff-store">{stop.storeName || `Stop #${index + 1}`}</strong>
@@ -1028,6 +1355,22 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                           <span className="drawer-dropoff-fee-val">
                             {entryFeeVal === 0 ? "₱0.00" : formatPeso(entryFeeVal)}
                           </span>
+                          {stop.podFile || stop.podSubmitted || (stop.documentRef && stop.documentRef !== "Pending upload") ? (
+                            <span
+                              style={{
+                                marginLeft: "auto",
+                                fontSize: "11px",
+                                color: "var(--color-primary)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontWeight: 600,
+                              }}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                              POD Attached
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -1113,19 +1456,35 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                 <div><span>Expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
                 <div className={financialReview.netIncome == null ? "" : financialReview.netIncome < 0 ? "negative" : "positive"}>
                   <span>Net Profit</span>
-                  <strong>{formatPeso(financialReview.netIncome)}</strong>
+                  <strong>
+                    {formatPeso(financialReview.netIncome)}
+                    {financialReview.marginPercent != null ? ` (${financialReview.marginPercent.toFixed(1)}%)` : ""}
+                  </strong>
                 </div>
               </div>
             </section>
 
             <section className="delivery-form-section">
               <FormHeading number="04" title="Documents" />
-              <DeliveryFilePreview podFiles={podFiles} supportingFiles={supportingFiles} />
+              <DeliveryFilePreview dropoffs={dropoffs} supportingFiles={supportingFiles} />
             </section>
+
+            {values.notes ? (
+              <section className="delivery-form-section">
+                <FormHeading number="05" title="Trip notes" />
+                <div className="review-meta-groups">
+                  <div className="review-meta-group">
+                    <p style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: "14px", lineHeight: "1.6", color: "var(--color-text)" }}>
+                      {values.notes}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             {isEditMode ? (
               <section className="delivery-form-section">
-                <FormHeading number="05" title="Reason for edit" />
+                <FormHeading number={values.notes ? "06" : "05"} title="Reason for edit" />
                 <div className="review-meta-groups">
                   <div className="review-meta-group">
                     <div className="detail-meta-item">
@@ -1138,6 +1497,47 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             ) : null}
 
             <div className="delivery-form-actions">
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginRight: "auto" }}>
+                {liveCompleteness.isComplete ? (
+                  <span
+                    className="routex-badge tone-success"
+                    style={{
+                      fontWeight: 700,
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      background: "rgba(16, 185, 129, 0.12)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Complete (All requirements met)
+                  </span>
+                ) : (
+                  <span
+                    className="routex-badge tone-warning"
+                    style={{
+                      fontWeight: 700,
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      background: "rgba(245, 158, 11, 0.12)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    Incomplete ({liveCompleteness.count} pending)
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 className="secondary-button"
@@ -1200,7 +1600,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
               <SingleDatePicker
                 required
                 disabled={isEditMode}
-                min={isAdmin || isEditMode ? "2024-01-01" : deliveryDateWindow.min}
+                min="2024-01-01"
                 max={isAdmin || isEditMode ? undefined : deliveryDateWindow.max}
                 value={values.deliveryDate}
                 onChange={(nextDate) => {
@@ -1209,6 +1609,65 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                 }}
               />
             </label>
+            {isOlderThanWindow && (
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  border: "1px solid",
+                  backgroundColor: approvedTicket ? "rgba(16, 185, 129, 0.1)" : "rgba(245, 158, 11, 0.1)",
+                  borderColor: approvedTicket ? "#10b981" : "#f59e0b",
+                  color: "var(--color-text)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                }}
+              >
+                <div>
+                  {approvedTicket ? (
+                    <span style={{ fontWeight: 600, color: "#059669", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Approved Backdating Ticket #{approvedTicket.id} on file for Waybill #{values.waybillNumber}.
+                    </span>
+                  ) : (
+                    <span style={{ display: "inline-flex", alignItems: "flex-start", gap: "6px" }}>
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#f59e0b"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ flexShrink: 0, marginTop: "2px" }}
+                        aria-hidden="true"
+                      >
+                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                        <line x1="12" y1="9" x2="12" y2="13" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                      </svg>
+                      <span><strong>Backdating Notice:</strong> This date precedes the rolling 3-working-day window (Min: {deliveryDateWindow.min}). An approved Admin Backdating Ticket is required to record this delivery.</span>
+                    </span>
+                  )}
+                </div>
+                {!approvedTicket && (
+                  <button
+                    type="button"
+                    onClick={() => setBackdatingModalOpen(true)}
+                    className="secondary-button"
+                    style={{ padding: "4px 10px", fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap" }}
+                  >
+                    Request Ticket
+                  </button>
+                )}
+              </div>
+            )}
             <div className="client-field-group">
               <label className="field-label-text">Client</label>
               <RoundedSelect
@@ -1309,12 +1768,14 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         </section>
 
         <section className="delivery-form-section">
-          <FormHeading number="02" title="Drop-offs" />
+          <FormHeading number="02" title="Locations & drop-offs" />
           <div className="dropoff-editor">
-            {dropoffs.map((dropoff, index) => (
+            {dropoffs.map((dropoff, index) => {
+              const isLast = index === dropoffs.length - 1;
+              return (
               <div
                 key={dropoff.id}
-                className={`dropoff-row ${draggedStopIndex === index ? "is-dragging" : ""}`}
+                className={`dropoff-row ${isLast ? "is-last-stop" : ""} ${draggedStopIndex === index ? "is-dragging" : ""}`}
                 draggable
                 onDragStart={() => setDraggedStopIndex(index)}
                 onDragOver={(e) => {
@@ -1410,6 +1871,18 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       placeholder="e.g. Quezon City, Metro Manila"
                     />
                   </label>
+                  <label className="dropoff-field" style={{ maxWidth: "130px" }}>
+                    <span className="field-label-text">Stops / Drop-offs</span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      required
+                      value={dropoff.dropoffCount}
+                      onChange={(event) => updateDropoff(dropoff.id, "dropoffCount", event.target.value)}
+                      placeholder="1"
+                    />
+                  </label>
                   <div className="dropoff-field dropoff-entry-fee-wrap">
                     <EntryFeeField
                       value={dropoff.entryFee}
@@ -1422,14 +1895,160 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     />
                   </div>
                 </div>
+
+                <div
+                  className="dropoff-pod-attachment-bar"
+                  style={{
+                    marginTop: "12px",
+                    paddingTop: "10px",
+                    borderTop: "1px dashed var(--color-border-subtle)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-muted)" }}>
+                      Proof of Delivery (POD)
+                    </span>
+                  </div>
+
+                  {dropoff.podFile || dropoff.podSubmitted || (dropoff.documentRef && dropoff.documentRef !== "Pending upload") ? (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "12px",
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        backgroundColor: "var(--color-surface-hover)",
+                        border: "1px solid var(--color-border-subtle)",
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <path d="m9 15 2 2 4-4" />
+                      </svg>
+                      <span
+                        style={{
+                          maxWidth: "240px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontWeight: 500,
+                        }}
+                        title={dropoff.podFile?.name ?? (dropoff.documentRef && dropoff.documentRef !== "Pending upload" ? dropoff.documentRef : "POD Attached")}
+                      >
+                        {dropoff.podFile?.name ?? (dropoff.documentRef && dropoff.documentRef !== "Pending upload" ? dropoff.documentRef : "POD Attached")}
+                      </span>
+                      <label
+                        style={{
+                          cursor: "pointer",
+                          color: "var(--color-accent)",
+                          fontWeight: 600,
+                          fontSize: "11px",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          backgroundColor: "var(--color-surface)",
+                          border: "1px solid var(--color-border-subtle)",
+                        }}
+                        title="Replace POD"
+                      >
+                        Replace
+                        <input
+                          type="file"
+                          accept="application/pdf,image/png,image/jpeg"
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              updateDropoff(dropoff.id, {
+                                podFile: file,
+                                podSubmitted: true,
+                                documentRef: file.name,
+                              });
+                            }
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateDropoff(dropoff.id, {
+                            podFile: null,
+                            podSubmitted: false,
+                            documentRef: "",
+                          });
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "var(--color-text-muted)",
+                          padding: "0 2px",
+                          fontWeight: "bold",
+                          fontSize: "14px",
+                          lineHeight: 1,
+                        }}
+                        title="Remove POD"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <label
+                      style={{
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        padding: "5px 12px",
+                        borderRadius: "6px",
+                        backgroundColor: "var(--color-surface)",
+                        border: "1px dashed var(--color-border-subtle)",
+                        color: "var(--color-accent)",
+                        fontWeight: 600,
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                      <span>Attach POD</span>
+                      <input
+                        type="file"
+                        accept="application/pdf,image/png,image/jpeg"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            updateDropoff(dropoff.id, {
+                              podFile: file,
+                              podSubmitted: true,
+                              documentRef: file.name,
+                            });
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
-            ))}
+              );
+            })}
             <div className="dropoff-actions-bar">
               <button type="button" className="secondary-button add-dropoff" onClick={addDropoff}>
-                + Add store
+                + Add location / store
               </button>
               <span className="dropoff-counter">
-                {dropoffs.length} {dropoffs.length === 1 ? "stop" : "stops"}
+                {totalDropoffs} {totalDropoffs === 1 ? "drop-off" : "drop-offs"} ({dropoffs.length} {dropoffs.length === 1 ? "location" : "locations"})
               </span>
             </div>
           </div>
@@ -1557,10 +2176,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <span className="crew-role-pill driver">Driver</span>
                     <RoundedSelect
                       value={driverName}
-                      options={references.drivers.map((driver) => ({
-                        value: driver.label,
-                        label: driver.label,
-                      }))}
+                      options={references.drivers
+                        .filter((driver) => !driver.label.toLowerCase().includes("unknown"))
+                        .map((driver) => ({
+                          value: driver.label,
+                          label: driver.label,
+                        }))}
                       onChange={(val) => setDriverName(sanitizePersonNameInput(val))}
                       inputFilter={sanitizePersonNameInput}
                       ariaLabel="Driver name"
@@ -1580,10 +2201,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                           <span className="peso-prefix" aria-hidden="true">₱</span>
                           <input
                             aria-label="Driver daily rate"
-                            required
+                            required={!isSubcontracted}
                             type="text"
                             inputMode="decimal"
-                            placeholder="0.00"
+                            placeholder={isSubcontracted ? "N/A" : "0.00"}
                             className="no-spin-stepper peso-input"
                             value={values.driverDailyRate}
                             onKeyDown={handlePositiveDecimalKeyDown}
@@ -1601,7 +2222,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                             aria-label="Driver allowance"
                             type="text"
                             inputMode="decimal"
-                            placeholder="0.00"
+                            placeholder={isSubcontracted ? "N/A" : "0.00"}
                             className="no-spin-stepper peso-input"
                             value={values.driverAllowance}
                             onKeyDown={handlePositiveDecimalKeyDown}
@@ -1622,10 +2243,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <span className="crew-role-pill helper">Helper 1</span>
                     <RoundedSelect
                       value={helper1Name}
-                      options={references.helpers.map((helper) => ({
-                        value: helper.label,
-                        label: helper.label,
-                      }))}
+                      options={references.helpers
+                        .filter((helper) => !helper.label.toLowerCase().includes("unknown"))
+                        .map((helper) => ({
+                          value: helper.label,
+                          label: helper.label,
+                        }))}
                       onChange={(val) => setHelper1Name(sanitizePersonNameInput(val))}
                       inputFilter={sanitizePersonNameInput}
                       ariaLabel="Helper name"
@@ -1645,10 +2268,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                           <span className="peso-prefix" aria-hidden="true">₱</span>
                           <input
                             aria-label="Helper daily rate"
-                            required
+                            required={!isSubcontracted}
                             type="text"
                             inputMode="decimal"
-                            placeholder="0.00"
+                            placeholder={isSubcontracted ? "N/A" : "0.00"}
                             className="no-spin-stepper peso-input"
                             value={values.helperDailyRate}
                             onKeyDown={handlePositiveDecimalKeyDown}
@@ -1666,7 +2289,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                             aria-label="Helper allowance"
                             type="text"
                             inputMode="decimal"
-                            placeholder="0.00"
+                            placeholder={isSubcontracted ? "N/A" : "0.00"}
                             className="no-spin-stepper peso-input"
                             value={values.helperAllowance}
                             onKeyDown={handlePositiveDecimalKeyDown}
@@ -1688,10 +2311,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       <span className="crew-role-pill helper-2">Helper 2</span>
                       <RoundedSelect
                         value={helper2Name}
-                        options={references.helpers.map((helper) => ({
-                          value: helper.label,
-                          label: helper.label,
-                        }))}
+                        options={references.helpers
+                          .filter((helper) => !helper.label.toLowerCase().includes("unknown"))
+                          .map((helper) => ({
+                            value: helper.label,
+                            label: helper.label,
+                          }))}
                         onChange={(val) => setHelper2Name(sanitizePersonNameInput(val))}
                         inputFilter={sanitizePersonNameInput}
                         ariaLabel="Helper 2 name"
@@ -1724,10 +2349,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                             <span className="peso-prefix" aria-hidden="true">₱</span>
                             <input
                               aria-label="Helper 2 daily rate"
-                              required
+                              required={!isSubcontracted}
                               type="text"
                               inputMode="decimal"
-                              placeholder="0.00"
+                              placeholder={isSubcontracted ? "N/A" : "0.00"}
                               className="no-spin-stepper peso-input"
                               value={values.helper2DailyRate}
                               onKeyDown={handlePositiveDecimalKeyDown}
@@ -1745,7 +2370,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                               aria-label="Helper 2 allowance"
                               type="text"
                               inputMode="decimal"
-                              placeholder="0.00"
+                              placeholder={isSubcontracted ? "N/A" : "0.00"}
                               className="no-spin-stepper peso-input"
                               value={values.helper2Allowance}
                               onKeyDown={handlePositiveDecimalKeyDown}
@@ -1768,8 +2393,8 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                         setHasSecondHelper(true);
                         setExpenseStatuses((cur) => ({
                           ...cur,
-                          helper2DailyRate: "confirmed",
-                          helper2Allowance: "confirmed",
+                          helper2DailyRate: isSubcontracted ? "not_applicable" : "confirmed",
+                          helper2Allowance: isSubcontracted ? "not_applicable" : "confirmed",
                         }));
                       }}
                     >
@@ -1795,37 +2420,258 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             </div>
           </div>
 
+          {/* Live Delivery Completeness Indicator */}
+          <div
+            className="delivery-completeness-live-bar"
+            style={{
+              marginTop: "16px",
+              padding: "12px 16px",
+              borderRadius: "10px",
+              border: liveCompleteness.isComplete
+                ? "1px solid rgba(16, 185, 129, 0.35)"
+                : "1px solid rgba(245, 158, 11, 0.35)",
+              background: liveCompleteness.isComplete
+                ? "rgba(16, 185, 129, 0.08)"
+                : "rgba(245, 158, 11, 0.08)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {liveCompleteness.isComplete ? (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      background: "var(--color-status-success, #059669)",
+                      color: "#fff",
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      background: "var(--color-accent, #f59e0b)",
+                      color: "#fff",
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                  </span>
+                )}
+                <strong
+                  style={{
+                    fontSize: "13px",
+                    color: liveCompleteness.isComplete
+                      ? "var(--color-status-success, #059669)"
+                      : "var(--color-accent-deep, #b45309)",
+                  }}
+                >
+                  {liveCompleteness.isComplete
+                    ? "All Details Complete · Ready to Record"
+                    : `Incomplete Delivery (${liveCompleteness.count} pending ${liveCompleteness.count === 1 ? "field" : "fields"})`}
+                </strong>
+              </div>
+              {liveCompleteness.isComplete ? (
+                <span className="routex-badge tone-success" style={{ fontWeight: 700 }}>
+                  COMPLETE
+                </span>
+              ) : (
+                <span className="routex-badge tone-warning" style={{ fontWeight: 700 }}>
+                  INCOMPLETE
+                </span>
+              )}
+            </div>
+            {!liveCompleteness.isComplete && liveCompleteness.issues.length > 0 ? (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px", paddingLeft: "28px" }}>
+                {liveCompleteness.issues.map((issue) => (
+                  <span
+                    key={issue}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: "rgba(245, 158, 11, 0.16)",
+                      color: "var(--color-accent-deep, #b45309)",
+                      border: "1px solid rgba(245, 158, 11, 0.25)",
+                    }}
+                  >
+                    • {issue}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <div className="delivery-financial-review" aria-label="Financial review">
-            <div><span>Revenue</span><strong>{formatPeso(financialReview.revenue)}</strong></div>
-            <div><span>Entry Fees</span><strong>{formatPeso(financialReview.entryFees)}</strong></div>
-            <div><span>Expenses</span><strong>{formatPeso(financialReview.totalExpenses)}</strong></div>
-            <div className={financialReview.netIncome == null ? "" : financialReview.netIncome < 0 ? "negative" : "positive"}><span>Net Profit</span><strong>{formatPeso(financialReview.netIncome)}</strong></div>
+            <div>
+              <span>Revenue</span>
+              <strong>{formatPeso(financialReview.revenue)}</strong>
+            </div>
+            <div>
+              <span>Entry Fees</span>
+              <strong>{formatPeso(financialReview.entryFees)}</strong>
+            </div>
+            <div>
+              <span>Expenses</span>
+              <strong>{formatPeso(financialReview.totalExpenses)}</strong>
+            </div>
+            <div className={financialReview.netIncome == null ? "" : financialReview.netIncome < 0 ? "negative" : "positive"}>
+              <span>Net Profit</span>
+              <strong>
+                {formatPeso(financialReview.netIncome)}
+                {financialReview.marginPercent != null ? ` (${financialReview.marginPercent.toFixed(1)}%)` : ""}
+              </strong>
+            </div>
           </div>
         </section>
 
         <section className="delivery-form-section">
-          <FormHeading number="04" title="Documents" />
-          <div className="delivery-upload-grid">
-            <FileUploadField
-              id="delivery-pod-files"
-              label="Proof of delivery"
-              helper="PDF, PNG, or JPG"
-              files={podFiles}
-              onChange={setPodFiles}
-            />
+          <FormHeading
+            number="04"
+            title="Supporting documents"
+            description="Attach trip receiving slips, gate passes, or miscellaneous receipts for this trip."
+          />
+          <div className="delivery-upload-single">
             <FileUploadField
               id="delivery-supporting-files"
-              label="Supporting documents"
-              helper="Receiving slips or attachments"
+              label="Trip supporting documents"
+              helper="Receiving slips, gate passes, or miscellaneous attachments (PDF, PNG, JPG)"
               files={supportingFiles}
               onChange={setSupportingFiles}
             />
+            {supportingFiles.length > 0 ? (
+              <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-secondary)" }}>
+                  Link attached files to locations:
+                </span>
+                {supportingFiles.map((file, idx) => (
+                  <div
+                    key={`${file.name}-${idx}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "10px",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid var(--line)",
+                      background: "var(--color-surface)",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l7.9-7.9" />
+                      </svg>
+                      {file.name}
+                    </span>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                      <select
+                        className="supporting-docs-store-select"
+                        value={supportingFileLinks[file.name] ?? "trip"}
+                        onChange={(e) =>
+                          setSupportingFileLinks((prev) => ({ ...prev, [file.name]: e.target.value }))
+                        }
+                        style={{ fontSize: "11px", padding: "2px 6px", height: "26px" }}
+                        aria-label={`Link ${file.name} to location`}
+                      >
+                        <option value="trip">Entire Trip (All stops)</option>
+                        {dropoffs.map((d, sIdx) => (
+                          <option key={d.id} value={d.id}>
+                            Stop #{sIdx + 1}: {d.storeName || `Stop #${sIdx + 1}`}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setSupportingFiles((prev) => prev.filter((_, i) => i !== idx))}
+                        style={{
+                          border: "none",
+                          background: "none",
+                          cursor: "pointer",
+                          color: "var(--color-danger, #ef4444)",
+                          fontWeight: "bold",
+                          fontSize: "14px",
+                          padding: "0 4px",
+                        }}
+                        title="Remove file"
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="delivery-form-section">
+          <FormHeading
+            number="05"
+            title="Trip notes"
+            description="Operational remarks, special instructions, delays, or dispatch notes for this trip."
+          />
+          <div className="delivery-field-grid">
+            <label style={{ gridColumn: "1 / -1" }}>
+              <span className="field-label-text">Notes (optional)</span>
+              <textarea
+                value={values.notes}
+                onChange={(event) => setValues((prev) => ({ ...prev, notes: event.target.value }))}
+                placeholder="Add any delivery notes, special handling details, client requests, or route remarks…"
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--color-border)",
+                  background: "var(--color-surface)",
+                  color: "var(--color-text)",
+                  fontSize: "13px",
+                  lineHeight: "1.5",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                }}
+                aria-label="Delivery notes"
+              />
+            </label>
           </div>
         </section>
 
         {isEditMode ? (
           <section className="delivery-form-section">
-            <FormHeading number="05" title="Reason for edit" />
+            <FormHeading number="06" title="Reason for edit" />
             <div className="delivery-field-grid">
               <label style={{ gridColumn: "1 / -1" }}>
                 <span className="field-label-text">
@@ -1846,6 +2692,47 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         ) : null}
 
         <div className="delivery-form-actions">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginRight: "auto" }}>
+            {liveCompleteness.isComplete ? (
+              <span
+                className="routex-badge tone-success"
+                style={{
+                  fontWeight: 700,
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  background: "rgba(16, 185, 129, 0.12)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Complete (All requirements met)
+              </span>
+            ) : (
+              <span
+                className="routex-badge tone-warning"
+                style={{
+                  fontWeight: 700,
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  background: "rgba(245, 158, 11, 0.12)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                Incomplete ({liveCompleteness.count} pending)
+              </span>
+            )}
+          </div>
           <Link
             className="secondary-button"
             href={backTarget.href}
@@ -1861,32 +2748,65 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         </>
       )}
       </div>
+
+      <BackdatingTicketsModal
+        isOpen={backdatingModalOpen}
+        onClose={() => setBackdatingModalOpen(false)}
+        currentUserRole={actor.role}
+        currentUsername={actor.username}
+        initialWaybill={values.waybillNumber}
+        initialDeliveryDate={values.deliveryDate}
+        onTicketApproved={(ticket) => {
+          setApprovedTicket(ticket);
+        }}
+      />
     </>
   );
 }
 
 function DeliveryFilePreview({
-  podFiles,
+  dropoffs,
   supportingFiles,
 }: {
-  podFiles: File[];
+  dropoffs: DropoffDraft[];
   supportingFiles: File[];
 }) {
   const [previews, setPreviews] = useState<Array<{
-    file: File;
-    kind: "pod" | "supporting";
-    url: string;
+    file?: File;
+    name: string;
+    kind: string;
+    url?: string;
   }>>([]);
 
   useEffect(() => {
-    const nextPreviews = [
-      ...podFiles.map((file) => ({ file, kind: "pod" as const, url: URL.createObjectURL(file) })),
-      ...supportingFiles.map((file) => ({ file, kind: "supporting" as const, url: URL.createObjectURL(file) })),
-    ];
+    const podList = dropoffs
+      .filter((d) => d.podFile || (d.documentRef && d.documentRef !== "Pending upload"))
+      .map((d) => ({
+        file: d.podFile || undefined,
+        name: d.podFile?.name ?? d.documentRef ?? "POD Document",
+        kind: `POD · ${d.storeName || "Stop"}`,
+        url: d.podFile ? URL.createObjectURL(d.podFile) : undefined,
+      }));
 
+    const supportingList = supportingFiles.map((file) => ({
+      file,
+      name: file.name,
+      kind: "Supporting",
+      url: URL.createObjectURL(file),
+    }));
+
+    const nextPreviews = [...podList, ...supportingList];
     setPreviews(nextPreviews);
-    return () => nextPreviews.forEach(({ url }) => URL.revokeObjectURL(url));
-  }, [podFiles, supportingFiles]);
+
+    return () => {
+      supportingList.forEach(({ url }) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+      podList.forEach(({ url }) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+    };
+  }, [dropoffs, supportingFiles]);
 
   if (previews.length === 0) {
     return <p className="delivery-file-preview-empty">No files attached.</p>;
@@ -1894,39 +2814,37 @@ function DeliveryFilePreview({
 
   return (
     <div className="delivery-file-preview-grid">
-      {previews.map(({ file, kind, url }, index) => (
-        <article className="delivery-file-preview-card" key={`${kind}-${file.name}-${file.lastModified}-${index}`}>
-          <div className="delivery-file-preview-visual">
-            {file.type.startsWith("image/") ? (
-              // Browser-created object URLs cannot be optimized by next/image.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt={`Preview of ${file.name}`} />
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M7 3.5h6l4 4V20.5H7V3.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-                <path d="M13 3.5v4h4M9.5 12h5M9.5 15h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-              </svg>
-            )}
-          </div>
-          <div className="delivery-file-preview-copy">
-            <span>{kind === "pod" ? "POD" : "Supporting"}</span>
-            <strong>{file.name}</strong>
-          </div>
+      {previews.map(({ file, name, kind, url }, index) => {
+        const isImage = file?.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(name);
+        return (
           <a
-            className="delivery-file-view-action"
-            href={url}
-            target="_blank"
+            className="delivery-file-preview-card is-clickable"
+            key={`${kind}-${name}-${index}`}
+            href={url || "#"}
+            target={url ? "_blank" : undefined}
             rel="noreferrer"
-            aria-label={`View ${file.name}`}
-            title="View file"
+            title={`View ${name}`}
+            aria-label={`View ${name}`}
+            style={{ textDecoration: "none", cursor: url ? "pointer" : "default" }}
           >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M3.5 12s3.1-5 8.5-5 8.5 5 8.5 5-3.1 5-8.5 5-8.5-5-8.5-5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-              <circle cx="12" cy="12" r="2.2" stroke="currentColor" strokeWidth="1.7" />
-            </svg>
+            <div className="delivery-file-preview-visual">
+              {url && isImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={url} alt={`Preview of ${name}`} />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M7 3.5h6l4 4V20.5H7V3.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                  <path d="M13 3.5v4h4M9.5 12h5M9.5 15h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                </svg>
+              )}
+            </div>
+            <div className="delivery-file-preview-copy">
+              <span>{kind}</span>
+              <strong>{name}</strong>
+            </div>
           </a>
-        </article>
-      ))}
+        );
+      })}
     </div>
   );
 }

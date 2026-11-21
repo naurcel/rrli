@@ -2,7 +2,9 @@
 
 import { useId, useMemo, useState } from "react";
 import type { DeliveryTripRecord } from "@/features/deliveries/delivery-domain";
+import { getTripTotalDropoffs } from "@/features/deliveries/delivery-domain";
 import { formatPercent, formatPeso } from "@/lib/format";
+import { CompactMoney } from "@/components/compact-money";
 import {
   computeDonutArcs,
   formatExpenseResolutionStatus,
@@ -571,7 +573,7 @@ export function DeliveryFinancialBreakdown({
         <div className="hero-metric-card revenue-card">
           <span className="hero-metric-eyebrow">REVENUE</span>
           <div className="hero-metric-amount revenue-text">
-            {model.grossRevenue != null ? formatPeso(model.grossRevenue) : "₱0.00"}
+            {model.grossRevenue != null ? <CompactMoney value={model.grossRevenue} /> : "₱0.00"}
           </div>
           <span className="hero-metric-sub">
             Billing rate
@@ -585,9 +587,11 @@ export function DeliveryFinancialBreakdown({
             className={`hero-metric-amount ${model.isFinanciallyComplete ? "expenses-text" : "warn-text"}`}
             title={model.isFinanciallyComplete ? "Total trip expenses" : "Incomplete expenses"}
           >
-            {model.isFinanciallyComplete && model.totalExpenses != null
-              ? formatPeso(model.totalExpenses)
-              : "Incomplete"}
+            {model.isFinanciallyComplete && model.totalExpenses != null ? (
+              <CompactMoney value={model.totalExpenses} />
+            ) : (
+              "Incomplete"
+            )}
           </div>
           <span className="hero-metric-sub">
             {model.isFinanciallyComplete ? "Total trip expenses" : "Pending confirmation"}
@@ -611,9 +615,11 @@ export function DeliveryFinancialBreakdown({
                 : "Pending expenses"
             }
           >
-            {model.isFinanciallyComplete && model.netIncome != null
-              ? formatPeso(model.netIncome)
-              : "Incomplete"}
+            {model.isFinanciallyComplete && model.netIncome != null ? (
+              <CompactMoney value={model.netIncome} />
+            ) : (
+              "Incomplete"
+            )}
           </div>
           <div className="hero-metric-badges">
             {model.isFinanciallyComplete && model.marginPercent != null ? (
@@ -724,7 +730,7 @@ export function DeliveryFinancialBreakdown({
               marginPercent={model.marginPercent}
               isComplete={model.isFinanciallyComplete}
               unknownList={model.unknownList}
-              dropoffCount={trip.dropoffs.length}
+              dropoffCount={getTripTotalDropoffs(trip.dropoffs)}
             />
           )}
         </section>
@@ -749,9 +755,6 @@ export function DeliveryFinancialBreakdown({
                   <span className="item-color-indicator" style={{ backgroundColor: "#f59e0b" }} />
                   <div>
                     <span className="item-name">Diesel</span>
-                    <span className="item-detail">
-                      {trip.fuelRate ? `Fuel rate: ₱${trip.fuelRate.toFixed(2)}/L` : "Trip fuel consumption"}
-                    </span>
                   </div>
                 </div>
                 <div className="item-value-box">
@@ -771,9 +774,6 @@ export function DeliveryFinancialBreakdown({
                   <span className="item-color-indicator" style={{ backgroundColor: "#6366f1" }} />
                   <div>
                     <span className="item-name">Toll Gates</span>
-                    <span className="item-detail">
-                      {trip.expenses.tollGateBreakdown || "Expressways & pass gates"}
-                    </span>
                   </div>
                 </div>
                 <div className="item-value-box">
@@ -793,9 +793,6 @@ export function DeliveryFinancialBreakdown({
                   <span className="item-color-indicator" style={{ backgroundColor: "#10b981" }} />
                   <div>
                     <span className="item-name">Entry Fees</span>
-                    <span className="item-detail">
-                      {trip.dropoffs.length} store drop-off point{trip.dropoffs.length === 1 ? "" : "s"}
-                    </span>
                   </div>
                 </div>
                 <div className="item-value-box">
@@ -815,7 +812,6 @@ export function DeliveryFinancialBreakdown({
                   <span className="item-color-indicator" style={{ backgroundColor: "#8b5cf6" }} />
                   <div>
                     <span className="item-name">Other Expenses</span>
-                    <span className="item-detail">Incidentals, permits, parking</span>
                   </div>
                 </div>
                 <div className="item-value-box">

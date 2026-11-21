@@ -13,6 +13,9 @@ import {
   calculateProfitMargin,
   calculateTripExpenseTotal,
   derivePodVerificationStatus,
+  normalizeSupportingDocument,
+  type SupportingDocumentItem,
+  type SupportingDocumentRecord,
 } from "@/features/deliveries/delivery-domain";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
@@ -26,15 +29,24 @@ import {
 } from "@/features/deliveries/delivery-input-utils";
 import { formatPeso } from "@/lib/format";
 
+function numberValue(val: string): number | null {
+  const clean = val.replace(/,/g, "").trim();
+  if (clean === "") return null;
+  const num = Number(clean);
+  return isNaN(num) ? null : num;
+}
+
 type CorrectionDropoffDraft = {
   id: string;
   storeName: string;
   destinationArea: string;
+  dropoffCount: string;
   entryFee: string;
   entryFeeStatus: "confirmed" | "not_applicable" | "unknown";
   podSubmitted: boolean;
   supportingDocsComplete: boolean;
   documentRef?: string;
+  podFile?: File | null;
 };
 
 export type EditDeliveryModalProps = {
@@ -56,9 +68,12 @@ export function EditDeliveryModal({
   const [rate, setRate] = useState("");
   const [driverName, setDriverName] = useState("");
   const [helperName, setHelperName] = useState("");
+  const [hasSecondHelper, setHasSecondHelper] = useState(false);
+  const [helper2Name, setHelper2Name] = useState("");
+  const [notes, setNotes] = useState("");
   const [expenses, setExpenses] = useState<{ [key: string]: string }>({});
   const [statuses, setStatuses] = useState<{ [key: string]: "confirmed" | "not_applicable" | "unknown" }>({});
-  const [existingDocs, setExistingDocs] = useState<string[]>([]);
+  const [existingDocs, setExistingDocs] = useState<SupportingDocumentRecord[]>([]);
   const [supportingFiles, setSupportingFiles] = useState<File[]>([]);
   const [dropoffs, setDropoffs] = useState<CorrectionDropoffDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -66,8 +81,18 @@ export function EditDeliveryModal({
 
   const fallbackDrivers = getFleetCrew().map((d) => ({ label: d.fullName }));
   const fallbackHelpers = BASE_HELPERS.map((h) => ({ label: h.fullName }));
-  const drivers = propDrivers && propDrivers.length > 0 ? propDrivers : fallbackDrivers;
-  const helpers = propHelpers && propHelpers.length > 0 ? propHelpers : fallbackHelpers;
+  const drivers = (propDrivers && propDrivers.length > 0 ? propDrivers : fallbackDrivers).filter(
+    (d) => !d.label.toLowerCase().includes("unknown"),
+  );
+  const helpers = (propHelpers && propHelpers.length > 0 ? propHelpers : fallbackHelpers).filter(
+    (h) => !h.label.toLowerCase().includes("unknown"),
+  );
+
+  const isSubcontracted = Boolean(
+    delivery?.truckOwnership === "Subcontracted" ||
+    delivery?.plateNumber?.trim().toUpperCase().startsWith("SUB-") ||
+    delivery?.plateNumber?.trim().toUpperCase().includes("SUBCON")
+  );
 
   useEffect(() => {
     if (!delivery) return;
@@ -75,7 +100,27 @@ export function EditDeliveryModal({
     setReason("");
     setRate(delivery.deliveryRate != null ? String(delivery.deliveryRate) : "");
     setDriverName(delivery.driverName ?? "");
-    setHelperName(delivery.helperName ?? "");
+    const rawHelpers = (delivery.helperName ?? "")
+      .split(/[,/&]/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const h1 = rawHelpers[0] ?? "";
+    const h2 = (delivery as unknown as Record<string, unknown>).helper2Name
+      ? String((delivery as unknown as Record<string, unknown>).helper2Name)
+      : rawHelpers[1] ?? "";
+    setHelperName(h1);
+    setHelper2Name(h2);
+    const hasH2 = Boolean(
+      h2 || (delivery.expenses as unknown as Record<string, unknown>).helper2DailyRate != null,
+    );
+    setHasSecondHelper(hasH2);
+    setNotes(delivery.notes ?? "");
+
+    const isSub =
+      delivery.truckOwnership === "Subcontracted" ||
+      delivery.plateNumber?.trim().toUpperCase().startsWith("SUB-") ||
+      delivery.plateNumber?.trim().toUpperCase().includes("SUBCON");
+
     setExpenses({
       dieselExpenses: delivery.expenses.dieselExpenses != null ? String(delivery.expenses.dieselExpenses) : "",
       tollGateExpenses: delivery.expenses.tollGateExpenses != null ? String(delivery.expenses.tollGateExpenses) : "",
@@ -83,18 +128,48 @@ export function EditDeliveryModal({
       driverDailyRate: delivery.expenses.driverDailyRate != null ? String(delivery.expenses.driverDailyRate) : "",
       helperAllowance: delivery.expenses.helperAllowance != null ? String(delivery.expenses.helperAllowance) : "",
       helperDailyRate: delivery.expenses.helperDailyRate != null ? String(delivery.expenses.helperDailyRate) : "",
+      helper2Allowance:
+        (delivery.expenses as unknown as Record<string, unknown>).helper2Allowance != null
+          ? String((delivery.expenses as unknown as Record<string, unknown>).helper2Allowance)
+          : "",
+      helper2DailyRate:
+        (delivery.expenses as unknown as Record<string, unknown>).helper2DailyRate != null
+          ? String((delivery.expenses as unknown as Record<string, unknown>).helper2DailyRate)
+          : "",
       otherExpenses: delivery.expenses.otherExpenses != null ? String(delivery.expenses.otherExpenses) : "",
     });
     setStatuses({
       dieselExpenses: delivery.expenseStates?.dieselExpenses ?? "confirmed",
       tollGateExpenses: delivery.expenseStates?.tollGateExpenses ?? "confirmed",
-      driverAllowance: delivery.expenseStates?.driverAllowance ?? "confirmed",
-      driverDailyRate: delivery.expenseStates?.driverDailyRate ?? "confirmed",
-      helperAllowance: delivery.expenseStates?.helperAllowance ?? "confirmed",
-      helperDailyRate: delivery.expenseStates?.helperDailyRate ?? "confirmed",
+      driverAllowance:
+        isSub && delivery.expenses.driverAllowance == null
+          ? "not_applicable"
+          : (delivery.expenseStates?.driverAllowance ?? "confirmed"),
+      driverDailyRate:
+        isSub && delivery.expenses.driverDailyRate == null
+          ? "not_applicable"
+          : (delivery.expenseStates?.driverDailyRate ?? "confirmed"),
+      helperAllowance:
+        isSub && delivery.expenses.helperAllowance == null
+          ? "not_applicable"
+          : (delivery.expenseStates?.helperAllowance ?? "confirmed"),
+      helperDailyRate:
+        isSub && delivery.expenses.helperDailyRate == null
+          ? "not_applicable"
+          : (delivery.expenseStates?.helperDailyRate ?? "confirmed"),
+      helper2Allowance:
+        isSub && (delivery.expenses as unknown as Record<string, unknown>).helper2Allowance == null
+          ? "not_applicable"
+          : ((delivery.expenseStates as unknown as Record<string, ExpenseResolutionStatus> | undefined)?.helper2Allowance ?? (hasH2 ? "confirmed" : "not_applicable")),
+      helper2DailyRate:
+        isSub && (delivery.expenses as unknown as Record<string, unknown>).helper2DailyRate == null
+          ? "not_applicable"
+          : ((delivery.expenseStates as unknown as Record<string, ExpenseResolutionStatus> | undefined)?.helper2DailyRate ?? (hasH2 ? "confirmed" : "not_applicable")),
       otherExpenses: delivery.expenseStates?.otherExpenses ?? "confirmed",
     });
-    setExistingDocs([...(delivery.supportingDocuments ?? [])]);
+    setExistingDocs(
+      (delivery.supportingDocuments ?? []).map((doc, idx) => normalizeSupportingDocument(doc, idx)),
+    );
     setSupportingFiles([]);
     setDropoffs(
       delivery.dropoffs.length > 0
@@ -102,22 +177,26 @@ export function EditDeliveryModal({
             id: d.id,
             storeName: d.storeName,
             destinationArea: d.destinationArea,
+            dropoffCount: d.dropoffCount != null ? String(d.dropoffCount) : "1",
             entryFee: d.entryFee != null ? String(d.entryFee) : "",
             entryFeeStatus: d.entryFeeStatus ?? (d.entryFee != null ? "confirmed" : "not_applicable"),
             podSubmitted: d.podSubmitted,
             supportingDocsComplete: d.supportingDocsComplete,
             documentRef: d.documentRef ?? "",
+            podFile: null,
           }))
         : [
             {
               id: crypto.randomUUID(),
               storeName: "",
               destinationArea: "",
+              dropoffCount: "1",
               entryFee: "",
               entryFeeStatus: "not_applicable",
               podSubmitted: false,
               supportingDocsComplete: false,
               documentRef: "",
+              podFile: null,
             },
           ],
     );
@@ -159,10 +238,13 @@ export function EditDeliveryModal({
         id: crypto.randomUUID(),
         storeName: "",
         destinationArea: "",
+        dropoffCount: "1",
         entryFee: "",
         entryFeeStatus: "not_applicable",
         podSubmitted: false,
         supportingDocsComplete: false,
+        documentRef: "",
+        podFile: null,
       },
     ]);
   }
@@ -174,29 +256,72 @@ export function EditDeliveryModal({
 
   function updateDropoff<K extends keyof CorrectionDropoffDraft>(
     index: number,
-    field: K,
-    val: CorrectionDropoffDraft[K],
+    fieldOrUpdates: K | Partial<CorrectionDropoffDraft>,
+    val?: CorrectionDropoffDraft[K],
   ) {
     setDropoffs((prev) => {
       const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: val };
+      if (typeof fieldOrUpdates === "object") {
+        copy[index] = { ...copy[index], ...fieldOrUpdates };
+      } else {
+        copy[index] = { ...copy[index], [fieldOrUpdates]: val };
+      }
+      if (fieldOrUpdates === "entryFee" && typeof val === "string") {
+        const num = Number(val);
+        copy[index].entryFeeStatus = !isNaN(num) && val.trim() !== "" ? "confirmed" : "not_applicable";
+      }
       return copy;
     });
   }
 
+  const totalDropoffs = dropoffs.reduce((sum, d) => sum + Math.max(1, parseInt(d.dropoffCount, 10) || 1), 0);
+
   const entryFeeSummary = (() => {
-    const hasUnknown = dropoffs.some((d) => d.entryFeeStatus === "unknown");
-    if (hasUnknown) return "Incomplete";
-    const allNa = dropoffs.length > 0 && dropoffs.every((d) => d.entryFeeStatus === "not_applicable");
-    if (allNa) return "Not applicable";
     const total = dropoffs.reduce((sum, d) => {
-      if (d.entryFeeStatus === "confirmed" && d.entryFee !== "") {
-        return sum + (Number(d.entryFee) || 0);
-      }
-      return sum;
+      const amt = Number(d.entryFee);
+      return sum + (!isNaN(amt) && amt > 0 ? amt : 0);
     }, 0);
     return formatPeso(total);
   })();
+
+  const liveRevenue = numberValue(rate) ?? 0;
+  const liveDropoffEntryFees = dropoffs.reduce((sum, d) => {
+    if (d.entryFeeStatus === "confirmed" && d.entryFee) {
+      return sum + (numberValue(d.entryFee) ?? 0);
+    }
+    return sum;
+  }, 0);
+  const liveHasUnknownEntryFee = dropoffs.some((d) => d.entryFeeStatus === "unknown");
+
+  const liveExpenseIssues: string[] = [];
+  if (statuses.dieselExpenses === "unknown") liveExpenseIssues.push("Fuel receipt");
+  if (statuses.tollGateExpenses === "unknown") liveExpenseIssues.push("Toll receipts");
+  if (statuses.driverDailyRate === "unknown") liveExpenseIssues.push("Driver rate");
+  if (statuses.driverAllowance === "unknown") liveExpenseIssues.push("Driver allowance");
+  if (statuses.helperDailyRate === "unknown") liveExpenseIssues.push("Helper rate");
+  if (statuses.helperAllowance === "unknown") liveExpenseIssues.push("Helper allowance");
+  if (hasSecondHelper && statuses.helper2DailyRate === "unknown") liveExpenseIssues.push("Helper 2 rate");
+  if (hasSecondHelper && statuses.helper2Allowance === "unknown") liveExpenseIssues.push("Helper 2 allowance");
+  if (statuses.otherExpenses === "unknown") liveExpenseIssues.push("Other expenses");
+  if (liveHasUnknownEntryFee) liveExpenseIssues.push("Store entry fee");
+
+  const liveIsComplete = liveExpenseIssues.length === 0;
+
+  const liveExpensesTotal = (
+    (statuses.dieselExpenses === "confirmed" ? (numberValue(expenses.dieselExpenses) ?? 0) : 0) +
+    (statuses.tollGateExpenses === "confirmed" ? (numberValue(expenses.tollGateExpenses) ?? 0) : 0) +
+    (statuses.driverDailyRate === "confirmed" ? (numberValue(expenses.driverDailyRate) ?? 0) : 0) +
+    (statuses.driverAllowance === "confirmed" ? (numberValue(expenses.driverAllowance) ?? 0) : 0) +
+    (statuses.helperDailyRate === "confirmed" ? (numberValue(expenses.helperDailyRate) ?? 0) : 0) +
+    (statuses.helperAllowance === "confirmed" ? (numberValue(expenses.helperAllowance) ?? 0) : 0) +
+    (hasSecondHelper && statuses.helper2DailyRate === "confirmed" ? (numberValue(expenses.helper2DailyRate) ?? 0) : 0) +
+    (hasSecondHelper && statuses.helper2Allowance === "confirmed" ? (numberValue(expenses.helper2Allowance) ?? 0) : 0) +
+    (statuses.otherExpenses === "confirmed" ? (numberValue(expenses.otherExpenses) ?? 0) : 0) +
+    liveDropoffEntryFees
+  );
+
+  const liveNetProfit = liveRevenue - liveExpensesTotal;
+  const liveMarginPercent = liveRevenue > 0 ? (liveNetProfit / liveRevenue) * 100 : 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -205,6 +330,27 @@ export function EditDeliveryModal({
     if (reason.trim().length < 5) {
       setError("A correction reason of at least 5 characters is required for audit integrity.");
       return;
+    }
+
+    const isExistingUnknownDriver = Boolean(delivery.driverName && delivery.driverName.toLowerCase().includes("unknown"));
+    if (driverName.trim().toLowerCase().includes("unknown") && !isExistingUnknownDriver) {
+      setError("Unknown driver is not permitted when editing deliveries. Please assign a real driver name.");
+      return;
+    }
+    const isExistingUnknownHelper = Boolean(delivery.helperName && delivery.helperName.toLowerCase().includes("unknown"));
+    if (helperName.trim().toLowerCase().includes("unknown") && !isExistingUnknownHelper) {
+      setError("Unknown helper is not permitted when editing deliveries. Please assign a real helper name.");
+      return;
+    }
+    if (hasSecondHelper) {
+      if (helper2Name.trim().length < 2) {
+        setError("Select or enter a name for Helper 2.");
+        return;
+      }
+      if (helper2Name.trim().toLowerCase().includes("unknown")) {
+        setError("Unknown helper is not permitted when editing deliveries. Please assign a real helper name.");
+        return;
+      }
     }
 
     const numRate = Number(rate);
@@ -242,6 +388,9 @@ export function EditDeliveryModal({
 
     const expensesPayload: Record<string, number | null> = {};
     for (const [key, val] of Object.entries(expenses)) {
+      if (!hasSecondHelper && (key === "helper2DailyRate" || key === "helper2Allowance")) {
+        continue;
+      }
       const status = statuses[key];
       if (status === "confirmed") {
         const num = val === "" ? null : Number(val);
@@ -256,9 +405,31 @@ export function EditDeliveryModal({
       }
     }
 
-    const finalSupportingDocs = [
+    const h1Rate = statuses.helperDailyRate === "confirmed" ? (numberValue(expenses.helperDailyRate) ?? 0) : 0;
+    const h2Rate = hasSecondHelper && statuses.helper2DailyRate === "confirmed" ? (numberValue(expenses.helper2DailyRate) ?? 0) : 0;
+    const hasHConfirmedRate = statuses.helperDailyRate === "confirmed" || (hasSecondHelper && statuses.helper2DailyRate === "confirmed");
+    const hasHUnknownRate = statuses.helperDailyRate === "unknown" || (hasSecondHelper && statuses.helper2DailyRate === "unknown");
+    const finalHelperDailyRate = hasHUnknownRate ? null : hasHConfirmedRate ? h1Rate + h2Rate : null;
+    const finalHelperDailyRateStatus: ExpenseResolutionStatus = hasHUnknownRate ? "unknown" : hasHConfirmedRate ? "confirmed" : "not_applicable";
+
+    const h1Allowance = statuses.helperAllowance === "confirmed" ? (numberValue(expenses.helperAllowance) ?? 0) : 0;
+    const h2Allowance = hasSecondHelper && statuses.helper2Allowance === "confirmed" ? (numberValue(expenses.helper2Allowance) ?? 0) : 0;
+    const hasHConfirmedAllowance = statuses.helperAllowance === "confirmed" || (hasSecondHelper && statuses.helper2Allowance === "confirmed");
+    const hasHUnknownAllowance = statuses.helperAllowance === "unknown" || (hasSecondHelper && statuses.helper2Allowance === "unknown");
+    const finalHelperAllowance = hasHUnknownAllowance ? null : hasHConfirmedAllowance ? h1Allowance + h2Allowance : null;
+    const finalHelperAllowanceStatus: ExpenseResolutionStatus = hasHUnknownAllowance ? "unknown" : hasHConfirmedAllowance ? "confirmed" : "not_applicable";
+
+    expensesPayload.helperDailyRate = finalHelperDailyRate;
+    expensesPayload.helperAllowance = finalHelperAllowance;
+
+    const finalSupportingDocs: SupportingDocumentRecord[] = [
       ...existingDocs,
-      ...supportingFiles.map((f) => f.name),
+      ...supportingFiles.map((f, i) => ({
+        id: `doc-${Date.now()}-${i}`,
+        name: f.name,
+        dropoffId: null,
+        storeName: null,
+      })),
     ];
     const hasSupporting = finalSupportingDocs.length > 0;
     const updatedDropoffs: DeliveryStoreDropoff[] = dropoffs.map((stop, index) => {
@@ -266,16 +437,21 @@ export function EditDeliveryModal({
         stop.entryFeeStatus === "confirmed" && stop.entryFee !== ""
           ? Number(stop.entryFee)
           : null;
+      const hasPod = Boolean(stop.podFile || stop.podSubmitted || (stop.documentRef && stop.documentRef !== "Pending upload"));
+      const docRef = stop.podFile
+        ? stop.podFile.name
+        : (stop.documentRef || (hasPod ? "POD attached" : "Pending upload"));
       return {
         id: stop.id,
         sequence: index + 1,
         storeName: stop.storeName.trim(),
         destinationArea: stop.destinationArea.trim(),
+        dropoffCount: Math.max(1, parseInt(stop.dropoffCount, 10) || 1),
         entryFee: feeNum,
         entryFeeStatus: stop.entryFeeStatus,
-        podSubmitted: stop.podSubmitted,
+        podSubmitted: hasPod,
         supportingDocsComplete: hasSupporting || stop.supportingDocsComplete,
-        documentRef: stop.documentRef || "",
+        documentRef: docRef,
       };
     });
 
@@ -299,6 +475,8 @@ export function EditDeliveryModal({
     expensesPayload.entryFees = aggregatedEntryFeeTotal;
     const finalStatuses: Record<string, ExpenseResolutionStatus> = {
       ...statuses,
+      helperDailyRate: finalHelperDailyRateStatus,
+      helperAllowance: finalHelperAllowanceStatus,
       entryFees: aggregatedEntryFeeStatus,
     };
 
@@ -329,6 +507,10 @@ export function EditDeliveryModal({
       otherExpenses: "Other expenses",
     };
     const financialIntegrityIssues = expenseKeys.flatMap((key) => {
+      if (isSubcontracted && (key === "driverDailyRate" || key === "driverAllowance" || key === "helperDailyRate" || key === "helperAllowance")) {
+        if (updatedStates[key] === "unknown") return [`Pending ${expenseIssueLabels[key].toLowerCase()}`];
+        return [];
+      }
       const status = updatedStates[key];
       if (status === "unknown") return [`Pending ${expenseIssueLabels[key].toLowerCase()}`];
       if (status === "confirmed" && updatedExpenses[key] == null) {
@@ -338,6 +520,11 @@ export function EditDeliveryModal({
     });
     const nextFinancialState: FinancialState =
       financialIntegrityIssues.length === 0 ? "finalized" : "incomplete";
+
+    const combinedHelperName =
+      hasSecondHelper && helper2Name.trim()
+        ? `${helperName.trim()}, ${helper2Name.trim()}`
+        : helperName.trim();
 
     try {
       const response = await fetch("/api/deliveries", {
@@ -352,7 +539,8 @@ export function EditDeliveryModal({
           changes: {
             deliveryRate: numRate,
             driverName: driverName.trim() || null,
-            helperName: helperName.trim() || null,
+            helperName: combinedHelperName || null,
+            notes: notes.trim() || null,
             expenses: expensesPayload,
             expenseStates: finalStatuses,
             supportingDocuments: finalSupportingDocs,
@@ -397,7 +585,8 @@ export function EditDeliveryModal({
         ...delivery,
         deliveryRate: numRate,
         driverName: driverName.trim() || null,
-        helperName: helperName.trim() || null,
+        helperName: combinedHelperName || null,
+        notes: notes.trim() || null,
         expenses: updatedExpenses,
         expenseStates: updatedStates,
         totalExpenses: totalExp,
@@ -430,7 +619,7 @@ export function EditDeliveryModal({
       <div className="routex-dialog edit-delivery-dialog">
         <header className="routex-dialog-header">
           <div>
-            <h2 id="correction-dialog-title">Edit Delivery Financials</h2>
+            <h2 id="correction-dialog-title">Edit Delivery</h2>
             <p>Waybill: {delivery.waybillNumber} · Current Version: {delivery.version}</p>
           </div>
           <button
@@ -454,6 +643,81 @@ export function EditDeliveryModal({
                 {error}
               </div>
             ) : null}
+
+            {/* Live Financial Calculation & Completeness Card */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                gap: "10px",
+                padding: "12px 14px",
+                borderRadius: "12px",
+                background: liveIsComplete
+                  ? "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(245, 158, 11, 0.04) 100%)"
+                  : "linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(245, 158, 11, 0.04) 100%)",
+                border: `1px solid ${liveIsComplete ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)"}`,
+                marginBottom: "14px",
+              }}
+            >
+              <div>
+                <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-text-muted)", textTransform: "uppercase" }}>
+                  Live Revenue
+                </span>
+                <strong style={{ display: "block", fontSize: "14px", color: "var(--color-text-primary)" }}>
+                  {formatPeso(liveRevenue)}
+                </strong>
+              </div>
+              <div>
+                <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-text-muted)", textTransform: "uppercase" }}>
+                  Live Expenses
+                </span>
+                <strong style={{ display: "block", fontSize: "14px", color: liveIsComplete ? "var(--color-accent-deep)" : "var(--color-danger, #dc2626)" }}>
+                  {liveIsComplete ? formatPeso(liveExpensesTotal) : "Incomplete"}
+                </strong>
+              </div>
+              <div>
+                <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-text-muted)", textTransform: "uppercase" }}>
+                  Live Net Profit
+                </span>
+                <strong style={{ display: "block", fontSize: "14px", color: liveIsComplete && liveNetProfit >= 0 ? "#059669" : liveIsComplete ? "#dc2626" : "var(--color-text-muted)" }}>
+                  {liveIsComplete ? formatPeso(liveNetProfit) : "Pending"}
+                </strong>
+              </div>
+              <div>
+                <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--color-text-muted)", textTransform: "uppercase" }}>
+                  Margin
+                </span>
+                <strong style={{ display: "block", fontSize: "14px", color: liveIsComplete ? "#059669" : "var(--color-text-muted)" }}>
+                  {liveIsComplete ? `${liveMarginPercent.toFixed(1)}%` : "Pending"}
+                </strong>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    textAlign: "center",
+                    background: liveIsComplete ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.12)",
+                    color: liveIsComplete ? "#059669" : "#dc2626",
+                    border: `1px solid ${liveIsComplete ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.25)"}`,
+                  }}
+                >
+                  {liveIsComplete ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Complete
+                    </span>
+                  ) : (
+                    `Pending: ${liveExpenseIssues.join(", ")}`
+                  )}
+                </span>
+              </div>
+            </div>
 
             {/* Revenue */}
             <div className="delivery-rate-banner">
@@ -493,8 +757,10 @@ export function EditDeliveryModal({
               </div>
 
               <div className="dropoff-editor">
-                {dropoffs.map((dropoff, index) => (
-                  <div key={dropoff.id} className="dropoff-row">
+                {dropoffs.map((dropoff, index) => {
+                  const isLast = index === dropoffs.length - 1;
+                  return (
+                  <div key={dropoff.id} className={`dropoff-row ${isLast ? "is-last-stop" : ""}`}>
                     <div className="dropoff-row-header">
                       <span className="dropoff-row-title">Store Drop-off #{index + 1}</span>
                       {dropoffs.length > 1 ? (
@@ -535,6 +801,20 @@ export function EditDeliveryModal({
                           onChange={(e) => updateDropoff(index, "destinationArea", e.target.value)}
                         />
                       </div>
+                      <div className="dropoff-field" style={{ maxWidth: "120px" }}>
+                        <label htmlFor={`corr-dropoff-count-${index}`} className="field-label-text">
+                          Drop-offs
+                        </label>
+                        <input
+                          id={`corr-dropoff-count-${index}`}
+                          type="number"
+                          min={1}
+                          step={1}
+                          required
+                          value={dropoff.dropoffCount}
+                          onChange={(e) => updateDropoff(index, "dropoffCount", e.target.value)}
+                        />
+                      </div>
                       <div className="dropoff-field dropoff-entry-fee-wrap">
                         <DialogExpenseField
                           id={`corr-dropoff-fee-${index}`}
@@ -546,8 +826,132 @@ export function EditDeliveryModal({
                         />
                       </div>
                     </div>
+
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        paddingTop: "10px",
+                        borderTop: "1px dashed var(--color-border-subtle)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span style={{ fontSize: "12px", color: "var(--color-text-muted)", fontWeight: 500 }}>
+                        Proof of Delivery (POD):
+                      </span>
+                      {dropoff.podFile || dropoff.podSubmitted || (dropoff.documentRef && dropoff.documentRef !== "Pending upload") ? (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            fontSize: "12px",
+                            padding: "3px 8px",
+                            borderRadius: "4px",
+                            backgroundColor: "var(--color-surface-hover)",
+                            border: "1px solid var(--color-border-subtle)",
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ opacity: 0.6 }}>
+                            <path d="M4 1h8l3 3v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm7 1.5V5h2.5L11 2.5z" />
+                          </svg>
+                          <span style={{ maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {dropoff.podFile?.name ?? (dropoff.documentRef && dropoff.documentRef !== "Pending upload" ? dropoff.documentRef : "POD Attached")}
+                          </span>
+                          <label
+                            style={{
+                              cursor: "pointer",
+                              color: "var(--color-accent)",
+                              fontWeight: 600,
+                              fontSize: "11px",
+                              marginLeft: "4px",
+                            }}
+                            title="Replace POD"
+                          >
+                            Replace
+                            <input
+                              type="file"
+                              accept="application/pdf,image/png,image/jpeg"
+                              style={{ display: "none" }}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  updateDropoff(index, {
+                                    podFile: file,
+                                    podSubmitted: true,
+                                    documentRef: file.name,
+                                  });
+                                }
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateDropoff(index, {
+                                podFile: null,
+                                podSubmitted: false,
+                                documentRef: "",
+                              });
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              color: "var(--color-text-muted)",
+                              padding: "0 2px",
+                              fontWeight: "bold",
+                            }}
+                            title="Remove POD"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <label
+                          style={{
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontSize: "11.5px",
+                            padding: "3px 8px",
+                            borderRadius: "4px",
+                            backgroundColor: "var(--color-surface)",
+                            border: "1px dashed var(--color-border-subtle)",
+                            color: "var(--color-accent)",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                          </svg>
+                          Attach POD
+                          <input
+                            type="file"
+                            accept="application/pdf,image/png,image/jpeg"
+                            style={{ display: "none" }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                updateDropoff(index, {
+                                  podFile: file,
+                                  podSubmitted: true,
+                                  documentRef: file.name,
+                                });
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="dropoff-actions-bar" style={{ marginTop: "12px" }}>
@@ -556,10 +960,10 @@ export function EditDeliveryModal({
                   className="button-tertiary add-dropoff"
                   onClick={addDropoff}
                 >
-                  + Add Store Drop-off
+                  + Add Location / Store
                 </button>
                 <span className="dropoff-counter">
-                  {dropoffs.length} {dropoffs.length === 1 ? "store drop-off" : "store drop-offs"}
+                  {totalDropoffs} {totalDropoffs === 1 ? "drop-off" : "drop-offs"} ({dropoffs.length} {dropoffs.length === 1 ? "location" : "locations"})
                 </span>
               </div>
             </div>
@@ -627,12 +1031,16 @@ export function EditDeliveryModal({
                       id="corr-driver-allowance"
                       label="Trip Allowance"
                       value={expenses.driverAllowance ?? ""}
-                      status="confirmed"
+                      status={statuses.driverAllowance ?? (isSubcontracted ? "not_applicable" : "confirmed")}
                       onValueChange={(val) => {
                         setExpenses((prev) => ({ ...prev, driverAllowance: val }));
                         setStatuses((prev) => ({ ...prev, driverAllowance: "confirmed" }));
                       }}
-                      hideStatusSwitch
+                      onStatusChange={(st) => {
+                        setStatuses((prev) => ({ ...prev, driverAllowance: st }));
+                        if (st !== "confirmed") setExpenses((prev) => ({ ...prev, driverAllowance: "" }));
+                      }}
+                      hideStatusSwitch={!isSubcontracted}
                     />
                   </div>
                 </section>
@@ -640,7 +1048,7 @@ export function EditDeliveryModal({
                 {/* Helper Card */}
                 <section className="crew-expense-group">
                   <div className="crew-card-title-row">
-                    <span className="crew-role-pill helper">Helper</span>
+                    <span className="crew-role-pill helper">Helper 1</span>
                     <RoundedSelect
                       value={helperName}
                       options={helpers.map((h) => ({
@@ -649,6 +1057,9 @@ export function EditDeliveryModal({
                       }))}
                       onChange={(val) => setHelperName(val)}
                       ariaLabel="Assigned Helper selection"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Search or enter helper"
                     />
                   </div>
                   <div className="crew-rates-fields">
@@ -667,15 +1078,115 @@ export function EditDeliveryModal({
                       id="corr-helper-allowance"
                       label="Trip Allowance"
                       value={expenses.helperAllowance ?? ""}
-                      status="confirmed"
+                      status={statuses.helperAllowance ?? (isSubcontracted ? "not_applicable" : "confirmed")}
                       onValueChange={(val) => {
                         setExpenses((prev) => ({ ...prev, helperAllowance: val }));
                         setStatuses((prev) => ({ ...prev, helperAllowance: "confirmed" }));
                       }}
-                      hideStatusSwitch
+                      onStatusChange={(st) => {
+                        setStatuses((prev) => ({ ...prev, helperAllowance: st }));
+                        if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helperAllowance: "" }));
+                      }}
+                      hideStatusSwitch={!isSubcontracted}
                     />
                   </div>
                 </section>
+
+                {/* Helper 2 Card (When added) */}
+                {hasSecondHelper ? (
+                  <section className="crew-expense-group helper-2-card">
+                    <div className="crew-card-title-row">
+                      <span className="crew-role-pill helper-2">Helper 2</span>
+                      <RoundedSelect
+                        value={helper2Name}
+                        options={helpers.map((h) => ({
+                          value: h.label,
+                          label: h.label,
+                        }))}
+                        onChange={(val) => setHelper2Name(val)}
+                        ariaLabel="Assigned Helper 2 selection"
+                        placeholder="Select or enter helper"
+                        searchable
+                        allowCustomValue
+                        searchPlaceholder="Search or enter helper"
+                      />
+                      <button
+                        type="button"
+                        className="remove-helper-btn"
+                        onClick={() => {
+                          setHasSecondHelper(false);
+                          setExpenses((prev) => ({ ...prev, helper2DailyRate: "", helper2Allowance: "" }));
+                          setStatuses((prev) => ({ ...prev, helper2DailyRate: "not_applicable", helper2Allowance: "not_applicable" }));
+                          setHelper2Name("");
+                        }}
+                        title="Remove helper"
+                      >
+                        × Remove
+                      </button>
+                    </div>
+                    <div className="crew-rates-fields">
+                      <DialogExpenseField
+                        id="corr-helper2-rate"
+                        label="Daily Rate"
+                        value={expenses.helper2DailyRate ?? ""}
+                        status={statuses.helper2DailyRate ?? (isSubcontracted ? "not_applicable" : "confirmed")}
+                        onValueChange={(val) => setExpenses((prev) => ({ ...prev, helper2DailyRate: val }))}
+                        onStatusChange={(st) => {
+                          setStatuses((prev) => ({ ...prev, helper2DailyRate: st }));
+                          if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helper2DailyRate: "" }));
+                        }}
+                      />
+                      <DialogExpenseField
+                        id="corr-helper2-allowance"
+                        label="Trip Allowance"
+                        value={expenses.helper2Allowance ?? ""}
+                        status={statuses.helper2Allowance ?? (isSubcontracted ? "not_applicable" : "confirmed")}
+                        onValueChange={(val) => {
+                          setExpenses((prev) => ({ ...prev, helper2Allowance: val }));
+                          setStatuses((prev) => ({ ...prev, helper2Allowance: "confirmed" }));
+                        }}
+                        onStatusChange={(st) => {
+                          setStatuses((prev) => ({ ...prev, helper2Allowance: st }));
+                          if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helper2Allowance: "" }));
+                        }}
+                        hideStatusSwitch={!isSubcontracted}
+                      />
+                    </div>
+                  </section>
+                ) : (
+                  <div className="crew-add-helper-slot">
+                    <button
+                      type="button"
+                      className="crew-add-helper-card-btn"
+                      onClick={() => {
+                        setHasSecondHelper(true);
+                        setStatuses((prev) => ({
+                          ...prev,
+                          helper2DailyRate: isSubcontracted ? "not_applicable" : "confirmed",
+                          helper2Allowance: isSubcontracted ? "not_applicable" : "confirmed",
+                        }));
+                      }}
+                    >
+                      <div className="crew-add-helper-icon">
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <line x1="12" y1="5" x2="12" y2="19" />
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                      </div>
+                      <span className="crew-add-helper-label">+ Add Helper</span>
+                      <span className="crew-add-helper-hint">Support up to 2 helpers</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -701,36 +1212,84 @@ export function EditDeliveryModal({
             <div className="routex-dialog-section">
               <h3 className="delivery-finance-group-title">Supporting Documents</h3>
               {existingDocs.length > 0 ? (
-                <div style={{ marginBottom: "12px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                <div style={{ marginBottom: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
                   {existingDocs.map((doc, idx) => (
-                    <span
-                      key={`${doc}-${idx}`}
+                    <div
+                      key={doc.id || `${doc.name}-${idx}`}
                       style={{
-                        display: "inline-flex",
+                        display: "flex",
                         alignItems: "center",
-                        gap: "6px",
-                        padding: "4px 8px",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                        padding: "6px 10px",
                         background: "var(--color-surface-subtle, #f1f5f9)",
+                        border: "1px solid var(--line)",
                         borderRadius: "6px",
                         fontSize: "12px",
                       }}
                     >
-                      📄 {doc}
-                      <button
-                        type="button"
-                        onClick={() => setExistingDocs((prev) => prev.filter((_, i) => i !== idx))}
-                        style={{
-                          border: "none",
-                          background: "none",
-                          cursor: "pointer",
-                          color: "var(--color-danger, #ef4444)",
-                          fontWeight: "bold",
-                        }}
-                        title="Remove document"
-                      >
-                        ×
-                      </button>
-                    </span>
+                      <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        {doc.name}
+                      </span>
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                        <select
+                          value={doc.dropoffId ?? "trip"}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const foundStop = val === "trip" ? null : dropoffs.find((d) => d.id === val);
+                            setExistingDocs((prev) =>
+                              prev.map((item, i) =>
+                                i === idx
+                                  ? {
+                                      ...item,
+                                      dropoffId: foundStop ? foundStop.id : null,
+                                      storeName: foundStop ? foundStop.storeName : null,
+                                    }
+                                  : item,
+                              ),
+                            );
+                          }}
+                          style={{
+                            fontSize: "11px",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            border: "1px solid var(--line)",
+                            background: "var(--color-surface)",
+                            color: "var(--color-text-primary)",
+                            cursor: "pointer",
+                          }}
+                          aria-label={`Link ${doc.name} to location`}
+                        >
+                          <option value="trip">Entire Trip (All stops)</option>
+                          {dropoffs.map((d, sIdx) => (
+                            <option key={d.id} value={d.id}>
+                              Stop #{sIdx + 1}: {d.storeName || `Stop #${sIdx + 1}`}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setExistingDocs((prev) => prev.filter((_, i) => i !== idx))}
+                          style={{
+                            border: "none",
+                            background: "none",
+                            cursor: "pointer",
+                            color: "var(--color-danger, #ef4444)",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                            padding: "0 4px",
+                          }}
+                          title="Remove document"
+                          aria-label={`Remove ${doc.name}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : null}
@@ -771,6 +1330,21 @@ export function EditDeliveryModal({
                   </div>
                 ) : null}
               </div>
+            </div>
+
+            {/* Trip Notes */}
+            <div className="routex-dialog-section">
+              <label htmlFor="corr-notes" className="field-label-text">
+                Trip Notes & Instructions <span className="field-optional-tag">(Optional)</span>
+              </label>
+              <textarea
+                id="corr-notes"
+                rows={2}
+                className="correction-reason-textarea"
+                placeholder="Optional operational remarks, instructions, or dispatch notes..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
             </div>
 
             {/* Correction Reason */}

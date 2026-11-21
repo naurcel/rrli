@@ -255,5 +255,45 @@ test("separates and filters completed vs incomplete delivery records with status
   assert.ok(finalizedFinancials.items.every((d) => isDeliveryFinanciallyComplete(d)));
 });
 
+test("searches deliveries by subcontracted trucker name", () => {
+  const result = listSmallMockDeliveryRecords(query("q=Northline&pageSize=10"));
+  assert.equal(result.total, 2);
+  assert.ok(result.items.every((d) => d.plateNumber === "KLM 4821"));
+  assert.deepEqual(
+    result.items.map((d) => d.waybillNumber).sort(),
+    ["WB-261029", "WB-261036"]
+  );
+});
+
+test("searches deliveries by operational notes and supports updating notes", () => {
+  // WB-261027 has note: "Priority early-morning cold chain replenishment. Temperature maintained at -18°C."
+  const result = listSmallMockDeliveryRecords(query("q=temperature&pageSize=10"));
+  assert.ok(result.total >= 1);
+  assert.ok(result.items.some((d) => d.waybillNumber === "WB-261027"));
+
+  const target = result.items.find((d) => d.waybillNumber === "WB-261027")!;
+  assert.ok(target.notes?.includes("-18"));
+
+  // Update notes via correctSmallMockDelivery
+  const updated = correctSmallMockDelivery({
+    deliveryId: target.id,
+    expectedVersion: target.version,
+    reason: "Updated instructions for handling",
+    changes: {
+      notes: "Driver instructed to verify temperature logs at each dropoff stop.",
+    },
+  });
+
+  assert.equal(updated.ok, true);
+  if (updated.ok) {
+    assert.equal(
+      updated.record.notes,
+      "Driver instructed to verify temperature logs at each dropoff stop.",
+    );
+    assert.equal(updated.record.version, target.version + 1);
+  }
+});
+
+
 
 

@@ -27,6 +27,7 @@ export type DeliveryFilterOption = {
   id: string;
   label: string;
   ownershipType?: "Owned" | "Subcontracted";
+  provider?: string | null;
 };
 
 export type DeliveryListResult = {
@@ -89,6 +90,7 @@ function mapDropoff(row: DropoffRow): DeliveryStoreDropoff {
     sequence: asNumber(row.sequence_number),
     storeName: asString(row.store_name),
     destinationArea: asString(row.destination_area),
+    dropoffCount: Math.max(1, asNumber(row.dropoff_count ?? row.dropoffs ?? 1) || 1),
     entryFee: asFinancialNumber(row.entry_fee, "entry_fee", issues),
     entryFeeStatus: asExpenseStatus(row.entry_fee_status, "entry_fee_status", issues),
     podSubmitted: row.pod_submitted === true,
@@ -166,6 +168,7 @@ function mapLedgerRow(
     deliveryStatus: asString(row.delivery_status) || "Completed",
     driverName: asString(row.driver_name) || null,
     helperName: asString(row.helper_name) || null,
+    notes: asString(row.notes) || null,
   };
 }
 
@@ -181,7 +184,7 @@ export async function listDeliveryRecords(
 
   if (input.search) {
     query = query.or(
-      `waybill_number.ilike.%${input.search}%,plate_number.ilike.%${input.search}%,client_name.ilike.%${input.search}%`,
+      `waybill_number.ilike.%${input.search}%,plate_number.ilike.%${input.search}%,client_name.ilike.%${input.search}%,provider.ilike.%${input.search}%,notes.ilike.%${input.search}%`,
     );
   }
   if (input.clientIds && input.clientIds.length > 0) {
@@ -249,7 +252,7 @@ export async function listDeliveryRecords(
     const dropoffResponse = await supabase
       .from("delivery_dropoffs")
       .select(
-        "id, delivery_id, sequence_number, store_name, destination_area, entry_fee, entry_fee_status, pod_submitted, supporting_docs_complete, document_ref",
+        "id, delivery_id, sequence_number, store_name, destination_area, dropoff_count, entry_fee, entry_fee_status, pod_submitted, supporting_docs_complete, document_ref",
       )
       .in("delivery_id", deliveryIds)
       .order("sequence_number", { ascending: true });

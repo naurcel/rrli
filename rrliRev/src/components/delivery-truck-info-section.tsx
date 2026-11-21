@@ -74,7 +74,7 @@ export function DeliveryTruckInfoSection({
         <div className="delivery-truck-details-grid">
           <div>
             <span>Classification</span>
-            <strong>{storageCapability === "Refrigerated" ? "Cold" : "Dry"}</strong>
+            <strong>{storageCapability}</strong>
           </div>
           <div>
             <span>Type</span>
@@ -85,7 +85,7 @@ export function DeliveryTruckInfoSection({
             <strong>{truckTemperature}</strong>
           </div>
           <div>
-            <span>{truckOwnership === "Subcontracted" ? "Provider" : "Fleet Type"}</span>
+            <span>{truckOwnership === "Subcontracted" ? "Trucker" : "Fleet Type"}</span>
             <strong>{provider || (truckOwnership === "Owned" ? "Company Owned" : "Subcontracted")}</strong>
           </div>
         </div>

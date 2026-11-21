@@ -1,52 +1,82 @@
-const BUSINESS_TIME_ZONE = "Asia/Manila";
+/**
+ * RouteX: Delivery Recording Policy & Backdating Validation
+ *
+ * Implements the rolling 3-working-day backdating window with Philippine calendar
+ * working-day arithmetic, weekend & holiday exclusion, and Admin approval ticket integration (TC-TIME-003).
+ */
 
-function parseDateKey(value: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function dateKeyInTimeZone(reference: Date, timeZone = BUSINESS_TIME_ZONE): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(reference);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function shiftDateKey(value: string, days: number): string {
-  const parsed = parseDateKey(value);
-  if (!parsed) return value;
-  parsed.setUTCDate(parsed.getUTCDate() + days);
-  return parsed.toISOString().slice(0, 10);
-}
+import {
+  formatManilaDateKey,
+  getRollingWorkingDayWindow,
+  parseDateKey,
+} from "./philippine-calendar.ts";
+import { findApprovedTicketForDelivery } from "./delivery-backdating-ticket-store.ts";
 
 export const COMPANY_FOUNDATION_YEAR = 2024;
 export const COMPANY_FOUNDATION_DATE = "2024-01-01";
 
-export function getDeliveryDateWindow(reference = new Date()): {
+export type DeliveryDateWindowResult = {
   min: string;
   max: string;
-} {
-  const max = dateKeyInTimeZone(reference);
-  return { min: shiftDateKey(max, -1), max };
+  workingDaysCount: number;
+  holidaysEncountered: string[];
+};
+
+/**
+ * Returns the rolling 3-working-day delivery date window (today + 3 past working days).
+ * Excludes weekends (Saturday & Sunday) and official Philippine Holidays.
+ */
+export function getDeliveryDateWindow(
+  reference: Date = new Date(),
+  workingDaysBack: number = 3,
+): DeliveryDateWindowResult {
+  const window = getRollingWorkingDayWindow(reference, workingDaysBack);
+  return {
+    min: window.min,
+    max: window.max,
+    workingDaysCount: window.workingDaysCount,
+    holidaysEncountered: window.holidaysEncountered,
+  };
 }
 
+export type DeliveryDateValidationResult =
+  | {
+      ok: true;
+      isLate: boolean;
+      isBackdatedWithApproval?: boolean;
+      approvedTicketId?: string;
+    }
+  | {
+      ok: false;
+      message: string;
+      requiresApprovalTicket?: boolean;
+      minAllowedDate?: string;
+      maxAllowedDate?: string;
+    };
+
+/**
+ * Validates whether a delivery date is permissible for recording.
+ * - Admin role can record across any date back to company foundation year (2024).
+ * - Operations / normal users are permitted within the rolling 3-working-day window.
+ * - Deliveries older than the rolling 3-working-day window require an approved Admin Backdating Ticket.
+ */
 export function validateDeliveryDateWindow(
   deliveryDate: string,
-  reference = new Date(),
+  reference: Date = new Date(),
   userRole?: string,
-): { ok: true; isLate: boolean } | { ok: false; message: string } {
+  options?: {
+    waybillNumber?: string;
+    ticketId?: string;
+    workingDaysBack?: number;
+  },
+): DeliveryDateValidationResult {
   if (!parseDateKey(deliveryDate)) {
     return { ok: false, message: "Enter a valid delivery date." };
   }
-  const window = getDeliveryDateWindow(reference);
 
-  // Admin role is permitted to record past/future deliveries, but company was founded in 2024
+  const window = getDeliveryDateWindow(reference, options?.workingDaysBack ?? 3);
+
+  // 1. Admin & Superadmin can record deliveries back to company foundation year
   if (userRole === "admin") {
     if (deliveryDate < COMPANY_FOUNDATION_DATE) {
       return {
@@ -57,12 +87,48 @@ export function validateDeliveryDateWindow(
     return { ok: true, isLate: deliveryDate < window.max };
   }
 
-  if (deliveryDate < window.min || deliveryDate > window.max) {
+  // 2. Future dates are strictly prohibited for non-admins
+  if (deliveryDate > window.max) {
     return {
       ok: false,
-      message: `Delivery date must be between ${window.min} and ${window.max}.`,
+      message: `Delivery date cannot be in the future. Today in Manila is ${window.max}.`,
+      minAllowedDate: window.min,
+      maxAllowedDate: window.max,
     };
   }
-  return { ok: true, isLate: deliveryDate < window.max };
-}
 
+  // 3. Pre-company foundation dates are prohibited
+  if (deliveryDate < COMPANY_FOUNDATION_DATE) {
+    return {
+      ok: false,
+      message: "Delivery date cannot be earlier than company foundation year (2024).",
+    };
+  }
+
+  // 4. Inside the rolling 3-working-day window: permitted (marked late if before today)
+  if (deliveryDate >= window.min && deliveryDate <= window.max) {
+    return { ok: true, isLate: deliveryDate < window.max };
+  }
+
+  // 5. Older than the 3-working-day window: check for an approved Admin Backdating Ticket
+  const approvedTicket =
+    (options?.waybillNumber ? findApprovedTicketForDelivery(options.waybillNumber, deliveryDate) : null) ||
+    null;
+
+  if (approvedTicket || options?.ticketId) {
+    return {
+      ok: true,
+      isLate: true,
+      isBackdatedWithApproval: true,
+      approvedTicketId: approvedTicket?.id || options?.ticketId,
+    };
+  }
+
+  return {
+    ok: false,
+    requiresApprovalTicket: true,
+    minAllowedDate: window.min,
+    maxAllowedDate: window.max,
+    message: `Delivery date must be between ${window.min} and ${window.max} (rolling 3 working days). Older dates require an approved Admin Backdating Ticket.`,
+  };
+}

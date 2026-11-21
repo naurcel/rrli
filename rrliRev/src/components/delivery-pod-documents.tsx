@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import {
   derivePodVerificationStatus,
+  getSupportingDocName,
   type DeliveryStoreDropoff,
 } from "@/features/deliveries/delivery-domain";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
@@ -213,9 +214,24 @@ export function DeliveryPodDocuments({
             <div
               key={stop.id}
               id={`pod-doc-stop-${stop.id}`}
-              className={`delivery-pod-card ${isPending ? "is-pending" : "is-attached"} ${isHighlighted ? "is-highlighted" : ""}`}
+              className={`delivery-pod-card ${isPending ? "is-pending" : "is-attached is-clickable"} ${isHighlighted ? "is-highlighted" : ""}`}
               onMouseEnter={() => onHoverStop?.(stop.id)}
               onMouseLeave={() => onHoverStop?.(null)}
+              onClick={() => {
+                if (!isPending) {
+                  void handleViewDocument(stop);
+                }
+              }}
+              role={!isPending ? "button" : undefined}
+              tabIndex={!isPending ? 0 : undefined}
+              onKeyDown={(e) => {
+                if (!isPending && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  void handleViewDocument(stop);
+                }
+              }}
+              style={!isPending ? { cursor: "pointer" } : undefined}
+              title={!isPending ? `View document for ${stop.storeName}` : undefined}
             >
               <div className="delivery-pod-card-left">
                 <span
@@ -288,34 +304,15 @@ export function DeliveryPodDocuments({
                   )
                 ) : (
                   <div className="pod-attached-row">
-                    <button
-                      type="button"
-                      className="pod-action-btn"
-                      onClick={() => void handleViewDocument(stop)}
-                      title="View document"
-                      aria-label="View document"
-                    >
-                      <svg
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7Z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    </button>
                     {canManage ? (
                       <button
                         type="button"
                         className="pod-action-btn"
                         disabled={isUploading}
-                        onClick={() => triggerAttach(stop.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerAttach(stop.id);
+                        }}
                         title={isUploading ? "Uploading…" : "Replace document"}
                         aria-label={isUploading ? "Uploading document" : "Replace document"}
                       >
@@ -392,36 +389,39 @@ export function DeliveryPodDocuments({
 
         {trip.supportingDocuments && trip.supportingDocuments.length > 0 ? (
           <div className="delivery-supporting-docs-chip-row">
-            {trip.supportingDocuments.map((docName, idx) => (
-              <button
-                key={idx}
-                type="button"
-                className="delivery-supporting-doc-pill clickable"
-                onClick={() => handleViewSupportingDocument(docName)}
-                title={`View ${docName}`}
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                  style={{ flexShrink: 0 }}
+            {trip.supportingDocuments.map((item, idx) => {
+              const docName = getSupportingDocName(item);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  className="delivery-supporting-doc-pill clickable"
+                  onClick={() => handleViewSupportingDocument(docName)}
+                  title={`View ${docName}`}
                 >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="16" y1="13" x2="8" y2="13" />
-                  <line x1="16" y1="17" x2="8" y2="17" />
-                  <polyline points="10 9 9 9 8 9" />
-                </svg>
-                <span className="doc-name">{docName}</span>
-                <span className="pill-status">View</span>
-              </button>
-            ))}
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                  <span className="doc-name">{docName}</span>
+                  <span className="pill-status">View</span>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <p className="delivery-supporting-docs-empty-text">

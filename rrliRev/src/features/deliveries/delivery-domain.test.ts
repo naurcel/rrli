@@ -6,6 +6,7 @@ import {
   calculateProfitMargin,
   calculateTripExpenseTotal,
   createConfirmedExpenseStates,
+  getTripTotalDropoffs,
   INITIAL_DELIVERY_TRIP_RECORDS,
   summarizeTruckProfitability,
 } from "./delivery-domain.ts";
@@ -177,4 +178,80 @@ test("excludes financially incomplete deliveries from profitability summaries", 
   assert.equal(incomplete.totalExpenses, null);
   assert.deepEqual(summarizeTruckProfitability([incomplete]), []);
 });
+
+test("supports locations with multiple drop-offs and accurately counts total drop-offs", () => {
+  assert.equal(getTripTotalDropoffs(null), 0);
+  assert.equal(getTripTotalDropoffs([]), 0);
+
+  const stops = [
+    {
+      id: "stop-1",
+      sequence: 1,
+      storeName: "SM Megamall",
+      destinationArea: "Mandaluyong",
+      dropoffCount: 3, // 3 drop-offs at this mall/location
+      entryFee: 150,
+      entryFeeStatus: "confirmed" as const,
+      podSubmitted: true,
+      supportingDocsComplete: true,
+      documentRef: "DOC-1",
+    },
+    {
+      id: "stop-2",
+      sequence: 2,
+      storeName: "Robinsons Galleria",
+      destinationArea: "Quezon City",
+      dropoffCount: 2, // 2 drop-offs at this location
+      entryFee: 100,
+      entryFeeStatus: "confirmed" as const,
+      podSubmitted: true,
+      supportingDocsComplete: true,
+      documentRef: "DOC-2",
+    },
+    {
+      id: "stop-3",
+      sequence: 3,
+      storeName: "Puregold Taguig",
+      destinationArea: "Taguig",
+      // default / omitted dropoffCount
+      entryFee: 50,
+      entryFeeStatus: "confirmed" as const,
+      podSubmitted: true,
+      supportingDocsComplete: true,
+      documentRef: "DOC-3",
+    },
+  ];
+
+  // 3 locations, but 3 + 2 + 1 = 6 total drop-offs
+  assert.equal(getTripTotalDropoffs(stops), 6);
+
+  const trip = buildDeliveryTripRecord({
+    id: "dlv-multi-drop",
+    waybillNumber: "WB-MULTI-DROP",
+    deliveryDate: "2026-11-20",
+    clientName: "Multi-Stop Client",
+    plateNumber: "NFD 1234",
+    truckType: "6-Wheeler",
+    truckTemperature: "4°C",
+    origin: "Warehouse 1",
+    distanceKm: 45,
+    fuelRate: 65,
+    deliveryRate: 15000,
+    expenses,
+    expenseStates: createConfirmedExpenseStates(),
+    dropoffs: stops,
+  });
+
+  assert.equal(trip.dropoffs.length, 3, "Trip has 3 physical locations/stores");
+  assert.equal(trip.dropoffs[0].dropoffCount, 3);
+  assert.equal(trip.dropoffs[1].dropoffCount, 2);
+  assert.equal(trip.dropoffs[2].dropoffCount, 1, "Missing dropoffCount defaults to 1");
+  assert.equal(getTripTotalDropoffs(trip.dropoffs), 6, "Total dropoffs equals 6");
+
+  const [truckSummary] = summarizeTruckProfitability([trip]);
+  assert.ok(truckSummary);
+  assert.equal(truckSummary.completedTrips, 1);
+  assert.equal(truckSummary.totalStoresServed, 6, "Total stores served in truck profitability reflects total drop-offs");
+});
+
 
