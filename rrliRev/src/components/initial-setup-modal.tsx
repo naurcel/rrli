@@ -3,8 +3,11 @@
 import { useState, type FormEvent } from "react";
 import { PasswordCriteriaList } from "./password-criteria-list";
 import { RoundedSelect, type SelectOption } from "./rounded-select";
-import { PREDEFINED_SECURITY_QUESTIONS } from "@/lib/auth/password-policy";
-import { evaluatePasswordCriteria } from "@/lib/auth/password-policy";
+import {
+  evaluatePasswordCriteria,
+  normalizeSecurityAnswer,
+  PREDEFINED_SECURITY_QUESTIONS,
+} from "@/lib/auth/password-policy";
 
 const SECURITY_QUESTION_OPTIONS: readonly SelectOption[] = [
   ...PREDEFINED_SECURITY_QUESTIONS.map((q) => ({
@@ -55,7 +58,7 @@ export function InitialSetupModal({ username }: { username: string }) {
       return;
     }
 
-    if (answer.trim() !== confirmAnswer.trim()) {
+    if (normalizeSecurityAnswer(answer) !== normalizeSecurityAnswer(confirmAnswer)) {
       setError("Security answers do not match.");
       return;
     }

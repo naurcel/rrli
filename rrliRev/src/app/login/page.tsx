@@ -8,9 +8,10 @@ import { RouteXFooter } from "@/components/routex-footer";
 import { LoginVisualCarousel } from "@/components/login-visual-carousel";
 import { evaluatePasswordCriteria } from "@/lib/auth/password-policy";
 import { isSupabaseConfigured } from "@/lib/config/env";
+import { toast } from "sonner";
 
 type AuthViewMode = "login" | "forgot-password";
-type ForgotStep = "username" | "security_question" | "reset_password";
+type ForgotStep = "username" | "security_question" | "backup_key" | "reset_password" | "replacement_key";
 type LoginLayoutMode = "split" | "centered";
 
 const ROLE_VERIFICATION_ACCOUNTS = [
@@ -65,8 +66,12 @@ export default function LoginPage() {
   const [recoveryUsername, setRecoveryUsername] = useState("");
   const [securityQuestion, setSecurityQuestion] = useState("");
   const [securityAnswer, setSecurityAnswer] = useState("");
+  const [hasBackupKey, setHasBackupKey] = useState(false);
+  const [hasSecurityQuestion, setHasSecurityQuestion] = useState(false);
+  const [backupKeyInput, setBackupKeyInput] = useState("");
+  const [replacementKey, setReplacementKey] = useState<string | null>(null);
   const [resetToken, setResetToken] = useState("");
-  const [recoveryMode, setRecoveryMode] = useState<"admin" | "security_question">("security_question");
+  const [recoveryMode, setRecoveryMode] = useState<"admin" | "security_question" | "backup_key">("security_question");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -216,6 +221,8 @@ export default function LoginPage() {
         ok?: boolean;
         mode?: "admin_authorized" | "security_question";
         question?: string;
+        hasBackupKey?: boolean;
+        hasSecurityQuestion?: boolean;
         recoveryToken?: string;
         message?: string;
       } | null;
@@ -228,16 +235,21 @@ export default function LoginPage() {
 
       setStatus("idle");
       setMessage("");
+      setHasBackupKey(Boolean(payload.hasBackupKey));
+      setHasSecurityQuestion(Boolean(payload.hasSecurityQuestion));
 
       if (payload.mode === "admin_authorized") {
         setRecoveryMode("admin");
         setResetToken(payload.recoveryToken || "");
         setForgotStep("reset_password");
         setMessage("Administrator-authorized password reset ready. Please set your new password below.");
-      } else if (payload.mode === "security_question") {
+      } else if (payload.hasSecurityQuestion && payload.question) {
         setRecoveryMode("security_question");
         setSecurityQuestion(payload.question || "");
         setForgotStep("security_question");
+      } else if (payload.hasBackupKey) {
+        setRecoveryMode("backup_key");
+        setForgotStep("backup_key");
       }
     } catch {
       setStatus("error");
@@ -245,7 +257,54 @@ export default function LoginPage() {
     }
   }
 
-  // Step 2: Verify security answer
+  // Step 2a: Verify emergency backup key
+  async function handleVerifyBackupKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("submitting");
+    setMessage("");
+
+    const trimmedKey = backupKeyInput.trim();
+    if (!trimmedKey) {
+      setStatus("error");
+      setMessage("Enter your emergency backup key.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify-backup-key",
+          username: recoveryUsername.trim(),
+          backupKey: trimmedKey,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        resetToken?: string;
+        message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setStatus("error");
+        setMessage(payload?.message ?? "The emergency backup key you entered is incorrect or already consumed.");
+        return;
+      }
+
+      setStatus("idle");
+      setMessage("");
+      setRecoveryMode("backup_key");
+      setResetToken(payload.resetToken || "");
+      setForgotStep("reset_password");
+    } catch {
+      setStatus("error");
+      setMessage("Unable to verify emergency backup key. Please try again.");
+    }
+  }
+
+  // Step 2b: Verify security answer
   async function handleVerifySecurityAnswer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("submitting");
@@ -327,6 +386,7 @@ export default function LoginPage() {
       const payload = (await response.json().catch(() => null)) as {
         ok?: boolean;
         message?: string;
+        replacementBackupKey?: string;
       } | null;
 
       if (!response.ok || !payload?.ok) {
@@ -335,8 +395,23 @@ export default function LoginPage() {
         return;
       }
 
+      if (payload.replacementBackupKey) {
+        setReplacementKey(payload.replacementBackupKey);
+        setForgotStep("replacement_key");
+        setStatus("idle");
+        setMessage("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+        setSecurityAnswer("");
+        setBackupKeyInput("");
+        return;
+      }
+
       setStatus("success");
       setMessage(payload.message ?? "Password reset successfully. You can now log in.");
+      toast.success("Password reset successfully!", {
+        description: "You can now log in with your new password.",
+      });
       setUsername(recoveryUsername.trim());
       setPassword("");
       setViewMode("login");
@@ -344,6 +419,7 @@ export default function LoginPage() {
       setNewPassword("");
       setConfirmNewPassword("");
       setSecurityAnswer("");
+      setBackupKeyInput("");
     } catch {
       setStatus("error");
       setMessage("Password reset failed. Please try again.");
@@ -643,6 +719,38 @@ export default function LoginPage() {
                     {status === "submitting" ? "Verifying Answer…" : "Verify & Continue →"}
                   </button>
 
+                  {hasBackupKey && (
+                    <div style={{ marginTop: "12px", textAlign: "center" }}>
+                      <button
+                        type="button"
+                        className="forgot-password-link"
+                        style={{ fontSize: "12px", color: "var(--color-accent-deep)", display: "inline-flex", alignItems: "center", gap: "5px" }}
+                        onClick={() => {
+                          setForgotStep("backup_key");
+                          setStatus("idle");
+                          setMessage("");
+                        }}
+                      >
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <circle cx="7.5" cy="15.5" r="5.5" />
+                          <path d="m21 2-9.6 9.6" />
+                          <path d="m15.5 7.5 3 3L22 7l-3-3" />
+                        </svg>
+                        Use Emergency Backup Key instead
+                      </button>
+                    </div>
+                  )}
+
                   <div className="login-forgot-wrap">
                     <button
                       type="button"
@@ -655,6 +763,81 @@ export default function LoginPage() {
                     >
                       ← Change username
                     </button>
+                  </div>
+                </form>
+              )}
+
+              {forgotStep === "backup_key" && (
+                <form onSubmit={handleVerifyBackupKey} noValidate>
+                  <div style={{ marginBottom: "12px" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-accent-deep)" }}>
+                      Emergency Recovery for @{recoveryUsername}:
+                    </span>
+                    <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-text-muted)" }}>
+                      Enter your 12-character emergency backup key (e.g. ROUTEX-XXXX-XXXX-XXXX).
+                      Note: Using this key will permanently consume and invalidate it.
+                    </p>
+                  </div>
+
+                  <label>
+                    Emergency Backup Key
+                    <input
+                      name="backupKeyInput"
+                      type="text"
+                      placeholder="ROUTEX-XXXX-XXXX-XXXX"
+                      value={backupKeyInput}
+                      onChange={(event) => setBackupKeyInput(event.target.value.toUpperCase())}
+                      style={{ fontFamily: "monospace", letterSpacing: "1px" }}
+                      required
+                    />
+                  </label>
+
+                  <div className="login-options">
+                    <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
+                      Step 2 of 3: Single-Use Key Verification
+                    </span>
+                  </div>
+
+                  {status === "error" && message ? (
+                    <p className="login-note error" role="alert">
+                      <span>!</span>
+                      {message}
+                    </p>
+                  ) : null}
+
+                  <button
+                    className="sign-in-button"
+                    type="submit"
+                    disabled={status === "submitting"}
+                  >
+                    {status === "submitting" ? "Verifying Backup Key…" : "Verify Key & Continue →"}
+                  </button>
+
+                  <div className="login-forgot-wrap" style={{ display: "flex", justifyContent: "space-between" }}>
+                    <button
+                      type="button"
+                      className="forgot-password-link"
+                      onClick={() => {
+                        setForgotStep("username");
+                        setStatus("idle");
+                        setMessage("");
+                      }}
+                    >
+                      ← Change username
+                    </button>
+                    {hasSecurityQuestion && (
+                      <button
+                        type="button"
+                        className="forgot-password-link"
+                        onClick={() => {
+                          setForgotStep("security_question");
+                          setStatus("idle");
+                          setMessage("");
+                        }}
+                      >
+                        Answer question instead →
+                      </button>
+                    )}
                   </div>
                 </form>
               )}
@@ -751,6 +934,140 @@ export default function LoginPage() {
                     </button>
                   </div>
                 </form>
+              )}
+
+              {forgotStep === "replacement_key" && (
+                <div style={{ textAlign: "center", padding: "10px 0" }}>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "48px",
+                      height: "48px",
+                      borderRadius: "12px",
+                      background: "var(--color-accent-soft, #fef3c7)",
+                      color: "var(--color-accent-deep, #92400e)",
+                      marginBottom: "12px",
+                    }}
+                    aria-hidden="true"
+                  >
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="7.5" cy="15.5" r="5.5" />
+                      <path d="m21 2-9.6 9.6" />
+                      <path d="m15.5 7.5 3 3L22 7l-3-3" />
+                    </svg>
+                  </div>
+                  <h3 style={{ fontSize: "16px", fontWeight: 700, margin: "0 0 6px", color: "var(--color-text)" }}>
+                    New Emergency Backup Key Provisioned
+                  </h3>
+                  <p style={{ fontSize: "12px", color: "var(--color-text-muted)", margin: "0 0 16px", lineHeight: 1.5 }}>
+                    Your previous emergency backup key has been consumed and invalidated. A new single-use emergency backup key has been automatically generated for @{recoveryUsername}:
+                  </p>
+
+                  <div
+                    style={{
+                      padding: "14px",
+                      borderRadius: "8px",
+                      backgroundColor: "var(--color-surface-subtle)",
+                      border: "1px dashed var(--color-border)",
+                      fontFamily: "monospace",
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      letterSpacing: "1.5px",
+                      color: "var(--color-accent-deep)",
+                      marginBottom: "16px",
+                      userSelect: "all",
+                    }}
+                  >
+                    {replacementKey}
+                  </div>
+
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--color-text-muted)",
+                      margin: "0 0 16px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#f59e0b"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ flexShrink: 0 }}
+                      aria-hidden="true"
+                    >
+                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    <span>Save this key in a secure location (e.g. password manager, safe). It will never be displayed again.</span>
+                  </p>
+
+                  <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ flex: 1, padding: "8px", fontSize: "12px", fontWeight: 600 }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(replacementKey || "");
+                        toast.success("Backup key copied to clipboard!");
+                      }}
+                    >
+                      Copy Key
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ flex: 1, padding: "8px", fontSize: "12px", fontWeight: 600 }}
+                      onClick={() => {
+                        const content = `ROUTEX EMERGENCY BACKUP KEY\nAccount: ${recoveryUsername}\nKey: ${replacementKey}\nGenerated: ${new Date().toISOString()}\n\nNote: This is a single-use emergency backup key. Store offline in a secure location.`;
+                        const blob = new Blob([content], { type: "text/plain" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `routex-backup-key-${recoveryUsername}.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        toast.success("Backup key downloaded!");
+                      }}
+                    >
+                      Download .txt
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="sign-in-button"
+                    onClick={() => {
+                      setUsername(recoveryUsername.trim());
+                      setPassword("");
+                      setViewMode("login");
+                      setForgotStep("username");
+                      toast.success("Account recovered! You may now sign in with your new password.");
+                    }}
+                  >
+                    I Have Saved My Key → Continue to Login
+                  </button>
+                </div>
               )}
             </div>
           )}

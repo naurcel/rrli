@@ -94,6 +94,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthenticated && account) {
+    if (account.mustChangePassword && pathname !== "/initial-setup" && !pathname.startsWith("/api/")) {
+      return NextResponse.redirect(new URL("/initial-setup", request.url));
+    }
+
+    if (!account.mustChangePassword && pathname === "/initial-setup") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
     if (pathname === "/login") {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }

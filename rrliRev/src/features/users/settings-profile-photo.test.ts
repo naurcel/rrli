@@ -84,5 +84,13 @@ describe("RouteX: Settings Page and Profile Photo", () => {
       assert.equal(admin.username, "admin");
       assert.ok(admin.avatarUrl?.includes("shinryu.png"));
     });
+
+    it("supports setting profile photo during initial account setup", () => {
+      const testAvatar = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const res = updateServerAccountAvatar("usr-ops-002", testAvatar);
+      assert.equal(res.ok, true);
+      const acc = findServerAccountById("usr-ops-002");
+      assert.equal(acc?.avatarUrl, testAvatar);
+    });
   });
 });

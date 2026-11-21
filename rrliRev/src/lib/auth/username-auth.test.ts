@@ -4,6 +4,7 @@ import test from "node:test";
 import { hashWithArgon2id, verifyWithArgon2id } from "./argon2id.ts";
 import {
   evaluatePasswordCriteria,
+  generateRandomTemporaryPassword,
   PREDEFINED_SECURITY_QUESTIONS,
   validateUsernameFormat,
 } from "./password-policy.ts";
@@ -77,6 +78,39 @@ test("RouteX password criteria validation", () => {
   // 7. Valid password with special characters
   const validWithSpecial = evaluatePasswordCriteria("SecurePass2026!#$");
   assert.equal(validWithSpecial.isValid, true);
+});
+
+test("Random temporary password generation", () => {
+  const pwd1 = generateRandomTemporaryPassword();
+  const pwd2 = generateRandomTemporaryPassword();
+
+  assert.equal(pwd1.length, 12, "Temporary password must be 12 characters long");
+  assert.equal(pwd2.length, 12, "Temporary password must be 12 characters long");
+  assert.notEqual(pwd1, pwd2, "Consecutive generated temporary passwords must be distinct");
+
+  const validation = evaluatePasswordCriteria(pwd1);
+  assert.equal(validation.isValid, true, "Generated temporary password must pass password policy");
+  assert.equal(validation.checks.hasLetter, true);
+  assert.equal(validation.checks.hasNumber, true);
+  assert.equal(validation.checks.notCommon, true);
+});
+
+test("Existing seeded accounts are pre-configured without required first-login setup", () => {
+  const seededUsernames = ["admin", "operations", "finance", "hr", "secretary", "customerrep"];
+  for (const u of seededUsernames) {
+    const account = findServerAccountByUsername(u);
+    assert.ok(account, `Seeded account @${u} must exist`);
+    assert.equal(
+      account?.mustChangePassword,
+      false,
+      `Seeded account @${u} must not require password change`,
+    );
+    assert.equal(
+      account?.hasSecurityQuestion,
+      true,
+      `Seeded account @${u} must already have security question configured`,
+    );
+  }
 });
 
 test("Username format and case-insensitive normalization", () => {
@@ -208,13 +242,23 @@ test("Normal password recovery using security question and answer", async () => 
   assert.equal(userRecoveryState.status, "security_question");
   assert.equal(userRecoveryState.question, question);
 
-  // Step 2: Answer verification (case-sensitive)
-  const wrongCaseAnswer = verifyServerAccountSecurityAnswer(recoveryUsername, "bantay the brave dog");
-  assert.equal(wrongCaseAnswer.ok, false, "Security answer is case-sensitive");
+  // Step 2: Answer verification (strictly case-insensitive throughout RouteX)
+  const lowerCaseAnswer = verifyServerAccountSecurityAnswer(recoveryUsername, "bantay the brave dog");
+  assert.equal(lowerCaseAnswer.ok, true, "Security answer accepts lowercase equivalent");
+
+  const upperCaseAnswer = verifyServerAccountSecurityAnswer(recoveryUsername, "BANTAY THE BRAVE DOG");
+  assert.equal(upperCaseAnswer.ok, true, "Security answer accepts uppercase equivalent");
+
+  const mixedCaseAnswer = verifyServerAccountSecurityAnswer(recoveryUsername, "bAnTaY tHe BrAvE dOg");
+  assert.equal(mixedCaseAnswer.ok, true, "Security answer accepts mixed-case equivalent");
+
+  // Incorrect answer is rejected
+  const wrongAnswer = verifyServerAccountSecurityAnswer(recoveryUsername, "Incorrect Answer");
+  assert.equal(wrongAnswer.ok, false, "Incorrect security answer is rejected");
 
   // Accidental leading and trailing whitespace is trimmed
-  const correctTrimmedAnswer = verifyServerAccountSecurityAnswer(recoveryUsername, "  Bantay The Brave Dog  ");
-  assert.equal(correctTrimmedAnswer.ok, true, "Leading/trailing whitespace trimmed consistently");
+  const correctTrimmedAnswer = verifyServerAccountSecurityAnswer(recoveryUsername, "  bantay the brave dog  ");
+  assert.equal(correctTrimmedAnswer.ok, true, "Leading/trailing whitespace trimmed and lowercased consistently");
   assert.ok(correctTrimmedAnswer.resetToken, "Returns single-use reset token");
 
   // Step 3: Reset password with token
@@ -239,6 +283,44 @@ test("Normal password recovery using security question and answer", async () => 
   // User can now log in with brand new password
   const brandNewLogin = await verifyServerAccountCredentials(recoveryUsername, brandNewPassword);
   assert.equal(brandNewLogin.ok, true, "User logs in with recovered password");
+});
+
+test("Case-insensitive security question answer verification and legacy seed compatibility", () => {
+  // 1. Seed accounts can be verified with case variations (Laguna, laguna, LAGUNA, lAgUnA)
+  const opsLower = verifyServerAccountSecurityAnswer("operations", "laguna");
+  assert.equal(opsLower.ok, true, "Seeded account verified with lowercase answer");
+
+  const opsUpper = verifyServerAccountSecurityAnswer("operations", "LAGUNA");
+  assert.equal(opsUpper.ok, true, "Seeded account verified with uppercase answer");
+
+  const opsMixed = verifyServerAccountSecurityAnswer("operations", "LaGuNa");
+  assert.equal(opsMixed.ok, true, "Seeded account verified with mixed-case answer");
+
+  // 2. Incorrect answer is rejected
+  const opsWrong = verifyServerAccountSecurityAnswer("operations", "Manila");
+  assert.equal(opsWrong.ok, false, "Incorrect answer for seeded account rejected");
+
+  // 3. User setup with 'Manila' validates and matches 'manila', 'MANILA', 'mAnIlA'
+  const testUser = createServerAccountProfile({
+    username: `case_test_${Date.now()}`,
+    fullName: "Case Insensitive User",
+    role: "operations",
+    temporaryPassword: "InitialPassword2026!",
+  });
+  assert.ok(testUser.ok);
+  if (testUser.ok) {
+    completeInitialServerAccountSetup(
+      testUser.profile.id,
+      "PermanentPass2026!",
+      "What city were you born in?",
+      "Manila",
+    );
+    assert.equal(verifyServerAccountSecurityAnswer(testUser.profile.username, "manila").ok, true);
+    assert.equal(verifyServerAccountSecurityAnswer(testUser.profile.username, "MANILA").ok, true);
+    assert.equal(verifyServerAccountSecurityAnswer(testUser.profile.username, "mAnIlA").ok, true);
+    assert.equal(verifyServerAccountSecurityAnswer(testUser.profile.username, "  Manila  ").ok, true);
+    assert.equal(verifyServerAccountSecurityAnswer(testUser.profile.username, "Cebu").ok, false);
+  }
 });
 
 test("Admin-assisted password recovery workflow", async () => {

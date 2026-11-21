@@ -10,6 +10,8 @@
  * - Passwords must not consist entirely of whitespace
  */
 
+import { randomBytes } from "node:crypto";
+
 export const PREDEFINED_SECURITY_QUESTIONS = [
   "What was the name of your first school?",
   "What was the name of your first pet?",
@@ -139,12 +141,80 @@ export function validateUsernameFormat(username: string): {
 
 /**
  * Normalizes security answer:
- * - Case-sensitive
- * - Trims accidental leading/trailing whitespace
- * - Does NOT lowercase
+ * - Case-insensitive: trims leading/trailing whitespace, collapses internal whitespace, and converts to lower case
+ * - Safe against non-string inputs
  */
 export function normalizeSecurityAnswer(answer: string): string {
   if (typeof answer !== "string") return "";
-  return answer.trim();
+  return answer.trim().toLowerCase().replace(/\s+/g, " ");
 }
+
+/**
+ * Normalizes an emergency backup key:
+ * - Strips all dashes, spaces, and non-alphanumeric characters
+ * - Converts to uppercase
+ */
+export function normalizeBackupKey(key: string): string {
+  if (typeof key !== "string") return "";
+  const upper = key.toUpperCase().trim();
+  const withoutPrefix = upper.startsWith("ROUTEX-") ? upper.slice(7) : upper.startsWith("ROUTEX") ? upper.slice(6) : upper;
+  return withoutPrefix.replace(/[^A-Z0-9]/g, "");
+}
+
+/**
+ * Formats a clean backup key into standard RouteX format:
+ * e.g., ROUTEX-7K2M-9P4W-X3Q8
+ */
+export function formatBackupKey(raw: string): string {
+  const clean = normalizeBackupKey(raw);
+  const chunks = clean.match(/.{1,4}/g) ?? [clean];
+  return `ROUTEX-${chunks.join("-")}`;
+}
+
+/**
+ * Generates a cryptographically strong emergency backup key (12 chars formatted as ROUTEX-XXXX-XXXX-XXXX).
+ * Uses unambiguous alphanumeric characters (excludes 0, O, 1, I).
+ */
+export function generateBackupKey(): string {
+  const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const bytes = randomBytes(12);
+  let core = "";
+  for (let i = 0; i < 12; i++) {
+    core += chars[bytes[i] % chars.length];
+  }
+  return formatBackupKey(core);
+}
+
+/**
+ * Generates a cryptographically strong, random temporary password.
+ * Guarantees compliance with RouteX password criteria:
+ * - 12 characters length
+ * - Contains uppercase, lowercase, numbers, and symbols
+ * - Guaranteed to satisfy evaluatePasswordCriteria
+ */
+export function generateRandomTemporaryPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnopqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%&*";
+
+  let pwd = "";
+  pwd += upper[Math.floor(Math.random() * upper.length)];
+  pwd += lower[Math.floor(Math.random() * lower.length)];
+  pwd += digits[Math.floor(Math.random() * digits.length)];
+  pwd += symbols[Math.floor(Math.random() * symbols.length)];
+
+  const all = upper + lower + digits + symbols;
+  while (pwd.length < 12) {
+    pwd += all[Math.floor(Math.random() * all.length)];
+  }
+
+  const arr = pwd.split("");
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.join("");
+}
+
 

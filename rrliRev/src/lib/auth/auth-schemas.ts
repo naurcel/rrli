@@ -35,9 +35,18 @@ export const verifySecurityAnswerSchema = z.object({
 export const resetPasswordWithTokenSchema = z.object({
   username: z.string().trim().min(1, "Username is required."),
   token: z.string().trim().min(1, "Recovery token is required."),
-  mode: z.enum(["admin", "security_question"]),
+  mode: z.enum(["admin", "security_question", "backup_key"]),
   newPassword: z.string().min(8, "Password must be at least 8 characters."),
   confirmPassword: z.string().min(1, "Confirm your new password."),
+});
+
+export const verifyBackupKeySchema = z.object({
+  username: z.string().trim().min(1, "Username is required."),
+  backupKey: z.string().trim().min(6, "Enter your emergency backup key."),
+});
+
+export const generateBackupKeySchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required to generate a backup key."),
 });
 
 export const changeUsernameSchema = z.object({
@@ -68,6 +77,7 @@ export const initialSetupSchema = z.object({
   question: z.string().trim().min(1, "Select or enter a security question."),
   answer: z.string().trim().min(2, "Security answer must be at least 2 characters."),
   confirmAnswer: z.string().trim().min(1, "Confirm your security answer."),
+  avatarUrl: z.string().trim().optional().nullable(),
 });
 
 export const createUserAccountSchema = z.object({

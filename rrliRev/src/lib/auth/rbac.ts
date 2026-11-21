@@ -291,13 +291,18 @@ export const WORKSPACE_NAVIGATION_ITEMS: readonly NavigationItem[] = [
   },
 ] as const;
 
-export function getAuthorizedNavigationForRole(role: UserRole): {
+export function getAuthorizedNavigationForRole(
+  role: UserRole,
+  isSuperadmin = false,
+): {
   primary: readonly NavigationItem[];
   management: readonly NavigationItem[];
 } {
-  const allowed = WORKSPACE_NAVIGATION_ITEMS.filter((item) =>
-    hasPermission(role, item.requiredPermission),
-  );
+  const allowed = isSuperadmin
+    ? [...WORKSPACE_NAVIGATION_ITEMS]
+    : WORKSPACE_NAVIGATION_ITEMS.filter((item) =>
+        hasPermission(role, item.requiredPermission),
+      );
 
   return {
     primary: allowed.filter((item) => item.section === "primary"),

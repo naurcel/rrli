@@ -10,6 +10,7 @@ import {
   initialSetupSchema,
   updateContactInfoSchema,
 } from "@/lib/auth/auth-schemas";
+import { normalizeSecurityAnswer } from "@/lib/auth/password-policy";
 import {
   completeInitialServerAccountSetup,
   updateServerAccountAvatar,
@@ -193,7 +194,7 @@ export async function POST(request: Request) {
 
     const { question, answer, confirmAnswer, currentPassword } = parsed.data;
 
-    if (answer.trim() !== confirmAnswer.trim()) {
+    if (normalizeSecurityAnswer(answer) !== normalizeSecurityAnswer(confirmAnswer)) {
       return NextResponse.json(
         { ok: false, message: "Security answers do not match." },
         { status: 400 },
@@ -242,7 +243,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { newPassword, confirmPassword, question, answer, confirmAnswer } = parsed.data;
+    const { newPassword, confirmPassword, question, answer, confirmAnswer, avatarUrl } = parsed.data;
 
     if (newPassword !== confirmPassword) {
       return NextResponse.json(
@@ -251,7 +252,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (answer.trim() !== confirmAnswer.trim()) {
+    if (normalizeSecurityAnswer(answer) !== normalizeSecurityAnswer(confirmAnswer)) {
       return NextResponse.json(
         { ok: false, message: "Security answers do not match." },
         { status: 400 },
@@ -267,6 +268,21 @@ export async function POST(request: Request) {
 
     if (!result.ok) {
       return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
+    }
+
+    if (avatarUrl) {
+      updateServerAccountAvatar(actor.id, avatarUrl);
+      if (isSupabaseConfigured()) {
+        try {
+          const supabase = await createServerSupabaseClient();
+          await supabase
+            .from("user_profiles")
+            .update({ avatar_url: avatarUrl })
+            .eq("id", actor.id);
+        } catch {
+          // Fallback gracefully
+        }
+      }
     }
 
     recordAuditEntry({

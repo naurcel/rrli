@@ -17,14 +17,20 @@ import {
   formatAuditEntityLabel,
   getActionVisuals,
 } from "@/features/audit/audit-formatters";
+import { toast } from "sonner";
 import {
   evaluatePasswordCriteria,
+  generateRandomTemporaryPassword,
   validateUsernameFormat,
 } from "@/lib/auth/password-policy";
+import { DepartmentManagementSection } from "@/features/users/DepartmentManagementSection";
+import { PermanentDeleteUserModal } from "@/features/users/PermanentDeleteUserModal";
+import { UserDepartmentPermissionsModal } from "@/features/users/UserDepartmentPermissionsModal";
 import {
   ROLE_METADATA,
   USER_ROLES,
   type AccessLevel,
+  type Permission,
   type UserRole,
 } from "@/lib/auth/rbac";
 
@@ -44,6 +50,16 @@ type ManagedUserRecord = {
   recoveryAuthorizedAt?: string | null;
   recoveryExpiresAt?: string | null;
   createdAt: string;
+  isSuperadmin?: boolean;
+  designation?: string;
+  departments?: readonly string[];
+  customGrants?: readonly Permission[];
+  customRestrictions?: readonly Permission[];
+  effectivePermissions?: readonly Permission[];
+  isPermanentlyDeleted?: boolean;
+  deletedAt?: string | null;
+  deletedReason?: string | null;
+  deletedBy?: string | null;
 };
 
 type AuditEntry = {
@@ -97,11 +113,18 @@ export default function UserManagementPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [temporaryPassword, setTemporaryPassword] = useState("");
-  const [confirmTemporaryPassword, setConfirmTemporaryPassword] = useState("");
+  const [temporaryPassword, setTemporaryPassword] = useState(() => generateRandomTemporaryPassword());
   const [newRole, setNewRole] = useState<UserRole>("operations");
   const [isCreating, setIsCreating] = useState(false);
-  const [activeTab, setActiveTab] = useState<"users" | "audit">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "audit" | "departments">("users");
+  const [userStatusTab, setUserStatusTab] = useState<"active" | "deactivated" | "deleted">("active");
+  const [deletedUsers, setDeletedUsers] = useState<ManagedUserRecord[]>([]);
+
+  // Permissions and Departments modal state
+  const [permissionsModalUser, setPermissionsModalUser] = useState<ManagedUserRecord | null>(null);
+
+  // Permanent delete modal state (Superadmin only)
+  const [permanentDeleteModalUser, setPermanentDeleteModalUser] = useState<ManagedUserRecord | null>(null);
 
   // Admin-assisted recovery dialog state
   const [authorizingUser, setAuthorizingUser] = useState<ManagedUserRecord | null>(null);
@@ -125,6 +148,16 @@ export default function UserManagementPage() {
   const [userToDelete, setUserToDelete] = useState<ManagedUserRecord | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
 
+  // Temporary password popup dialog state
+  const [tempPasswordPopup, setTempPasswordPopup] = useState<{
+    fullName: string;
+    username: string;
+    password: string;
+    roleLabel?: string;
+    isNewlyProvisioned: boolean;
+  } | null>(null);
+  const [tempPasswordCopied, setTempPasswordCopied] = useState(false);
+
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
@@ -134,7 +167,7 @@ export default function UserManagementPage() {
     bufferedQuery: debouncedAuditSearch,
     isBuffering: isAuditSearchBuffering,
     clear: clearAuditSearch,
-  } = useSearchBuffer({ delay: 280 });
+  } = useSearchBuffer({ delay: 500 });
   const [actionFilter, setActionFilter] = useState("all");
   const [entityFilter, setEntityFilter] = useState("all");
   const [selectedAuditEntry, setSelectedAuditEntry] = useState<AuditEntry | null>(null);
@@ -191,6 +224,26 @@ export default function UserManagementPage() {
   }, [userToDelete]);
 
   useEffect(() => {
+    if (!tempPasswordPopup) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setTempPasswordPopup(null);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [tempPasswordPopup]);
+
+  useEffect(() => {
+    if (!tempPasswordPopup) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [tempPasswordPopup]);
+
+  useEffect(() => {
     fetch("/api/users")
       .then((res) => res.json())
       .then((data: { ok?: boolean; users?: ManagedUserRecord[] }) => {
@@ -202,6 +255,19 @@ export default function UserManagementPage() {
         // Ignore fetch error
       });
   }, []);
+
+  useEffect(() => {
+    if (userStatusTab === "deleted" && actor.isSuperadmin) {
+      fetch("/api/users?tab=deleted")
+        .then((res) => res.json())
+        .then((data: { ok?: boolean; users?: ManagedUserRecord[] }) => {
+          if (data?.ok && Array.isArray(data.users)) {
+            setDeletedUsers(data.users.filter((u) => u.isPermanentlyDeleted));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [userStatusTab, actor.isSuperadmin]);
 
   async function loadAuditEntries(silent = false) {
     if (!silent) setAuditLoading(true);
@@ -323,9 +389,18 @@ export default function UserManagementPage() {
     return { total, deliveryAndFinance, fleetAndSecurity };
   }, [auditEntries]);
 
+  const activeUsers = useMemo(() => users.filter((u) => u.isActive && !u.isPermanentlyDeleted), [users]);
+  const deactivatedUsers = useMemo(() => users.filter((u) => !u.isActive && !u.isPermanentlyDeleted), [users]);
+
   const sortedUsers = useMemo(() => {
+    const list =
+      userStatusTab === "active"
+        ? activeUsers
+        : userStatusTab === "deactivated"
+        ? deactivatedUsers
+        : deletedUsers;
     const multiplier = userSort.direction === "asc" ? 1 : -1;
-    return [...users].sort((left, right) => {
+    return [...list].sort((left, right) => {
       const values: Record<string, [string | number, string | number]> = {
         name: [left.fullName, right.fullName],
         username: [left.username ?? "", right.username ?? ""],
@@ -340,7 +415,7 @@ export default function UserManagementPage() {
         : String(leftValue).localeCompare(String(rightValue));
       return compared * multiplier || left.id.localeCompare(right.id);
     });
-  }, [userSort, users]);
+  }, [userSort, activeUsers, deactivatedUsers, userStatusTab]);
 
   const [userPage, setUserPage] = useState(1);
   const USER_PAGE_SIZE = 10;
@@ -348,7 +423,7 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     setUserPage(1);
-  }, [userSort]);
+  }, [userSort, userStatusTab]);
 
   const paginatedUsers = useMemo(() => {
     const start = (userPage - 1) * USER_PAGE_SIZE;
@@ -366,25 +441,6 @@ export default function UserManagementPage() {
       setFeedback({
         tone: "error",
         text: usernameValidation.message ?? "Invalid username format.",
-      });
-      setIsCreating(false);
-      return;
-    }
-
-    const passwordValidation = evaluatePasswordCriteria(temporaryPassword);
-    if (!passwordValidation.isValid) {
-      setFeedback({
-        tone: "error",
-        text: passwordValidation.errors[0] ?? "Temporary password does not meet security criteria.",
-      });
-      setIsCreating(false);
-      return;
-    }
-
-    if (temporaryPassword !== confirmTemporaryPassword) {
-      setFeedback({
-        tone: "error",
-        text: "Temporary password confirmation does not match.",
       });
       setIsCreating(false);
       return;
@@ -410,6 +466,8 @@ export default function UserManagementPage() {
       return;
     }
 
+    const assignedTempPassword = temporaryPassword || generateRandomTemporaryPassword();
+
     try {
       const response = await fetch("/api/users", {
         method: "POST",
@@ -417,8 +475,8 @@ export default function UserManagementPage() {
         body: JSON.stringify({
           fullName: fullName.trim(),
           username: cleanUsername,
-          temporaryPassword,
-          confirmTemporaryPassword,
+          temporaryPassword: assignedTempPassword,
+          confirmTemporaryPassword: assignedTempPassword,
           email: cleanEmail,
           phoneNumber: cleanPhone,
           role: newRole,
@@ -444,12 +502,21 @@ export default function UserManagementPage() {
       setUsername("");
       setEmail("");
       setPhoneNumber("");
-      setTemporaryPassword("");
-      setConfirmTemporaryPassword("");
+      const nextTempPwd = generateRandomTemporaryPassword();
+      setTemporaryPassword(nextTempPwd);
       setFeedback({
         tone: "success",
-        text: `Provisioned @${payload.user.username} (${payload.user.fullName}) with role ${payload.user.roleLabel}. The user will be required to change their temporary password upon first login.`,
+        text: `Provisioned @${payload.user.username} (${payload.user.fullName}) with role ${payload.user.roleLabel}.`,
       });
+      setTempPasswordPopup({
+        fullName: payload.user.fullName,
+        username: payload.user.username,
+        roleLabel: payload.user.roleLabel,
+        password: assignedTempPassword,
+        isNewlyProvisioned: true,
+      });
+      setTempPasswordCopied(false);
+      toast.success(`Account @${payload.user.username} provisioned!`);
       void loadAuditEntries(true);
     } catch {
       setFeedback({
@@ -771,6 +838,17 @@ export default function UserManagementPage() {
           >
             Staff Accounts
           </button>
+          {actor.isSuperadmin && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "departments"}
+              className={activeTab === "departments" ? "active" : ""}
+              onClick={() => setActiveTab("departments")}
+            >
+              Departments
+            </button>
+          )}
           <button
             type="button"
             role="tab"
@@ -782,7 +860,11 @@ export default function UserManagementPage() {
           </button>
         </div>
 
-        {activeTab === "users" ? (
+        {activeTab === "departments" ? (
+          <section className="records-card" style={{ padding: "24px" }}>
+            <DepartmentManagementSection />
+          </section>
+        ) : activeTab === "users" ? (
           <>
             {feedback ? (
               <section className="notice" role={feedback.tone === "error" ? "alert" : "status"}>
@@ -916,48 +998,57 @@ export default function UserManagementPage() {
                 {/* Group 3: Credentials & Access */}
                 <div className="user-provision-group">
                   <div className="user-provision-group-header">
-                    <h3 className="user-provision-group-title">Initial Credentials &amp; Access</h3>
+                    <h3 className="user-provision-group-title">Temporary Credentials</h3>
                   </div>
                   <div className="user-provision-group-body">
-                    <div className="user-provision-grid-2">
-                      <div className="user-form-field">
-                        <label htmlFor="provision-temp-password" className="user-form-label">
-                          Temporary Password
-                        </label>
-                        <input
-                          id="provision-temp-password"
-                          className="user-management-input"
-                          type="password"
-                          placeholder="Enter temporary password"
-                          value={temporaryPassword}
-                          onChange={(event) => setTemporaryPassword(event.target.value)}
-                          required
-                        />
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "14px",
+                        padding: "14px 18px",
+                        borderRadius: "10px",
+                        background: "var(--color-surface-subtle)",
+                        border: "1px solid var(--color-border)",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 650, color: "var(--color-text-primary)" }}>
+                          One-Time Access Password
+                        </span>
+                        <span style={{ fontSize: "11.5px", color: "var(--color-text-secondary)" }}>
+                          A cryptographically random temporary password is generated as a secure popup dialog upon provisioning.
+                        </span>
                       </div>
-
-                      <div className="user-form-field">
-                        <label htmlFor="provision-confirm-temp-password" className="user-form-label">
-                          Confirm Temporary Password
-                        </label>
-                        <input
-                          id="provision-confirm-temp-password"
-                          className="user-management-input"
-                          type="password"
-                          placeholder="Re-enter temporary password"
-                          value={confirmTemporaryPassword}
-                          onChange={(event) => setConfirmTemporaryPassword(event.target.value)}
-                          required
-                        />
-                      </div>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{ fontSize: "12.5px", padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                        onClick={() => {
+                          const pwd = temporaryPassword || generateRandomTemporaryPassword();
+                          if (!temporaryPassword) setTemporaryPassword(pwd);
+                          setTempPasswordPopup({
+                            fullName: fullName.trim() || "New Account",
+                            username: username.trim().toLowerCase().replace(/^@+/, "") || "new.user",
+                            roleLabel: ROLE_METADATA[newRole]?.label,
+                            password: pwd,
+                            isNewlyProvisioned: false,
+                          });
+                          setTempPasswordCopied(false);
+                        }}
+                        title="Generate or preview temporary password in a secure popup modal"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                        Generate / View Password Popup
+                      </button>
                     </div>
 
-                    {temporaryPassword ? (
-                      <div className="user-provision-criteria">
-                        <PasswordCriteriaList password={temporaryPassword} />
-                      </div>
-                    ) : null}
-
-                    <div className="user-provision-note">
+                    <div className="user-provision-note" style={{ marginTop: "10px" }}>
                       <svg
                         width="16"
                         height="16"
@@ -975,7 +1066,7 @@ export default function UserManagementPage() {
                         <line x1="12" y1="8" x2="12.01" y2="8" />
                       </svg>
                       <div>
-                        <strong>Note:</strong> Share this temporary password securely with the user. They will be required to set their permanent password on first sign-in.
+                        <strong>Auto-Generated:</strong> Share this temporary password securely with the user. They will be prompted to set their permanent password and security question upon first login.
                       </div>
                     </div>
                   </div>
@@ -996,295 +1087,606 @@ export default function UserManagementPage() {
 
             {/* Registered Users Table */}
             <section className="records-card" aria-label="Registered RouteX users">
-              <div className="records-heading">
+              <div
+                className="records-heading"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                }}
+              >
                 <div>
                   <h2>Staff Accounts</h2>
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                    {userStatusTab === "active"
+                      ? `Active operational staff (${activeUsers.length})`
+                      : userStatusTab === "deactivated"
+                      ? `Deactivated ex-employee archive (${deactivatedUsers.length})`
+                      : `Historical deleted accounts archive (${deletedUsers.length})`}
+                  </p>
+                </div>
+                <div
+                  className="user-management-tabs"
+                  role="tablist"
+                  aria-label="Staff account status filter"
+                  style={{ margin: 0 }}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={userStatusTab === "active"}
+                    className={userStatusTab === "active" ? "active" : ""}
+                    onClick={() => setUserStatusTab("active")}
+                  >
+                    Active Staff ({activeUsers.length})
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={userStatusTab === "deactivated"}
+                    className={userStatusTab === "deactivated" ? "active" : ""}
+                    onClick={() => setUserStatusTab("deactivated")}
+                  >
+                    Deactivated Archive ({deactivatedUsers.length})
+                  </button>
+                  {actor.isSuperadmin && (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={userStatusTab === "deleted"}
+                      className={userStatusTab === "deleted" ? "active" : ""}
+                      onClick={() => setUserStatusTab("deleted")}
+                    >
+                      Historical / Deleted ({deletedUsers.length})
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <SortableTableHeader
-                        label="Staff Member"
-                        sortKey="name"
-                        activeSortKey={userSort.key}
-                        direction={userSort.direction}
-                        onSort={(key, direction) => setUserSort({ key, direction })}
-                      />
-                      <SortableTableHeader
-                        label="Username"
-                        sortKey="username"
-                        activeSortKey={userSort.key}
-                        direction={userSort.direction}
-                        onSort={(key, direction) => setUserSort({ key, direction })}
-                      />
-                      <SortableTableHeader
-                        label="Role"
-                        sortKey="role"
-                        activeSortKey={userSort.key}
-                        direction={userSort.direction}
-                        onSort={(key, direction) => setUserSort({ key, direction })}
-                      />
-                      <SortableTableHeader
-                        label="Access"
-                        sortKey="access"
-                        activeSortKey={userSort.key}
-                        direction={userSort.direction}
-                        onSort={(key, direction) => setUserSort({ key, direction })}
-                      />
-                      <th>Setup</th>
-                      <SortableTableHeader
-                        label="Status"
-                        sortKey="status"
-                        activeSortKey={userSort.key}
-                        direction={userSort.direction}
-                        defaultDirection="desc"
-                        onSort={(key, direction) => setUserSort({ key, direction })}
-                      />
-                      <th><span className="sr-only">More actions</span></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedUsers.length === 0 ? (
+              {userStatusTab === "deleted" && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    background: "rgba(239, 68, 68, 0.08)",
+                    border: "1px solid rgba(239, 68, 68, 0.2)",
+                    margin: "12px 0 16px",
+                  }}
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ flexShrink: 0, color: "var(--color-danger, #dc2626)" }}
+                    aria-hidden="true"
+                  >
+                    <path d="M8 2h8a2 2 0 0 1 2 2v14a4 4 0 0 1-4 4H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                    <path d="M18 18a2 2 0 0 1-2 2H6" />
+                  </svg>
+                  <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                    <strong>Historical Retention Record (Executive Superadmin View):</strong> Accounts listed here have been permanently deleted and cannot be reactivated or used to log in. In accordance with enterprise audit standards, all past deliveries, transactions, approvals, and actions retain full attribution to the original employee identity.
+                  </span>
+                </div>
+              )}
+
+              {userStatusTab === "deactivated" && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    background: "rgba(100, 116, 139, 0.08)",
+                    border: "1px solid rgba(100, 116, 139, 0.2)",
+                    margin: "12px 0 16px",
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ flexShrink: 0, color: "var(--color-text-secondary)" }}
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.4 }}>
+                    <strong>Ex-Employee Archive:</strong> Deactivated staff accounts are prevented from logging in. All historical delivery assignments, expense entries, and audit trail records remain intact. You can reactivate an account at any time via the action menu.
+                  </span>
+                </div>
+              )}
+
+              {userStatusTab === "deleted" ? (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
                       <tr>
-                        <td colSpan={7} className="table-empty-cell">
-                          <div className="empty-state minimal">
-                            <strong className="empty-state-title">No staff accounts found</strong>
-                            <span className="empty-state-desc">No registered staff users match the active view.</span>
-                          </div>
-                        </td>
+                        <th>Historical Staff Member</th>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Deletion Details</th>
+                        <th>Documented Reason</th>
+                        <th>Attribution Status</th>
                       </tr>
-                    ) : (
-                      paginatedUsers.map((user, userIndex) => {
-                      const isRecoveryActive = Boolean(
-                        user.recoveryExpiresAt && new Date(user.recoveryExpiresAt) > new Date(),
-                      );
-                      const isSelf = user.id === actor.id;
-
-                      return (
-                        <tr
-                          key={user.id}
-                          style={{
-                            position: "relative",
-                            zIndex: openActionMenuUserId === user.id ? 150 : undefined,
-                          }}
-                        >
-                          <td>
-                            <strong>{user.fullName}</strong>
-                            <br />
-                            <small style={{ color: "var(--color-text-muted)", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                              <span>{user.email}</span>
-                              {user.phoneNumber ? (
-                                <>
-                                  <span aria-hidden="true" style={{ opacity: 0.5 }}>·</span>
-                                  <span>{user.phoneNumber}</span>
-                                </>
-                              ) : null}
-                            </small>
-                          </td>
-                          <td>
-                            <span
-                              style={{
-                                fontFamily: "monospace",
-                                fontWeight: 600,
-                                color: "var(--color-text-primary)",
-                              }}
-                            >
-                              @{user.username}
-                            </span>
-                          </td>
-                          <td>
-                            <RoundedSelect
-                              value={user.role}
-                              options={ROLE_OPTIONS}
-                              onChange={(nextRole) =>
-                                handleRoleChange(user.id, nextRole as UserRole)
-                              }
-                              ariaLabel={`Change role for ${user.fullName}`}
-                            />
-                          </td>
-                          <td>
-                            <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 500 }}>
-                              {user.accessLevelLabel}
-                            </span>
-                          </td>
-                          <td>
-                            {isRecoveryActive ? (
-                              <span
-                                style={{
-                                  fontSize: "12px",
-                                  color: "#b45309",
-                                  fontWeight: 500,
-                                }}
-                                title={`Reset authorized until ${new Date(user.recoveryExpiresAt!).toLocaleTimeString()}`}
-                              >
-                                Reset active
-                              </span>
-                            ) : user.mustChangePassword ? (
-                              <span
-                                style={{
-                                  fontSize: "12px",
-                                  color: "#2563eb",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                Pending
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  fontSize: "12px",
-                                  color: "#059669",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                Ready
-                              </span>
-                            )}
-                          </td>
-                          <td>
-                            <span
-                              style={{
-                                fontSize: "12px",
-                                color: user.isActive ? "#059669" : "var(--color-text-muted)",
-                                fontWeight: 500,
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "5px",
-                              }}
-                            >
-                              <span
-                                aria-hidden="true"
-                                style={{
-                                  width: "6px",
-                                  height: "6px",
-                                  borderRadius: "50%",
-                                  background: user.isActive ? "#10b981" : "var(--color-text-muted)",
-                                  flexShrink: 0,
-                                }}
-                              />
-                              {user.isActive ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                          <td style={{ textAlign: "right" }}>
-                            <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
-                              <button
-                                type="button"
-                                className="row-action-more-btn"
-                                aria-label={`Actions for ${user.fullName}`}
-                                aria-haspopup="menu"
-                                aria-expanded={openActionMenuUserId === user.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  const spaceBelow = window.innerHeight - rect.bottom;
-                                  const isNearBottom = spaceBelow < 220 || userIndex >= paginatedUsers.length - 2;
-                                  setActionMenuOpensAbove(isNearBottom);
-                                  setOpenActionMenuUserId((curr) => (curr === user.id ? null : user.id));
-                                }}
-                                title="More actions"
-                              >
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                                  <circle cx="8" cy="3" r="1.5" />
-                                  <circle cx="8" cy="8" r="1.5" />
-                                  <circle cx="8" cy="13" r="1.5" />
-                                </svg>
-                              </button>
-
-                              {openActionMenuUserId === user.id && (
-                                <div
-                                  className={`row-action-menu${actionMenuOpensAbove ? " opens-above" : ""}`}
-                                  role="menu"
-                                  aria-label={`Actions for ${user.fullName}`}
-                                >
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setOpenActionMenuUserId(null);
-                                      setEditingUser(user);
-                                      setNewUsernameInput(user.username);
-                                      setEditUsernameError(null);
-                                    }}
-                                  >
-                                    Edit Username
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setOpenActionMenuUserId(null);
-                                      setEditingContactUser(user);
-                                      setEditEmailInput(user.email);
-                                      setEditPhoneInput(user.phoneNumber || "");
-                                      setEditContactError(null);
-                                    }}
-                                  >
-                                    Edit Contact Info
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    disabled={isSelf}
-                                    onClick={() => {
-                                      setOpenActionMenuUserId(null);
-                                      setAuthorizingUser(user);
-                                      setAuthorizeError(null);
-                                    }}
-                                    title={
-                                      isSelf
-                                        ? "Admins cannot authorize reset for their own account"
-                                        : undefined
-                                    }
-                                  >
-                                    Authorize Password Reset
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    disabled={isSelf}
-                                    onClick={() => {
-                                      setOpenActionMenuUserId(null);
-                                      handleToggleActive(user);
-                                    }}
-                                    title={
-                                      isSelf
-                                        ? "Cannot deactivate your own active Admin account"
-                                        : undefined
-                                    }
-                                  >
-                                    {user.isActive ? "Deactivate User" : "Reactivate User"}
-                                  </button>
-                                  <div className="row-action-menu-divider" role="separator" />
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="row-action-menu-danger"
-                                    disabled={isSelf}
-                                    onClick={() => {
-                                      setOpenActionMenuUserId(null);
-                                      setUserToDelete(user);
-                                    }}
-                                    title={
-                                      isSelf
-                                        ? "Cannot delete your own active Admin account"
-                                        : undefined
-                                    }
-                                  >
-                                    Delete User
-                                  </button>
-                                </div>
-                              )}
+                    </thead>
+                    <tbody>
+                      {deletedUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="table-empty-cell">
+                            <div className="empty-state minimal">
+                              <strong className="empty-state-title">No permanently deleted employee records</strong>
+                              <span className="empty-state-desc">Historical accounts will appear here after permanent executive deletion.</span>
                             </div>
                           </td>
                         </tr>
-                      );
-                    }))}
-                  </tbody>
-                </table>
-              </div>
+                      ) : (
+                        deletedUsers.map((delUser) => (
+                          <tr key={delUser.id}>
+                            <td>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <strong>{delUser.fullName}</strong>
+                                <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "rgba(239, 68, 68, 0.1)", color: "#dc2626", fontWeight: 700 }}>
+                                  Permanently Deleted
+                                </span>
+                              </div>
+                              <small style={{ color: "var(--color-text-muted)", fontSize: "11px" }}>
+                                {delUser.email}
+                              </small>
+                            </td>
+                            <td>
+                              <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
+                                @{delUser.username}
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: "12px", fontWeight: 500 }}>
+                                {delUser.roleLabel}
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: "12px" }}>
+                                {delUser.deletedAt ? new Date(delUser.deletedAt).toLocaleDateString() : "Historical"}
+                              </span>
+                              <br />
+                              <small style={{ color: "var(--color-text-muted)", fontSize: "11px" }}>
+                                Authorizer: @{delUser.deletedBy || "superadmin"}
+                              </small>
+                            </td>
+                            <td style={{ maxWidth: "260px" }}>
+                              <span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                                {delUser.deletedReason || "Corporate personnel record retention."}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  padding: "3px 8px",
+                                  borderRadius: "6px",
+                                  background: "rgba(16, 185, 129, 0.1)",
+                                  color: "#059669",
+                                  fontWeight: 650,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                <svg
+                                  width="11"
+                                  height="11"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                Preserved in Audit &amp; Transactions
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <SortableTableHeader
+                          label="Staff Member"
+                          sortKey="name"
+                          activeSortKey={userSort.key}
+                          direction={userSort.direction}
+                          onSort={(key, direction) => setUserSort({ key, direction })}
+                        />
+                        <SortableTableHeader
+                          label="Username"
+                          sortKey="username"
+                          activeSortKey={userSort.key}
+                          direction={userSort.direction}
+                          onSort={(key, direction) => setUserSort({ key, direction })}
+                        />
+                        <SortableTableHeader
+                          label="Role"
+                          sortKey="role"
+                          activeSortKey={userSort.key}
+                          direction={userSort.direction}
+                          onSort={(key, direction) => setUserSort({ key, direction })}
+                        />
+                        <SortableTableHeader
+                          label="Access"
+                          sortKey="access"
+                          activeSortKey={userSort.key}
+                          direction={userSort.direction}
+                          onSort={(key, direction) => setUserSort({ key, direction })}
+                        />
+                        <SortableTableHeader
+                          label="Status"
+                          sortKey="status"
+                          activeSortKey={userSort.key}
+                          direction={userSort.direction}
+                          defaultDirection="desc"
+                          onSort={(key, direction) => setUserSort({ key, direction })}
+                        />
+                        <th><span className="sr-only">More actions</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="table-empty-cell">
+                            <div className="empty-state minimal">
+                              <strong className="empty-state-title">
+                                {userStatusTab === "active"
+                                  ? "No active staff accounts found"
+                                  : "No deactivated accounts in archive"}
+                              </strong>
+                              <span className="empty-state-desc">
+                                {userStatusTab === "active"
+                                  ? "No registered staff users match the active view."
+                                  : "When former employees depart, deactivating their accounts archives them here."}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedUsers.map((user, userIndex) => {
+                        const isRecoveryActive = Boolean(
+                          user.recoveryExpiresAt && new Date(user.recoveryExpiresAt) > new Date(),
+                        );
+                        const isSelf = user.id === actor.id;
+
+                        return (
+                          <tr
+                            key={user.id}
+                            style={{
+                              position: "relative",
+                              zIndex: openActionMenuUserId === user.id ? 150 : undefined,
+                            }}
+                          >
+                            <td>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <strong>{user.fullName}</strong>
+                                {user.isSuperadmin && (
+                                  <span
+                                    style={{
+                                      padding: "2px 8px",
+                                      borderRadius: "999px",
+                                      background: "linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.3))",
+                                      border: "1px solid rgba(245, 158, 11, 0.5)",
+                                      color: "#b45309",
+                                      fontSize: "10.5px",
+                                      fontWeight: 750,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                    }}
+                                  >
+                                    <svg
+                                      width="11"
+                                      height="11"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      aria-hidden="true"
+                                    >
+                                      <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.24A2 2 0 0 1 17.22 18H6.78a2 2 0 0 1-1.927-1.741L2.019 6.019a.5.5 0 0 1 .798-.52l4.277 3.665a1 1 0 0 0 1.516-.294z" />
+                                      <path d="M5 21h14" />
+                                    </svg>
+                                    Superadmin
+                                  </span>
+                                )}
+                              </div>
+                              <small style={{ color: "var(--color-text-muted)", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                {user.isSuperadmin && (
+                                  <span style={{ fontWeight: 650, color: "var(--color-accent-deep)" }}>
+                                    {user.designation || "President"} ·
+                                  </span>
+                                )}
+                                <span>{user.email}</span>
+                                {user.phoneNumber ? (
+                                  <>
+                                    <span aria-hidden="true" style={{ opacity: 0.5 }}>·</span>
+                                    <span>{user.phoneNumber}</span>
+                                  </>
+                                ) : null}
+                              </small>
+                            </td>
+                            <td>
+                              <span
+                                style={{
+                                  fontFamily: "monospace",
+                                  fontWeight: 600,
+                                  color: "var(--color-text-primary)",
+                                }}
+                              >
+                                @{user.username}
+                              </span>
+                            </td>
+                            <td>
+                              {user.isSuperadmin ? (
+                                <span
+                                  style={{
+                                    display: "inline-block",
+                                    padding: "4px 10px",
+                                    borderRadius: "999px",
+                                    background: "rgba(245, 158, 11, 0.12)",
+                                    color: "#b45309",
+                                    fontSize: "11.5px",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  President & CEO
+                                </span>
+                              ) : (
+                                <RoundedSelect
+                                  value={user.role}
+                                  options={ROLE_OPTIONS}
+                                  onChange={(nextRole) =>
+                                    handleRoleChange(user.id, nextRole as UserRole)
+                                  }
+                                  ariaLabel={`Change role for ${user.fullName}`}
+                                />
+                              )}
+                            </td>
+                            <td>
+                              <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 500 }}>
+                                {user.accessLevelLabel}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                style={{
+                                  fontSize: "12px",
+                                  color: user.isActive ? "#059669" : "var(--color-text-muted)",
+                                  fontWeight: 500,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                }}
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  style={{
+                                    width: "6px",
+                                    height: "6px",
+                                    borderRadius: "50%",
+                                    background: user.isActive ? "#10b981" : "var(--color-text-muted)",
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                {user.isActive ? "Active" : "Deactivated"}
+                                {isRecoveryActive ? (
+                                  <span
+                                    style={{
+                                      fontSize: "11px",
+                                      color: "#d97706",
+                                      fontWeight: 500,
+                                      marginLeft: "4px",
+                                    }}
+                                    title={`Reset authorized until ${new Date(user.recoveryExpiresAt!).toLocaleTimeString()}`}
+                                  >
+                                    (Reset active)
+                                  </span>
+                                ) : null}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
+                                <button
+                                  type="button"
+                                  className="row-action-more-btn"
+                                  aria-label={`Actions for ${user.fullName}`}
+                                  aria-haspopup="menu"
+                                  aria-expanded={openActionMenuUserId === user.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const spaceBelow = window.innerHeight - rect.bottom;
+                                    const isNearBottom = spaceBelow < 220 || userIndex >= paginatedUsers.length - 2;
+                                    setActionMenuOpensAbove(isNearBottom);
+                                    setOpenActionMenuUserId((curr) => (curr === user.id ? null : user.id));
+                                  }}
+                                  title="More actions"
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+
+                                {openActionMenuUserId === user.id && (
+                                  <div
+                                    className={`row-action-menu${actionMenuOpensAbove ? " opens-above" : ""}`}
+                                    role="menu"
+                                    aria-label={`Actions for ${user.fullName}`}
+                                  >
+                                    {user.isSuperadmin && !actor.isSuperadmin ? (
+                                      <div style={{ padding: "8px 12px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.4, display: "flex", alignItems: "flex-start", gap: "6px" }}>
+                                        <svg
+                                          width="14"
+                                          height="14"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          style={{ flexShrink: 0, marginTop: "2px", color: "var(--color-accent-deep)" }}
+                                          aria-hidden="true"
+                                        >
+                                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                        </svg>
+                                        <span><strong>Executive Account:</strong> Regular Admins cannot modify, deactivate, or delete the Superadmin account.</span>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          onClick={() => {
+                                            setOpenActionMenuUserId(null);
+                                            setEditingUser(user);
+                                            setNewUsernameInput(user.username);
+                                            setEditUsernameError(null);
+                                          }}
+                                        >
+                                          Edit Username
+                                        </button>
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          onClick={() => {
+                                            setOpenActionMenuUserId(null);
+                                            setEditingContactUser(user);
+                                            setEditEmailInput(user.email);
+                                            setEditPhoneInput(user.phoneNumber || "");
+                                            setEditContactError(null);
+                                          }}
+                                        >
+                                          Edit Contact Info
+                                        </button>
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          onClick={() => {
+                                            setOpenActionMenuUserId(null);
+                                            setPermissionsModalUser(user);
+                                          }}
+                                        >
+                                          Configure Permissions
+                                        </button>
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          disabled={isSelf || user.isSuperadmin}
+                                          onClick={() => {
+                                            setOpenActionMenuUserId(null);
+                                            setAuthorizingUser(user);
+                                            setAuthorizeError(null);
+                                          }}
+                                          title={
+                                            isSelf
+                                              ? "Admins cannot authorize reset for their own account"
+                                              : user.isSuperadmin
+                                              ? "Superadmin cannot be reset via this action"
+                                              : undefined
+                                          }
+                                        >
+                                          Authorize Password Reset
+                                        </button>
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          disabled={isSelf || user.isSuperadmin}
+                                          onClick={() => {
+                                            setOpenActionMenuUserId(null);
+                                            handleToggleActive(user);
+                                          }}
+                                          title={
+                                            isSelf
+                                              ? "Cannot deactivate your own active Admin account"
+                                              : user.isSuperadmin
+                                              ? "Superadmin account cannot be deactivated"
+                                              : undefined
+                                          }
+                                        >
+                                          {user.isActive ? "Deactivate User" : "Reactivate User"}
+                                        </button>
+                                        <div className="row-action-menu-divider" role="separator" />
+                                        {actor.isSuperadmin ? (
+                                          <button
+                                            type="button"
+                                            role="menuitem"
+                                            className="row-action-menu-danger"
+                                            disabled={isSelf || user.isSuperadmin}
+                                            onClick={() => {
+                                              setOpenActionMenuUserId(null);
+                                              setPermanentDeleteModalUser(user);
+                                            }}
+                                            title={
+                                              isSelf
+                                                ? "Cannot delete your own active Superadmin account"
+                                                : user.isSuperadmin
+                                                ? "Superadmin account cannot be permanently deleted"
+                                                : undefined
+                                            }
+                                          >
+                                            Permanently Delete
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            role="menuitem"
+                                            className="row-action-menu-danger"
+                                            disabled
+                                            title="Permanent deletion strictly requires Superadmin (President) authority"
+                                            style={{ opacity: 0.5, cursor: "not-allowed" }}
+                                          >
+                                            Permanently Delete
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {sortedUsers.length > 0 ? (
                 <TablePagination
@@ -1328,7 +1730,18 @@ export default function UserManagementPage() {
                   <h2>Audit Trail</h2>
                   <p>Detailed event log of data changes, staff actions, and security operations.</p>
                 </div>
-                <span className="ledger-total-badge">
+                <span
+                  className="ledger-total-badge"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    boxShadow: "none",
+                    padding: 0,
+                    fontSize: "12px",
+                    color: "var(--color-text-secondary)",
+                    fontWeight: 500,
+                  }}
+                >
                   {filteredAuditEntries.length} of {auditEntries.length} events
                 </span>
               </div>
@@ -1495,7 +1908,36 @@ export default function UserManagementPage() {
                                 </div>
                               </td>
                               <td>
-                                <span className={`pod-status ${visuals.className}`}>
+                                <span
+                                  className={`audit-action-indicator ${visuals.className}`}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    background: "transparent",
+                                    border: "none",
+                                    borderRadius: 0,
+                                    boxShadow: "none",
+                                    padding: 0,
+                                    fontSize: "12px",
+                                    fontWeight: 500,
+                                    lineHeight: 1.4,
+                                    textTransform: "none",
+                                    letterSpacing: "normal",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  <i
+                                    aria-hidden="true"
+                                    style={{
+                                      display: "inline-block",
+                                      width: "6px",
+                                      height: "6px",
+                                      borderRadius: "50%",
+                                      flexShrink: 0,
+                                      background: "currentColor",
+                                    }}
+                                  />
                                   {visuals.badgeLabel}
                                 </span>
                               </td>
@@ -1658,7 +2100,36 @@ export default function UserManagementPage() {
                   >
                     Action
                   </div>
-                  <span className={`pod-status ${getActionVisuals(selectedAuditEntry.action).className}`}>
+                  <span
+                    className={`audit-action-indicator ${getActionVisuals(selectedAuditEntry.action).className}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      background: "transparent",
+                      border: "none",
+                      borderRadius: 0,
+                      boxShadow: "none",
+                      padding: 0,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      lineHeight: 1.4,
+                      textTransform: "none",
+                      letterSpacing: "normal",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <i
+                      aria-hidden="true"
+                      style={{
+                        display: "inline-block",
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        flexShrink: 0,
+                        background: "currentColor",
+                      }}
+                    />
                     {getActionVisuals(selectedAuditEntry.action).badgeLabel}
                   </span>
                 </div>
@@ -2171,6 +2642,393 @@ export default function UserManagementPage() {
             document.body,
           )
         : null}
+
+      {/* Temporary Password Popup Modal */}
+      {tempPasswordPopup && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="temp-password-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => setTempPasswordPopup(null)}
+              />
+              <div
+                className="routex-dialog"
+                style={{
+                  maxWidth: "480px",
+                  borderRadius: "16px",
+                  overflow: "hidden",
+                  boxShadow: "0 24px 64px rgba(15, 23, 21, 0.32)",
+                }}
+              >
+                <header
+                  className="routex-dialog-header"
+                  style={{
+                    padding: "18px 22px",
+                    borderBottom: "1px solid var(--color-border)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div
+                      style={{
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "10px",
+                        background: tempPasswordPopup.isNewlyProvisioned
+                          ? "rgba(16, 185, 129, 0.12)"
+                          : "rgba(245, 158, 11, 0.12)",
+                        color: tempPasswordPopup.isNewlyProvisioned
+                          ? "var(--color-primary, #059669)"
+                          : "var(--color-accent, #b45309)",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2
+                        id="temp-password-dialog-title"
+                        style={{
+                          margin: 0,
+                          fontSize: "16px",
+                          fontWeight: 700,
+                          color: "var(--color-text-primary)",
+                        }}
+                      >
+                        {tempPasswordPopup.isNewlyProvisioned
+                          ? "Account Provisioned"
+                          : "Temporary Password"}
+                      </h2>
+                      <p
+                        style={{
+                          margin: "2px 0 0",
+                          fontSize: "11.5px",
+                          color: "var(--color-text-secondary)",
+                        }}
+                      >
+                        {tempPasswordPopup.isNewlyProvisioned
+                          ? "User onboarding credentials ready to share."
+                          : "Randomly generated temporary access credential."}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="routex-dialog-close"
+                    aria-label="Close dialog"
+                    onClick={() => setTempPasswordPopup(null)}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontSize: "20px",
+                      cursor: "pointer",
+                      color: "var(--color-text-muted)",
+                      padding: "4px",
+                      lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
+                </header>
+
+                <div
+                  className="routex-dialog-body"
+                  style={{
+                    padding: "20px 22px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "16px",
+                  }}
+                >
+                  {/* Account Summary */}
+                  <div
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: "10px",
+                      background: "var(--color-surface-subtle)",
+                      border: "1px solid var(--color-border)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: "var(--color-text-muted)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Target Account
+                      </span>
+                      <strong style={{ fontSize: "13.5px", color: "var(--color-text-primary)" }}>
+                        {tempPasswordPopup.fullName}
+                      </strong>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          color: "var(--color-text-secondary)",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        @{tempPasswordPopup.username}
+                      </span>
+                    </div>
+                    {tempPasswordPopup.roleLabel ? (
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          background: "var(--color-surface)",
+                          border: "1px solid var(--line)",
+                          fontSize: "11.5px",
+                          fontWeight: 600,
+                          color: "var(--color-text-secondary)",
+                        }}
+                      >
+                        {tempPasswordPopup.roleLabel}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {/* Password Card */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      padding: "16px",
+                      borderRadius: "12px",
+                      background: "var(--color-surface-subtle)",
+                      border: "1.5px dashed var(--color-accent, #b45309)",
+                      textAlign: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        fontWeight: 700,
+                        color: "var(--color-accent-deep)",
+                      }}
+                    >
+                      One-Time Temporary Password
+                    </span>
+                    <div
+                      style={{
+                        padding: "10px 16px",
+                        borderRadius: "8px",
+                        background: "var(--color-surface)",
+                        border: "1px solid var(--color-border)",
+                        fontFamily:
+                          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                        fontSize: "18px",
+                        fontWeight: 750,
+                        letterSpacing: "0.12em",
+                        color: "var(--color-accent-deep)",
+                        userSelect: "all",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {tempPasswordPopup.password}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        gap: "8px",
+                        marginTop: "4px",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={tempPasswordCopied ? "primary-button" : "secondary-button"}
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 650,
+                          padding: "7px 16px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                        onClick={() => {
+                          void navigator.clipboard.writeText(tempPasswordPopup.password);
+                          setTempPasswordCopied(true);
+                          toast.success("Password copied to clipboard!");
+                          setTimeout(() => setTempPasswordCopied(false), 2500);
+                        }}
+                      >
+                        {tempPasswordCopied ? (
+                          <>
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                              <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                            </svg>
+                            Copy Password
+                          </>
+                        )}
+                      </button>
+                      {!tempPasswordPopup.isNewlyProvisioned && (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          style={{ fontSize: "12px", padding: "7px 14px" }}
+                          onClick={() => {
+                            const newPwd = generateRandomTemporaryPassword();
+                            setTemporaryPassword(newPwd);
+                            setTempPasswordPopup((curr) =>
+                              curr ? { ...curr, password: newPwd } : null,
+                            );
+                            setTempPasswordCopied(false);
+                            toast.info("Generated new random password");
+                          }}
+                          title="Generate a new random temporary password"
+                        >
+                          ↻ Regenerate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Security Notice */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      background: "rgba(245, 158, 11, 0.08)",
+                      border: "1px solid rgba(245, 158, 11, 0.25)",
+                      fontSize: "11.5px",
+                      lineHeight: 1.45,
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      style={{ flexShrink: 0, marginTop: "2px", color: "var(--color-accent)" }}
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>
+                      The user will be required to change this temporary password upon first
+                      signing in. Provide this password via a secure communication channel.
+                    </span>
+                  </div>
+                </div>
+
+                <footer
+                  className="routex-dialog-footer"
+                  style={{
+                    padding: "14px 22px",
+                    borderTop: "1px solid var(--color-border)",
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    gap: "10px",
+                    flexShrink: 0,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="primary-button"
+                    style={{ minHeight: "36px", padding: "0 20px", fontSize: "12.5px" }}
+                    onClick={() => setTempPasswordPopup(null)}
+                  >
+                    Done
+                  </button>
+                </footer>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {permissionsModalUser && (
+        <UserDepartmentPermissionsModal
+          user={permissionsModalUser}
+          allUsers={users}
+          onClose={() => setPermissionsModalUser(null)}
+          onSuccess={(updated, msg) => {
+            setUsers((curr) =>
+              curr.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)),
+            );
+            toast.success(msg);
+          }}
+        />
+      )}
+
+      {permanentDeleteModalUser && (
+        <PermanentDeleteUserModal
+          user={permanentDeleteModalUser}
+          onClose={() => setPermanentDeleteModalUser(null)}
+          onSuccess={(deletedId, msg) => {
+            setUsers((curr) => curr.filter((u) => u.id !== deletedId));
+            toast.success(msg);
+            void loadAuditEntries(true);
+          }}
+        />
+      )}
     </>
   );
 }

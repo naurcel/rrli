@@ -44,6 +44,10 @@ export function getRequiredPermissionForPath(pathname: string): Permission | nul
     return "profitability:view";
   }
 
+  if (pathname === "/finance/import" || pathname.startsWith("/finance/import/") || pathname.startsWith("/api/finance/import")) {
+    return "finance:manage";
+  }
+
   if (pathname === "/finance" || pathname.startsWith("/finance/") || pathname.startsWith("/api/finance")) {
     return "finance:view";
   }
@@ -58,6 +62,10 @@ export function getRequiredPermissionForPath(pathname: string): Permission | nul
 
   if (pathname === "/settings" || pathname.startsWith("/settings/")) {
     return "settings:view";
+  }
+
+  if (pathname === "/initial-setup" || pathname.startsWith("/initial-setup/")) {
+    return null;
   }
 
   return "dashboard:view";

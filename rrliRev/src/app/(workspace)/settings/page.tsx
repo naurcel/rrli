@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { OperationalTopbar } from "@/components/operational-topbar";
@@ -22,9 +23,29 @@ import {
 } from "@/components/profile-photo";
 import {
   evaluatePasswordCriteria,
+  normalizeSecurityAnswer,
   PREDEFINED_SECURITY_QUESTIONS,
   validateUsernameFormat,
 } from "@/lib/auth/password-policy";
+import {
+  formatDateRange,
+  GlobalDateRangePicker,
+  toDateKey,
+  useGlobalDateRange,
+  type DateRange,
+} from "@/components/global-date-range-picker";
+import { ReportsDataExportTab } from "@/components/reports-data-export-tab";
+import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
+import {
+  readBrowserPreviewExpenses,
+  ROUTEX_COMPANY_EXPENSES_CHANGED,
+} from "@/features/finance/browser-preview-expenses";
+import type { CompanyExpense } from "@/features/finance/company-expense-domain";
+import {
+  canAccessDataExportTab,
+  readExportRequests,
+  ROUTEX_EXPORT_REQUESTS_CHANGED,
+} from "@/features/reports/data-export-engine";
 import {
   canImportAndReviewExcel,
   canManageCompanyExpenses,
@@ -94,9 +115,64 @@ export default function SettingsPage() {
   const [securityFeedback, setSecurityFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [securitySubmitting, setSecuritySubmitting] = useState(false);
 
+  // Emergency Backup Key state
+  const [backupKeyPassword, setBackupKeyPassword] = useState("");
+  const [backupKeyFeedback, setBackupKeyFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [backupKeySubmitting, setBackupKeySubmitting] = useState(false);
+  const [generatedBackupKey, setGeneratedBackupKey] = useState<string | null>(null);
+  const [hasExistingBackupKey, setHasExistingBackupKey] = useState(false);
+
   // Design Preferences state & Dark mode sync
-  type SettingsTab = "account" | "appearance" | "security" | "permissions";
+  type SettingsTab = "account" | "appearance" | "security" | "permissions" | "export";
   const [activeTab, setActiveTab] = useState<SettingsTab>("account");
+
+  const ALL_TIME_RANGE: DateRange = { startDate: null, endDate: null };
+  const { range } = useGlobalDateRange();
+  const { deliveries: allDeliveries } = usePersistedDeliveries(ALL_TIME_RANGE);
+  const [companyExpenses, setCompanyExpenses] = useState<CompanyExpense[]>([]);
+  const [pendingExportRequestsCount, setPendingExportRequestsCount] = useState(0);
+
+  useEffect(() => {
+    const syncPending = () => {
+      const reqs = readExportRequests();
+      setPendingExportRequestsCount(reqs.filter((r) => r.status === "pending").length);
+    };
+    syncPending();
+    window.addEventListener(ROUTEX_EXPORT_REQUESTS_CHANGED, syncPending);
+    window.addEventListener("storage", syncPending);
+    return () => {
+      window.removeEventListener(ROUTEX_EXPORT_REQUESTS_CHANGED, syncPending);
+      window.removeEventListener("storage", syncPending);
+    };
+  }, []);
+
+  useEffect(() => {
+    async function fetchExpenses() {
+      try {
+        const res = await fetch("/api/finance/expenses?pageSize=100");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.ok && Array.isArray(data.items)) {
+            setCompanyExpenses(data.items);
+            return;
+          }
+        }
+      } catch {
+        // Fallback
+      }
+      setCompanyExpenses(readBrowserPreviewExpenses());
+    }
+
+    fetchExpenses();
+
+    const onExpensesChanged = () => {
+      setCompanyExpenses(readBrowserPreviewExpenses());
+    };
+    window.addEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, onExpensesChanged);
+    return () => {
+      window.removeEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, onExpensesChanged);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -104,6 +180,7 @@ export default function SettingsPage() {
       if (hash === "appearance" || hash === "design") setActiveTab("appearance");
       else if (hash === "security") setActiveTab("security");
       else if (hash === "permissions") setActiveTab("permissions");
+      else if (hash === "export" || hash === "data-export") setActiveTab("export");
       else if (hash === "account") setActiveTab("account");
     }
   }, []);
@@ -214,6 +291,7 @@ export default function SettingsPage() {
             setContactPhone(data.actor.phoneNumber);
           }
           if (data.actor.securityQuestion) setCurrentQuestion(data.actor.securityQuestion);
+          if (data.actor.hasBackupKey) setHasExistingBackupKey(Boolean(data.actor.hasBackupKey));
           if (data.actor.avatarUrl) {
             setCurrentAvatar(data.actor.avatarUrl);
             try {
@@ -491,7 +569,7 @@ export default function SettingsPage() {
       return;
     }
 
-    if (securityAnswer.trim() !== confirmSecurityAnswer.trim()) {
+    if (normalizeSecurityAnswer(securityAnswer) !== normalizeSecurityAnswer(confirmSecurityAnswer)) {
       setSecurityFeedback({ tone: "error", text: "Security answers do not match." });
       return;
     }
@@ -532,6 +610,46 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleGenerateBackupKey(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBackupKeyFeedback(null);
+    if (!backupKeyPassword) {
+      setBackupKeyFeedback({ tone: "error", text: "Current password is required to generate a backup key." });
+      return;
+    }
+
+    try {
+      setBackupKeySubmitting(true);
+      const res = await fetch("/api/auth/backup-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: backupKeyPassword }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        setBackupKeyFeedback({
+          tone: "error",
+          text: data?.message || "Failed to generate emergency backup key.",
+        });
+        return;
+      }
+
+      setGeneratedBackupKey(data.backupKey);
+      setHasExistingBackupKey(true);
+      setBackupKeyPassword("");
+      setBackupKeyFeedback({
+        tone: "success",
+        text: "Emergency backup key generated successfully! Save this key now in a secure offline location.",
+      });
+      toast.success("Emergency backup key generated!");
+    } catch {
+      setBackupKeyFeedback({ tone: "error", text: "Network error generating emergency backup key." });
+    } finally {
+      setBackupKeySubmitting(false);
+    }
+  }
+
   const activeAvatar = previewUrl || currentAvatar;
   const initials = getUserInitials(actor.fullName, actor.username);
   const cleanFullName = actor.fullName.replace(/\s*\([^)]*\)/g, "").trim() || actor.fullName;
@@ -540,8 +658,8 @@ export default function SettingsPage() {
     <>
       <OperationalTopbar contextLabel="Settings" showDateFilter={false} />
 
-      <div className="content-wrap settings-page-wrap">
-        <div className="settings-layout-grid">
+      <div className={`content-wrap settings-page-wrap${activeTab === "export" ? " is-export" : ""}`}>
+        <div className={`settings-layout-grid${activeTab === "export" ? " is-export" : ""}`}>
           {/* Left Navigation: Clean text tabs */}
           <aside className="settings-tabs-sidebar" aria-label="Settings categories">
             <nav className="settings-tabs-list" role="tablist">
@@ -589,11 +707,44 @@ export default function SettingsPage() {
               >
                 Permissions
               </button>
+              {canAccessDataExportTab(actor.role) && (
+                <button
+                  type="button"
+                  role="tab"
+                  id="tab-export"
+                  aria-selected={activeTab === "export"}
+                  aria-controls="panel-export"
+                  className={`settings-tab-btn${activeTab === "export" ? " active" : ""}`}
+                  onClick={() => handleSelectTab("export")}
+                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}
+                >
+                  <span>Export Data</span>
+                  {actor.role === "admin" && pendingExportRequestsCount > 0 ? (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        minWidth: "18px",
+                        height: "18px",
+                        padding: "0 5px",
+                        borderRadius: "999px",
+                        fontSize: "10.5px",
+                        fontWeight: 700,
+                        background: "var(--color-accent, #b45309)",
+                        color: "#ffffff",
+                      }}
+                    >
+                      {pendingExportRequestsCount}
+                    </span>
+                  ) : null}
+                </button>
+              )}
             </nav>
           </aside>
 
           {/* Right Main Content Column */}
-          <div className="settings-tab-content-area">
+          <div className={`settings-tab-content-area${activeTab === "export" ? " is-expanded" : ""}`}>
             {activeTab === "account" && (
               <div id="panel-account" role="tabpanel" aria-labelledby="tab-account" className="settings-tab-panel">
                 {/* Profile Centerpiece (Google Account Mobile Inspired - Borderless with Animated Glowing Avatar) */}
@@ -1108,7 +1259,158 @@ export default function SettingsPage() {
               </div>
             </form>
           </section>
-                {/* Section 4: Account Security Status */}
+
+          {/* Section 4: Emergency Backup Key */}
+          <section className="records-card settings-card-section" aria-label="Emergency Backup Key">
+            <div className="settings-section-header">
+              <h2>Emergency Backup Key</h2>
+              <p>Generate a single-use emergency backup key for offline account recovery.</p>
+            </div>
+
+            <p className="settings-explanation-text">
+              Emergency backup keys allow you to recover account access if you forget your password or cannot answer your security question.
+              Each key is strictly <strong>single-use</strong>. Generating a new key invalidates any prior key immediately.
+              Plaintext backup keys are never stored on RouteX servers (Argon2id cryptographic hash only).
+            </p>
+
+            {backupKeyFeedback && (
+              <div
+                className={`feedback-banner ${backupKeyFeedback.tone}`}
+                role="alert"
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  marginBottom: "16px",
+                  backgroundColor: backupKeyFeedback.tone === "success" ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
+                  color: backupKeyFeedback.tone === "success" ? "#059669" : "#dc2626",
+                  border: `1px solid ${backupKeyFeedback.tone === "success" ? "#10b981" : "#ef4444"}`,
+                }}
+              >
+                {backupKeyFeedback.text}
+              </div>
+            )}
+
+            {generatedBackupKey && (
+              <div
+                style={{
+                  padding: "16px",
+                  borderRadius: "8px",
+                  border: "1px dashed var(--color-accent-deep)",
+                  backgroundColor: "var(--color-surface-subtle)",
+                  marginBottom: "20px",
+                }}
+              >
+                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-accent-deep)", marginBottom: "4px" }}>
+                  Your New Single-Use Emergency Backup Key:
+                </div>
+                <div
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: "20px",
+                    fontWeight: 700,
+                    letterSpacing: "1.5px",
+                    padding: "10px 0",
+                    color: "var(--color-text)",
+                    userSelect: "all",
+                  }}
+                >
+                  {generatedBackupKey}
+                </div>
+                <p
+                  style={{
+                    margin: "4px 0 14px",
+                    fontSize: "12px",
+                    color: "var(--color-text-muted)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ flexShrink: 0 }}
+                    aria-hidden="true"
+                  >
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  <span>Save this key in a secure location (e.g. password manager, safe). It will never be displayed again.</span>
+                </p>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ padding: "6px 14px", fontSize: "12px", fontWeight: 600 }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedBackupKey);
+                      toast.success("Emergency backup key copied to clipboard!");
+                    }}
+                  >
+                    Copy Key
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ padding: "6px 14px", fontSize: "12px", fontWeight: 600 }}
+                    onClick={() => {
+                      const content = `ROUTEX EMERGENCY BACKUP KEY\nAccount: ${actor.username}\nKey: ${generatedBackupKey}\nGenerated: ${new Date().toISOString()}\n\nNote: This is a single-use emergency backup key. Store offline in a secure location.`;
+                      const blob = new Blob([content], { type: "text/plain" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `routex-backup-key-${actor.username}.txt`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      toast.success("Backup key downloaded!");
+                    }}
+                  >
+                    Download .txt
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleGenerateBackupKey} className="settings-stacked-form" noValidate>
+              <div className="settings-field-group">
+                <label htmlFor="input-backupkey-password" className="settings-field-label">
+                  Current Password (Identity Verification)
+                </label>
+                <input
+                  id="input-backupkey-password"
+                  type="password"
+                  required
+                  placeholder="Enter current password to generate key"
+                  value={backupKeyPassword}
+                  onChange={(e) => setBackupKeyPassword(e.target.value)}
+                  className="settings-input"
+                  style={{ maxWidth: "340px" }}
+                  minLength={8}
+                />
+              </div>
+
+              <div className="settings-form-actions">
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={backupKeySubmitting}
+                  style={{ minHeight: "42px", padding: "0 22px" }}
+                >
+                  {backupKeySubmitting ? "Generating…" : hasExistingBackupKey ? "Regenerate Backup Key" : "Generate Emergency Backup Key"}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          {/* Section 5: Account Security Status */}
           <section className="records-card settings-card-section" aria-label="Account Security Status">
             <div className="settings-section-header">
               <h2>Account Security Status</h2>
@@ -1118,15 +1420,29 @@ export default function SettingsPage() {
             <div className="settings-security-checklist-card">
               <ul className="settings-security-checklist">
                 <li className="settings-security-item">
-                  <span className="settings-check-pill ok" aria-hidden="true">✓</span>
+                  <span className="settings-check-pill ok" aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
                   <div>
                     <strong>Argon2id Password Encryption</strong>
                     <p className="settings-security-subtext">RFC 9106 cryptographic standard</p>
                   </div>
                 </li>
                 <li className="settings-security-item">
-                  <span className={`settings-check-pill ${currentQuestion !== "Not yet configured" ? "ok" : "pending"}`} aria-hidden="true">
-                    {currentQuestion !== "Not yet configured" ? "✓" : "!"}
+                  <span
+                    className={`settings-check-pill ${currentQuestion !== "Not yet configured" ? "ok" : "pending"}`}
+                    aria-hidden="true"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    {currentQuestion !== "Not yet configured" ? (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      "!"
+                    )}
                   </span>
                   <div>
                     <strong>
@@ -1138,6 +1454,33 @@ export default function SettingsPage() {
                       {currentQuestion !== "Not yet configured"
                         ? "Active self-service recovery"
                         : "Required for self-service recovery"}
+                    </p>
+                  </div>
+                </li>
+                <li className="settings-security-item">
+                  <span
+                    className={`settings-check-pill ${hasExistingBackupKey || Boolean(generatedBackupKey) ? "ok" : "pending"}`}
+                    aria-hidden="true"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    {hasExistingBackupKey || Boolean(generatedBackupKey) ? (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      "!"
+                    )}
+                  </span>
+                  <div>
+                    <strong>
+                      {hasExistingBackupKey || Boolean(generatedBackupKey)
+                        ? "Emergency Backup Key Configured"
+                        : "Emergency Backup Key Not Yet Generated"}
+                    </strong>
+                    <p className="settings-security-subtext">
+                      {hasExistingBackupKey || Boolean(generatedBackupKey)
+                        ? "Single-use key ready for emergency recovery"
+                        : "Recommended for secure offline recovery"}
                     </p>
                   </div>
                 </li>
@@ -1225,7 +1568,26 @@ export default function SettingsPage() {
           </section>
               </div>
             )}
+
+            {activeTab === "export" && canAccessDataExportTab(actor.role) && (
+              <div id="panel-export" role="tabpanel" aria-labelledby="tab-export" className="settings-tab-panel is-export">
+                <ReportsDataExportTab
+                  actor={actor}
+                  allDeliveries={allDeliveries}
+                  allCompanyExpenses={companyExpenses}
+                  dateFrom={range.startDate ? toDateKey(range.startDate) : null}
+                  dateTo={range.endDate ? toDateKey(range.endDate) : null}
+                  periodLabel={formatDateRange(range)}
+                  dateRangePicker={<GlobalDateRangePicker />}
+                />
+              </div>
+            )}
           </div>
+
+          {/* Balanced Right Spacer: only when not in full-width export tab */}
+          {activeTab !== "export" && (
+            <div className="settings-grid-spacer" aria-hidden="true" />
+          )}
         </div>
       </div>
     </>
