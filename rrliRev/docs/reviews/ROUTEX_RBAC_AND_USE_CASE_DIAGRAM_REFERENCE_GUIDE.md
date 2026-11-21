@@ -121,14 +121,16 @@ RouteX comprises **36 Canonical Use Cases** across 8 subsystems.
 
 | UC ID | Use Case Name | Primary Actor | Relationships & Triggers | Brief Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **UC-06** | **View Delivery Ledger** | View-Only Staff, Finance, Operations, Admin | `<<include>>` UC-01 | View completed delivery records in an paginated tabular ledger with gross revenue, trip expenses, and net profit. |
+| **UC-06** | **View Delivery Ledger** | View-Only Staff, Finance, Operations, Admin | `<<include>>` UC-01 | View completed delivery records in a paginated tabular ledger with gross revenue, trip expenses, and net profit. |
 | **UC-07** | **Search & Filter Deliveries** | View-Only Staff, Finance, Operations, Admin | `<<extend>>` UC-06 *(Condition: user applies filters)* | Filter ledger records by client name, truck plate, driver, or POD status; sort columns with 3-state sort controls. |
-| **UC-08** | **View Delivery Details Page** | View-Only Staff, Finance, Operations, Admin | `<<extend>>` UC-06 *(Condition: user opens a delivery)* | Navigate to `/deliveries/[id]` to inspect trip overview, vehicle specs, drop-offs, crew, and inline financial metric cards (clean layout without redundant warning alert banners). |
-| **UC-09** | **Create Delivery Record** | Operations, Admin | `<<include>>` UC-01, `<<include>>` UC-10, `<<include>>` UC-11, `<<include>>` UC-13 | Record completed trip via the 4-step wizard (`/deliveries/new`): Trip Identity, Multi-Store Drop-offs, Expenses & Crew, and Review. |
-| **UC-10** | **Record & Reorder Multi-Store Drop-off Sequence** | Operations, Admin | *(Included by UC-09 and UC-12)* | Define destination stores with vertically centered stop numbering (`top: 50%; transform: translateY(-50%)`), Up/Down nudge buttons (`▲`/`▼`) for reordering without data loss, and single `×` removal. |
-| **UC-11** | **Assign Vehicle & Crew** | Operations, Admin | *(Included by UC-09 and UC-12)* | Select truck plate, assign driver, and assign up to two helpers in a unified 1-row 3-column layout with dynamic `+ Add Helper` card slot. |
-| **UC-12** | **Edit Delivery Record (Full-Page Workflow)** | Operations, Admin | `<<include>>` UC-08, `<<include>>` UC-10, `<<include>>` UC-11, `<<include>>` UC-13 | Full-page edit route (`/deliveries/[id]/edit`) pre-populating all existing delivery data, updating via audited `PATCH /api/deliveries`, and redirecting back upon save (no popup modal). |
-| **UC-13** | **Calculate Trip Financials & Margin** | Automated Financial Engine | *(Included by UC-09 and UC-12)* | Automatically compute delivery revenue, trip expenses (fuel, tolls, crew pay, store fees), net income, and profit margin percent. Flags incomplete trips and excludes them from KPI totals. |
+| **UC-08** | **View Delivery Details Page** | View-Only Staff, Finance, Operations, Admin | `<<extend>>` UC-06 *(Condition: user opens a delivery)* | Navigate to `/deliveries/[id]` to inspect trip overview, vehicle specs, locations, derived drop-off counts, crew attribution, and adaptive financial breakdown. |
+| **UC-09** | **Create Delivery Record** | Operations, Admin | `<<include>>` UC-01, `<<include>>` UC-10, `<<include>>` UC-11, `<<include>>` UC-13 | Record completed trip (`/deliveries/new`): Trip Identity, Delivery Locations, Expenses & Crew, and Review. Subject to 3-day window unless an approved Backdating Request exists. |
+| **UC-10** | **Record Delivery Locations & Drop-off Counts** | Operations, Admin | *(Included by UC-09 and UC-12)* | Add/remove Locations (Name, Address) with numeric drop-off counts (`dropoffCount`), automatically calculating total stops/drop-offs. Individual stop records are not created. |
+| **UC-11** | **Assign Vehicle & Crew** | Operations, Admin | *(Included by UC-09 and UC-12)* | Select truck plate (Owned vs. Subcontracted), assign 1 Driver and 1–2 Helpers displaying `Name [Employee ID] · Role`. Allows drivers as helpers; prevents duplicate and same-date conflict assignments. |
+| **UC-12** | **Edit Delivery Record** | Operations, Admin | `<<include>>` UC-08, `<<include>>` UC-10, `<<include>>` UC-11, `<<include>>` UC-13 | Edit delivery route pre-populating data, updating via audited `PATCH /api/deliveries`. |
+| **UC-13** | **Calculate Trip Financials & Margin** | Automated Financial Engine | *(Included by UC-09 and UC-12)* | Automatically compute delivery revenue, trip expenses (itemized for Owned; single subcontractor amount for Subcontracted), net income, and margin. Excludes incomplete trips from aggregate KPIs. |
+| **UC-13B**| **Submit Backdating Request** | Operations | `<<extend>>` UC-09 *(Condition: trip date > 3 days ago)* | Submit a Backdating Request via the Requests Queue specifying Waybill, Date, Client, Plate, and Reason for Admin review. |
+| **UC-13C**| **Authorize Backdating Request** | Admin | `<<extend>>` UC-13B | Review, approve, or reject backdating requests with optional review notes. |
 
 ---
 
@@ -136,8 +138,8 @@ RouteX comprises **36 Canonical Use Cases** across 8 subsystems.
 
 | UC ID | Use Case Name | Primary Actor | Relationships & Triggers | Brief Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **UC-14** | **Upload Excel / CSV Trip File** | Operations, Admin | `<<include>>` UC-01 | Upload `.xlsx` / `.csv` file in the dedicated 4-step import wizard (`/deliveries/import`). |
-| **UC-15** | **Review & Validate Staged Deliveries** | Operations, Admin | `<<include>>` UC-14 | Inspect parsed rows, validate rates, auto-aggregate multi-store drop-offs under identical waybills, and detect duplicate trips. |
+| **UC-14** | **Upload Excel / CSV Trip File** | Operations, Admin | `<<include>>` UC-01 | Upload `.xlsx` / `.csv` file in the dedicated import wizard (`/deliveries/import`). |
+| **UC-15** | **Review & Validate Staged Deliveries** | Operations, Admin | `<<include>>` UC-14 | Inspect parsed rows, validate rates, auto-register unregistered truck plates, distinguish Owned vs Subcontracted, and match crew names. |
 | **UC-16** | **Confirm & Commit Batch Import** | Operations, Admin | `<<include>>` UC-15 | Atomically commit validated staging rows to the active delivery ledger; skips duplicates non-destructively. |
 
 ---
@@ -146,8 +148,9 @@ RouteX comprises **36 Canonical Use Cases** across 8 subsystems.
 
 | UC ID | Use Case Name | Primary Actor | Relationships & Triggers | Brief Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **UC-17** | **View Proof of Delivery (POD)** | View-Only Staff, Finance, Operations, Admin | `<<include>>` UC-08 | Inspect attached POD documents (signed receipt images or PDF delivery slips) inline or via zoom viewer. |
+| **UC-17** | **View Proof of Delivery (POD)** | View-Only Staff, Finance, Operations, Admin | `<<include>>` UC-08 | Inspect attached Delivery-Level documents (Waybill, fuel slips) and Location-Level PODs (signed receipts). |
 | **UC-18** | **Download POD File** | View-Only Staff, Finance, Operations, Admin | `<<extend>>` UC-17 *(Condition: user clicks download)* | Download original signed receipt or invoice for external client dispute resolution or audits. |
+| **UC-19** | **Upload Supporting Document** | Operations, Admin | `<<include>>` UC-08 | Upload digital documents associating to either the overall Delivery or a specific Location (no individual stop records created). |
 | **UC-19** | **Upload / Replace POD Document** | Operations, Admin | `<<extend>>` UC-17 *(Condition: document missing or updated)* | Attach new or replacement digital POD file to a specific delivery stop; records audit trail event. |
 
 ---

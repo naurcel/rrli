@@ -248,25 +248,10 @@ export function UserDepartmentPermissionsModal({
               Configure Permissions & Departments
             </h2>
             <span style={{ fontSize: "12px", color: "var(--color-text-secondary, #64748b)" }}>
-              {user.fullName} (@{user.username}) — Primary Role: {user.roleLabel}
+              {user.fullName} (@{user.username}) — Role: {user.roleLabel}
               {user.isSuperadmin && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", marginLeft: "6px", color: "var(--color-accent-deep)" }}>
-                  (
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.24A2 2 0 0 1 17.22 18H6.78a2 2 0 0 1-1.927-1.741L2.019 6.019a.5.5 0 0 1 .798-.52l4.277 3.665a1 1 0 0 0 1.516-.294z" />
-                    <path d="M5 21h14" />
-                  </svg>
-                  Superadmin)
+                <span style={{ marginLeft: "6px", fontWeight: 600, color: "var(--color-accent-deep)" }}>
+                  (Superadmin)
                 </span>
               )}
             </span>
@@ -307,33 +292,15 @@ export function UserDepartmentPermissionsModal({
           {user.isSuperadmin && (
             <div
               style={{
-                padding: "12px 14px",
+                padding: "10px 14px",
                 borderRadius: "8px",
-                background: "rgba(245, 158, 11, 0.1)",
-                border: "1px solid rgba(245, 158, 11, 0.3)",
+                background: "var(--color-surface-subtle, #f8fafc)",
+                border: "1px solid var(--color-border, #e2e8f0)",
                 fontSize: "12px",
-                color: "var(--color-text, #0f172a)",
-                display: "flex",
-                alignItems: "flex-start",
-                gap: "8px",
+                color: "var(--color-text-secondary, #64748b)",
               }}
             >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ flexShrink: 0, marginTop: "2px", color: "var(--color-accent-deep)" }}
-                aria-hidden="true"
-              >
-                <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.24A2 2 0 0 1 17.22 18H6.78a2 2 0 0 1-1.927-1.741L2.019 6.019a.5.5 0 0 1 .798-.52l4.277 3.665a1 1 0 0 0 1.516-.294z" />
-                <path d="M5 21h14" />
-              </svg>
-              <span><strong>Superadmin Executive Account:</strong> As the company President, this account inherently holds unrestricted, non-revocable system-wide authority across all modules and functions.</span>
+              Superadmin account holds full system permissions.
             </div>
           )}
 

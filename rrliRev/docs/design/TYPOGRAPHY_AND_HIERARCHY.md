@@ -26,6 +26,15 @@ input,
 select {
   font: inherit;
 }
+
+/* Monospace font stack for operational identifiers */
+.truck-code,
+.waybill-code,
+.employee-code,
+.export-pkg-ext {
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
 ```
 
 ### Font Loading & Weight Availability

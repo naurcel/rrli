@@ -1,7 +1,8 @@
 # Knowledge Base: 02 — System Architecture
 
-> **Document Status:** `[Implemented]`  
+> **Document Status:** `[Authoritative Architecture]`  
 > **Authority Level:** Authoritative Specification  
+> **Master Source of Truth:** [`../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md`](../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md)  
 > **Last Verified:** November 2026  
 > **Location:** `rrliRev/docs/knowledge-base/02-system-architecture.md`
 
@@ -9,7 +10,7 @@
 
 ## 1. High-Level Architectural Model
 
-RouteX is constructed as a modern, monolithic Next.js 16 full-stack web application running on React 19 and TypeScript. The architecture adheres to a clean separation between Presentation, Domain, Security, and Data Access layers.
+RouteX is constructed as a monolithic Next.js 16 full-stack web application running on React 19 and TypeScript. The architecture adheres to a clean separation between Presentation, Domain, Security, and Data Access layers.
 
 ```mermaid
 flowchart TD
@@ -17,7 +18,7 @@ flowchart TD
     
     subgraph AppRouter["Next.js App Router (rrliRev/src/app)"]
         Layout["(workspace)/layout.tsx\nWorkspaceShellLayout"]
-        Routes["Routes (/deliveries, /trucks, /finance, /reports, etc.)"]
+        Routes["Routes (/deliveries, /truck-profitability, /finance, /reports, etc.)"]
         API["Route Handlers (/api/*)"]
     end
 
@@ -28,15 +29,15 @@ flowchart TD
     end
 
     subgraph Domain["Domain & Service Layer (rrliRev/src/features)"]
-        DeliveryDomain["Delivery & Drop-off Domain"]
+        DeliveryDomain["Delivery & Locations Domain"]
         FinanceDomain["Company Expense Domain"]
         ReportEngine["Report Generation Engine"]
     end
 
     subgraph StorageAdapters["Dual-Mode Storage Abstraction"]
         direction TB
-        PreviewAdapter["Browser Preview Adapter\n(small-mock-database.ts + localStorage)"]
-        SupabaseAdapter["Supabase PostgreSQL Adapter\n(Server Client + RLS + Storage)"]
+        PreviewAdapter["Browser Preview Adapter [Implemented Mock]\n(small-mock-database.ts + localStorage)"]
+        SupabaseAdapter["Supabase PostgreSQL Adapter [Planned Backend]\n(Server Client + RLS + Storage)"]
     end
 
     Client --> Layout --> Routes
@@ -62,90 +63,47 @@ flowchart TD
 - **Server Route Protection:** Server component pages execute `requireAuthenticatedActor()` to prevent unauthorized rendering, while `/api/*` handlers return 401 or 403 responses.
 
 ### Domain & Business Logic Layer (`src/features/`)
-- **Delivery Domain (`src/features/deliveries/`):** Encapsulates delivery calculation rules, drop-off timelines, POD verification derivation, fuel cost algorithms, and financial completeness evaluation (`isDeliveryIncomplete`, `isDeliveryFinanciallyComplete`).
-- **Finance Domain (`src/features/finance/`):** Manages company-wide operating expenses, date range filtering, and company net profit aggregation.
+- **Delivery Domain (`src/features/deliveries/`):** Encapsulates delivery calculation rules, locations with numeric drop-off counts, POD verification derivation, fuel cost algorithms, and financial completeness evaluation (`isDeliveryIncomplete`, `isDeliveryFinanciallyComplete`).
+- **Finance Domain (`src/features/finance/`):** Manages company-wide operating expenses, 6-sheet spreadsheet ingestion, duplicate reconciliation, date range filtering, and company net profit aggregation.
 - **Reports Engine (`src/features/reports/`):** Transforms delivery and expense datasets into structured report tables (Client Summary, Truck Summary, Trip Ledger, Daily Trip Report) and formats compliant CSV documents.
 
-### Data Access Layer & Dual-Mode Abstraction
+### Data Access Layer & Implementation Status
 RouteX isolates database dependencies behind repository contracts:
 - [`src/features/deliveries/server/delivery-repository.ts`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/features/deliveries/server/delivery-repository.ts)
 - [`src/features/finance/server/company-expense-repository.ts`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/features/finance/server/company-expense-repository.ts)
 - [`src/lib/auth/server-account-store.ts`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/lib/auth/server-account-store.ts)
 - [`src/lib/audit/server-audit-store.ts`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/lib/audit/server-audit-store.ts)
 
-When Supabase environment variables are missing, the repositories automatically route calls to `small-mock-database.ts` and browser storage without throwing connection errors.
+> [!NOTE]
+> **Implementation Status:** The production database backend has not been implemented yet. In current browser preview mode, repositories seamlessly operate against `small-mock-database.ts`, in-memory stores, and browser `localStorage`. Production Supabase tables and RLS are planned for future backend implementation.
 
 ---
 
 ## 3. Data Flow Diagrams
 
-### A. Delivery Creation & Financial Completion Flow
+### Delivery Creation & Backdating Approval Flow
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Dispatcher / Admin
+    actor Ops as Operations Staff
+    actor Admin as System Administrator
     participant UI as Record Delivery Form (/deliveries/new)
-    participant Policy as Recording Policy
+    participant Req as Requests Queue (/api/deliveries/backdating-tickets)
     participant Domain as Delivery Domain
-    participant Repo as Delivery Repository
-    participant Store as Browser / PostgreSQL Storage
+    participant Repo as Delivery Repository (Mock / Planned DB)
 
-    User->>UI: Enter trip details (Waybill, Date, Client, Drop-offs, Expenses)
-    UI->>Policy: Validate 3-day window & 2024 boundary
+    Ops->>UI: Enter trip details (Waybill, Date, Client, Locations, Expenses)
     alt Date earlier than 2024-01-01
-        Policy-->>UI: Reject: Foundation boundary error
-    else Operations user exceeds 3 days
-        Policy-->>UI: Reject: 3-day operational window exceeded
-    else Validated
-        Policy-->>UI: Permitted
+        UI-->>Ops: Rejected: Foundation boundary error (2024)
+    else Date exceeds 3-day window & no approved request
+        UI-->>Ops: Blocked: 3-day submission window exceeded
+        Ops->>Req: Submit Backdating Request (Waybill, Date, Reason)
+        Admin->>Req: Review Requests Queue -> Approve Request
+        Req-->>Ops: Request Approved
+        Ops->>UI: Re-submit Delivery with Approved Request on file
     end
-
-    UI->>Domain: Evaluate completeness (check unknown expenses & PODs)
-    alt Any expense state == "unknown" or missing PODs
-        Domain-->>UI: financialState = "incomplete"
-    else All expenses confirmed / N/A and PODs submitted
-        Domain-->>UI: financialState = "finalized"
-    end
-
-    UI->>Repo: upsertDeliveryRecord(payload)
-    Repo->>Store: Save delivery + emit audit log
-    Store-->>Repo: Saved record
-    Repo-->>UI: Success
-    UI-->>User: Redirect to /deliveries/[id]
+    UI->>Domain: Calculate Total Stops (sum of dropoffCount) & Financial State
+    Domain->>Repo: Persist Delivery Record
+    Repo-->>UI: Confirm Delivery Recorded
 ```
-
-### B. Profitability Aggregation Flow
-
-```mermaid
-flowchart TD
-    AllDeliveries["All Recorded Deliveries"] --> Filter["Filter by Selected Date Range"]
-    Filter --> Split{"Check Financial State"}
-    
-    Split -- "incomplete" --> IncompleteTrips["Incomplete Trips Ledger\n(Displayed with Incomplete Badges)"]
-    Split -- "finalized" --> FinalizedTrips["Confirmed Operational Deliveries"]
-    
-    FinalizedTrips --> SumRev["Sum Delivery Revenue (₱)"]
-    FinalizedTrips --> SumExp["Sum Trip Expenses (₱)\n(Fuel + Tolls + Fees + Crew)"]
-    
-    SumRev --> DeliveryProfit["Delivery Net Profit\n(Revenue - Expenses)"]
-    SumExp --> DeliveryProfit
-    
-    DeliveryProfit --> TruckProfit["Truck Profitability Engine\n(Aggregated by Plate Number)"]
-    
-    CompanyExpenses["Company Expenses Ledger\n(Entered via /finance)"] --> CompanyFinance["Company Profitability Engine"]
-    SumRev --> CompanyFinance
-    SumExp --> CompanyFinance
-    CompanyFinance --> CompanyProfit["Company Net Profit =\nDelivery Revenue - Delivery Expenses - Company Expenses"]
-    
-    IncompleteTrips -.-> PendingBadge["+ ₱X pending indicator\n(Truck Profile only, excluded from totals)"]
-```
-
----
-
-## 4. Deployment & Runtime Architecture
-
-- **Runtime Target:** Node.js (v20+) or Vercel Serverless environment.
-- **Build Engine:** Next.js Turbopack (`next build`).
-- **Database Engine:** Supabase PostgreSQL with automated migrations in `rrliRev/supabase/migrations/`.
-- **Object Storage:** Supabase Storage (private bucket `routex-documents`).

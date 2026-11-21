@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     const auth = await verifyServerPermission("users:manage");
     if (!auth.ok || auth.actor.role !== "admin") {
       return NextResponse.json(
-        { ok: false, code: "FORBIDDEN", message: "Only System Administrators can approve or reject backdating tickets." },
+        { ok: false, code: "FORBIDDEN", message: "Only System Administrators can approve or reject backdating requests." },
         { status: 403 },
       );
     }
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     const { ticketId, decision, decisionNotes } = body ?? {};
     if (!ticketId || (decision !== "approve" && decision !== "reject")) {
       return NextResponse.json(
-        { ok: false, message: "Ticket ID and decision ('approve' or 'reject') are required." },
+        { ok: false, message: "Request ID and decision ('approve' or 'reject') are required." },
         { status: 400 },
       );
     }

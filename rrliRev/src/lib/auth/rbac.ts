@@ -289,6 +289,13 @@ export const WORKSPACE_NAVIGATION_ITEMS: readonly NavigationItem[] = [
     section: "management",
     requiredPermission: "users:view",
   },
+  {
+    label: "Permissions",
+    href: "/permissions",
+    symbol: "\u26e8",
+    section: "management",
+    requiredPermission: "users:manage",
+  },
 ] as const;
 
 export function getAuthorizedNavigationForRole(

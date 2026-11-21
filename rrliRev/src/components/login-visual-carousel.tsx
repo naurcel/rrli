@@ -7,11 +7,15 @@ const LOGIN_SLIDES = [
     id: "fleet-team",
     src: "/branding/login-slides/rrli-fleet-team.jpg",
     alt: "Redeemed Route Logistics Inc. fleet trucks and dedicated operations crew",
+    className: "login-slide-fleet-team",
+    objectPosition: "59% center",
   },
   {
     id: "team-anniversary",
     src: "/branding/login-slides/rrli-team-anniversary.jpg",
     alt: "Redeemed Route Logistics Inc. 2nd Year Anniversary team celebration",
+    className: "login-slide-team-anniversary",
+    objectPosition: "center",
   },
 ] as const;
 
@@ -76,7 +80,8 @@ export function LoginVisualCarousel() {
           loading={index === 0 ? "eager" : "lazy"}
           decoding="async"
           aria-hidden={index !== activeSlide}
-          className={`login-visual-media ${index === activeSlide ? "is-active" : "is-inactive"}`}
+          className={`login-visual-media ${slide.className} ${index === activeSlide ? "is-active" : "is-inactive"}`}
+          style={{ objectPosition: slide.objectPosition }}
         />
       ))}
 

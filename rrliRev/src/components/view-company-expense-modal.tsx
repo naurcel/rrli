@@ -69,6 +69,8 @@ export function ViewCompanyExpenseModal({
     ? expense.createdBy
     : `@${expense.createdBy || "system"}`;
 
+  const isIncome = expense.transactionType === "Incoming";
+
   return createPortal(
     <div
       className="routex-dialog-layer"
@@ -92,16 +94,16 @@ export function ViewCompanyExpenseModal({
                 gap: "6px",
                 fontSize: "11px",
                 fontWeight: 700,
-                color: "var(--color-accent-deep)",
+                color: isIncome ? "var(--color-status-success, #059669)" : "var(--color-accent-deep)",
                 textTransform: "uppercase",
                 letterSpacing: "0.05em",
                 marginBottom: "4px",
               }}
             >
-              <span>Company Operating Expense</span>
+              <span>{isIncome ? "Company Operating Income" : "Company Operating Expense"}</span>
             </div>
             <h2 id="view-expense-dialog-title" style={{ margin: 0, fontSize: "18px", fontWeight: 750 }}>
-              {expense.description || "Total Company Expenses"}
+              {expense.description || (isIncome ? "Total Company Income" : "Total Company Expenses")}
             </h2>
           </div>
           <button
@@ -124,8 +126,10 @@ export function ViewCompanyExpenseModal({
               justifyContent: "space-between",
               padding: "16px 20px",
               borderRadius: "14px",
-              background: "linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(245, 158, 11, 0.04) 100%)",
-              border: "1px solid rgba(217, 119, 6, 0.22)",
+              background: isIncome
+                ? "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.04) 100%)"
+                : "linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(245, 158, 11, 0.04) 100%)",
+              border: isIncome ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid rgba(217, 119, 6, 0.22)",
             }}
           >
             <div>
@@ -140,9 +144,16 @@ export function ViewCompanyExpenseModal({
                   marginBottom: "4px",
                 }}
               >
-                Recorded Expense Amount
+                {isIncome ? "Recorded Income Amount" : "Recorded Expense Amount"}
               </span>
-              <strong style={{ fontSize: "24px", fontWeight: 800, color: "var(--color-accent-deep)" }}>
+              <strong
+                style={{
+                  fontSize: "24px",
+                  fontWeight: 800,
+                  color: isIncome ? "var(--color-status-success, #059669)" : "var(--color-accent-deep)",
+                }}
+              >
+                {isIncome ? "+ " : "- "}
                 {formatPeso(expense.amount)}
               </strong>
             </div>
@@ -160,7 +171,7 @@ export function ViewCompanyExpenseModal({
                   color: "var(--color-text-primary)",
                 }}
               >
-                {expense.category || "Company Expenses"}
+                {expense.category || (isIncome ? "Company Income" : "Company Expenses")}
               </span>
             </div>
           </div>
@@ -270,7 +281,7 @@ export function ViewCompanyExpenseModal({
                 }}
                 onClick={() => onDelete(expense)}
               >
-                Delete Expense
+                {isIncome ? "Delete Income" : "Delete Expense"}
               </button>
             ) : null}
           </div>
@@ -289,7 +300,7 @@ export function ViewCompanyExpenseModal({
                 className="primary-action-button"
                 onClick={() => onEdit(expense)}
               >
-                Edit Expense
+                {isIncome ? "Edit Income" : "Edit Expense"}
               </button>
             ) : null}
           </div>

@@ -20,7 +20,13 @@ export function getRequiredPermissionForPath(pathname: string): Permission | nul
     return null;
   }
 
-  if (pathname === "/user-management" || pathname.startsWith("/user-management/") || pathname.startsWith("/api/users")) {
+  if (
+    pathname === "/user-management" ||
+    pathname.startsWith("/user-management/") ||
+    pathname === "/permissions" ||
+    pathname.startsWith("/permissions/") ||
+    pathname.startsWith("/api/users")
+  ) {
     return "users:manage";
   }
 

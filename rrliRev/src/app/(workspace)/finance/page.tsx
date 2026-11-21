@@ -37,6 +37,7 @@ import {
 import {
   filterExpensesByDateRange,
   type CompanyExpense,
+  type FinanceTransactionType,
   type ValidatedCompanyExpense,
   validateCompanyExpenseInput,
 } from "@/features/finance/company-expense-domain";
@@ -56,8 +57,9 @@ export default function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Record Expense Modal state
+  // Record Modal state
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [recordType, setRecordType] = useState<FinanceTransactionType>("Outgoing");
   const [newDescription, setNewDescription] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newDate, setNewDate] = useState(() => toDateKey(new Date()));
@@ -332,7 +334,18 @@ export default function FinancePage() {
     setPage(1);
   }
 
-  function openRecordModal() {
+  function openRecordExpenseModal() {
+    setRecordType("Outgoing");
+    setFormError(null);
+    setNewDescription("");
+    setNewAmount("");
+    setNewDate(toDateKey(new Date()));
+    setNewNotes("");
+    setIsRecordModalOpen(true);
+  }
+
+  function openRecordIncomeModal() {
+    setRecordType("Incoming");
     setFormError(null);
     setNewDescription("");
     setNewAmount("");
@@ -347,24 +360,28 @@ export default function FinancePage() {
     setFormError(null);
   }
 
-  // Handle new expense submission
+  // Handle new transaction submission (Income or Expense)
   async function handleCreateExpense(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
     setSubmitting(true);
 
+    const isIncome = recordType === "Incoming";
+    const defaultTitle = isIncome ? "Total Company Income" : "Total Company Expenses";
     const resolvedDescription =
       newDescription.trim() ||
       (newNotes.trim()
-        ? `Company Expenses - ${newNotes.trim()}`
-        : "Total Company Expenses");
+        ? `${isIncome ? "Company Income" : "Company Expenses"} - ${newNotes.trim()}`
+        : defaultTitle);
 
     const validation = validateCompanyExpenseInput({
       description: resolvedDescription,
       amount: newAmount,
       expenseDate: newDate,
+      category: isIncome ? "Company Income" : "Company Expenses",
       notes: newNotes,
+      transactionType: recordType,
     });
 
     if (!validation.success) {
@@ -392,9 +409,9 @@ export default function FinancePage() {
           setNewAmount("");
           setNewNotes("");
           setIsRecordModalOpen(false);
-          const msg = `Recorded ${formatPeso(validation.data.amount)} company expense.`;
+          const msg = `Recorded ${formatPeso(validation.data.amount)} company ${isIncome ? "income" : "expense"}.`;
           setFormSuccess(msg);
-          toast.success("Expense recorded", { description: msg });
+          toast.success(isIncome ? "Income recorded" : "Expense recorded", { description: msg });
           setSubmitting(false);
           return;
         }
@@ -405,12 +422,13 @@ export default function FinancePage() {
 
     // Preview mode fallback
     const newRecord: CompanyExpense = {
-      id: `exp-${Date.now()}`,
+      id: `${isIncome ? "inc" : "exp"}-${Date.now()}`,
       description: validation.data.description,
       amount: validation.data.amount,
       expenseDate: validation.data.expenseDate,
-      category: "Company Expenses",
+      category: isIncome ? "Company Income" : "Company Expenses",
       notes: validation.data.notes,
+      transactionType: recordType,
       createdBy: actor.username,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -422,9 +440,9 @@ export default function FinancePage() {
     setNewAmount("");
     setNewNotes("");
     setIsRecordModalOpen(false);
-    const msg = `Recorded ${formatPeso(validation.data.amount)} company expense.`;
+    const msg = `Recorded ${formatPeso(validation.data.amount)} company ${isIncome ? "income" : "expense"}.`;
     setFormSuccess(msg);
-    toast.success("Expense recorded", { description: msg });
+    toast.success(isIncome ? "Income recorded" : "Expense recorded", { description: msg });
     setSubmitting(false);
   }
 
@@ -519,8 +537,8 @@ export default function FinancePage() {
       <div className="content-wrap finance-page">
         <header className="page-intro">
           <div>
-            <h1>Finance</h1>
-            <p className="subtitle">Company operating expense ledger and records.</p>
+            <h1>Company Finance</h1>
+            <p className="subtitle">Company income, operating expenses, and financial balance.</p>
           </div>
           <div className="page-intro-actions">
             {canManage ? (
@@ -528,14 +546,21 @@ export default function FinancePage() {
                 <Link
                   className="secondary-button page-intro-action"
                   href="/finance/import"
-                  aria-label="Import company expenses spreadsheet"
+                  aria-label="Import company finance spreadsheet"
                 >
                   Import
                 </Link>
                 <button
                   type="button"
+                  className="secondary-button page-intro-action finance-record-income-btn"
+                  onClick={openRecordIncomeModal}
+                >
+                  + Record Income
+                </button>
+                <button
+                  type="button"
                   className="primary-action-button page-intro-action"
-                  onClick={openRecordModal}
+                  onClick={openRecordExpenseModal}
                 >
                   + Record Expense
                 </button>
@@ -585,37 +610,37 @@ export default function FinancePage() {
         <section className="stat-grid" aria-label="Company finance summary">
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">TOTAL INCOMING</span>
+              <span className="stat-label">TOTAL COMPANY INCOME</span>
             </div>
             <strong style={{ color: "var(--color-status-success, #059669)" }}>
               +<CompactMoney value={financeActivity.totalIncoming} />
             </strong>
             <span className="stat-meta">
-              {financeActivity.incomingCount} incoming transactions
+              {financeActivity.incomingCount} income {financeActivity.incomingCount === 1 ? "record" : "records"}
             </span>
           </article>
 
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">TOTAL OUTGOING</span>
+              <span className="stat-label">TOTAL COMPANY EXPENSES</span>
             </div>
             <strong style={{ color: "var(--color-danger, #dc2626)" }}>
               -<CompactMoney value={financeActivity.totalOutgoing} />
             </strong>
             <span className="stat-meta">
-              {financeActivity.outgoingCount} outgoing transactions
+              {financeActivity.outgoingCount} expense {financeActivity.outgoingCount === 1 ? "record" : "records"}
             </span>
           </article>
 
           <article className="stat-card">
             <div className="stat-card-header">
-              <span className="stat-label">NET FINANCE ACTIVITY</span>
+              <span className="stat-label">NET BALANCE</span>
             </div>
             <strong style={{ color: financeActivity.netActivity >= 0 ? "var(--color-status-success, #059669)" : "var(--color-danger, #dc2626)" }}>
               {financeActivity.netActivity >= 0 ? "+" : ""}<CompactMoney value={financeActivity.netActivity} />
             </strong>
             <span className="stat-meta">
-              Net cash flow for period
+              Income - Expenses balance
             </span>
           </article>
 
@@ -628,14 +653,52 @@ export default function FinancePage() {
           </article>
         </section>
 
-        {/* Expense Ledger */}
+        {/* Company Ledger */}
         <section
           className="records-card finance-ledger-card"
-          aria-label="Company expense ledger"
+          aria-label="Company finance ledger"
         >
           <div className="records-heading">
-            <div>
-              <h2>Expense Ledger</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+              <h2>Company Ledger</h2>
+              <div className="finance-ledger-tabs" role="tablist" aria-label="Filter ledger view">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={typeFilter === "all"}
+                  className={`finance-ledger-tab${typeFilter === "all" ? " active" : ""}`}
+                  onClick={() => {
+                    setTypeFilter("all");
+                    setPage(1);
+                  }}
+                >
+                  All Records
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={typeFilter === "Incoming"}
+                  className={`finance-ledger-tab${typeFilter === "Incoming" ? " active income" : ""}`}
+                  onClick={() => {
+                    setTypeFilter("Incoming");
+                    setPage(1);
+                  }}
+                >
+                  Company Income
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={typeFilter === "Outgoing"}
+                  className={`finance-ledger-tab${typeFilter === "Outgoing" ? " active expense" : ""}`}
+                  onClick={() => {
+                    setTypeFilter("Outgoing");
+                    setPage(1);
+                  }}
+                >
+                  Company Expenses
+                </button>
+              </div>
             </div>
             <span className="ledger-total-badge">
               {filteredAndSortedExpenses.length} of {expenses.length} records
@@ -942,7 +1005,7 @@ export default function FinancePage() {
         </section>
       </div>
 
-      {/* Record Expense Modal */}
+      {/* Record Modal (Income or Expense) */}
       {isRecordModalOpen && typeof document !== "undefined"
         ? createPortal(
             <div
@@ -962,12 +1025,14 @@ export default function FinancePage() {
               >
                 <header className="routex-dialog-header">
                   <div>
-                    <h2 id="record-expense-modal-title">Record Expense</h2>
+                    <h2 id="record-expense-modal-title">
+                      {recordType === "Incoming" ? "Record Company Income" : "Record Company Expense"}
+                    </h2>
                   </div>
                   <button
                     type="button"
                     className="routex-dialog-close"
-                    aria-label="Close record expense modal"
+                    aria-label="Close record modal"
                     title="Close (Esc)"
                     disabled={submitting}
                     onClick={closeRecordModal}
@@ -983,6 +1048,26 @@ export default function FinancePage() {
                         {formError}
                       </div>
                     ) : null}
+
+                    {/* Transaction Type Switcher */}
+                    <div className="finance-type-toggle-group" style={{ marginBottom: "14px" }}>
+                      <button
+                        type="button"
+                        className={`finance-type-toggle-btn${recordType === "Incoming" ? " active income" : ""}`}
+                        onClick={() => setRecordType("Incoming")}
+                        disabled={submitting}
+                      >
+                        + Company Income
+                      </button>
+                      <button
+                        type="button"
+                        className={`finance-type-toggle-btn${recordType === "Outgoing" ? " active expense" : ""}`}
+                        onClick={() => setRecordType("Outgoing")}
+                        disabled={submitting}
+                      >
+                        - Company Expense
+                      </button>
+                    </div>
 
                     <div className="routex-dialog-grid-2">
                       <div className="routex-dialog-field">
@@ -1037,7 +1122,11 @@ export default function FinancePage() {
                       <input
                         id="finance-expense-description"
                         type="text"
-                        placeholder="Total Company Expenses"
+                        placeholder={
+                          recordType === "Incoming"
+                            ? "e.g. Client retainer, customer payment, freight rebate"
+                            : "Total Company Expenses"
+                        }
                         value={newDescription}
                         onChange={(e) => setNewDescription(e.target.value)}
                         disabled={submitting}
@@ -1052,7 +1141,11 @@ export default function FinancePage() {
                       <input
                         id="finance-expense-notes"
                         type="text"
-                        placeholder="e.g. Utilities, office supplies, invoice #"
+                        placeholder={
+                          recordType === "Incoming"
+                            ? "e.g. Check / wire reference #, invoice number"
+                            : "e.g. Utilities, office supplies, invoice #"
+                        }
                         value={newNotes}
                         onChange={(e) => setNewNotes(e.target.value)}
                         disabled={submitting}
@@ -1074,7 +1167,11 @@ export default function FinancePage() {
                       className="primary-action-button"
                       disabled={submitting}
                     >
-                      {submitting ? "Saving…" : "Record Expense"}
+                      {submitting
+                        ? "Saving…"
+                        : recordType === "Incoming"
+                        ? "Record Income"
+                        : "Record Expense"}
                     </button>
                   </footer>
                 </form>

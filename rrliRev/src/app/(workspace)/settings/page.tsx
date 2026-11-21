@@ -58,6 +58,8 @@ import {
   USER_ROLES,
   type UserRole,
 } from "@/lib/auth/rbac";
+import { DiscordPermissionsManager } from "@/features/permissions/DiscordPermissionsManager";
+import { RolePermissionsMatrix } from "@/features/permissions/RolePermissionsMatrix";
 
 const SECURITY_QUESTION_OPTIONS: readonly SelectOption[] = [
   ...PREDEFINED_SECURITY_QUESTIONS.map((q) => ({
@@ -125,6 +127,7 @@ export default function SettingsPage() {
   // Design Preferences state & Dark mode sync
   type SettingsTab = "account" | "appearance" | "security" | "permissions" | "export";
   const [activeTab, setActiveTab] = useState<SettingsTab>("account");
+  const [permissionsView, setPermissionsView] = useState<"interactive" | "matrix">("interactive");
 
   const ALL_TIME_RANGE: DateRange = { startDate: null, endDate: null };
   const { range } = useGlobalDateRange();
@@ -658,8 +661,8 @@ export default function SettingsPage() {
     <>
       <OperationalTopbar contextLabel="Settings" showDateFilter={false} />
 
-      <div className={`content-wrap settings-page-wrap${activeTab === "export" ? " is-export" : ""}`}>
-        <div className={`settings-layout-grid${activeTab === "export" ? " is-export" : ""}`}>
+      <div className={`content-wrap settings-page-wrap${activeTab === "export" || activeTab === "permissions" ? " is-export" : ""}`}>
+        <div className={`settings-layout-grid${activeTab === "export" || activeTab === "permissions" ? " is-export" : ""}`}>
           {/* Left Navigation: Clean text tabs */}
           <aside className="settings-tabs-sidebar" aria-label="Settings categories">
             <nav className="settings-tabs-list" role="tablist">
@@ -744,7 +747,7 @@ export default function SettingsPage() {
           </aside>
 
           {/* Right Main Content Column */}
-          <div className={`settings-tab-content-area${activeTab === "export" ? " is-expanded" : ""}`}>
+          <div className={`settings-tab-content-area${activeTab === "export" || activeTab === "permissions" ? " is-expanded" : ""}`}>
             {activeTab === "account" && (
               <div id="panel-account" role="tabpanel" aria-labelledby="tab-account" className="settings-tab-panel">
                 {/* Profile Centerpiece (Google Account Mobile Inspired - Borderless with Animated Glowing Avatar) */}
@@ -1492,80 +1495,52 @@ export default function SettingsPage() {
 
             {activeTab === "permissions" && (
               <div id="panel-permissions" role="tabpanel" aria-labelledby="tab-permissions" className="settings-tab-panel">
-                {/* Section 5: Role Permissions Reference */}
-          <section className="records-card settings-card-section" aria-label="Role Permissions">
-            <div className="settings-section-header">
-              <h2>Role Permissions</h2>
-              <p>System privileges and operational access across roles.</p>
-            </div>
-
-            <div
-              className="settings-role-current-summary"
-              style={{
-                margin: "12px 0 16px",
-                padding: "10px 14px",
-                borderRadius: "8px",
-                background: "var(--color-surface-subtle, rgba(241, 245, 249, 0.6))",
-                border: "1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.2))",
-                fontSize: "13px",
-                display: "flex",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "8px 12px",
-              }}
-            >
-              <span className={`access-pill ${ROLE_METADATA[actor.role].accessLevel}`} style={{ margin: 0 }}>
-                {ROLE_METADATA[actor.role].label}
-              </span>
-              <span style={{ color: "var(--color-text-secondary)" }}>
-                {ROLE_CONCISE_SUMMARY[actor.role]}
-              </span>
-            </div>
-
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Role</th>
-                    <th>Level</th>
-                    <th>Deliveries</th>
-                    <th>Finance</th>
-                    <th>Import</th>
-                    <th>Fleet</th>
-                    <th>POD</th>
-                    <th>Reports</th>
-                    <th>Users</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {USER_ROLES.map((roleKey) => {
-                    const meta = ROLE_METADATA[roleKey];
-                    const isCurrentRole = actor.role === roleKey;
-                    return (
-                      <tr key={roleKey} className={isCurrentRole ? "settings-current-role-row" : undefined}>
-                        <td>
-                          <strong>{meta.label}</strong>
-                          {isCurrentRole ? <span className="settings-current-role-tag">(You)</span> : null}
-                        </td>
-                        <td>
-                          <span className={`access-pill ${meta.accessLevel}`}>
-                            {meta.accessLevelLabel}
-                          </span>
-                        </td>
-                        <td>{renderDeliveriesCell(roleKey)}</td>
-                        <td>{renderFinanceCell(roleKey)}</td>
-                        <td>{renderImportCell(roleKey)}</td>
-                        <td>{renderTrucksCell(roleKey)}</td>
-                        <td>{renderPodCell(roleKey)}</td>
-                        <td>{renderReportsCell(roleKey)}</td>
-                        <td>{renderUsersCell(roleKey)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                {canManageUsers(actor.role) ? (
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "16px",
+                        flexWrap: "wrap",
+                        gap: "10px",
+                      }}
+                    >
+                      <div>
+                        <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0, color: "var(--color-text-primary)" }}>
+                          Roles & Permissions
+                        </h2>
+                        <p style={{ fontSize: "12.5px", color: "var(--color-text-secondary)", margin: "4px 0 0 0" }}>
+                          Configure operational permissions for roles and individual employees.
+                        </p>
+                      </div>
+                      <div className="user-management-tabs" style={{ margin: 0 }}>
+                        <button
+                          type="button"
+                          className={permissionsView === "interactive" ? "active" : ""}
+                          onClick={() => setPermissionsView("interactive")}
+                        >
+                          Roles & Staff
+                        </button>
+                        <button
+                          type="button"
+                          className={permissionsView === "matrix" ? "active" : ""}
+                          onClick={() => setPermissionsView("matrix")}
+                        >
+                          Access Matrix
+                        </button>
+                      </div>
+                    </div>
+                    {permissionsView === "interactive" ? (
+                      <DiscordPermissionsManager />
+                    ) : (
+                      <RolePermissionsMatrix />
+                    )}
+                  </div>
+                ) : (
+                  <RolePermissionsMatrix />
+                )}
               </div>
             )}
 
@@ -1584,8 +1559,8 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Balanced Right Spacer: only when not in full-width export tab */}
-          {activeTab !== "export" && (
+          {/* Balanced Right Spacer: only when not in full-width export or permissions tab */}
+          {activeTab !== "export" && activeTab !== "permissions" && (
             <div className="settings-grid-spacer" aria-hidden="true" />
           )}
         </div>

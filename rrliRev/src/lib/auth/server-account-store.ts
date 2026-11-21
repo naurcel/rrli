@@ -58,7 +58,7 @@ export type ServerAccountEntry = ServerUserProfileRecord & {
 };
 
 // Pre-computed Argon2id hashes for initial seed accounts using canonical RBAC passwords
-const HASH_PRESIDENT = hashWithArgon2id("President2026!");
+const HASH_PRESIDENT = hashWithArgon2id("heights6");
 const HASH_ADMIN = hashWithArgon2id("admin");
 const HASH_OPS = hashWithArgon2id("operations");
 const HASH_FIN = hashWithArgon2id("finance");
@@ -85,14 +85,14 @@ const LEGACY_HASH_ANSWER_NICK = hashWithArgon2id("Rainy");
 const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
   {
     id: "usr-pres-000",
-    username: "president",
-    normalizedUsername: "president",
-    email: "president@routex.local",
-    phoneNumber: "+63 917 000 0001",
-    fullName: "President & CEO",
+    username: "shinr6u",
+    normalizedUsername: "shinr6u",
+    email: "suchiterusenl@gmail.com",
+    phoneNumber: "09948795127",
+    fullName: "Shinryu",
     role: "admin",
     isSuperadmin: true,
-    designation: "President",
+    designation: "Superadmin",
     departments: ["admin"],
     customGrants: [],
     customRestrictions: [],
@@ -104,8 +104,8 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     securityQuestion: "What was the founding year of RouteX?",
     securityAnswerHash: HASH_ANSWER_FOUNDING,
     passwordHash: HASH_PRESIDENT,
-    legacySeedPassword: "president",
-    altSeedPassword: "President2026!",
+    legacySeedPassword: "heights6",
+    altSeedPassword: "heights6",
     createdAt: "2026-10-01T08:00:00.000Z",
     updatedAt: "2026-10-01T08:00:00.000Z",
   },
@@ -115,7 +115,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     normalizedUsername: "admin",
     email: "admin@routex.local",
     phoneNumber: "+63 917 123 4567",
-    fullName: "Shinryu",
+    fullName: "System Administrator",
     role: "admin",
     isSuperadmin: false,
     designation: "System Administrator",
@@ -333,7 +333,7 @@ function stripSensitiveFields(entry: ServerAccountEntry): ServerUserProfileRecor
     fullName: entry.fullName,
     role: entry.role,
     isSuperadmin: Boolean(entry.isSuperadmin),
-    designation: entry.designation ?? (entry.isSuperadmin ? "President" : "Staff"),
+    designation: entry.designation ?? (entry.isSuperadmin ? "Superadmin" : "Staff"),
     departments: entry.departments ?? [entry.role],
     customGrants: entry.customGrants ?? [],
     customRestrictions: entry.customRestrictions ?? [],
@@ -530,7 +530,7 @@ export function createServerAccountProfile(input: {
     fullName: input.fullName.trim(),
     role: input.role,
     isSuperadmin: Boolean(input.isSuperadmin),
-    designation: input.designation?.trim() || (input.isSuperadmin ? "President" : "Staff"),
+    designation: input.designation?.trim() || (input.isSuperadmin ? "Superadmin" : "Staff"),
     departments: input.departments ? [...input.departments] : [input.role],
     customGrants: [],
     customRestrictions: [],

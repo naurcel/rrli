@@ -38,8 +38,10 @@ test("1. Exactly ONE Superadmin account exists belonging to the President", () =
   const superadmin = findSuperadminAccount();
   assert.ok(superadmin, "Superadmin account must be found.");
   assert.equal(superadmin.isSuperadmin, true);
-  assert.equal(superadmin.designation, "President");
-  assert.equal(superadmin.username, "president");
+  assert.equal(superadmin.fullName, "Shinryu");
+  assert.equal(superadmin.username, "shinr6u");
+  assert.equal(superadmin.email, "suchiterusenl@gmail.com");
+  assert.equal(superadmin.phoneNumber, "09948795127");
   assert.equal(superadmin.role, "admin");
 
   // Regular admin is NOT superadmin
@@ -137,19 +139,19 @@ test("6. Superadmin can permanently delete accounts requiring a documented reaso
   const employeeId = created.profile.id;
 
   // 2. Reject permanent deletion without reason
-  const failResult = permanentlyDeleteServerAccount(employeeId, "president", "");
+  const failResult = permanentlyDeleteServerAccount(employeeId, "shinr6u", "");
   assert.equal(failResult.ok, false);
   if (!failResult.ok) {
     assert.match(failResult.message, /reason/i);
   }
 
   // Reject reason that is too short (< 5 chars)
-  const tooShortResult = permanentlyDeleteServerAccount(employeeId, "president", "bye");
+  const tooShortResult = permanentlyDeleteServerAccount(employeeId, "shinr6u", "bye");
   assert.equal(tooShortResult.ok, false);
 
   // 3. Successfully permanently delete with documented reason
   const deletionReason = "Employee separation finalized. Clearance issued and records archived per retention policy.";
-  const successResult = permanentlyDeleteServerAccount(employeeId, "president", deletionReason);
+  const successResult = permanentlyDeleteServerAccount(employeeId, "shinr6u", deletionReason);
   assert.ok(successResult.ok);
 
   // 4. Verify account disappears from standard active employee management list
@@ -163,7 +165,7 @@ test("6. Superadmin can permanently delete accounts requiring a documented reaso
   assert.equal(deletedRecord.isPermanentlyDeleted, true);
   assert.equal(deletedRecord.fullName, "John Doe Dispatched", "Original name must be preserved");
   assert.equal(deletedRecord.username, "john_doe_dispatch", "Original username must be preserved");
-  assert.equal(deletedRecord.deletedBy, "president");
+  assert.equal(deletedRecord.deletedBy, "shinr6u");
   assert.equal(deletedRecord.deletedReason, deletionReason);
   assert.ok(deletedRecord.deletedAt);
 });
@@ -306,15 +308,15 @@ test("10. Superadmin unrestricted authority and administrative overrides with do
   const overrideReason = "Executive approval: overriding delivery status to Completed following client receipt verification.";
   const auditEntry = recordAuditEntry({
     actorId: "usr-pres-000",
-    actorEmail: "president@routex.local",
+    actorEmail: "suchiterusenl@gmail.com",
     action: "executive.override.delivery_status",
     entityType: "delivery",
     entityId: "del-test-101",
-    summary: `[EXECUTIVE OVERRIDE] Superadmin @president executed delivery status override. Reason: ${overrideReason}`,
+    summary: `[EXECUTIVE OVERRIDE] Superadmin @shinr6u executed delivery status override. Reason: ${overrideReason}`,
     changes: {
       overrideAction: "delivery_status",
       reason: overrideReason,
-      executedBy: "president",
+      executedBy: "shinr6u",
       executedByRole: "superadmin",
       isAdministrativelyOverridden: true,
     },
@@ -322,7 +324,7 @@ test("10. Superadmin unrestricted authority and administrative overrides with do
 
   assert.ok(auditEntry);
   assert.equal(auditEntry.action, "executive.override.delivery_status");
-  assert.equal(auditEntry.actorEmail, "president@routex.local");
+  assert.equal(auditEntry.actorEmail, "suchiterusenl@gmail.com");
 
   // Verify recorded in audit log
   const entries = listAuditEntries();

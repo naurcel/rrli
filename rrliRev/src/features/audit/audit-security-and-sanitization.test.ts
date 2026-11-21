@@ -46,7 +46,7 @@ test("Audit Security: Never exposes passwords, security answers, or raw secrets 
 test("Audit Metadata: Every recorded audit entry includes required compliance fields", () => {
   const entry = recordAuditEntry({
     actorId: "usr-pres-000",
-    actorEmail: "president@routex.local",
+    actorEmail: "suchiterusenl@gmail.com",
     action: "department.archived",
     entityType: "department",
     entityId: "dept-test-audit",
@@ -56,7 +56,7 @@ test("Audit Metadata: Every recorded audit entry includes required compliance fi
 
   assert.ok(entry.id, "Audit entry must have a unique ID");
   assert.ok(entry.occurredAt, "Audit entry must have a timestamp");
-  assert.equal(entry.actorEmail, "president@routex.local");
+  assert.equal(entry.actorEmail, "suchiterusenl@gmail.com");
   assert.equal(entry.action, "department.archived");
   assert.equal(entry.entityType, "department");
   assert.equal(entry.entityId, "dept-test-audit");

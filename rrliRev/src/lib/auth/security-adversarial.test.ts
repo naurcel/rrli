@@ -70,6 +70,6 @@ test("Security Adversarial: Case normalization prevents spoofing and enumeration
   assert.equal(a1, a2, "Security answer normalization must trim and lowercase");
 
   // Security answer mismatch
-  const verifyWrong = verifyServerAccountSecurityAnswer("president", "Wrong Answer That Does Not Match");
+  const verifyWrong = verifyServerAccountSecurityAnswer("shinr6u", "Wrong Answer That Does Not Match");
   assert.equal(verifyWrong.ok, false);
 });

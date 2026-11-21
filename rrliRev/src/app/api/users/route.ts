@@ -89,12 +89,12 @@ export async function GET(request: Request) {
             email: row.email,
             fullName: row.full_name,
             role: row.role,
-            roleLabel: isSuperadmin ? "Superadmin (President)" : meta.label,
+            roleLabel: isSuperadmin ? "Superadmin" : meta.label,
             accessLevel: isSuperadmin ? "admin" : meta.accessLevel,
-            accessLevelLabel: isSuperadmin ? "Executive Authority" : meta.accessLevelLabel,
+            accessLevelLabel: isSuperadmin ? "Full Access" : meta.accessLevelLabel,
             isActive: row.is_active,
             isSuperadmin,
-            designation: row.designation || (isSuperadmin ? "President" : undefined),
+            designation: row.designation || (isSuperadmin ? "Superadmin" : undefined),
             isPermanentlyDeleted: Boolean(row.is_permanently_deleted),
             deletedAt: row.deleted_at,
             deletedReason: row.deleted_reason,
@@ -136,9 +136,9 @@ export async function GET(request: Request) {
 
     return {
       ...profile,
-      roleLabel: profile.isSuperadmin ? "Superadmin (President)" : meta.label,
+      roleLabel: profile.isSuperadmin ? "Superadmin" : meta.label,
       accessLevel: profile.isSuperadmin ? "admin" : meta.accessLevel,
-      accessLevelLabel: profile.isSuperadmin ? "Executive Authority" : meta.accessLevelLabel,
+      accessLevelLabel: profile.isSuperadmin ? "Full Access" : meta.accessLevelLabel,
       effectivePermissions,
     };
   });

@@ -50,30 +50,51 @@ Always uphold these domain invariants:
 
 ### A. Canonical Terminology
 - **"Revenue"** (or "Delivery Revenue" in formal contexts; never use "rate", "billing", "gross revenue", or "sales").
-- **"Expenses"** (or "Trip Expenses" = Diesel + Tolls + Store Entry Fees + Crew Pay + Other; never use "operational costs" or "fleet overhead").
-- **"Store Drop-offs"** or **"Drop-offs"** (never use "stops" or "waypoints").
+- **"Expenses"** (or "Trip Expenses"; never use "operational costs" or "fleet overhead").
+- **"Locations"** and **"Number of Stops / Drop-offs"** (locations store name/address and numeric drop-off count; total drop-offs derived as sum across locations; never create individual stop records).
 - **"Net Profit"** & **"Profit Margin"** (`(Net Profit / Revenue) * 100`).
 - **"POD Attached"** vs. **"Missing POD"** (never use "Verified" / "Pending Verification").
+- **"Requests"** (Backdating Requests queue and modal; never "Tickets").
 
-### B. Financial Integrity & Zero-Tolerance for Silent Zeroes
+### B. Core Delivery & Fleet Invariants
+- **Delivery & Locations:** A Delivery represents one delivery trip. It contains one or more Locations (Name, Address, numeric `dropoffCount`). Individual stop/drop-off records are NOT created. Total drop-offs are derived as the sum across locations.
+- **Truck Registration on Import:** Unregistered truck plates found during delivery import automatically create a new truck record with available data and defaults, without blocking the import or requiring pre-registration.
+- **Owned vs. Subcontracted Expenses:**
+  - **Owned Trucks:** Itemized expense entries (Description + Amount) with Add/Remove rows, plus one general delivery notes field (`notes`).
+  - **Subcontracted Trucks:** One total subcontractor expense amount (`subcontractorExpense`). No itemized fuel/tolls or crew wage rates.
+- **Crew Assignments:**
+  - Unique Employee ID (`employeeCode`, e.g., `DRV-01`, `HLP-01`) for every driver and helper.
+  - Dropdown display format: `Name [Employee ID] · Role`.
+  - Drivers can also be selected as helpers.
+  - Exactly 1 driver and 1–2 helpers per delivery.
+  - Disallow duplicate assignment of the same employee to multiple roles on the trip.
+  - Detect and flag same-date schedule conflicts if an employee is already assigned on that date.
+  - Daily wage rates and allowances are entered manually (no automated labor calculations).
+  - Permanent employee deletion preserves historical attribution in delivery records and audit logs.
+- **Documents & POD:** Two-tier attachment: Delivery-level documents (trip-wide) and Location-level documents (store PODs). No individual stop records created for document association.
+- **Finance Spreadsheet Import:** Ingests all 6 legacy sheets as completed historical activity (Incoming or Outgoing). Cross-sheet matching duplicates are flagged for manual review with 3 actions: `Combine Records`, `Keep Records Separate`, or `Exclude Record`.
+
+### C. Financial Integrity & Zero-Tolerance for Silent Zeroes
 - **Deliveries with `unknown` expenses are marked `incomplete`.**
 - Deliveries in the `incomplete` financial state **MUST BE EXCLUDED** from aggregate revenue, expense, and profit KPI totals until finalized.
 - **NEVER SILENTLY ZERO AN UNKNOWN EXPENSE.**
 - `not_applicable` expenses evaluate to confirmed `null` with `0.00` impact and do not block finalization.
 - Under Truck Profitability, unfinalized delivery revenue may be displayed as a distinct `+ ₱X pending` indicator, but must remain separate from finalized revenue.
 - **Automatic Financial Resolution:** No separate "Finalize Financials" button. Dispatchers edit the delivery to resolve unknown values; once all are resolved, the trip automatically becomes `finalized`.
-- **Company Expenses Entry:** The company's overall expenses are entered at `/finance` as a **single total amount**, date, and optional note. No category tags or distributions.
+- **Company Expenses Entry:** The company's overall expenses are entered at `/finance` as a **single total amount**, date, and optional note.
 
-### C. Profitability Calculation Rules
-- **Delivery Net Profit:** $\text{Delivery Revenue} - \text{Total Trip Expenses}$
+### D. Profitability Calculation Rules
+- **Owned Delivery Net Profit:** $\text{Delivery Revenue} - \sum \text{Itemized Expenses}$
+- **Subcontracted Delivery Net Profit:** $\text{Delivery Revenue} - \text{Subcontractor Expense}$
 - **Truck Profitability:** Strictly isolated from company-wide expenses. Evaluates solely trips attributable to that specific truck plate.
 - **Company Net Profit:** $\text{Total Delivery Revenue} - \text{Total Delivery Expenses} - \text{Total Company Expenses}$
 
-### D. Recording Windows & RBAC Boundaries
+### E. Recording Windows & RBAC Boundaries
 - **Company Foundation Boundary (2024):** No operational deliveries, expenses, reports, or spreadsheet imports may precede `2024-01-01`.
-- **Admin:** Can do EVERYTHING: full mutation authority across deliveries, trucks, crew, PODs, Excel import, company expenses, and exclusive additional admin features (user management, audited deletion, audit logs, custom templates, and unlimited 2024+ recording).
-- **Finance:** Can ONLY edit whatever is on the Finance page (`/finance` — record, edit, and delete company operating expenses). View-only across all other modules (deliveries, trucks, drivers, PODs, user management).
-- **Operations:** Dispatch and execution authority (record/edit deliveries within the 3-day window, drop-offs, POD files, truck specs, Excel import), but view-only on Finance and excluded from additional admin features.
+- **3-Day Operational Window:** Operations staff recording past 3 days must submit a Backdating Request via the Requests Queue for Admin approval. System Admin is exempt.
+- **Admin:** Can do EVERYTHING: full mutation authority across deliveries, trucks, crew, PODs, Excel import, company expenses, and exclusive additional admin features (user management, audited deletion, audit logs, custom templates, request approvals, and unlimited 2024+ recording).
+- **Finance:** Can ONLY edit whatever is on the Finance page (`/finance` — record, edit, delete company operating expenses, and import finance workbooks). View-only across all other modules.
+- **Operations:** Dispatch and execution authority (record/edit deliveries within the 3-day window or approved request, locations, POD files, truck specs, Excel import), but view-only on Finance and excluded from additional admin features.
 - **View-Only Roles** (`hr`, `secretary`, `customerrep`): Can browse and view records, export reports, but cannot mutate deliveries, expenses, trucks, or users. Server-side route guards enforce this.
 
 ### E. Pagination & Limit Standards

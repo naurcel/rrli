@@ -7,52 +7,15 @@ import { PasswordCriteriaList } from "@/components/password-criteria-list";
 import { RouteXFooter } from "@/components/routex-footer";
 import { LoginVisualCarousel } from "@/components/login-visual-carousel";
 import { evaluatePasswordCriteria } from "@/lib/auth/password-policy";
-import { isSupabaseConfigured } from "@/lib/config/env";
 import { toast } from "sonner";
 
 type AuthViewMode = "login" | "forgot-password";
 type ForgotStep = "username" | "security_question" | "backup_key" | "reset_password" | "replacement_key";
-type LoginLayoutMode = "split" | "centered";
-
-const ROLE_VERIFICATION_ACCOUNTS = [
-  {
-    label: "Admin (Full Access)",
-    username: "admin",
-    password: "admin",
-  },
-  {
-    label: "Operations (Write)",
-    username: "operations",
-    password: "operations",
-  },
-  {
-    label: "Finance (View-Only)",
-    username: "finance",
-    password: "finance",
-  },
-  {
-    label: "HR (View-Only)",
-    username: "hr",
-    password: "humanresources",
-  },
-  {
-    label: "Secretary (View-Only)",
-    username: "secretary",
-    password: "secretary",
-  },
-  {
-    label: "Customer Rep (View-Only)",
-    username: "customerrep",
-    password: "customerrep",
-  },
-] as const;
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabaseConfigured = isSupabaseConfigured();
 
   const [viewMode, setViewMode] = useState<AuthViewMode>("login");
-  const [layoutMode, setLayoutMode] = useState<LoginLayoutMode>("split");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -87,11 +50,6 @@ export default function LoginPage() {
       if (rememberedUser) {
         setUsername(rememberedUser);
       }
-
-      const savedLayout = window.localStorage.getItem("routex-login-layout");
-      if (savedLayout === "split" || savedLayout === "centered") {
-        setLayoutMode(savedLayout);
-      }
     } catch {
       // Ignore storage restrictions
     }
@@ -109,15 +67,6 @@ export default function LoginPage() {
       }
       return next;
     });
-  }
-
-  function selectLayout(nextLayout: LoginLayoutMode) {
-    setLayoutMode(nextLayout);
-    try {
-      window.localStorage.setItem("routex-login-layout", nextLayout);
-    } catch {
-      // Ignore storage restrictions
-    }
   }
 
   async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
@@ -426,78 +375,12 @@ export default function LoginPage() {
     }
   }
 
-  function applyRolePreset(presetUsername: string, presetPassword: string) {
-    setViewMode("login");
-    setUsername(presetUsername);
-    setPassword(presetPassword);
-    setStatus("idle");
-    setMessage("");
-  }
-
   return (
     <main
-      className={`login-page login-layout-${layoutMode}${isDark ? " theme-dark" : ""}`}
+      className={`login-page login-layout-split${isDark ? " theme-dark" : ""}`}
       aria-busy={status === "submitting"}
     >
       <div className="login-tools" aria-label="Login page tools">
-        <div className="login-layout-switch" role="group" aria-label="Login page layout">
-          <button
-            className={layoutMode === "split" ? "active" : ""}
-            type="button"
-            aria-pressed={layoutMode === "split"}
-            onClick={() => selectLayout("split")}
-          >
-            Split
-          </button>
-          <button
-            className={layoutMode === "centered" ? "active" : ""}
-            type="button"
-            aria-pressed={layoutMode === "centered"}
-            onClick={() => selectLayout("centered")}
-          >
-            Center
-          </button>
-        </div>
-
-        {!supabaseConfigured ? (
-          <details className="login-role-access-menu">
-            <summary aria-label="Open role verification accounts">
-              <span>RBAC</span>
-              <svg className="login-dropdown-chevron" width="14" height="14" viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  d="M5.5 7.5L10 12l4.5-4.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </summary>
-            <div className="login-role-access-popover">
-              <div className="login-role-access-header">
-                <strong>Server-Verified Roles</strong>
-                <span>Quick-fill account</span>
-              </div>
-              <div className="login-role-presets">
-                {ROLE_VERIFICATION_ACCOUNTS.map((item) => (
-                  <button
-                    key={item.username}
-                    type="button"
-                    className="login-role-preset-btn"
-                    onClick={(event) => {
-                      applyRolePreset(item.username, item.password);
-                      event.currentTarget.closest("details")?.removeAttribute("open");
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </details>
-        ) : null}
-
         <button
           className="theme-toggle"
           type="button"
@@ -505,7 +388,43 @@ export default function LoginPage() {
           title={isDark ? "Light mode" : "Dark mode"}
           onClick={toggleTheme}
         >
-          {isDark ? "\u2600" : "\u25D0"}
+          {isDark ? (
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+          ) : (
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+          )}
         </button>
       </div>
 

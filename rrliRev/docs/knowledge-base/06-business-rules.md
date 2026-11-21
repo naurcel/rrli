@@ -1,7 +1,8 @@
 # Knowledge Base: 06 — Business Rules & Financial Integrity
 
-> **Document Status:** `[Implemented]`  
+> **Document Status:** `[Authoritative Rules]`  
 > **Authority Level:** Authoritative Specification  
+> **Master Source of Truth:** [`../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md`](../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md)  
 > **Last Verified:** November 2026  
 > **Location:** `rrliRev/docs/knowledge-base/06-business-rules.md`
 
@@ -16,96 +17,147 @@ RouteX enforces standard business language across all UI elements, database colu
 | **"Revenue"** | Standard UI (cards, table headers, badges) | "rate", "billing", "sales", "gross revenue" |
 | **"Delivery Revenue"** | Formal reports, legal documents, contracts | "billing amount", "gross sales" |
 | **"Expenses"** | Standard UI (cards, table headers, badges) | "operational costs", "fleet overhead" |
-| **"Trip Expenses"** | Formal breakdown ($Diesel + Tolls + Fees + Crew + Other$) | "delivery overhead", "stop costs" |
-| **"Store Drop-offs"** / **"Drop-offs"** | Store destination lists and timeline | "stops", "waypoints", "deliveries" |
+| **"Trip Expenses"** | Formal breakdown (Diesel + Tolls + Crew + Other) | "delivery overhead", "stop costs" |
+| **"Locations"** | Stores, branches, or depots visited | "waypoints", "deliveries" |
+| **"Stops / Drop-offs"** | Numeric count of drop-offs at a location | "stopovers", "deliveries" |
 | **"Net Profit"** | Profit after all attributable expenses | "net income", "margin value" |
 | **"Profit Margin"** | Net profit percentage of revenue | "margin", "markup", "profit percent" |
 | **"POD Attached"** | Document uploaded and attached | "Verified", "Confirmed" |
 | **"Missing POD"** | Document outstanding | "Pending Verification", "Unverified" |
+| **"Requests"** | Backdating request queue and modal | "Tickets", "Backdating Tickets" |
 
 ---
 
 ## 2. Delivery & Trip Architecture Invariants
 
 1. **One Delivery Equals One Completed Trip:**
-   A delivery record in RouteX represents a single, complete vehicular run from origin to destination. It can contain one or more **Store Drop-offs**.
-2. **No Duplication Across Drop-offs:**
-   Trip Revenue and Trip Expenses belong to the overall delivery trip. They must **never** be multiplied or duplicated across individual store drop-offs.
-3. **Multi-Store Sequencing:**
-   Each store drop-off within a delivery has an integer sequence number ($1, 2, 3\dots$) representing the physical delivery order.
+   - A delivery record in RouteX represents a single, complete vehicular run from origin to destination.
+   - It is identified by a unique Waybill Number (`waybillNumber`), Delivery Date, Client, and Truck.
+2. **Locations and Numeric Stop Counts (No Individual Stop Records):**
+   - A delivery can have one or more **Locations**.
+   - Each Location stores:
+     - Location Name
+     - Location Address
+     - Numeric count of stops/drop-offs (`dropoffCount`)
+   - **Do not create individual stop/drop-off records**, forms, or database rows.
+   - The total stop/drop-off count is derived as the sum across locations:
+     $$\text{Total Stops / Drop-offs} = \sum_{i=1}^{N} \text{Location}_i.\text{dropoffCount}$$
+3. **No Revenue/Expense Duplication Across Locations:**
+   - Trip Revenue and Trip Expenses belong to the overall delivery trip. They must **never** be multiplied across locations.
 4. **Completed Operations Only:**
-   RouteX is an operational accounting system for completed deliveries. Active dispatching, live GPS telematics, and in-transit tracking are outside the platform's scope.
+   - RouteX is an operational accounting system for completed deliveries. Active dispatching, live GPS telematics, and in-transit tracking are outside scope.
 
 ---
 
-## 3. Financial Integrity & Expense Resolution Rules
+## 3. Fleet & Truck Registration Rules
 
-### A. The Unknown Expense Invariant (Zero-Tolerance)
-- An expense marked with state `unknown` represents an unresolved operational liability.
+1. **Plate Matching:** Every delivery is attributed to a registered truck by plate number.
+2. **Automatic Truck Registration on Import:**
+   - If an imported spreadsheet contains a plate number not present in the truck registry, the system **automatically registers the truck** using available spreadsheet details.
+   - Missing fields remain blank or use appropriate defaults.
+   - The import does not require additional truck information or pre-registration to proceed.
+3. **Ownership Differentiation:**
+   - **Owned Trucks:** Complete operational tracking (diesel, tolls, crew pay, itemized expenses).
+   - **Subcontracted Trucks:** Distinguished by spreadsheet structure/formatting (unshaded/white cells). Simplified financial structure (single subcontractor expense amount).
+
+---
+
+## 4. Employee Identification & Crew Assignment Rules
+
+1. **Unique Employee ID/Code:**
+   - Every driver and helper has a unique, non-null Employee ID (`employeeCode`, e.g., `DRV-01`, `HLP-01`).
+2. **Crew Dropdown Display Format:**
+   - Dropdown options display: `Name [Employee ID] · Role`.
+3. **Cross-Role Flexibility:**
+   - Drivers are selectable as helpers on delivery trips.
+4. **Crew Quotas per Delivery:**
+   - Exactly **one (1) Driver** per delivery.
+   - **One to two (1–2) Helpers** per delivery (minimum 1, maximum 2).
+5. **Conflict Prevention:**
+   - **Same Delivery:** An employee cannot be assigned to multiple roles on the same trip.
+   - **Same Date:** An employee cannot be assigned to multiple delivery trips on the same calendar date. The UI surfaces a schedule conflict warning if an employee is already booked.
+6. **Manual Daily Rates:**
+   - Daily rates and allowances are entered manually per trip. No automated labor cost calculations.
+7. **Permanent Deletion & Historical Integrity:**
+   - Deleting an employee removes them from active lists and future dropdowns, but **preserves their name and attribution in all historical deliveries and audit logs**.
+
+---
+
+## 5. Expense Tracking & Financial Integrity Invariants
+
+### A. Owned vs. Subcontracted Expense Interfaces
+- **Owned Trucks:** Itemized expense entries (`description` + `amount`) with Add/Remove rows, plus **one general delivery notes field** (`notes`). No per-expense notes.
+- **Subcontracted Trucks:** **One total subcontractor expense amount** (`subcontractorExpense`). Itemized fuel and crew daily rates are omitted.
+
+### B. The Unknown Expense Invariant (Zero-Tolerance)
+- An expense marked `unknown` represents an unresolved operational liability.
 - **NEVER SILENTLY ZERO AN UNKNOWN EXPENSE.**
-- Deliveries containing one or more `unknown` expenses (diesel, tolls, entry fees, allowances, or other) are marked with `financialState = "incomplete"`.
+- Deliveries containing one or more `unknown` expenses are marked `financialState = "incomplete"`.
 
-### B. Exclusion from Aggregate KPI Totals
-- Deliveries in the `incomplete` financial state **MUST BE STRICTLY EXCLUDED** from aggregate revenue, expense, and profit KPI calculations across the Dashboard, Truck Profitability, and Finance overviews.
-- Incomplete trips are displayed in ledgers and detail views with explicit warning badges so dispatchers know they require resolution.
-- Under Truck Profitability, unfinalized delivery revenue may be surfaced as a secondary `+ ₱X pending` indicator, but is never mixed into finalized earnings totals.
+### C. Exclusion from Aggregate KPI Totals
+- Deliveries in the `incomplete` financial state **MUST BE STRICTLY EXCLUDED** from aggregate revenue, expense, and profit KPI calculations across the Dashboard, Truck Profitability, and Finance overviews until finalized.
+- Incomplete trips display warning badges indicating that financial resolution is required.
 
-### C. Resolution States & Impacts
-
-| Expense Resolution State | Internal Value | Financial Impact | Blocks Finalization? |
-| :--- | :--- | :--- | :--- |
-| `confirmed` | Numerical (e.g. `1500.00`) | Exact value summed into Total Expenses | No |
-| `not_applicable` | `null` | Evaluates to `0.00` | No |
-| `unknown` | `null` | Excluded; flags delivery as incomplete | **Yes** |
-
-### D. Automatic Financial Resolution (No Manual Finalize Button)
-There is no separate "Finalize Financials" button. Dispatchers simply click "Edit delivery" to resolve unknown expenses. Once all expense fields are confirmed or marked not applicable, the system **automatically** promotes the delivery to `finalized` status.
+### D. Automatic Financial Resolution
+- There is no separate "Finalize Financials" button. Dispatchers simply edit the delivery to confirm unknown amounts; the system automatically promotes the delivery to `finalized`.
 
 ---
 
-## 4. Operational Recording Windows & RBAC Boundaries
+## 6. Operational Recording Windows & Backdating Requests
 
-### A. Company Foundation Boundary (2024)
-- RRLI was founded on **January 1, 2024**.
-- No operational deliveries, expense entries, calendar date selections, report intervals, or spreadsheet imports may precede `2024-01-01`.
-- Any record attempted with a date earlier than `2024-01-01` is rejected at the API and validation layer.
-
-### B. 3-Day Submission Window for Operations
-- Users with the **Operations** role are subject to a **3-day submission window** from the delivery date:
-  $$\text{Current Date} - \text{Delivery Date} \le 3 \text{ days}$$
-- Trips submitted past this boundary are flagged as `recording_delayed = true`.
-- **System Admin** users are exempt from the 3-day restriction and can record or edit trips back to the `2024-01-01` foundation boundary.
-
-### C. Tripartite RBAC Governance Model
-RouteX operates under three core role-based access control tenets:
-1. **Admin Superuser Authority (EVERYTHING):** The System Administrator has unrestricted write access across all operational modules (deliveries, drop-offs, trucks, drivers, helpers, PODs, Excel staged batch import, company expenses) and holds exclusive authority over Additional Admin Features (User Account Provisioning, Role Assignments, Audited Record Deletion, System Audit Logs, Custom Report Template Management, and Unlimited Historical Delivery Recording).
-2. **Finance Dedicated Scope (Finance Page ONLY):** Finance Officers have write authority exclusively on `/finance` (`finance:manage` to record, edit, and delete company operating expenses). In all other modules (Deliveries, Fleet Trucks, Drivers & Helpers, PODs, User Management, Templates), Finance is strictly read-only.
-3. **The Rest Are View-Only (With Dispatch Exception):**
-   - **Operations:** Write access for daily logistics dispatch and execution (record and edit completed deliveries within the 3-day window, manage drop-offs, upload POD files, manage fleet specifications, execute Excel imports). Strictly view-only on the Finance page and excluded from all Additional Admin Features.
-   - **View-Only Staff (HR, Secretary, Customer Representative):** 100% read-only across the entire platform. Zero mutation authority anywhere. Cannot record or edit deliveries, expenses, trucks, or users.
+1. **Company Foundation Boundary (2024):**
+   - RRLI was founded on **January 1, 2024**. No records may precede `2024-01-01`.
+2. **3-Day Operational Window for Operations:**
+   - Operations staff can record or edit deliveries up to 3 days from the delivery date:
+     $$\text{Today} - \text{Delivery Date} \le 3 \text{ days}$$
+   - Any trip recorded past 3 days requires an **Approved Backdating Request**.
+3. **Backdating Requests Queue:**
+   - Operations submits a request with Waybill, Date, Client, Plate, and Reason.
+   - System Admin reviews and approves or rejects the request.
+   - System Admin is exempt from the 3-day restriction.
 
 ---
 
-## 5. Profitability Calculation Formulas
+## 7. Finance Spreadsheet Import Rules
 
-### A. Delivery Trip Profitability
-$$\text{Total Trip Expenses} = \text{Diesel} + \text{Tolls} + \text{Entry Fees} + \text{Driver Daily Rate} + \text{Driver Allowance} + \text{Helper Daily Rate} + \text{Helper Allowance} + \text{Other}$$
+1. **All Six Sheets Supported:** Billings, Petty Cash, Checks Received, Payables, Checks Issued, Collections.
+2. **Core Data Ingestion:** Extracts **Date**, **Total Amount**, and **Description/Subject**, classified strictly as **Incoming** or **Outgoing** (no pending status).
+3. **Duplicate Record Review:**
+   - Cross-sheet matching records are flagged for **Manual Review**.
+   - Records are never merged automatically.
+   - Reviewers select: **Combine Records**, **Keep Separate**, or **Exclude Record**.
 
+---
+
+## 8. Documents & Proof of Delivery (POD)
+
+1. **Two-Tier Association:**
+   - **Delivery-Level Documents:** Attached to the overall trip (Master Waybill, Fuel Slip).
+   - **Location-Level Documents:** Attached to a specific Location (Store POD, stamped invoice).
+   - **No individual stop records** are created solely for document association.
+2. **Storage Architecture (`[Planned Backend]`):**
+   - Private Supabase Storage bucket (`routex-documents`) with 5-minute pre-signed URLs.
+
+---
+
+## 9. Profitability Formulas
+
+### A. Owned Delivery Profitability
+$$\text{Total Trip Expenses} = \sum \text{Itemized Expenses (Diesel, Tolls, Crew Rates, Allowances, Other)}$$
 $$\text{Delivery Net Profit} = \text{Delivery Revenue} - \text{Total Trip Expenses}$$
-
 $$\text{Profit Margin (\%)} = \left(\frac{\text{Delivery Net Profit}}{\text{Delivery Revenue}}\right) \times 100$$
 
-### B. Truck Profitability (Strict Isolation)
-$$\text{Truck Revenue} = \sum \text{Finalized Delivery Revenue for Plate Number}$$
+### B. Subcontracted Delivery Profitability
+$$\text{Delivery Net Profit} = \text{Delivery Revenue} - \text{Subcontractor Expense}$$
+$$\text{Profit Margin (\%)} = \left(\frac{\text{Delivery Net Profit}}{\text{Delivery Revenue}}\right) \times 100$$
 
-$$\text{Truck Expenses} = \sum \text{Finalized Trip Expenses for Plate Number}$$
-
+### C. Truck Profitability (Strict Isolation)
+$$\text{Truck Revenue} = \sum \text{Finalized Delivery Revenue for Truck Plate}$$
+$$\text{Truck Expenses} = \sum \text{Finalized Trip Expenses for Truck Plate}$$
 $$\text{Truck Net Profit} = \text{Truck Revenue} - \text{Truck Expenses}$$
-
 > [!IMPORTANT]
-> Truck profitability is strictly isolated from company-wide operating expenses. General corporate expenses must never be allocated to individual trucks.
+> Company-wide operating expenses are never allocated to individual trucks.
 
-### C. Consolidated Company Profitability
-$$\text{Company Net Profit} = \text{Total Delivery Revenue} - \text{Total Delivery Expenses} - \text{Total Company Expenses}$$
-
-$$\text{Company Profit Margin (\%)} = \left(\frac{\text{Company Net Profit}}{\text{Total Delivery Revenue}}\right) \times 100$$
+### D. Consolidated Company Profitability
+$$\text{Company Net Profit} = \sum \text{Delivery Revenue} - \sum \text{Trip Expenses} - \sum \text{Company Operating Expenses}$$
+$$\text{Company Profit Margin (\%)} = \left(\frac{\text{Company Net Profit}}{\sum \text{Delivery Revenue}}\right) \times 100$$

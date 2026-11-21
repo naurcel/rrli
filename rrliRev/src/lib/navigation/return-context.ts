@@ -75,6 +75,9 @@ export function deriveReturnLabel(
   if (pathname === "/user-management" || pathname.startsWith("/user-management/")) {
     return "Back to User Management";
   }
+  if (pathname === "/permissions" || pathname.startsWith("/permissions/")) {
+    return "Back to Permissions";
+  }
   if (pathname === "/settings" || pathname.startsWith("/settings/")) {
     return "Back to Settings";
   }

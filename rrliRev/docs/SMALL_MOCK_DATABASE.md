@@ -15,7 +15,7 @@ When Supabase is not configured, the delivery list and profitability-summary rou
 | Drivers | 2 | Fictional personnel |
 | Helpers | 2 | Fictional personnel |
 | Completed deliveries | 9 | Exactly three per client |
-| Drop-offs | 12 | Six single-destination trips and three two-stop trips |
+| Locations & Drop-offs | 12 | Locations record name/address and numeric drop-off count (derived total stops) |
 
 All deliveries occur within the current seven-day window of October 27 through November 2, 2026. Waybills, routes, personnel, storage paths, and filenames are fictional. Sample filenames include `SAMPLE-NOT-SIGNED` so they cannot be mistaken for operational documents.
 

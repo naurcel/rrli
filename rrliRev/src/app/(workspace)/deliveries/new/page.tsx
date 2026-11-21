@@ -967,7 +967,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     if (!isEditMode && !isAdmin && values.deliveryDate < deliveryDateWindow.min) {
       if (!approvedTicket) {
         setSubmitError(
-          `Delivery date precedes the rolling 3-working-day window (${deliveryDateWindow.min}). Please request an Admin Backdating Approval Ticket.`
+          `Delivery date precedes the rolling 3-working-day window (${deliveryDateWindow.min}). Please submit an Admin Backdating Request.`
         );
         return;
       }
@@ -1632,7 +1632,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
-                      Approved Backdating Ticket #{approvedTicket.id} on file for Waybill #{values.waybillNumber}.
+                      Approved Backdating Request #{approvedTicket.id} on file for Waybill #{values.waybillNumber}.
                     </span>
                   ) : (
                     <span style={{ display: "inline-flex", alignItems: "flex-start", gap: "6px" }}>
@@ -1652,7 +1652,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                         <line x1="12" y1="9" x2="12" y2="13" />
                         <line x1="12" y1="17" x2="12.01" y2="17" />
                       </svg>
-                      <span><strong>Backdating Notice:</strong> This date precedes the rolling 3-working-day window (Min: {deliveryDateWindow.min}). An approved Admin Backdating Ticket is required to record this delivery.</span>
+                      <span><strong>Backdating Notice:</strong> This date precedes the rolling 3-working-day window (Min: {deliveryDateWindow.min}). An approved Admin Backdating Request is required to record this delivery.</span>
                     </span>
                   )}
                 </div>
@@ -1663,7 +1663,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     className="secondary-button"
                     style={{ padding: "4px 10px", fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap" }}
                   >
-                    Request Ticket
+                    Submit Request
                   </button>
                 )}
               </div>

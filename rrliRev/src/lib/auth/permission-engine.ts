@@ -1,5 +1,6 @@
 import { PERMISSIONS, ROLE_PERMISSIONS, type Permission, type UserRole } from "./rbac.ts";
 import { findDepartmentById } from "./department-store.ts";
+import { findCustomRoleById } from "./custom-role-store.ts";
 
 export type PermissionEvaluationInput = {
   isSuperadmin?: boolean;
@@ -37,7 +38,7 @@ export function resolveEffectivePermissions(
   const inheritedSet = new Set<Permission>();
   const deptList = input.departmentIds ?? input.departments;
 
-  // 2. Additive department permissions from active departments
+  // 2. Additive department & enabled custom role permissions
   if (deptList && deptList.length > 0) {
     for (const deptId of deptList) {
       const dept = findDepartmentById(deptId);
@@ -45,6 +46,13 @@ export function resolveEffectivePermissions(
       if (dept && !dept.isArchived) {
         for (const p of dept.defaultPermissions) {
           inheritedSet.add(p);
+        }
+      } else {
+        const customRole = findCustomRoleById(deptId);
+        if (customRole && customRole.isEnabled) {
+          for (const p of customRole.permissions) {
+            inheritedSet.add(p);
+          }
         }
       }
     }
@@ -99,6 +107,13 @@ export function evaluatePermissionBreakdown(
       if (dept && !dept.isArchived) {
         for (const p of dept.defaultPermissions) {
           inheritedSet.add(p);
+        }
+      } else {
+        const customRole = findCustomRoleById(deptId);
+        if (customRole && customRole.isEnabled) {
+          for (const p of customRole.permissions) {
+            inheritedSet.add(p);
+          }
         }
       }
     }

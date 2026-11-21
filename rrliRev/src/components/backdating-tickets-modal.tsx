@@ -28,7 +28,7 @@ export function BackdatingTicketsModal({
   const [filterStatus, setFilterStatus] = useState<"all" | BackdatingTicketStatus>("all");
   const [viewTab, setViewTab] = useState<"queue" | "request">("queue");
 
-  // New ticket form state
+  // New request form state
   const [waybillNumber, setWaybillNumber] = useState(initialWaybill || "");
   const [deliveryDate, setDeliveryDate] = useState(initialDeliveryDate || "");
   const [clientName, setClientName] = useState("");
@@ -57,7 +57,7 @@ export function BackdatingTicketsModal({
         setTickets(data.tickets);
       }
     } catch {
-      toast.error("Failed to load backdating tickets.");
+      toast.error("Failed to load backdating requests.");
     } finally {
       setLoading(false);
     }
@@ -125,16 +125,16 @@ export function BackdatingTicketsModal({
 
         const data = await res.json().catch(() => null);
         if (!res.ok || !data?.ok) {
-          setFormError(data?.message || "Failed to submit backdating ticket.");
+          setFormError(data?.message || "Failed to submit backdating request.");
           return;
         }
 
-        toast.success(`Backdating ticket ${data.ticket.id} submitted for Admin review.`);
+        toast.success(`Request for Waybill #${waybillNumber.trim().toUpperCase()} submitted for Admin review.`);
         setReason("");
         setViewTab("queue");
         fetchTickets();
       } catch {
-        setFormError("A network error occurred while submitting the ticket.");
+        setFormError("A network error occurred while submitting the request.");
       }
     });
   }
@@ -155,11 +155,11 @@ export function BackdatingTicketsModal({
 
         const data = await res.json().catch(() => null);
         if (!res.ok || !data?.ok) {
-          toast.error(data?.message || `Failed to ${decision} ticket.`);
+          toast.error(data?.message || `Failed to ${decision} request.`);
           return;
         }
 
-        toast.success(`Ticket ${ticketId} has been ${decision === "approve" ? "approved" : "rejected"}.`);
+        toast.success(`Request ${ticketId} has been ${decision === "approve" ? "approved" : "rejected"}.`);
         setActiveDecisionId(null);
         setDecisionNotes("");
         fetchTickets();
@@ -178,150 +178,200 @@ export function BackdatingTicketsModal({
     return t.status === filterStatus;
   });
 
-  const pendingCount = tickets.filter((t) => t.status === "pending").length;
+  const counts = {
+    all: tickets.length,
+    pending: tickets.filter((t) => t.status === "pending").length,
+    approved: tickets.filter((t) => t.status === "approved").length,
+    rejected: tickets.filter((t) => t.status === "rejected").length,
+  };
 
   return createPortal(
-    <div className="image-viewer-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+    <div
+      className="routex-dialog-layer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="backdating-modal-title"
+      style={{ zIndex: 1100 }}
+    >
+      <div className="routex-dialog-backdrop" onClick={onClose} />
       <div
-        className="records-card"
+        className="routex-dialog"
+        onClick={(e) => e.stopPropagation()}
         style={{
+          width: "min(94vw, 760px)",
           maxWidth: "760px",
-          width: "92%",
           maxHeight: "88vh",
           display: "flex",
           flexDirection: "column",
-          padding: 0,
+          borderRadius: "16px",
           overflow: "hidden",
-          boxShadow: "0 20px 40px rgba(0,0,0,0.35)",
-          border: "1px solid var(--color-border)",
-          backgroundColor: "var(--color-surface)",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div
-          style={{
-            padding: "18px 24px",
-            borderBottom: "1px solid var(--color-border)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
+        <header className="routex-dialog-header">
           <div>
-            <h2 style={{ fontSize: "17px", fontWeight: 700, margin: 0, color: "var(--color-text)" }}>
-              Backdating Approval Tickets
+            <h2 id="backdating-modal-title" style={{ fontSize: "18px", fontWeight: 750 }}>
+              Backdating Requests
             </h2>
-            <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--color-text-muted)" }}>
-              Deliveries dated beyond the rolling 3-working-day window require Admin ticket approval.
+            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-text-muted)" }}>
+              Deliveries dated beyond the rolling 3-working-day window require Administrator approval.
             </p>
           </div>
           <button
             type="button"
-            className="filter-button"
+            className="routex-dialog-close"
             onClick={onClose}
             aria-label="Close dialog"
-            style={{ padding: "6px 12px", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "5px" }}
+            title="Close (Esc)"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-            Close
+            ×
           </button>
-        </div>
+        </header>
 
         {/* Tab switcher */}
         <div
           style={{
             display: "flex",
+            alignItems: "center",
+            padding: "8px 24px",
             borderBottom: "1px solid var(--color-border)",
             backgroundColor: "var(--color-surface-subtle)",
-            padding: "0 24px",
-            gap: "16px",
+            gap: "8px",
           }}
         >
-          <button
-            type="button"
-            onClick={() => setViewTab("queue")}
+          <div
+            role="tablist"
+            aria-label="Request views"
             style={{
-              padding: "12px 4px",
-              fontSize: "13px",
-              fontWeight: 600,
-              border: "none",
-              background: "none",
-              cursor: "pointer",
-              color: viewTab === "queue" ? "var(--color-accent-deep)" : "var(--color-text-muted)",
-              borderBottom: viewTab === "queue" ? "2px solid var(--color-accent-deep)" : "2px solid transparent",
+              display: "inline-flex",
+              background: "var(--color-surface)",
+              padding: "3px",
+              borderRadius: "8px",
+              border: "1px solid var(--color-border)",
+              gap: "3px",
             }}
           >
-            Ticket Queue ({tickets.length}) {pendingCount > 0 ? `• ${pendingCount} Pending` : ""}
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewTab("request")}
-            style={{
-              padding: "12px 4px",
-              fontSize: "13px",
-              fontWeight: 600,
-              border: "none",
-              background: "none",
-              cursor: "pointer",
-              color: viewTab === "request" ? "var(--color-accent-deep)" : "var(--color-text-muted)",
-              borderBottom: viewTab === "request" ? "2px solid var(--color-accent-deep)" : "2px solid transparent",
-            }}
-          >
-            + Request Backdating Approval
-          </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewTab === "queue"}
+              onClick={() => setViewTab("queue")}
+              style={{
+                border: "none",
+                padding: "6px 14px",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: 650,
+                cursor: "pointer",
+                background: viewTab === "queue" ? "var(--color-surface-subtle)" : "transparent",
+                color: viewTab === "queue" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
+                boxShadow: viewTab === "queue" ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <span>Requests Queue ({counts.all})</span>
+              {counts.pending > 0 ? (
+                <span
+                  style={{
+                    display: "inline-block",
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    backgroundColor: "#fffbeb",
+                    color: "#92400e",
+                    border: "1px solid #fef3c7",
+                  }}
+                >
+                  {counts.pending} Pending
+                </span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewTab === "request"}
+              onClick={() => setViewTab("request")}
+              style={{
+                border: "none",
+                padding: "6px 14px",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: 650,
+                cursor: "pointer",
+                background: viewTab === "request" ? "var(--color-surface-subtle)" : "transparent",
+                color: viewTab === "request" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
+                boxShadow: viewTab === "request" ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              + New Request
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
-        <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+        <div className="routex-dialog-body" style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
           {viewTab === "queue" && (
-            <div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {/* Filter pills */}
-              <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center" }}>
-                <span style={{ fontSize: "12px", color: "var(--color-text-muted)", fontWeight: 500 }}>Filter:</span>
-                {(["all", "pending", "approved", "rejected"] as const).map((s) => (
+              <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "11.5px", color: "var(--color-text-muted)", fontWeight: 600, marginRight: "4px" }}>
+                  Filter:
+                </span>
+                {(
+                  [
+                    { id: "all", label: `All (${counts.all})` },
+                    { id: "pending", label: `Pending (${counts.pending})` },
+                    { id: "approved", label: `Approved (${counts.approved})` },
+                    { id: "rejected", label: `Rejected (${counts.rejected})` },
+                  ] as const
+                ).map((tab) => (
                   <button
-                    key={s}
+                    key={tab.id}
                     type="button"
-                    onClick={() => setFilterStatus(s)}
+                    onClick={() => setFilterStatus(tab.id)}
                     style={{
-                      padding: "4px 10px",
-                      borderRadius: "14px",
-                      fontSize: "11px",
-                      fontWeight: 600,
+                      padding: "4px 11px",
+                      borderRadius: "6px",
+                      fontSize: "11.5px",
+                      fontWeight: filterStatus === tab.id ? 650 : 500,
                       border: "1px solid",
                       cursor: "pointer",
-                      textTransform: "capitalize",
-                      backgroundColor: filterStatus === s ? "var(--color-accent-deep)" : "transparent",
-                      color: filterStatus === s ? "#fff" : "var(--color-text)",
-                      borderColor: filterStatus === s ? "var(--color-accent-deep)" : "var(--color-border)",
+                      backgroundColor: filterStatus === tab.id ? "var(--color-surface-subtle)" : "transparent",
+                      color: filterStatus === tab.id ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
+                      borderColor: filterStatus === tab.id ? "var(--color-accent)" : "var(--color-border)",
+                      transition: "all 0.15s ease",
                     }}
                   >
-                    {s}
+                    {tab.label}
                   </button>
                 ))}
               </div>
 
               {loading ? (
-                <div style={{ textAlign: "center", padding: "40px", color: "var(--color-text-muted)" }}>
-                  Loading tickets…
+                <div style={{ textAlign: "center", padding: "48px 24px", color: "var(--color-text-muted)", fontSize: "13px" }}>
+                  Loading requests…
                 </div>
               ) : filteredTickets.length === 0 ? (
                 <div
                   style={{
                     textAlign: "center",
-                    padding: "40px",
+                    padding: "44px 24px",
                     color: "var(--color-text-muted)",
                     border: "1px dashed var(--color-border)",
-                    borderRadius: "8px",
+                    borderRadius: "10px",
+                    backgroundColor: "var(--color-surface-subtle)",
                   }}
                 >
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: "13px" }}>No backdating tickets found.</p>
+                  <p style={{ margin: 0, fontWeight: 650, fontSize: "13.5px", color: "var(--color-text-primary)" }}>
+                    No requests found
+                  </p>
                   <p style={{ margin: "4px 0 0", fontSize: "12px" }}>
-                    Tickets requested for historical dates will appear here.
+                    Backdating requests submitted for historical delivery dates will appear here.
                   </p>
                 </div>
               ) : (
@@ -330,187 +380,207 @@ export function BackdatingTicketsModal({
                     <div
                       key={t.id}
                       style={{
-                        padding: "16px",
-                        borderRadius: "8px",
+                        padding: "16px 18px",
+                        borderRadius: "10px",
                         border: "1px solid var(--color-border)",
-                        backgroundColor: "var(--color-surface-subtle)",
+                        backgroundColor: "var(--color-surface)",
                         display: "flex",
                         flexDirection: "column",
-                        gap: "8px",
+                        gap: "10px",
+                        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+                        transition: "border-color 0.15s ease",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      {/* Top Header Row */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
                         <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontWeight: 700, fontSize: "14px", color: "var(--color-text)" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            <strong style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", fontFamily: "var(--font-mono, monospace)" }}>
                               Waybill #{t.waybillNumber}
-                            </span>
-                            <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
-                              • Delivery Date: <strong>{t.deliveryDate}</strong>
+                            </strong>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "11.5px",
+                                fontWeight: 600,
+                                padding: "2px 7px",
+                                borderRadius: "5px",
+                                background: "var(--color-surface-subtle)",
+                                color: "var(--color-text-secondary)",
+                                border: "1px solid var(--color-border)",
+                              }}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                                <line x1="16" x2="16" y1="2" y2="6" />
+                                <line x1="8" x2="8" y1="2" y2="6" />
+                                <line x1="3" x2="21" y1="10" y2="10" />
+                              </svg>
+                              {t.deliveryDate}
                             </span>
                           </div>
-                          <div style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: "2px" }}>
-                            Requested by {t.requestedBy.fullName} (@{t.requestedBy.username}) on{" "}
-                            {new Date(t.createdAt).toLocaleDateString()}
+                          <div style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: "3px" }}>
+                            Requested by {t.requestedBy.fullName} (@{t.requestedBy.username}) · {new Date(t.createdAt).toLocaleDateString()}
                           </div>
                         </div>
 
+                        {/* Status badge */}
                         <span
-                          style={{
-                            padding: "3px 8px",
-                            borderRadius: "12px",
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            textTransform: "uppercase",
-                            backgroundColor:
-                              t.status === "approved"
-                                ? "rgba(16, 185, 129, 0.15)"
-                                : t.status === "rejected"
-                                ? "rgba(239, 68, 68, 0.15)"
-                                : "rgba(245, 158, 11, 0.15)",
-                            color:
-                              t.status === "approved"
-                                ? "#059669"
-                                : t.status === "rejected"
-                                ? "#dc2626"
-                                : "#d97706",
-                          }}
+                          className={`export-status-pill status-${t.status}`}
+                          style={{ flexShrink: 0 }}
                         >
-                          {t.status}
+                          {t.status === "approved" ? "Approved" : t.status === "rejected" ? "Rejected" : "Pending"}
                         </span>
                       </div>
 
-                      <div style={{ fontSize: "12px", color: "var(--color-text)", marginTop: "4px", wordBreak: "break-word", lineHeight: 1.45 }}>
-                        <span style={{ fontWeight: 600 }}>Reason: </span>
-                        {t.reason}
-                      </div>
-
-                      {t.clientName && (
-                        <div style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
-                          Client: {t.clientName} {t.plateNumber ? `| Plate: ${t.plateNumber}` : ""}
+                      {/* Client / Plate tags */}
+                      {(t.clientName || t.plateNumber) && (
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                          {t.clientName ? (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 550,
+                                padding: "1px 7px",
+                                borderRadius: "4px",
+                                background: "var(--color-surface-subtle)",
+                                color: "var(--color-text-secondary)",
+                                border: "1px solid var(--color-border)",
+                              }}
+                            >
+                              Client: {t.clientName}
+                            </span>
+                          ) : null}
+                          {t.plateNumber ? (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                padding: "1px 7px",
+                                borderRadius: "4px",
+                                background: "var(--color-surface-subtle)",
+                                color: "var(--color-text-secondary)",
+                                border: "1px solid var(--color-border)",
+                                fontFamily: "var(--font-mono, monospace)",
+                              }}
+                            >
+                              Plate: {t.plateNumber}
+                            </span>
+                          ) : null}
                         </div>
                       )}
 
+                      {/* Reason callout */}
+                      <div
+                        style={{
+                          fontSize: "12.5px",
+                          lineHeight: 1.45,
+                          color: "var(--color-text-primary)",
+                          padding: "8px 12px",
+                          borderRadius: "6px",
+                          backgroundColor: "var(--color-surface-subtle)",
+                          borderLeft: "3px solid var(--color-accent)",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        <span style={{ fontWeight: 600, color: "var(--color-text-secondary)", marginRight: "4px" }}>
+                          Reason:
+                        </span>
+                        {t.reason}
+                      </div>
+
+                      {/* Admin Decision note */}
                       {t.status !== "pending" && t.decidedBy && (
                         <div
                           style={{
-                            marginTop: "4px",
                             padding: "8px 12px",
                             borderRadius: "6px",
-                            backgroundColor: "var(--color-surface)",
+                            backgroundColor: "var(--color-surface-subtle)",
                             fontSize: "12px",
                             border: "1px solid var(--color-border)",
                           }}
                         >
-                          <div style={{ fontWeight: 600, color: "var(--color-text)" }}>
+                          <div style={{ fontWeight: 600, color: "var(--color-text-primary)", fontSize: "11.5px" }}>
                             Decision by {t.decidedBy.fullName} (@{t.decidedBy.username}):
                           </div>
                           {t.decisionNotes ? (
-                            <p style={{ margin: "2px 0 0", color: "var(--color-text-muted)" }}>{t.decisionNotes}</p>
+                            <p style={{ margin: "3px 0 0", color: "var(--color-text-secondary)", fontSize: "12px", fontStyle: "italic" }}>
+                              {t.decisionNotes}
+                            </p>
                           ) : (
-                            <span style={{ fontStyle: "italic", color: "var(--color-text-muted)" }}>No notes entered.</span>
+                            <span style={{ fontStyle: "italic", color: "var(--color-text-muted)", fontSize: "11.5px" }}>
+                              No review note provided.
+                            </span>
                           )}
                         </div>
                       )}
 
                       {/* Admin Decision Actions */}
                       {isAdmin && t.status === "pending" && (
-                        <div style={{ marginTop: "8px", borderTop: "1px solid var(--color-border)", paddingTop: "10px" }}>
+                        <div style={{ marginTop: "4px", borderTop: "1px solid var(--color-border)", paddingTop: "10px" }}>
                           {activeDecisionId === t.id ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text)" }}>
+                              <label style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
                                 Review Notes (Optional):
                                 <input
                                   type="text"
                                   value={decisionNotes}
                                   onChange={(e) => setDecisionNotes(e.target.value)}
                                   placeholder="e.g. Verified paper logsheet with dispatch manager."
+                                  className="export-review-input"
                                   style={{
                                     marginTop: "4px",
                                     width: "100%",
-                                    padding: "6px 10px",
-                                    fontSize: "12px",
-                                    borderRadius: "6px",
-                                    border: "1px solid var(--color-border)",
-                                    backgroundColor: "var(--color-surface)",
-                                    color: "var(--color-text)",
+                                    maxWidth: "100%",
                                   }}
                                 />
                               </label>
-                              <div style={{ display: "flex", gap: "8px" }}>
-                                <button
-                                  type="button"
-                                  disabled={isPending}
-                                  onClick={() => handleDecideTicket(t.id, "approve")}
-                                  style={{
-                                    padding: "6px 14px",
-                                    borderRadius: "6px",
-                                    border: "none",
-                                    backgroundColor: "#10b981",
-                                    color: "#fff",
-                                    fontWeight: 600,
-                                    fontSize: "12px",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {isPending ? "Processing…" : "Confirm Approval"}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isPending}
-                                  onClick={() => handleDecideTicket(t.id, "reject")}
-                                  style={{
-                                    padding: "6px 14px",
-                                    borderRadius: "6px",
-                                    border: "none",
-                                    backgroundColor: "#ef4444",
-                                    color: "#fff",
-                                    fontWeight: 600,
-                                    fontSize: "12px",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  Reject Ticket
-                                </button>
+                              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "2px" }}>
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setActiveDecisionId(null);
                                     setDecisionNotes("");
                                   }}
-                                  style={{
-                                    padding: "6px 12px",
-                                    borderRadius: "6px",
-                                    border: "1px solid var(--color-border)",
-                                    background: "none",
-                                    fontSize: "12px",
-                                    cursor: "pointer",
-                                  }}
+                                  className="secondary-button"
+                                  style={{ padding: "4px 12px", fontSize: "12px" }}
                                 >
                                   Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isPending}
+                                  onClick={() => handleDecideTicket(t.id, "reject")}
+                                  className="export-btn-reject"
+                                  style={{ height: "30px", fontSize: "12px" }}
+                                >
+                                  Reject Request
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isPending}
+                                  onClick={() => handleDecideTicket(t.id, "approve")}
+                                  className="export-btn-approve"
+                                  style={{ height: "30px", fontSize: "12px" }}
+                                >
+                                  {isPending ? "Processing…" : "Confirm Approval"}
                                 </button>
                               </div>
                             </div>
                           ) : (
-                            <div style={{ display: "flex", gap: "8px" }}>
+                            <div style={{ display: "flex", justifyContent: "flex-end" }}>
                               <button
                                 type="button"
                                 onClick={() => {
                                   setActiveDecisionId(t.id);
                                   setDecisionNotes("");
                                 }}
-                                style={{
-                                  padding: "5px 12px",
-                                  borderRadius: "6px",
-                                  backgroundColor: "var(--color-accent-deep)",
-                                  color: "#fff",
-                                  border: "none",
-                                  fontSize: "12px",
-                                  fontWeight: 600,
-                                  cursor: "pointer",
-                                }}
+                                className="primary-action-button"
+                                style={{ minHeight: "30px", padding: "0 14px", fontSize: "12px" }}
                               >
-                                Review & Decide
+                                Review &amp; Decide
                               </button>
                             </div>
                           )}
@@ -524,29 +594,41 @@ export function BackdatingTicketsModal({
           )}
 
           {viewTab === "request" && (
-            <form onSubmit={handleCreateTicket} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ fontSize: "13px", color: "var(--color-text-muted)" }}>
-                Submit a request to authorize recording a delivery dated before the standard 3-working-day window.
+            <form onSubmit={handleCreateTicket} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  backgroundColor: "var(--color-surface-subtle)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "12px",
+                  color: "var(--color-text-secondary)",
+                  lineHeight: 1.45,
+                }}
+              >
+                <strong>Backdating Policy:</strong> Recording deliveries older than the rolling 3-working-day window requires an Administrator review and approved justification.
               </div>
 
               {formError && (
                 <div
                   style={{
-                    padding: "10px 14px",
+                    padding: "9px 13px",
                     borderRadius: "6px",
-                    backgroundColor: "rgba(239, 68, 68, 0.12)",
+                    backgroundColor: "rgba(239, 68, 68, 0.08)",
                     color: "#dc2626",
                     fontSize: "12px",
-                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    border: "1px solid rgba(239, 68, 68, 0.25)",
+                    fontWeight: 500,
                   }}
+                  role="alert"
                 >
                   {formError}
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text)" }}>
-                  Waybill Number *
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                  Waybill Number <span style={{ color: "var(--color-accent)" }}>*</span>
                   <input
                     type="text"
                     required
@@ -555,19 +637,20 @@ export function BackdatingTicketsModal({
                     placeholder="e.g. WB-2026-9041"
                     style={{
                       width: "100%",
-                      marginTop: "4px",
-                      padding: "8px 10px",
+                      marginTop: "5px",
+                      padding: "8px 11px",
                       fontSize: "13px",
                       borderRadius: "6px",
                       border: "1px solid var(--color-border)",
                       backgroundColor: "var(--color-surface)",
-                      color: "var(--color-text)",
+                      color: "var(--color-text-primary)",
+                      outline: "none",
                     }}
                   />
                 </label>
 
-                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text)" }}>
-                  Delivery Date *
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                  Delivery Date <span style={{ color: "var(--color-accent)" }}>*</span>
                   <input
                     type="date"
                     required
@@ -576,20 +659,21 @@ export function BackdatingTicketsModal({
                     onChange={(e) => setDeliveryDate(e.target.value)}
                     style={{
                       width: "100%",
-                      marginTop: "4px",
-                      padding: "8px 10px",
+                      marginTop: "5px",
+                      padding: "8px 11px",
                       fontSize: "13px",
                       borderRadius: "6px",
                       border: "1px solid var(--color-border)",
                       backgroundColor: "var(--color-surface)",
-                      color: "var(--color-text)",
+                      color: "var(--color-text-primary)",
+                      outline: "none",
                     }}
                   />
                 </label>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
                   Client Name (Optional)
                   <input
                     type="text"
@@ -598,18 +682,19 @@ export function BackdatingTicketsModal({
                     placeholder="e.g. Jollibee Foods Corp."
                     style={{
                       width: "100%",
-                      marginTop: "4px",
-                      padding: "8px 10px",
+                      marginTop: "5px",
+                      padding: "8px 11px",
                       fontSize: "13px",
                       borderRadius: "6px",
                       border: "1px solid var(--color-border)",
                       backgroundColor: "var(--color-surface)",
-                      color: "var(--color-text)",
+                      color: "var(--color-text-primary)",
+                      outline: "none",
                     }}
                   />
                 </label>
 
-                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text)" }}>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
                   Truck Plate (Optional)
                   <input
                     type="text"
@@ -618,20 +703,21 @@ export function BackdatingTicketsModal({
                     placeholder="e.g. NBD-1234"
                     style={{
                       width: "100%",
-                      marginTop: "4px",
-                      padding: "8px 10px",
+                      marginTop: "5px",
+                      padding: "8px 11px",
                       fontSize: "13px",
                       borderRadius: "6px",
                       border: "1px solid var(--color-border)",
                       backgroundColor: "var(--color-surface)",
-                      color: "var(--color-text)",
+                      color: "var(--color-text-primary)",
+                      outline: "none",
                     }}
                   />
                 </label>
               </div>
 
-              <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text)" }}>
-                Business Justification / Reason * (min 5 characters)
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                Business Justification / Reason <span style={{ color: "var(--color-accent)" }}>*</span> (min 5 characters)
                 <textarea
                   required
                   rows={3}
@@ -640,48 +726,36 @@ export function BackdatingTicketsModal({
                   placeholder="Explain why this delivery is being recorded beyond the rolling 3-working-day window (e.g. Delayed physical POD return from provincial route, power outage at regional hub)."
                   style={{
                     width: "100%",
-                    marginTop: "4px",
-                    padding: "8px 10px",
+                    marginTop: "5px",
+                    padding: "8px 11px",
                     fontSize: "13px",
+                    lineHeight: 1.45,
                     borderRadius: "6px",
                     border: "1px solid var(--color-border)",
                     backgroundColor: "var(--color-surface)",
-                    color: "var(--color-text)",
+                    color: "var(--color-text-primary)",
                     fontFamily: "inherit",
+                    outline: "none",
                   }}
                 />
               </label>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
                 <button
                   type="button"
                   onClick={() => setViewTab("queue")}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "6px",
-                    border: "1px solid var(--color-border)",
-                    background: "none",
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
+                  className="secondary-button"
+                  style={{ padding: "7px 16px", fontSize: "12.5px" }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
-                  style={{
-                    padding: "8px 18px",
-                    borderRadius: "6px",
-                    border: "none",
-                    backgroundColor: "var(--color-accent-deep)",
-                    color: "#fff",
-                    fontWeight: 600,
-                    fontSize: "13px",
-                    cursor: "pointer",
-                  }}
+                  className="primary-action-button"
+                  style={{ minHeight: "36px", padding: "0 18px", fontSize: "12.5px" }}
                 >
-                  {isPending ? "Submitting…" : "Submit Approval Ticket"}
+                  {isPending ? "Submitting…" : "Submit Request"}
                 </button>
               </div>
             </form>

@@ -1,7 +1,8 @@
 # Knowledge Base: 14 — Deployment, Maintenance & Documentation Conventions
 
-> **Document Status:** `[Implemented]`  
+> **Document Status:** `[Authoritative Operations Specification]`  
 > **Authority Level:** Authoritative Specification  
+> **Master Source of Truth:** [`../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md`](../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md)  
 > **Last Verified:** November 2026  
 > **Location:** `rrliRev/docs/knowledge-base/14-deployment-and-maintenance.md`
 
@@ -19,7 +20,7 @@ RouteX is configured via environment variables. Copy `.env.example` to `.env.loc
 # Session Secret (Mandatory in production; minimum 32 random characters)
 ROUTEX_SESSION_SECRET=your-32-char-random-hmac-secret-key-here
 
-# Supabase PostgreSQL & Storage Connection (Optional for Browser Preview Mode)
+# Supabase PostgreSQL & Storage Connection (Planned Backend; Optional for Browser Preview Mode)
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-publishable-anon-key
 
@@ -35,27 +36,24 @@ NODE_ENV=production
 
 ---
 
-## 2. Database Migrations Deployment
+## 2. Dual-Mode Deployment Architecture
 
-When connecting to a Supabase project:
+### A. Browser Preview Mode (`[Frontend Implemented]` · `[Mock-Only]`)
+- When Supabase credentials are not provided or placeholder values are detected, RouteX deploys automatically in Browser Preview Mode.
+- Runs entirely on verified in-memory fixtures (`small-mock-database.ts`) and client `localStorage`.
+- Ideal for instant Vercel previews, design validation, and functional testing without external database dependencies.
 
-1. Install Supabase CLI:
-   ```bash
-   npm install -g supabase
-   ```
-2. Link your remote Supabase project:
+### B. Supabase Connected Mode (`[Planned Backend]`)
+When ready for production database deployment:
+1. Link remote Supabase project:
    ```bash
    supabase link --project-ref your-project-ref
    ```
-3. Apply migrations in sequential order from `rrliRev/supabase/migrations/`:
+2. Apply versioned migrations in sequential order from `rrliRev/supabase/migrations/`:
    ```bash
    supabase db push
    ```
-
-Migration inventory:
-- `20261101000000_routex_revised_foundation.sql`: Core profiles, RLS, audit logging.
-- `20261101010000_stage2_delivery_management.sql`: Deliveries, store drop-offs, trucks, crew, POD storage bucket.
-- `20261109000000_company_expenses.sql`: Company-wide operating expenses table, RLS policies, indexes.
+3. Configure `ROUTEX_SESSION_SECRET`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the hosting environment (e.g., Vercel).
 
 ---
 
@@ -67,38 +65,26 @@ Migration inventory:
    - Build Command: `npm run build`
    - Output Directory: `.next`
    - Install Command: `npm install`
-3. **Environment Variables:** Configure `ROUTEX_SESSION_SECRET`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+3. **Environment Variables:** Configure `ROUTEX_SESSION_SECRET`.
 
 ---
 
 ## 4. Documentation Maintenance Conventions
 
-To maintain this Knowledge Base and keep documentation aligned with the codebase during future pull requests or AI coding tasks:
+To maintain consistency and prevent documentation drift:
 
 ### A. Status Tag Taxonomy
-Every technical document must explicitly declare one of five standard tags at the top:
-- `[Implemented]`: Verified in the live codebase with automated test coverage.
-- `[Agreed]`: Formally agreed architectural decision awaiting implementation.
-- `[Planned]`: Roadmap feature intended for future iterations.
-- `[Unverified]`: Requires source code or schema verification.
-- `[Deprecated]`: Legacy or superseded implementation retained for historical reference.
+Every document must declare its authority and implementation state:
+- `[Confirmed Requirement]`: Agreed system rule.
+- `[Frontend Implemented]`: Functional in UI.
+- `[Mock-Only]`: Powered by local mock storage.
+- `[Planned Backend]`: Designed for future Supabase implementation.
+- `[Implemented Backend]`: Server logic verified in repo.
+- `[Superseded]`: Retained for historical reference only.
 
-### B. Updating Documentation Upon Code Changes
-Whenever code or business logic is updated:
-1. **Update the relevant Knowledge Base document** in `rrliRev/docs/knowledge-base/`.
-2. **Update the Central Index** in `rrliRev/docs/README.md`.
-3. **Update `rrliRev/AGENTS.md`** if any invariant or developer rule changed.
-4. **Run Verification Gates** (`npm test`, `npm run typecheck`, `npm run build`) before signing off.
-
----
-
-## 5. Troubleshooting & FAQ
-
-### Q: Why do I see duplicate sidebars or a blank screen on a new route?
-**A:** This happens if a page template re-wraps `<OperationalSidebar />` or `.app-shell`. In RouteX, `(workspace)/layout.tsx` is the sole canonical provider of the sidebar and app shell. Page components should only render `<OperationalTopbar />` and `<div className="content-wrap">`.
-
-### Q: Why is my delivery excluded from Dashboard KPI totals?
-**A:** Check if any expense field is marked `unknown` or if PODs are missing. Deliveries with unresolved liabilities are flagged `incomplete` and automatically excluded to protect financial integrity until finalized.
-
-### Q: Why does `next build` fail with CSS errors?
-**A:** Verify that no CSS Modules (`*.module.css`) were introduced. All styles must be declared directly in `src/app/globals.css`.
+### B. Updating Documentation Upon Requirements or Code Changes
+Whenever requirements or UI behaviors evolve:
+1. Update [`../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md`](../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md) as the primary source of truth.
+2. Update the relevant Knowledge Base documents in `rrliRev/docs/knowledge-base/`.
+3. Update [`../README.md`](../README.md) and [`../../AGENTS.md`](../../AGENTS.md).
+4. Run verification gates (`npm test`, `npm run typecheck`, `npm run build`).

@@ -671,9 +671,9 @@ export default function DeliveriesPage() {
               type="button"
               className="secondary-button page-intro-action"
               onClick={() => setBackdatingModalOpen(true)}
-              title="View or submit delivery backdating approval tickets"
+              title="View or submit delivery backdating requests"
             >
-              Backdating Tickets
+              Requests
             </button>
             {canImport ? (
               <Link

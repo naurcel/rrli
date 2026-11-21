@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import {
   type CompanyExpense,
+  type FinanceTransactionType,
   type ValidatedCompanyExpense,
   validateCompanyExpenseInput,
 } from "@/features/finance/company-expense-domain";
@@ -28,14 +29,16 @@ export function EditCompanyExpenseModal({
   const [amount, setAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [transactionType, setTransactionType] = useState<FinanceTransactionType>("Outgoing");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (expense) {
-      setDescription(expense.description || "Total Company Expenses");
+      setDescription(expense.description || (expense.transactionType === "Incoming" ? "Total Company Income" : "Total Company Expenses"));
       setAmount(expense.amount.toString());
       setExpenseDate(expense.expenseDate);
       setNotes(expense.notes || "");
+      setTransactionType(expense.transactionType || "Outgoing");
       setErrorMessage(null);
     }
   }, [expense]);
@@ -70,7 +73,9 @@ export function EditCompanyExpenseModal({
       description,
       amount,
       expenseDate,
+      category: transactionType === "Incoming" ? "Company Income" : "Company Expenses",
       notes,
+      transactionType,
     });
 
     if (!validation.success) {
@@ -102,7 +107,9 @@ export function EditCompanyExpenseModal({
       >
         <header className="routex-dialog-header">
           <div>
-            <h2 id="edit-expense-modal-title">Edit Expense</h2>
+            <h2 id="edit-expense-modal-title">
+              {transactionType === "Incoming" ? "Edit Company Income" : "Edit Company Expense"}
+            </h2>
           </div>
           <button
             type="button"
@@ -123,6 +130,26 @@ export function EditCompanyExpenseModal({
                 {errorMessage}
               </div>
             ) : null}
+
+            {/* Type Switcher */}
+            <div className="finance-type-toggle-group" style={{ marginBottom: "14px" }}>
+              <button
+                type="button"
+                className={`finance-type-toggle-btn${transactionType === "Incoming" ? " active income" : ""}`}
+                onClick={() => setTransactionType("Incoming")}
+                disabled={pending}
+              >
+                + Company Income
+              </button>
+              <button
+                type="button"
+                className={`finance-type-toggle-btn${transactionType === "Outgoing" ? " active expense" : ""}`}
+                onClick={() => setTransactionType("Outgoing")}
+                disabled={pending}
+              >
+                - Company Expense
+              </button>
+            </div>
 
             <div className="routex-dialog-grid-2">
               <div className="routex-dialog-field">

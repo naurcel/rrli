@@ -1,7 +1,8 @@
 # Knowledge Base: 10 — API & Server Logic
 
-> **Document Status:** `[Implemented]`  
+> **Document Status:** `[Authoritative API Catalog]`  
 > **Authority Level:** Authoritative Specification  
+> **Master Source of Truth:** [`../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md`](../CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md)  
 > **Last Verified:** November 2026  
 > **Location:** `rrliRev/docs/knowledge-base/10-api-and-server-logic.md`
 
@@ -27,6 +28,7 @@ graph TD
         SummaryDeliveries["GET /deliveries/summary"]
         ImportDeliveries["POST /deliveries/import"]
         DocsDeliveries["POST /deliveries/documents"]
+        BackdatingTickets["GET, POST, PATCH /deliveries/backdating-tickets"]
     end
 
     subgraph FinanceAPI["Finance (/api/finance)"]
@@ -35,6 +37,7 @@ graph TD
         PutExpense["PUT /finance/expenses/[id]"]
         DeleteExpense["DELETE /finance/expenses/[id]"]
         FinanceSummary["GET /finance/summary"]
+        FinanceImport["POST /finance/import"]
     end
 
     subgraph FleetCrewAPI["Fleet & Users"]
@@ -45,6 +48,9 @@ graph TD
     end
 ```
 
+> [!NOTE]
+> **Implementation Status:** Route handlers execute with full RBAC validation. In current preview mode, handlers read and write to `small-mock-database.ts` and browser `localStorage`. Supabase SQL execution represents `[Planned Backend]`.
+
 ---
 
 ## 2. Authentication Endpoints (`/api/auth/*`)
@@ -52,21 +58,16 @@ graph TD
 ### `POST /api/auth/login`
 - **Request Body:** `{ username: string, password: string }`
 - **Validation:** Username normalized to lowercase; password evaluated.
-- **Response:**
-  - `200 OK`: Sets `routex_session_token` HTTP-only cookie. Returns `{ ok: true, redirectUrl: "/dashboard" }`.
-  - `401 Unauthorized`: `{ ok: false, error: "Invalid username or password" }`.
+- **Response:** Sets `routex_session_token` HTTP-only cookie. Returns `{ ok: true, redirectUrl: "/dashboard" }`.
 
 ### `POST /api/auth/logout`
-- Clears `routex_session_token` cookie by setting `Max-Age=0`.
-- Returns `{ ok: true, redirectUrl: "/login" }`.
+- Clears `routex_session_token` cookie. Returns `{ ok: true, redirectUrl: "/login" }`.
 
 ### `GET /api/auth/me`
-- Inspects session token and retrieves current actor profile.
-- Returns `{ ok: true, actor: { id, username, fullName, role, email, avatarUrl, securityQuestion } }`.
+- Returns current actor profile: `{ ok: true, actor: { id, username, fullName, role, email, avatarUrl, securityQuestion } }`.
 
 ### `POST /api/auth/account`
 - Supports actions: `update-profile-photo`, `change-username`, `change-password`, `change-security-question`.
-- Authenticates caller's current password for sensitive operations.
 
 ---
 
@@ -78,14 +79,20 @@ graph TD
 
 ### `POST /api/deliveries`
 - **Permissions:** Admin or Operations (`canMutateDeliveryRecords`).
-- **Policy Enforcement:** Rejects records prior to `2024-01-01`. Enforces 3-day window for Operations.
-- **Payload:** Waybill number, delivery date, client name, truck plate, driver, helper, drop-offs array, expenses, expense states.
-- **Completeness Calculation:** Evaluates `unknown` expenses and missing PODs to assign `financialState` (`finalized` vs `incomplete`).
+- **Policy Enforcement:** Rejects dates prior to `2024-01-01`. Enforces 3-day window for Operations unless an approved Backdating Request exists.
+- **Payload:** Waybill number, delivery date, client name, truck plate, driver ID/name, helper ID(s)/name(s), locations array (`locationName`, `locationAddress`, `dropoffCount`), expenses (itemized for Owned; single subcontractor amount for Subcontracted), general notes.
+- **Completeness Calculation:** Evaluates `unknown` expenses to assign `financialState` (`finalized` vs `incomplete`).
 
 ### `POST /api/deliveries/import`
 - **Permissions:** Admin or Operations (`canImportAndReviewExcel`).
-- **Payload:** Array of staged spreadsheet delivery rows.
-- **Behavior:** Validates, maps, and atomically creates deliveries and store drop-offs. Emits audit trail entry.
+- **Payload:** Staged delivery rows.
+- **Behavior:** Auto-registers any unregistered truck plates from available spreadsheet data without requiring manual pre-registration. Identifies Owned vs. Subcontracted entries. Creates delivery and location records.
+
+### `GET, POST, PATCH /api/deliveries/backdating-tickets`
+- **Endpoint:** Backdating Requests queue.
+- **POST:** Operations submits a backdating request (`waybillNumber`, `deliveryDate`, `clientName`, `plateNumber`, `reason`).
+- **GET:** Lists pending, approved, and rejected requests.
+- **PATCH:** Admin authorizes decision (`decision: "approve" | "reject"`, optional `decisionNotes`).
 
 ---
 
@@ -96,33 +103,11 @@ graph TD
 - **Response:** `{ ok: true, items: CompanyExpense[], total, summary: { totalAmount } }`.
 
 ### `POST /api/finance/expenses`
-- **Permissions:** Admin, Operations, or Finance (`canManageCompanyExpenses`).
+- **Permissions:** Admin or Finance (`canManageCompanyExpenses`). Operations is blocked (`403 Forbidden`).
 - **Payload:** `{ amount: number, expenseDate: string, description: string, notes?: string }`.
-- **Validation:** `amount >= 0`, `expenseDate >= '2024-01-01'`.
-- **Response:** `{ ok: true, expense: CompanyExpense }`.
 
-### `DELETE /api/finance/expenses/[id]`
-- **Permissions:** **Admin Only**.
-- **Request Body:** `{ reason: string }` (mandatory audit explanation).
-- **Behavior:** Permanently deletes company expense record and records structured deletion event in audit store.
+### `PUT /api/finance/expenses/[id]` & `DELETE /api/finance/expenses/[id]`
+- **Permissions:** Admin or Finance (`canManageCompanyExpenses`). Emits an immutable audit log entry.
 
----
-
-## 5. Audit Logging Architecture (`/api/audit`)
-
-- Every administrative mutation (delivery deletion, truck deletion, user status toggle, expense deletion) emits a structured audit record into [`src/lib/audit/server-audit-store.ts`](file:///c:/Users/suchi/Documents/rrli/rrliRev/src/lib/audit/server-audit-store.ts).
-- Audit record attributes:
-  ```typescript
-  export type ServerAuditEntry = {
-    id: string;
-    timestamp: string;
-    actorUsername: string;
-    actorRole: string;
-    actionType: string;
-    targetType: "delivery" | "truck" | "user" | "expense";
-    targetId: string;
-    reason?: string;
-    metadata?: Record<string, unknown>;
-  };
-  ```
-- Accessible exclusively to Admin users via `/user-management` audit inspector.
+### `POST /api/finance/import`
+- **Permissions:** Admin or Finance. Ingests normalized rows from the 6-sheet workbook with duplicate review actions (`combine`, `separate`, `exclude`).

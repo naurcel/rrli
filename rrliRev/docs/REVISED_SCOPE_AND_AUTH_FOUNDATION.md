@@ -1,5 +1,12 @@
 # RouteX Revised Scope & Authentication Foundation (`rrliRev`)
 
+> [!WARNING]
+> **SUPERSEDED IN PART:** This document represents an early architectural checkpoint.  
+> - The confirmed delivery structure uses **Locations with numeric drop-off counts (`dropoffCount`)** rather than individual `delivery_dropoffs` rows.
+> - A dedicated Company Operating Expenses module was added at `/finance`.
+> - Open questions from Section 5 have been resolved.
+> - For the authoritative, current source of truth, see [`CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md`](./CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md).
+
 ## 1. Revised Project Scope Summary
 
 RouteX has been narrowed from a general company-wide management system to focus exclusively on **Delivery Operations and Truck Profitability** for **Redeemed Route Logistics Inc. (RRLI)**:

@@ -26,6 +26,7 @@ import {
 import { DepartmentManagementSection } from "@/features/users/DepartmentManagementSection";
 import { PermanentDeleteUserModal } from "@/features/users/PermanentDeleteUserModal";
 import { UserDepartmentPermissionsModal } from "@/features/users/UserDepartmentPermissionsModal";
+import { DiscordPermissionsManager } from "@/features/permissions/DiscordPermissionsManager";
 import {
   ROLE_METADATA,
   USER_ROLES,
@@ -116,7 +117,8 @@ export default function UserManagementPage() {
   const [temporaryPassword, setTemporaryPassword] = useState(() => generateRandomTemporaryPassword());
   const [newRole, setNewRole] = useState<UserRole>("operations");
   const [isCreating, setIsCreating] = useState(false);
-  const [activeTab, setActiveTab] = useState<"users" | "audit" | "departments">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "audit" | "departments" | "permissions">("users");
+  const [permissionFocusUserId, setPermissionFocusUserId] = useState<string | undefined>(undefined);
   const [userStatusTab, setUserStatusTab] = useState<"active" | "deactivated" | "deleted">("active");
   const [deletedUsers, setDeletedUsers] = useState<ManagedUserRecord[]>([]);
 
@@ -401,6 +403,10 @@ export default function UserManagementPage() {
         : deletedUsers;
     const multiplier = userSort.direction === "asc" ? 1 : -1;
     return [...list].sort((left, right) => {
+      // Superadmin is pinned strictly at the top
+      if (left.isSuperadmin && !right.isSuperadmin) return -1;
+      if (!left.isSuperadmin && right.isSuperadmin) return 1;
+
       const values: Record<string, [string | number, string | number]> = {
         name: [left.fullName, right.fullName],
         username: [left.username ?? "", right.username ?? ""],
@@ -852,6 +858,18 @@ export default function UserManagementPage() {
           <button
             type="button"
             role="tab"
+            aria-selected={activeTab === "permissions"}
+            className={activeTab === "permissions" ? "active" : ""}
+            onClick={() => {
+              setPermissionFocusUserId(undefined);
+              setActiveTab("permissions");
+            }}
+          >
+            Permissions
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={activeTab === "audit"}
             className={activeTab === "audit" ? "active" : ""}
             onClick={() => setActiveTab("audit")}
@@ -863,6 +881,17 @@ export default function UserManagementPage() {
         {activeTab === "departments" ? (
           <section className="records-card" style={{ padding: "24px" }}>
             <DepartmentManagementSection />
+          </section>
+        ) : activeTab === "permissions" ? (
+          <section className="records-card" style={{ padding: "24px" }}>
+            <DiscordPermissionsManager
+              initialSelectedUserId={permissionFocusUserId}
+              onUserSaved={(updated) => {
+                setUsers((curr) =>
+                  curr.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)),
+                );
+              }}
+            />
           </section>
         ) : activeTab === "users" ? (
           <>
@@ -1389,47 +1418,10 @@ export default function UserManagementPage() {
                             }}
                           >
                             <td>
-                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <div>
                                 <strong>{user.fullName}</strong>
-                                {user.isSuperadmin && (
-                                  <span
-                                    style={{
-                                      padding: "2px 8px",
-                                      borderRadius: "999px",
-                                      background: "linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.3))",
-                                      border: "1px solid rgba(245, 158, 11, 0.5)",
-                                      color: "#b45309",
-                                      fontSize: "10.5px",
-                                      fontWeight: 750,
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "4px",
-                                    }}
-                                  >
-                                    <svg
-                                      width="11"
-                                      height="11"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      aria-hidden="true"
-                                    >
-                                      <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.24A2 2 0 0 1 17.22 18H6.78a2 2 0 0 1-1.927-1.741L2.019 6.019a.5.5 0 0 1 .798-.52l4.277 3.665a1 1 0 0 0 1.516-.294z" />
-                                      <path d="M5 21h14" />
-                                    </svg>
-                                    Superadmin
-                                  </span>
-                                )}
                               </div>
                               <small style={{ color: "var(--color-text-muted)", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                                {user.isSuperadmin && (
-                                  <span style={{ fontWeight: 650, color: "var(--color-accent-deep)" }}>
-                                    {user.designation || "President"} ·
-                                  </span>
-                                )}
                                 <span>{user.email}</span>
                                 {user.phoneNumber ? (
                                   <>
@@ -1452,18 +1444,8 @@ export default function UserManagementPage() {
                             </td>
                             <td>
                               {user.isSuperadmin ? (
-                                <span
-                                  style={{
-                                    display: "inline-block",
-                                    padding: "4px 10px",
-                                    borderRadius: "999px",
-                                    background: "rgba(245, 158, 11, 0.12)",
-                                    color: "#b45309",
-                                    fontSize: "11.5px",
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  President & CEO
+                                <span className="access-pill admin">
+                                  Superadmin
                                 </span>
                               ) : (
                                 <RoundedSelect
@@ -1599,7 +1581,8 @@ export default function UserManagementPage() {
                                           role="menuitem"
                                           onClick={() => {
                                             setOpenActionMenuUserId(null);
-                                            setPermissionsModalUser(user);
+                                            setPermissionFocusUserId(user.id);
+                                            setActiveTab("permissions");
                                           }}
                                         >
                                           Configure Permissions

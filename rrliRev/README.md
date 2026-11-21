@@ -57,6 +57,7 @@ When `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are configur
 
 ## Central Documentation Center (`docs/`)
 
+- [**Master Requirements & System Design (`docs/CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md`)**](./docs/CENTRAL_REQUIREMENTS_AND_SYSTEM_DESIGN.md) — The single authoritative source of truth for all confirmed requirements, delivery & crew rules, financial invariants, and the planned Supabase backend architecture.
 - [**Master Documentation Index (`docs/README.md`)**](./docs/README.md)
 - [**Central Knowledge Base (`docs/knowledge-base/`)**](./docs/knowledge-base/) — 14 authoritative specification documents covering project overview, architecture, tech stack, database, business rules, RBAC, security, API logic, file management, and QA.
 
