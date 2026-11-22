@@ -32,36 +32,39 @@ export async function proxy(request: NextRequest) {
       } = await supabase.auth.getUser();
 
       if (!error && Boolean(user?.id)) {
-        if (pathname === "/login") {
-          return applySessionUpdates(
-            NextResponse.redirect(new URL("/dashboard", request.url)),
-          );
-        }
-
         const role = isValidUserRole(user?.app_metadata?.role)
           ? user.app_metadata.role
           : null;
 
-        if (role && !canRoleAccessPath(role, pathname)) {
-          if (pathname.startsWith("/api/")) {
+        // Only treat as authenticated via Supabase if the user has a valid assigned role or profile
+        if (role) {
+          if (pathname === "/login") {
             return applySessionUpdates(
-              NextResponse.json(
-                {
-                  ok: false,
-                  code: "FORBIDDEN",
-                  message: `Access denied for role '${role}'.`,
-                },
-                { status: 403 },
-              ),
+              NextResponse.redirect(new URL("/dashboard", request.url)),
             );
           }
 
-          const deniedUrl = new URL("/dashboard", request.url);
-          deniedUrl.searchParams.set("access", "restricted");
-          return applySessionUpdates(NextResponse.redirect(deniedUrl));
-        }
+          if (!canRoleAccessPath(role, pathname)) {
+            if (pathname.startsWith("/api/")) {
+              return applySessionUpdates(
+                NextResponse.json(
+                  {
+                    ok: false,
+                    code: "FORBIDDEN",
+                    message: `Access denied for role '${role}'.`,
+                  },
+                  { status: 403 },
+                ),
+              );
+            }
 
-        return applySessionUpdates(NextResponse.next({ request }));
+            const deniedUrl = new URL("/dashboard", request.url);
+            deniedUrl.searchParams.set("access", "restricted");
+            return applySessionUpdates(NextResponse.redirect(deniedUrl));
+          }
+
+          return applySessionUpdates(NextResponse.next({ request }));
+        }
       }
     } catch {
       // Supabase unavailable; fall through to server-verified session cookie

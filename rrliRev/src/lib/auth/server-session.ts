@@ -113,63 +113,59 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
         error: userError,
       } = await supabase.auth.getUser();
 
-      if (userError || !user || !user.email) {
-        return null;
-      }
+      if (!userError && user && user.email) {
+        // 1. Primary source of truth: public.user_profiles table in Supabase PostgreSQL
+        const { data: profileRow, error: profileError } = await supabase
+          .from("user_profiles")
+          .select("id, email, username, full_name, role, is_active, must_change_password, security_question, security_answer_hash, is_superadmin, designation, is_permanently_deleted, custom_grants, custom_restrictions")
+          .eq("id", user.id)
+          .maybeSingle();
 
-      // 1. Primary source of truth: public.user_profiles table in Supabase PostgreSQL
-      const { data: profileRow, error: profileError } = await supabase
-        .from("user_profiles")
-        .select("id, email, username, full_name, role, is_active, must_change_password, security_question, security_answer_hash, is_superadmin, designation, is_permanently_deleted, custom_grants, custom_restrictions")
-        .eq("id", user.id)
-        .maybeSingle();
+        if (!profileError && profileRow) {
+          if (profileRow.is_active && !profileRow.is_permanently_deleted && isValidUserRole(profileRow.role)) {
+            const username = profileRow.username || user.email.split("@")[0];
 
-      if (!profileError && profileRow) {
-        if (!profileRow.is_active || profileRow.is_permanently_deleted || !isValidUserRole(profileRow.role)) {
-          return null;
+            return buildAuthenticatedActor({
+              id: profileRow.id,
+              username,
+              email: profileRow.email || user.email,
+              fullName: profileRow.full_name || username,
+              role: profileRow.role,
+              providerMode: "supabase",
+              mustChangePassword: Boolean(profileRow.must_change_password),
+              hasSecurityQuestion: Boolean(profileRow.security_answer_hash),
+              avatarUrl: (profileRow as { avatar_url?: string | null }).avatar_url || null,
+              isSuperadmin: Boolean(profileRow.is_superadmin),
+              designation: profileRow.designation || (profileRow.is_superadmin ? "President" : undefined),
+              customGrants: profileRow.custom_grants,
+              customRestrictions: profileRow.custom_restrictions,
+            });
+          }
         }
 
-        const username = profileRow.username || user.email.split("@")[0];
+        // 2. Trusted admin-only app_metadata fallback
+        const adminAssignedRole = user.app_metadata?.role;
+        const adminAssignedActive = user.app_metadata?.is_active ?? true;
+        if (adminAssignedActive !== false && isValidUserRole(adminAssignedRole)) {
+          const username = user.app_metadata?.username || user.email.split("@")[0];
+          const displayName =
+            typeof user.app_metadata?.full_name === "string"
+              ? user.app_metadata.full_name
+              : username;
 
-        return buildAuthenticatedActor({
-          id: profileRow.id,
-          username,
-          email: profileRow.email || user.email,
-          fullName: profileRow.full_name || username,
-          role: profileRow.role,
-          providerMode: "supabase",
-          mustChangePassword: Boolean(profileRow.must_change_password),
-          hasSecurityQuestion: Boolean(profileRow.security_answer_hash),
-          avatarUrl: (profileRow as { avatar_url?: string | null }).avatar_url || null,
-          isSuperadmin: Boolean(profileRow.is_superadmin),
-          designation: profileRow.designation || (profileRow.is_superadmin ? "President" : undefined),
-          customGrants: profileRow.custom_grants,
-          customRestrictions: profileRow.custom_restrictions,
-        });
-      }
-
-      // 2. Trusted admin-only app_metadata fallback (if user_profiles table is being initialized)
-      const adminAssignedRole = user.app_metadata?.role;
-      const adminAssignedActive = user.app_metadata?.is_active ?? true;
-      if (adminAssignedActive !== false && isValidUserRole(adminAssignedRole)) {
-        const username = user.app_metadata?.username || user.email.split("@")[0];
-        const displayName =
-          typeof user.app_metadata?.full_name === "string"
-            ? user.app_metadata.full_name
-            : username;
-
-        return buildAuthenticatedActor({
-          id: user.id,
-          username,
-          email: user.email,
-          fullName: displayName,
-          role: adminAssignedRole,
-          providerMode: "supabase",
-          mustChangePassword: Boolean(user.app_metadata?.must_change_password),
-          hasSecurityQuestion: Boolean(user.app_metadata?.has_security_question),
-          isSuperadmin: Boolean(user.app_metadata?.is_superadmin),
-          designation: user.app_metadata?.designation,
-        });
+          return buildAuthenticatedActor({
+            id: user.id,
+            username,
+            email: user.email,
+            fullName: displayName,
+            role: adminAssignedRole,
+            providerMode: "supabase",
+            mustChangePassword: Boolean(user.app_metadata?.must_change_password),
+            hasSecurityQuestion: Boolean(user.app_metadata?.has_security_question),
+            isSuperadmin: Boolean(user.app_metadata?.is_superadmin),
+            designation: user.app_metadata?.designation,
+          });
+        }
       }
     } catch {
       // Supabase lookup error; fallback to session token below
