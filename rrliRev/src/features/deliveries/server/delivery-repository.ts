@@ -96,6 +96,7 @@ function mapDropoff(row: DropoffRow): DeliveryStoreDropoff {
     podSubmitted: row.pod_submitted === true,
     supportingDocsComplete: row.supporting_docs_complete === true,
     documentRef: asString(row.document_ref) || "No document submitted",
+    notes: typeof row.notes === "string" ? row.notes : null,
   };
 }
 

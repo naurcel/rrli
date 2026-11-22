@@ -42,6 +42,8 @@ export function DeliveryPodDocuments({
     title: string;
     subtitle?: string;
     filename?: string;
+    stopId?: string;
+    notes?: string;
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -141,6 +143,11 @@ export function DeliveryPodDocuments({
   }
 
   async function handleViewDocument(stop: DeliveryStoreDropoff) {
+    const cachedNote = typeof window !== "undefined"
+      ? localStorage.getItem(`routex-pod-note:${trip.id}:${stop.id}`)
+      : null;
+    const initialNote = stop.notes ?? cachedNote ?? "";
+
     try {
       const res = await fetch(`/api/deliveries/documents?deliveryId=${trip.id}&dropoffId=${stop.id}`);
       const data = (await res.json().catch(() => null)) as { ok?: boolean; document?: DocumentDetail } | null;
@@ -150,6 +157,8 @@ export function DeliveryPodDocuments({
           title: `Proof of Delivery · ${stop.storeName}`,
           subtitle: `Waybill #${trip.waybillNumber} · Drop-off #${stop.sequence} (${stop.destinationArea})`,
           filename: stop.documentRef || "pod.pdf",
+          stopId: stop.id,
+          notes: initialNote,
         });
         return;
       }
@@ -162,6 +171,8 @@ export function DeliveryPodDocuments({
       title: `Proof of Delivery Receipt · ${stop.storeName}`,
       subtitle: `Waybill #${trip.waybillNumber} · Drop-off #${stop.sequence} (${stop.destinationArea})`,
       filename: stop.documentRef || "pod.svg",
+      stopId: stop.id,
+      notes: initialNote,
     });
   }
 
@@ -437,6 +448,33 @@ export function DeliveryPodDocuments({
         title={viewingImage?.title ?? ""}
         subtitle={viewingImage?.subtitle}
         filename={viewingImage?.filename}
+        notes={viewingImage?.notes}
+        onSaveNotes={
+          viewingImage?.stopId
+            ? (notes) => {
+                const trimmed = notes.trim();
+                const stopId = viewingImage.stopId!;
+                if (typeof window !== "undefined") {
+                  try {
+                    if (trimmed) {
+                      localStorage.setItem(`routex-pod-note:${trip.id}:${stopId}`, trimmed);
+                    } else {
+                      localStorage.removeItem(`routex-pod-note:${trip.id}:${stopId}`);
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }
+                setViewingImage((prev) => (prev ? { ...prev, notes: trimmed } : null));
+                const updatedDropoffs = trip.dropoffs.map((s) =>
+                  s.id === stopId ? { ...s, notes: trimmed || null } : s,
+                );
+                onTripChange({ ...trip, dropoffs: updatedDropoffs });
+              }
+            : undefined
+        }
+        canEditNotes={canManage}
+        notesPlaceholder="Add drop-off POD remarks (e.g. store manager received, stamp verified, condition good)..."
       />
     </div>
   );

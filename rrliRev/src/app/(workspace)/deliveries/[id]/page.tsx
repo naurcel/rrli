@@ -123,6 +123,8 @@ function DeliveryDetailsPageContent({
     title: string;
     subtitle?: string;
     filename?: string;
+    stopId?: string;
+    notes?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -541,6 +543,11 @@ function DeliveryDetailsPageContent({
 
   async function handleViewPod(stop: DeliveryStoreDropoff) {
     if (!delivery) return;
+    const cachedNote = typeof window !== "undefined"
+      ? localStorage.getItem(`routex-pod-note:${delivery.id}:${stop.id}`)
+      : null;
+    const initialNote = stop.notes ?? cachedNote ?? "";
+
     try {
       const res = await fetch(`/api/deliveries/documents?deliveryId=${delivery.id}&dropoffId=${stop.id}`);
       const data = (await res.json().catch(() => null)) as { ok?: boolean; document?: { downloadUrl?: string; filename?: string } } | null;
@@ -550,6 +557,8 @@ function DeliveryDetailsPageContent({
           title: `Proof of Delivery · ${stop.storeName}`,
           subtitle: `Waybill #${delivery.waybillNumber} · Drop-off #${stop.sequence} (${stop.destinationArea})`,
           filename: stop.documentRef || data.document.filename || "pod.pdf",
+          stopId: stop.id,
+          notes: initialNote,
         });
         return;
       }
@@ -562,6 +571,60 @@ function DeliveryDetailsPageContent({
       title: `Proof of Delivery Receipt · ${stop.storeName}`,
       subtitle: `Waybill #${delivery.waybillNumber} · Drop-off #${stop.sequence} (${stop.destinationArea})`,
       filename: stop.documentRef || "pod.svg",
+      stopId: stop.id,
+      notes: initialNote,
+    });
+  }
+
+  async function handleSavePodNotes(stopId: string, newNotes: string) {
+    if (!delivery) return;
+    const trimmed = newNotes.trim();
+
+    if (typeof window !== "undefined") {
+      try {
+        if (trimmed) {
+          localStorage.setItem(`routex-pod-note:${delivery.id}:${stopId}`, trimmed);
+        } else {
+          localStorage.removeItem(`routex-pod-note:${delivery.id}:${stopId}`);
+        }
+      } catch {
+        // ignore storage write errors
+      }
+    }
+
+    const updatedDropoffs = delivery.dropoffs.map((s) =>
+      s.id === stopId ? { ...s, notes: trimmed || null } : s,
+    );
+
+    const updatedTrip: DeliveryLedgerItem = {
+      ...delivery,
+      dropoffs: updatedDropoffs,
+      version: delivery.version + 1,
+    };
+
+    setDelivery(updatedTrip);
+    upsertBrowserPreviewDelivery(updatedTrip);
+    setViewingImage((prev) => (prev && prev.stopId === stopId ? { ...prev, notes: trimmed } : prev));
+
+    try {
+      await fetch("/api/deliveries", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "correct_financials",
+          deliveryId: delivery.id,
+          expectedVersion: delivery.version,
+          reason: "Update drop-off POD remarks",
+          changes: { dropoffs: updatedDropoffs },
+          fallbackRecord: updatedTrip,
+        }),
+      });
+    } catch {
+      // preview fallback already preserved
+    }
+
+    toast.success("POD note saved", {
+      description: trimmed ? "Remarks recorded for this drop-off." : "Drop-off remarks cleared.",
     });
   }
 
@@ -1159,6 +1222,14 @@ function DeliveryDetailsPageContent({
         title={viewingImage?.title ?? ""}
         subtitle={viewingImage?.subtitle}
         filename={viewingImage?.filename}
+        notes={viewingImage?.notes}
+        onSaveNotes={
+          viewingImage?.stopId
+            ? (notes) => handleSavePodNotes(viewingImage.stopId!, notes)
+            : undefined
+        }
+        canEditNotes={canWrite}
+        notesPlaceholder="Add drop-off POD remarks (e.g. store manager received, stamp verified, condition good)..."
       />
 
       {/* Attention & Missing Items Dialog */}

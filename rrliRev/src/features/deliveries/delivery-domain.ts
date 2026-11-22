@@ -37,6 +37,7 @@ export type DeliveryStoreDropoff = {
   podSubmitted: boolean;
   supportingDocsComplete: boolean;
   documentRef: string;
+  notes?: string | null;
 };
 
 export function getTripTotalDropoffs(

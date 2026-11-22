@@ -71,6 +71,9 @@ export default function PodDocumentsPage() {
     title: string;
     subtitle?: string;
     filename?: string;
+    deliveryId?: string;
+    dropoffId?: string;
+    notes?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -591,6 +594,9 @@ export default function PodDocumentsPage() {
                             title: `Proof of Delivery · ${inspectingStop.stop.storeName}`,
                             subtitle: `Waybill #${inspectingStop.waybillNumber} · Drop-off #${inspectingStop.stop.sequence}`,
                             filename: docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf",
+                            deliveryId: inspectingStop.tripId,
+                            dropoffId: inspectingStop.stop.id,
+                            notes: inspectingStop.stop.notes ?? undefined,
                           })
                         }
                         style={{ cursor: "pointer" }}
@@ -615,6 +621,9 @@ export default function PodDocumentsPage() {
                             title: `Proof of Delivery · ${inspectingStop.stop.storeName}`,
                             subtitle: `Waybill #${inspectingStop.waybillNumber} · Drop-off #${inspectingStop.stop.sequence}`,
                             filename: docDetail.filename || inspectingStop.stop.documentRef || "pod.pdf",
+                            deliveryId: inspectingStop.tripId,
+                            dropoffId: inspectingStop.stop.id,
+                            notes: inspectingStop.stop.notes ?? undefined,
                           })
                         }
                       >
@@ -735,6 +744,46 @@ export default function PodDocumentsPage() {
         title={fullscreenImage?.title ?? ""}
         subtitle={fullscreenImage?.subtitle}
         filename={fullscreenImage?.filename}
+        notes={fullscreenImage?.notes}
+        onSaveNotes={
+          fullscreenImage?.dropoffId
+            ? (notes) => {
+                const trimmed = notes.trim();
+                const { deliveryId, dropoffId } = fullscreenImage;
+                if (deliveryId && dropoffId && typeof window !== "undefined") {
+                  try {
+                    if (trimmed) {
+                      localStorage.setItem(`routex-pod-note:${deliveryId}:${dropoffId}`, trimmed);
+                    } else {
+                      localStorage.removeItem(`routex-pod-note:${deliveryId}:${dropoffId}`);
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }
+                setFullscreenImage((prev) => (prev ? { ...prev, notes: trimmed } : null));
+                if (inspectingStop && inspectingStop.stop.id === dropoffId) {
+                  setInspectingStop({
+                    ...inspectingStop,
+                    stop: { ...inspectingStop.stop, notes: trimmed || null },
+                  });
+                }
+                setDeliveries((prev) =>
+                  prev.map((d) => {
+                    if (d.id !== deliveryId) return d;
+                    return {
+                      ...d,
+                      dropoffs: d.dropoffs.map((s) =>
+                        s.id === dropoffId ? { ...s, notes: trimmed || null } : s,
+                      ),
+                    };
+                  }),
+                );
+              }
+            : undefined
+        }
+        canEditNotes={canManage}
+        notesPlaceholder="Add drop-off POD remarks (e.g. store manager received, stamp verified, condition good)..."
       />
     </>
   );

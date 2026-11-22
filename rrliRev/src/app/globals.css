@@ -7805,6 +7805,122 @@ html[data-theme="dark"] .image-viewer-canvas {
   color: var(--color-text-muted);
 }
 
+/* Image Viewer Note Writing Section */
+.image-viewer-notes-section {
+  border-top: 1px solid var(--line);
+  background: var(--color-surface);
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+html[data-theme="dark"] .image-viewer-notes-section {
+  background: #17202a;
+}
+
+.image-viewer-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.image-viewer-notes-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+
+.image-viewer-notes-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.image-viewer-notes-saved-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #16a34a;
+}
+
+.image-viewer-notes-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-viewer-notes-textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+  background: var(--color-surface-subtle);
+  font-family: inherit;
+  resize: vertical;
+  min-height: 52px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.image-viewer-notes-textarea:focus {
+  outline: none;
+  border-color: var(--color-accent, #0284c7);
+  box-shadow: 0 0 0 2px var(--focus-ring, rgba(2, 132, 199, 0.15));
+  background: var(--color-surface);
+}
+
+.image-viewer-notes-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.image-viewer-notes-discard-btn {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.15s ease;
+}
+
+.image-viewer-notes-discard-btn:hover {
+  color: var(--color-text-primary);
+}
+
+.image-viewer-notes-readonly {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+}
+
+.image-viewer-notes-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Dropoff timeline note indicator */
+.drawer-dropoff-notes-text {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}
+
 .delivery-supporting-doc-pill.clickable {
   cursor: pointer;
   transition: all 0.15s ease;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { isImageDocument, triggerDocumentDownload } from "@/features/deliveries/pod-utils";
 
@@ -11,6 +11,10 @@ export type ImageViewerModalProps = {
   title: string;
   subtitle?: string;
   filename?: string;
+  notes?: string | null;
+  onSaveNotes?: (notes: string) => Promise<void> | void;
+  canEditNotes?: boolean;
+  notesPlaceholder?: string;
 };
 
 export function ImageViewerModal({
@@ -20,7 +24,21 @@ export function ImageViewerModal({
   title,
   subtitle,
   filename,
+  notes,
+  onSaveNotes,
+  canEditNotes = true,
+  notesPlaceholder,
 }: ImageViewerModalProps) {
+  const [draftNotes, setDraftNotes] = useState(notes ?? "");
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [savedFeedback, setSavedFeedback] = useState(false);
+
+  // Sync draftNotes whenever notes prop changes or modal opens
+  useEffect(() => {
+    setDraftNotes(notes ?? "");
+    setSavedFeedback(false);
+  }, [notes, isOpen]);
+
   // Close on Escape key press
   useEffect(() => {
     if (!isOpen) return;
@@ -50,6 +68,20 @@ export function ImageViewerModal({
   }
 
   const isImg = isImageDocument(imageUrl, filename);
+  const showNotesSection = Boolean(onSaveNotes || notes !== undefined);
+  const isDirty = draftNotes !== (notes ?? "");
+
+  async function handleSaveNotes() {
+    if (!onSaveNotes) return;
+    setIsSavingNotes(true);
+    try {
+      await onSaveNotes(draftNotes);
+      setSavedFeedback(true);
+      setTimeout(() => setSavedFeedback(false), 2800);
+    } finally {
+      setIsSavingNotes(false);
+    }
+  }
 
   return createPortal(
     <div
@@ -109,6 +141,79 @@ export function ImageViewerModal({
             />
           )}
         </div>
+
+        {showNotesSection ? (
+          <div className="image-viewer-notes-section">
+            <div className="image-viewer-notes-header">
+              <div className="image-viewer-notes-title-group">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                <span className="image-viewer-notes-label">POD Notes & Remarks</span>
+              </div>
+
+              {savedFeedback ? (
+                <span className="image-viewer-notes-saved-hint">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Saved</span>
+                </span>
+              ) : null}
+            </div>
+
+            {canEditNotes ? (
+              <div className="image-viewer-notes-input-wrapper">
+                <textarea
+                  className="image-viewer-notes-textarea"
+                  value={draftNotes}
+                  onChange={(e) => setDraftNotes(e.target.value)}
+                  placeholder={
+                    notesPlaceholder ||
+                    "Add drop-off POD remarks (e.g. store receiver signature, stamp verification, condition upon arrival)..."
+                  }
+                  rows={2}
+                />
+                <div className="image-viewer-notes-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ padding: "4px 12px", fontSize: "11.5px", fontWeight: 600 }}
+                    onClick={() => void handleSaveNotes()}
+                    disabled={isSavingNotes || (!isDirty && Boolean(savedFeedback))}
+                  >
+                    {isSavingNotes ? "Saving..." : isDirty ? "Save Note" : "Save Note"}
+                  </button>
+                  {isDirty ? (
+                    <button
+                      type="button"
+                      className="image-viewer-notes-discard-btn"
+                      onClick={() => setDraftNotes(notes ?? "")}
+                      disabled={isSavingNotes}
+                    >
+                      Discard
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <p className="image-viewer-notes-readonly">
+                {draftNotes || <span className="image-viewer-notes-empty">No notes recorded for this document.</span>}
+              </p>
+            )}
+          </div>
+        ) : null}
 
         <footer className="image-viewer-footer">
           <span className="image-viewer-hint">
