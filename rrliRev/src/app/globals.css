@@ -19469,12 +19469,6 @@ html[data-theme="dark"] .permission-badge.restricted {
   display: none !important;
 }
 
-/* Page print orientation and margins */
-@page {
-  size: portrait;
-  margin: 14mm 15mm 14mm 15mm;
-}
-
 /* ==========================================================================
    Authoritative Print Stylesheet (@media print)
    ========================================================================== */

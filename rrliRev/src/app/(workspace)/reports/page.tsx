@@ -267,6 +267,73 @@ export default function ReportsPage() {
 
   return (
     <>
+      <style>{`
+        @media print {
+          html, body {
+            overflow: visible !important;
+            background: #ffffff !important;
+            color: #111827 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            min-height: 0 !important;
+          }
+          .app-shell, .main-content, .content-wrap, .report-workspace {
+            display: block !important;
+            position: static !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            border: none !important;
+          }
+          aside.sidebar,
+          .sidebar,
+          header.topbar,
+          .topbar,
+          footer.routex-footer,
+          .routex-footer,
+          header.page-intro,
+          .page-intro,
+          .report-intro,
+          .report-actions,
+          .report-tabs-bar,
+          .daily-trip-date-bar,
+          .no-print,
+          .no-print *,
+          [role="alert"],
+          [role="status"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          .report-workspace > *:not(.report-document) {
+            display: none !important;
+          }
+          .report-document,
+          .report-document.doc-sheet {
+            display: block !important;
+            position: static !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #111827 !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          .report-screen-only-row {
+            display: none !important;
+          }
+          .report-print-only-row {
+            display: table-row !important;
+          }
+        }
+      `}</style>
+
       <OperationalTopbar
         contextLabel="Delivery Operations & Truck Reports"
         showDateFilter={false}
