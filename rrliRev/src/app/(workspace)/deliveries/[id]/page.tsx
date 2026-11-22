@@ -11,7 +11,7 @@ import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline"
 import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
 import { DeliveryNavigator } from "@/components/delivery-navigator";
 import { DeliverySupportingDocumentsPane } from "@/components/delivery-supporting-documents-pane";
-import { DeliveryTruckTripSection } from "@/components/delivery-truck-trip-section";
+import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
 import { DeliveryAttentionFlags } from "@/components/delivery-attention-flags";
 import {
   countUnresolvedDeliveryAttentionFlags,
@@ -921,35 +921,62 @@ function DeliveryDetailsPageContent({
           <DeliveryFinancialBreakdown trip={delivery} />
         </section>
 
-        {/* 2. Unified Vehicle & Trip Specifications Card */}
-        <section className="records-card delivery-section-card delivery-truck-trip-card">
-          <div className="section-card-header">
-            <div>
-              <h2 className="section-card-title">Truck &amp; Trip Information</h2>
-              <p className="section-card-subtitle">
-                Vehicle assignment, technical specifications, and trip routing parameters
-              </p>
-            </div>
+        {/* 2. Vehicle & Trip Specifications (Balanced Fixed-Height 2-Column Split Grid) */}
+        <div className="delivery-detail-grid delivery-specs-grid">
+          {/* Left Column: Truck Specifications */}
+          <div className="delivery-detail-column">
+            <section className="records-card delivery-section-card delivery-equal-card">
+              <div className="section-card-header">
+                <h2 className="section-card-title">Truck</h2>
+              </div>
+              <DeliveryTruckInfoSection
+                plateNumber={delivery.plateNumber}
+                truckType={delivery.truckType}
+                truckTemperature={delivery.truckTemperature}
+                truckOwnership={delivery.truckOwnership}
+                rateBasis={delivery.rateBasis}
+                truckHref={withReturnContext(
+                  `/truck-profitability/${encodeURIComponent(delivery.plateNumber)}`,
+                  `/deliveries/${encodeURIComponent(delivery.id)}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
+                  `Waybill #${delivery.waybillNumber}`,
+                )}
+              />
+            </section>
           </div>
-          <DeliveryTruckTripSection
-            plateNumber={delivery.plateNumber}
-            truckType={delivery.truckType}
-            truckTemperature={delivery.truckTemperature}
-            truckOwnership={delivery.truckOwnership}
-            rateBasis={delivery.rateBasis}
-            truckHref={withReturnContext(
-              `/truck-profitability/${encodeURIComponent(delivery.plateNumber)}`,
-              `/deliveries/${encodeURIComponent(delivery.id)}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
-              `Waybill #${delivery.waybillNumber}`,
-            )}
-            clientName={delivery.clientName}
-            origin={delivery.origin}
-            distanceKm={delivery.distanceKm}
-            fuelRate={delivery.fuelRate}
-            deliveryDate={delivery.deliveryDate}
-            formatPeso={formatPeso}
-          />
-        </section>
+
+          {/* Right Column: Trip Information */}
+          <div className="delivery-detail-column">
+            <section className="records-card delivery-section-card delivery-equal-card">
+              <div className="section-card-header">
+                <h2 className="section-card-title">Trip Information</h2>
+              </div>
+              <div className="detail-meta-grid detail-meta-grid-2">
+                <div className="detail-meta-item">
+                  <span className="meta-label">Client</span>
+                  <strong className="meta-value">{delivery.clientName}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Date</span>
+                  <strong className="meta-value">{delivery.deliveryDate}</strong>
+                </div>
+                <div className="detail-meta-item" style={{ gridColumn: "1 / -1" }}>
+                  <span className="meta-label">Origin</span>
+                  <strong className="meta-value">{delivery.origin || "Default Origin"}</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Distance</span>
+                  <strong className="meta-value">{delivery.distanceKm} km</strong>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="meta-label">Fuel Rate</span>
+                  <strong className="meta-value">
+                    {formatPeso(delivery.fuelRate)} / L
+                  </strong>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
 
         {/* 2b. Operational Notes & Remarks Card */}
         <section className="records-card delivery-section-card delivery-notes-card">
