@@ -11695,6 +11695,7 @@ html[data-theme="dark"] .routex-dialog textarea.correction-reason-textarea {
 .metric-tabs::-webkit-scrollbar-thumb:hover,
 .custom-client-scroll::-webkit-scrollbar-thumb:hover,
 .report-table-scroll::-webkit-scrollbar-thumb:hover,
+.delivery-embedded-notes-scrollable::-webkit-scrollbar-thumb:hover,
 .login-layout-split::-webkit-scrollbar-thumb:hover {
   background: var(--color-accent);
 }
@@ -11707,6 +11708,7 @@ html[data-theme="dark"] .routex-dialog textarea.correction-reason-textarea {
 .metric-tabs::-webkit-scrollbar,
 .custom-client-scroll::-webkit-scrollbar,
 .report-table-scroll::-webkit-scrollbar,
+.delivery-embedded-notes-scrollable::-webkit-scrollbar,
 .login-layout-split::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -11720,6 +11722,7 @@ html[data-theme="dark"] .routex-dialog textarea.correction-reason-textarea {
 .metric-tabs::-webkit-scrollbar-track,
 .custom-client-scroll::-webkit-scrollbar-track,
 .report-table-scroll::-webkit-scrollbar-track,
+.delivery-embedded-notes-scrollable::-webkit-scrollbar-track,
 .login-layout-split::-webkit-scrollbar-track {
   background: transparent;
 }
@@ -11732,6 +11735,7 @@ html[data-theme="dark"] .routex-dialog textarea.correction-reason-textarea {
 .metric-tabs::-webkit-scrollbar-thumb,
 .custom-client-scroll::-webkit-scrollbar-thumb,
 .report-table-scroll::-webkit-scrollbar-thumb,
+.delivery-embedded-notes-scrollable::-webkit-scrollbar-thumb,
 .login-layout-split::-webkit-scrollbar-thumb {
   border: var(--scrollbar-thumb-inset) solid transparent;
   border-radius: 999px;
@@ -11750,6 +11754,7 @@ html[data-theme="dark"] .routex-dialog textarea.correction-reason-textarea {
   .revenue-chart-scroll,
   .metric-tabs,
   .report-table-scroll,
+  .delivery-embedded-notes-scrollable,
   .login-layout-split {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in srgb, var(--color-text-muted) 55%, transparent) transparent;
@@ -11764,6 +11769,7 @@ html[data-theme="dark"] .routex-dialog textarea.correction-reason-textarea {
   .revenue-chart-scroll,
   .metric-tabs,
   .report-table-scroll,
+  .delivery-embedded-notes-scrollable,
   .login-layout-split {
     transition: none;
   }

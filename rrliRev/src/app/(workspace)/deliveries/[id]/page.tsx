@@ -1016,11 +1016,24 @@ function DeliveryDetailsPageContent({
             </section>
           </div>
 
-          {/* Right Column: Trip Information */}
+          {/* Right Column: Trip Information & Notes */}
           <div className="delivery-detail-column">
             <section className="records-card delivery-section-card delivery-equal-card">
-              <div className="section-card-header">
+              <div className="section-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <h2 className="section-card-title">Trip Information</h2>
+                {canWrite && !isEditingNotes && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ fontSize: "11.5px", padding: "3px 10px", display: "inline-flex", alignItems: "center", gap: "5px" }}
+                    onClick={() => {
+                      setNoteDraft(delivery.notes ?? "");
+                      setIsEditingNotes(true);
+                    }}
+                  >
+                    <span>{delivery.notes ? "Edit Note" : "+ Add Note"}</span>
+                  </button>
+                )}
               </div>
               <div className="detail-meta-grid detail-meta-grid-2">
                 <div className="detail-meta-item">
@@ -1046,97 +1059,120 @@ function DeliveryDetailsPageContent({
                   </strong>
                 </div>
               </div>
+
+              {/* Embedded Trip Notes in empty space (Scrollable, never expands card) */}
+              <div
+                className="delivery-embedded-notes-wrapper"
+                style={{
+                  marginTop: "16px",
+                  paddingTop: "12px",
+                  borderTop: "1px solid var(--color-border-subtle, var(--line))",
+                  display: "flex",
+                  flexDirection: "column",
+                  flex: 1,
+                  minHeight: 0,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "6px",
+                  }}
+                >
+                  <span
+                    className="meta-label"
+                    style={{
+                      fontSize: "11px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      fontWeight: 600,
+                      color: "var(--color-text-muted)",
+                    }}
+                  >
+                    Trip Notes &amp; Remarks
+                  </span>
+                </div>
+
+                <div
+                  className="delivery-embedded-notes-scrollable"
+                  style={{
+                    flex: 1,
+                    minHeight: "72px",
+                    maxHeight: "155px",
+                    overflowY: "auto",
+                    borderRadius: "8px",
+                    background: "var(--color-surface-subtle, rgba(0, 0, 0, 0.02))",
+                    border: "1px solid var(--line, #e2e8f0)",
+                    padding: "10px 12px",
+                    fontSize: "13px",
+                    lineHeight: "1.5",
+                  }}
+                >
+                  {isEditingNotes ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <textarea
+                        rows={3}
+                        className="correction-reason-textarea"
+                        style={{
+                          width: "100%",
+                          resize: "none",
+                          fontSize: "12.5px",
+                          lineHeight: "1.45",
+                          padding: "6px 8px",
+                        }}
+                        placeholder="Enter operational notes, special handling, or dispatch instructions for this delivery..."
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                        autoFocus
+                      />
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={savingNotes}
+                          onClick={() => setIsEditingNotes(false)}
+                          style={{ fontSize: "11px", padding: "3px 8px" }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="primary-action-button"
+                          disabled={savingNotes}
+                          onClick={handleSaveNotes}
+                          style={{ fontSize: "11px", padding: "3px 10px" }}
+                        >
+                          {savingNotes ? "Saving…" : "Save Note"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : delivery.notes ? (
+                    <div
+                      style={{
+                        color: "var(--color-text, #1e293b)",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {delivery.notes}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        color: "var(--color-text-muted, #64748b)",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      No operational notes recorded for this delivery trip.
+                    </div>
+                  )}
+                </div>
+              </div>
             </section>
           </div>
         </div>
-
-        {/* 2b. Operational Notes & Remarks Card */}
-        <section className="records-card delivery-section-card delivery-notes-card">
-          <div className="section-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <h2 className="section-card-title">Trip Notes &amp; Remarks</h2>
-              <p className="section-card-subtitle">
-                Operational instructions, dispatch remarks, and road conditions
-              </p>
-            </div>
-            {canWrite && !isEditingNotes && (
-              <button
-                type="button"
-                className="secondary-button"
-                style={{ fontSize: "12px", padding: "5px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                onClick={() => {
-                  setNoteDraft(delivery.notes ?? "");
-                  setIsEditingNotes(true);
-                }}
-              >
-                <span>{delivery.notes ? "Edit Note" : "+ Add Note"}</span>
-              </button>
-            )}
-          </div>
-
-          <div style={{ padding: "0 20px 20px" }}>
-            {isEditingNotes ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <textarea
-                  rows={3}
-                  className="correction-reason-textarea"
-                  style={{ width: "100%", resize: "vertical", fontSize: "13.5px", lineHeight: "1.5" }}
-                  placeholder="Enter operational notes, special handling, or dispatch instructions for this delivery..."
-                  value={noteDraft}
-                  onChange={(e) => setNoteDraft(e.target.value)}
-                  autoFocus
-                />
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={savingNotes}
-                    onClick={() => setIsEditingNotes(false)}
-                    style={{ fontSize: "12px", padding: "6px 14px" }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="primary-action-button"
-                    disabled={savingNotes}
-                    onClick={handleSaveNotes}
-                    style={{ fontSize: "12px", padding: "6px 16px" }}
-                  >
-                    {savingNotes ? "Saving…" : "Save Note"}
-                  </button>
-                </div>
-              </div>
-            ) : delivery.notes ? (
-              <div
-                style={{
-                  background: "var(--color-surface-subtle, rgba(0, 0, 0, 0.02))",
-                  border: "1px solid var(--line, #e2e8f0)",
-                  borderRadius: "8px",
-                  padding: "14px 16px",
-                  fontSize: "13.5px",
-                  lineHeight: "1.6",
-                  color: "var(--color-text, #1e293b)",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              >
-                {delivery.notes}
-              </div>
-            ) : (
-              <div
-                style={{
-                  color: "var(--color-text-muted, #64748b)",
-                  fontSize: "13px",
-                  fontStyle: "italic",
-                  padding: "8px 0",
-                }}
-              >
-                No operational notes recorded for this delivery trip.
-              </div>
-            )}
-          </div>
-        </section>
 
         {/* 3. Unified Store Drop-offs & Documents Card (Scalable Bottom Section) */}
         <section
