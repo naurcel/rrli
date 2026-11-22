@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { OperationalTopbar } from "@/components/operational-topbar";
-import { PasswordCriteriaList } from "@/components/password-criteria-list";
 import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
 import { useSearchBuffer } from "@/components/search-buffer";
@@ -19,13 +18,10 @@ import {
 } from "@/features/audit/audit-formatters";
 import { toast } from "sonner";
 import {
-  evaluatePasswordCriteria,
   generateRandomTemporaryPassword,
   validateUsernameFormat,
 } from "@/lib/auth/password-policy";
-import { DepartmentManagementSection } from "@/features/users/DepartmentManagementSection";
 import { PermanentDeleteUserModal } from "@/features/users/PermanentDeleteUserModal";
-import { UserDepartmentPermissionsModal } from "@/features/users/UserDepartmentPermissionsModal";
 import { DiscordPermissionsManager } from "@/features/permissions/DiscordPermissionsManager";
 import {
   ROLE_METADATA,
@@ -116,14 +112,38 @@ export default function UserManagementPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState(() => generateRandomTemporaryPassword());
   const [newRole, setNewRole] = useState<UserRole>("operations");
+
+  const availableRoleOptions = useMemo(() => {
+    return actor.isSuperadmin
+      ? ROLE_OPTIONS
+      : ROLE_OPTIONS.filter((opt) => opt.value !== "admin");
+  }, [actor.isSuperadmin]);
   const [isCreating, setIsCreating] = useState(false);
-  const [activeTab, setActiveTab] = useState<"users" | "audit" | "departments" | "permissions">("users");
+  type UserManagementTab = "users" | "permissions" | "audit";
+  const [activeTab, setActiveTab] = useState<UserManagementTab>("users");
   const [permissionFocusUserId, setPermissionFocusUserId] = useState<string | undefined>(undefined);
   const [userStatusTab, setUserStatusTab] = useState<"active" | "deactivated" | "deleted">("active");
   const [deletedUsers, setDeletedUsers] = useState<ManagedUserRecord[]>([]);
 
-  // Permissions and Departments modal state
-  const [permissionsModalUser, setPermissionsModalUser] = useState<ManagedUserRecord | null>(null);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "").toLowerCase();
+      if (hash === "permissions" || hash === "roles" || hash === "perms") {
+        setActiveTab("permissions");
+      } else if (hash === "audit" || hash === "trail" || hash === "logs") {
+        setActiveTab("audit");
+      } else if (hash === "users" || hash === "staff") {
+        setActiveTab("users");
+      }
+    }
+  }, []);
+
+  function handleSelectTab(tab: UserManagementTab) {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", '#' + tab);
+    }
+  }
 
   // Permanent delete modal state (Superadmin only)
   const [permanentDeleteModalUser, setPermanentDeleteModalUser] = useState<ManagedUserRecord | null>(null);
@@ -824,77 +844,64 @@ export default function UserManagementPage() {
         showDateFilter={false}
       />
 
-      <div className="content-wrap">
-        <header className="page-intro">
-          <div>
-            <h1>User Management</h1>
-            <p className="subtitle">
-              Manage staff accounts and permissions.
-            </p>
-          </div>
-        </header>
+      <div className="content-wrap settings-page-wrap user-management-page-wrap">
+        <div className="settings-layout-grid">
+          {/* Left Navigation: Clean text tabs matching Settings layout */}
+          <aside className="settings-tabs-sidebar" aria-label="User management categories">
+            <nav className="settings-tabs-list" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                id="tab-users"
+                aria-selected={activeTab === "users"}
+                aria-controls="panel-users"
+                className={`settings-tab-btn${activeTab === "users" ? " active" : ""}`}
+                onClick={() => handleSelectTab("users")}
+              >
+                Staff Accounts
+              </button>
 
-        <div className="user-management-tabs" role="tablist" aria-label="User management sections">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "users"}
-            className={activeTab === "users" ? "active" : ""}
-            onClick={() => setActiveTab("users")}
-          >
-            Staff Accounts
-          </button>
-          {actor.isSuperadmin && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "departments"}
-              className={activeTab === "departments" ? "active" : ""}
-              onClick={() => setActiveTab("departments")}
-            >
-              Departments
-            </button>
-          )}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "permissions"}
-            className={activeTab === "permissions" ? "active" : ""}
-            onClick={() => {
-              setPermissionFocusUserId(undefined);
-              setActiveTab("permissions");
-            }}
-          >
-            Permissions
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "audit"}
-            className={activeTab === "audit" ? "active" : ""}
-            onClick={() => setActiveTab("audit")}
-          >
-            Audit Trail
-          </button>
-        </div>
+              <button
+                type="button"
+                role="tab"
+                id="tab-permissions"
+                aria-selected={activeTab === "permissions"}
+                aria-controls="panel-permissions"
+                className={`settings-tab-btn${activeTab === "permissions" ? " active" : ""}`}
+                onClick={() => {
+                  setPermissionFocusUserId(undefined);
+                  handleSelectTab("permissions");
+                }}
+              >
+                Permissions
+              </button>
 
-        {activeTab === "departments" ? (
-          <section className="records-card" style={{ padding: "24px" }}>
-            <DepartmentManagementSection />
-          </section>
-        ) : activeTab === "permissions" ? (
-          <section className="records-card" style={{ padding: "24px" }}>
-            <DiscordPermissionsManager
-              initialSelectedUserId={permissionFocusUserId}
-              onUserSaved={(updated) => {
-                setUsers((curr) =>
-                  curr.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)),
-                );
-              }}
-            />
-          </section>
-        ) : activeTab === "users" ? (
-          <>
+              <button
+                type="button"
+                role="tab"
+                id="tab-audit"
+                aria-selected={activeTab === "audit"}
+                aria-controls="panel-audit"
+                className={`settings-tab-btn${activeTab === "audit" ? " active" : ""}`}
+                onClick={() => handleSelectTab("audit")}
+              >
+                Audit Trail
+              </button>
+            </nav>
+          </aside>
+
+          {/* Right Main Content Area */}
+          <div className="settings-tab-content-area">
+            {activeTab === "users" && (
+              <div id="panel-users" role="tabpanel" aria-labelledby="tab-users" className="settings-tab-panel">
+                <header className="page-intro" style={{ marginBottom: "16px" }}>
+                  <div>
+                    <h1>User Management</h1>
+                    <p className="subtitle">
+                      Manage staff accounts and credentials.
+                    </p>
+                  </div>
+                </header>
             {feedback ? (
               <section className="notice" role={feedback.tone === "error" ? "alert" : "status"}>
                 <span className="notice-icon" aria-hidden="true">
@@ -926,6 +933,7 @@ export default function UserManagementPage() {
                 <div>
                   <h2>Add User</h2>
                   <p>Create staff account with a temporary password.</p>
+                  <p>Provision staff account credentials and role assignments.</p>
                 </div>
               </div>
 
@@ -974,7 +982,7 @@ export default function UserManagementPage() {
                         <span className="user-form-label">Assigned Role</span>
                         <RoundedSelect
                           value={newRole}
-                          options={ROLE_OPTIONS}
+                          options={availableRoleOptions}
                           onChange={(val) => setNewRole(val as UserRole)}
                           ariaLabel="Select role for new user"
                           className="is-form-select"
@@ -1447,10 +1455,14 @@ export default function UserManagementPage() {
                                 <span className="access-pill admin">
                                   Superadmin
                                 </span>
+                              ) : user.role === "admin" && !actor.isSuperadmin ? (
+                                <span className="access-pill admin" title="Protected role: Only the Superadmin (President) can modify Admin accounts">
+                                  Admin
+                                </span>
                               ) : (
                                 <RoundedSelect
                                   value={user.role}
-                                  options={ROLE_OPTIONS}
+                                  options={availableRoleOptions}
                                   onChange={(nextRole) =>
                                     handleRoleChange(user.id, nextRole as UserRole)
                                   }
@@ -1582,7 +1594,7 @@ export default function UserManagementPage() {
                                           onClick={() => {
                                             setOpenActionMenuUserId(null);
                                             setPermissionFocusUserId(user.id);
-                                            setActiveTab("permissions");
+                                            handleSelectTab("permissions");
                                           }}
                                         >
                                           Configure Permissions
@@ -1609,7 +1621,7 @@ export default function UserManagementPage() {
                                         <button
                                           type="button"
                                           role="menuitem"
-                                          disabled={isSelf || user.isSuperadmin}
+                                          disabled={isSelf || user.isSuperadmin || (user.role === "admin" && !actor.isSuperadmin)}
                                           onClick={() => {
                                             setOpenActionMenuUserId(null);
                                             handleToggleActive(user);
@@ -1619,6 +1631,8 @@ export default function UserManagementPage() {
                                               ? "Cannot deactivate your own active Admin account"
                                               : user.isSuperadmin
                                               ? "Superadmin account cannot be deactivated"
+                                              : user.role === "admin" && !actor.isSuperadmin
+                                              ? "Only Superadmin can deactivate Admin accounts"
                                               : undefined
                                           }
                                         >
@@ -1683,10 +1697,25 @@ export default function UserManagementPage() {
                 />
               ) : null}
             </section>
-          </>
-        ) : (
-          <>
-            <section className="stat-grid" aria-label="Audit log totals">
+              </div>
+            )}
+
+            {activeTab === "permissions" && (
+              <div id="panel-permissions" role="tabpanel" aria-labelledby="tab-permissions" className="settings-tab-panel">
+                <DiscordPermissionsManager
+                  initialSelectedUserId={permissionFocusUserId}
+                  onUserSaved={(updated) => {
+                    setUsers((curr) =>
+                      curr.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)),
+                    );
+                  }}
+                />
+              </div>
+            )}
+
+            {activeTab === "audit" && (
+              <div id="panel-audit" role="tabpanel" aria-labelledby="tab-audit" className="settings-tab-panel">
+                <section className="stat-grid" aria-label="Audit log totals">
               <article className="stat-card">
                 <span className="stat-label">TOTAL AUDIT EVENTS</span>
                 <strong>{auditStats.total}</strong>
@@ -1960,8 +1989,10 @@ export default function UserManagementPage() {
                 />
               ) : null}
             </section>
-          </>
-        )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Audit Event Details Popup Modal */}
@@ -2986,20 +3017,6 @@ export default function UserManagementPage() {
             document.body,
           )
         : null}
-
-      {permissionsModalUser && (
-        <UserDepartmentPermissionsModal
-          user={permissionsModalUser}
-          allUsers={users}
-          onClose={() => setPermissionsModalUser(null)}
-          onSuccess={(updated, msg) => {
-            setUsers((curr) =>
-              curr.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)),
-            );
-            toast.success(msg);
-          }}
-        />
-      )}
 
       {permanentDeleteModalUser && (
         <PermanentDeleteUserModal

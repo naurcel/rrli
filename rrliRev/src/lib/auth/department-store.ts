@@ -1,4 +1,4 @@
-import { PERMISSIONS, type Permission, type UserRole } from "./rbac.ts";
+import { PERMISSIONS, type Permission } from "./rbac.ts";
 
 export type DepartmentRecord = {
   id: string;

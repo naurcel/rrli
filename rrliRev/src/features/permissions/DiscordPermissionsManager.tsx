@@ -8,7 +8,7 @@ import { useAuthenticatedActor } from "@/components/auth-context";
 import { getUserInitials } from "@/components/profile-photo";
 import { resolveEffectivePermissions } from "@/lib/auth/permission-engine";
 import {
-  ROLE_METADATA,
+  PERMISSIONS,
   ROLE_PERMISSIONS,
   USER_ROLES,
   type AccessLevel,
@@ -22,6 +22,59 @@ import {
   type FriendlyPermissionDefinition,
   type PermissionCategory,
 } from "./permission-ui-model";
+
+export type BuiltInRoleKey = "superadmin" | UserRole;
+
+export const BUILT_IN_ROLES: readonly BuiltInRoleKey[] = [
+  "superadmin",
+  "admin",
+  "operations",
+  "finance",
+  "hr",
+  "secretary",
+  "customer_representative",
+];
+
+const BUILT_IN_ROLE_CONFIG: Record<
+  BuiltInRoleKey,
+  { label: string; description: string; defaultPermissions: readonly Permission[] }
+> = {
+  superadmin: {
+    label: "Superadmin",
+    description: "President and executive leadership. Holds permanent, unrestricted system permissions across all modules.",
+    defaultPermissions: PERMISSIONS,
+  },
+  admin: {
+    label: "Admin",
+    description: "System Administrator. Manages operational, financial, user account, and lower-tier role workflows.",
+    defaultPermissions: ROLE_PERMISSIONS.admin,
+  },
+  operations: {
+    label: "Operations",
+    description: "Daily logistics dispatch coordinator managing deliveries, drop-offs, imports, POD files, and fleet trucks.",
+    defaultPermissions: ROLE_PERMISSIONS.operations,
+  },
+  finance: {
+    label: "Finance",
+    description: "Manages company income, operating expenses, and financial summaries; view-only in operational modules.",
+    defaultPermissions: ROLE_PERMISSIONS.finance,
+  },
+  hr: {
+    label: "HR",
+    description: "Human Resources. View-only access to employee records, trip logs, and operational summaries.",
+    defaultPermissions: ROLE_PERMISSIONS.hr,
+  },
+  secretary: {
+    label: "Secretary",
+    description: "Corporate Secretary. View-only access to delivery records, POD completeness, and operational reports.",
+    defaultPermissions: ROLE_PERMISSIONS.secretary,
+  },
+  customer_representative: {
+    label: "Customer Representative",
+    description: "Customer Representative. View-only access to client delivery records and waybill tracking.",
+    defaultPermissions: ROLE_PERMISSIONS.customer_representative,
+  },
+};
 
 export type ManagedUserSummary = {
   id: string;
@@ -50,7 +103,7 @@ type DepartmentRecord = {
 };
 
 type SelectedEntity =
-  | { kind: "role"; roleKey: UserRole }
+  | { kind: "role"; roleKey: BuiltInRoleKey }
   | { kind: "custom_role"; customRoleId: string }
   | { kind: "user"; userId: string };
 
@@ -74,7 +127,7 @@ export function DiscordPermissionsManager({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Selected Entity (Role, Custom Role, or Member)
+  // Selected Entity (Role, Custom Role, or Staff Member)
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity>(() => {
     if (initialSelectedUserId) {
       return { kind: "user", userId: initialSelectedUserId };
@@ -89,6 +142,13 @@ export function DiscordPermissionsManager({
   const [searchQuery, setSearchQuery] = useState("");
   const [permSearchQuery, setPermSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<PermissionCategory | "all">("all");
+
+  // Collapsed module categories
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+
+  function toggleCategoryCollapse(catId: string) {
+    setCollapsedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }));
+  }
 
   // In-Memory Edits (Staging before save)
   const [stagedUserGrants, setStagedUserGrants] = useState<Record<string, Permission[]>>({});
@@ -134,6 +194,16 @@ export function DiscordPermissionsManager({
 
         if (deptData?.ok && Array.isArray(deptData.departments)) {
           setDepartments(deptData.departments);
+          // Sync staged baseline role permissions from saved departments
+          setStagedRolePerms((prev) => {
+            const next = { ...prev };
+            for (const d of deptData.departments) {
+              if (USER_ROLES.includes(d.id as UserRole) && Array.isArray(d.defaultPermissions)) {
+                next[d.id as UserRole] = [...d.defaultPermissions];
+              }
+            }
+            return next;
+          });
         }
 
         if (roleData?.ok && Array.isArray(roleData.customRoles)) {
@@ -206,19 +276,6 @@ export function DiscordPermissionsManager({
     return new Set<Permission>(resolved);
   }, [selectedUser, currentUserDepts, currentUserGrants, currentUserRestrictions]);
 
-  // Baseline permissions inherited from role/department
-  const baselineInheritedPerms = useMemo(() => {
-    if (!selectedUser) return new Set<Permission>();
-    const resolved = resolveEffectivePermissions({
-      role: selectedUser.role,
-      isSuperadmin: selectedUser.isSuperadmin,
-      departments: currentUserDepts,
-      customGrants: [],
-      customRestrictions: [],
-    });
-    return new Set<Permission>(resolved);
-  }, [selectedUser, currentUserDepts]);
-
   // Selected Custom Role Object
   const selectedCustomRole = useMemo(() => {
     if (selectedEntity.kind !== "custom_role") return null;
@@ -228,6 +285,9 @@ export function DiscordPermissionsManager({
   // Active permissions for selected role or custom role
   const currentRolePerms = useMemo(() => {
     if (selectedEntity.kind === "role") {
+      if (selectedEntity.roleKey === "superadmin") {
+        return [...PERMISSIONS];
+      }
       return stagedRolePerms[selectedEntity.roleKey] ?? ROLE_PERMISSIONS[selectedEntity.roleKey] ?? [];
     }
     if (selectedEntity.kind === "custom_role" && selectedCustomRole) {
@@ -235,6 +295,23 @@ export function DiscordPermissionsManager({
     }
     return [];
   }, [selectedEntity, stagedRolePerms, selectedCustomRole, stagedCustomRolePerms]);
+
+  // Authority check for modifying selected entity
+  const canModifySelected = useMemo(() => {
+    if (selectedEntity.kind === "role") {
+      if (selectedEntity.roleKey === "superadmin") return false; // Superadmin is permanent and unchangeable
+      if (selectedEntity.roleKey === "admin") return Boolean(actor.isSuperadmin); // Only Superadmin can edit Admin
+      return actor.role === "admin" || Boolean(actor.isSuperadmin); // Admin & Superadmin can edit lower roles
+    }
+    if (selectedEntity.kind === "custom_role") {
+      return actor.role === "admin" || Boolean(actor.isSuperadmin);
+    }
+    if (selectedEntity.kind === "user") {
+      if (selectedUser?.isSuperadmin) return false; // Sole Superadmin protected
+      return actor.role === "admin" || Boolean(actor.isSuperadmin);
+    }
+    return false;
+  }, [selectedEntity, actor, selectedUser]);
 
   // Unsaved changes check
   const hasUnsavedChanges = useMemo(() => {
@@ -263,6 +340,7 @@ export function DiscordPermissionsManager({
     }
 
     if (selectedEntity.kind === "role") {
+      if (selectedEntity.roleKey === "superadmin") return false;
       const orig = ROLE_PERMISSIONS[selectedEntity.roleKey] || [];
       const current = stagedRolePerms[selectedEntity.roleKey] || [];
       return orig.length !== current.length || orig.some((p) => !current.includes(p));
@@ -298,13 +376,13 @@ export function DiscordPermissionsManager({
     );
   }, [searchQuery, customRoles]);
 
-  // Filtered Roles
-  const filteredRoles = useMemo(() => {
+  // Filtered Built-in Roles
+  const filteredBuiltInRoles = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return USER_ROLES;
-    return USER_ROLES.filter((r) => {
-      const meta = ROLE_METADATA[r];
-      return meta.label.toLowerCase().includes(q) || meta.summary.toLowerCase().includes(q);
+    if (!q) return BUILT_IN_ROLES;
+    return BUILT_IN_ROLES.filter((r) => {
+      const cfg = BUILT_IN_ROLE_CONFIG[r];
+      return cfg.label.toLowerCase().includes(q) || cfg.description.toLowerCase().includes(q);
     });
   }, [searchQuery]);
 
@@ -353,36 +431,36 @@ export function DiscordPermissionsManager({
     }
     for (const def of visiblePermissions) {
       const list = map.get(def.category);
-      if (list) list.push(def);
+      if (list) {
+        list.push(def);
+      }
     }
     return map;
   }, [visiblePermissions]);
 
   // Toggle user permission
   function handleToggleUserPermission(perm: Permission) {
-    if (!selectedUser || selectedUser.isSuperadmin) return;
+    if (!selectedUser || selectedUser.isSuperadmin || !canModifySelected) return;
 
-    const isCurrentlyAllowed = effectiveUserPerms.has(perm);
-    const isBaselineAllowed = baselineInheritedPerms.has(perm);
+    // Check authority: Admin cannot grant permissions beyond own authority
+    if (!actor.isSuperadmin && !actor.permissions.includes(perm)) {
+      toast.error(`You do not have authority to grant '${perm}'.`);
+      return;
+    }
 
+    const hasCurrently = effectiveUserPerms.has(perm);
     let nextGrants = [...currentUserGrants];
     let nextRestrictions = [...currentUserRestrictions];
 
-    if (isCurrentlyAllowed) {
-      // Turn off
+    if (hasCurrently) {
       nextGrants = nextGrants.filter((p) => p !== perm);
-      if (isBaselineAllowed) {
-        if (!nextRestrictions.includes(perm)) {
-          nextRestrictions.push(perm);
-        }
+      if (!nextRestrictions.includes(perm)) {
+        nextRestrictions.push(perm);
       }
     } else {
-      // Turn on
       nextRestrictions = nextRestrictions.filter((p) => p !== perm);
-      if (!isBaselineAllowed) {
-        if (!nextGrants.includes(perm)) {
-          nextGrants.push(perm);
-        }
+      if (!nextGrants.includes(perm)) {
+        nextGrants.push(perm);
       }
     }
 
@@ -390,10 +468,9 @@ export function DiscordPermissionsManager({
     setStagedUserRestrictions((prev) => ({ ...prev, [selectedUser.id]: nextRestrictions }));
   }
 
-  // Reset user permission to role baseline
+  // Reset user permission to role default
   function handleResetUserPermission(perm: Permission) {
-    if (!selectedUser || selectedUser.isSuperadmin) return;
-
+    if (!selectedUser || selectedUser.isSuperadmin || !canModifySelected) return;
     const nextGrants = currentUserGrants.filter((p) => p !== perm);
     const nextRestrictions = currentUserRestrictions.filter((p) => p !== perm);
 
@@ -403,8 +480,23 @@ export function DiscordPermissionsManager({
 
   // Toggle role or custom role permission
   function handleToggleRolePermission(perm: Permission) {
+    if (!canModifySelected) return;
+
+    // Cannot grant users:manage to custom roles
+    if (selectedEntity.kind === "custom_role" && perm === "users:manage") {
+      toast.error("Custom roles cannot be granted protected role-management authority (users:manage).");
+      return;
+    }
+
+    // Admin cannot grant permissions beyond own authority
+    if (!actor.isSuperadmin && !actor.permissions.includes(perm)) {
+      toast.error(`You cannot grant permissions beyond your own authority: ${perm}`);
+      return;
+    }
+
     if (selectedEntity.kind === "role") {
-      const roleKey = selectedEntity.roleKey;
+      if (selectedEntity.roleKey === "superadmin") return;
+      const roleKey = selectedEntity.roleKey as UserRole;
       const current = currentRolePerms;
       const hasIt = current.includes(perm);
 
@@ -511,7 +603,7 @@ export function DiscordPermissionsManager({
 
   // Toggle department / role assignment
   function handleToggleDept(deptId: string) {
-    if (!selectedUser || selectedUser.isSuperadmin) return;
+    if (!selectedUser || selectedUser.isSuperadmin || !canModifySelected) return;
     const current = currentUserDepts;
     const next = current.includes(deptId)
       ? current.filter((d) => d !== deptId)
@@ -522,7 +614,7 @@ export function DiscordPermissionsManager({
 
   // Copy permissions from another employee
   async function handleDuplicatePermissions() {
-    if (!selectedUser || !duplicateSourceId) return;
+    if (!selectedUser || !duplicateSourceId || !canModifySelected) return;
     const source = users.find((u) => u.id === duplicateSourceId);
     if (!source) return;
 
@@ -557,10 +649,11 @@ export function DiscordPermissionsManager({
         return next;
       });
       toast.info("Changes discarded.");
-    } else if (selectedEntity.kind === "role") {
+    } else if (selectedEntity.kind === "role" && selectedEntity.roleKey !== "superadmin") {
+      const rKey = selectedEntity.roleKey as UserRole;
       setStagedRolePerms((prev) => ({
         ...prev,
-        [selectedEntity.roleKey]: [...(ROLE_PERMISSIONS[selectedEntity.roleKey] || [])],
+        [rKey]: [...(ROLE_PERMISSIONS[rKey] || [])],
       }));
       toast.info("Role permissions reset.");
     } else if (selectedEntity.kind === "custom_role" && selectedCustomRole) {
@@ -629,7 +722,12 @@ export function DiscordPermissionsManager({
 
         toast.success(`Permissions saved for @${selectedUser.username}.`);
       } else if (selectedEntity.kind === "role") {
-        const roleKey = selectedEntity.roleKey;
+        if (selectedEntity.roleKey === "superadmin") {
+          toast.info("Superadmin permissions are unconditional and permanently set.");
+          return;
+        }
+
+        const roleKey = selectedEntity.roleKey as UserRole;
         const matchingDept = departments.find((d) => d.id === roleKey);
 
         if (matchingDept) {
@@ -644,11 +742,11 @@ export function DiscordPermissionsManager({
           });
           const deptPayload = await deptRes.json();
           if (!deptRes.ok || !deptPayload.ok) {
-            throw new Error(deptPayload.message || "Failed to update role.");
+            throw new Error(deptPayload.message || "Failed to update role permissions.");
           }
         }
 
-        toast.success(`Defaults saved for ${ROLE_METADATA[roleKey].label}.`);
+        toast.success(`Permissions saved for ${BUILT_IN_ROLE_CONFIG[roleKey].label}.`);
       } else if (selectedEntity.kind === "custom_role" && selectedCustomRole) {
         const roleId = selectedCustomRole.id;
         const permsToSave = stagedCustomRolePerms[roleId] ?? selectedCustomRole.permissions;
@@ -677,25 +775,29 @@ export function DiscordPermissionsManager({
     }
   }
 
-  // Quick helper: Allow all in category
-  function handleAllowAllInCategory(catId: PermissionCategory) {
-    const catPerms = FRIENDLY_PERMISSIONS.filter((p) => p.category === catId).map((p) => p.key);
+  // Module Selection Control: Select All in Module
+  function handleSelectAllInCategory(catId: PermissionCategory) {
+    if (!canModifySelected) return;
+
+    let catPerms = FRIENDLY_PERMISSIONS.filter((p) => p.category === catId).map((p) => p.key);
+
+    // Filter out users:manage if custom role
+    if (selectedEntity.kind === "custom_role") {
+      catPerms = catPerms.filter((p) => p !== "users:manage");
+    }
+
+    // Filter out permissions beyond actor authority if not Superadmin
+    if (!actor.isSuperadmin) {
+      catPerms = catPerms.filter((p) => actor.permissions.includes(p));
+    }
 
     if (selectedEntity.kind === "user" && selectedUser && !selectedUser.isSuperadmin) {
-      let nextGrants = [...currentUserGrants];
-      let nextRestrictions = [...currentUserRestrictions];
-
-      for (const p of catPerms) {
-        nextRestrictions = nextRestrictions.filter((x) => x !== p);
-        if (!baselineInheritedPerms.has(p) && !nextGrants.includes(p)) {
-          nextGrants.push(p);
-        }
-      }
-
+      const nextGrants = Array.from(new Set([...currentUserGrants, ...catPerms]));
+      const nextRestrictions = currentUserRestrictions.filter((p) => !catPerms.includes(p));
       setStagedUserGrants((prev) => ({ ...prev, [selectedUser.id]: nextGrants }));
       setStagedUserRestrictions((prev) => ({ ...prev, [selectedUser.id]: nextRestrictions }));
-    } else if (selectedEntity.kind === "role") {
-      const roleKey = selectedEntity.roleKey;
+    } else if (selectedEntity.kind === "role" && selectedEntity.roleKey !== "superadmin") {
+      const roleKey = selectedEntity.roleKey as UserRole;
       const combined = Array.from(new Set([...currentRolePerms, ...catPerms]));
       setStagedRolePerms((prev) => ({ ...prev, [roleKey]: combined }));
     } else if (selectedEntity.kind === "custom_role" && selectedCustomRole) {
@@ -705,32 +807,51 @@ export function DiscordPermissionsManager({
     }
   }
 
-  // Quick helper: Reset category
-  function handleResetCategory(catId: PermissionCategory) {
+  // Module Selection Control: Clear All in Module
+  function handleClearAllInCategory(catId: PermissionCategory) {
+    if (!canModifySelected) return;
+
     const catPerms = FRIENDLY_PERMISSIONS.filter((p) => p.category === catId).map((p) => p.key);
 
     if (selectedEntity.kind === "user" && selectedUser && !selectedUser.isSuperadmin) {
       const nextGrants = currentUserGrants.filter((p) => !catPerms.includes(p));
-      const nextRestrictions = currentUserRestrictions.filter((p) => !catPerms.includes(p));
-
+      const nextRestrictions = Array.from(new Set([...currentUserRestrictions, ...catPerms]));
       setStagedUserGrants((prev) => ({ ...prev, [selectedUser.id]: nextGrants }));
       setStagedUserRestrictions((prev) => ({ ...prev, [selectedUser.id]: nextRestrictions }));
-    } else if (selectedEntity.kind === "role") {
-      const roleKey = selectedEntity.roleKey;
-      const originalRole = ROLE_PERMISSIONS[roleKey] || [];
-      const originalCatPerms = originalRole.filter((p) => catPerms.includes(p));
-      const remainingOtherPerms = currentRolePerms.filter((p) => !catPerms.includes(p));
-      const next = Array.from(new Set([...remainingOtherPerms, ...originalCatPerms]));
+    } else if (selectedEntity.kind === "role" && selectedEntity.roleKey !== "superadmin") {
+      const roleKey = selectedEntity.roleKey as UserRole;
+      const next = currentRolePerms.filter((p) => !catPerms.includes(p));
       setStagedRolePerms((prev) => ({ ...prev, [roleKey]: next }));
     } else if (selectedEntity.kind === "custom_role" && selectedCustomRole) {
       const roleId = selectedCustomRole.id;
-      const originalRole = selectedCustomRole.permissions || [];
-      const originalCatPerms = originalRole.filter((p) => catPerms.includes(p));
-      const remainingOtherPerms = currentRolePerms.filter((p) => !catPerms.includes(p));
-      const next = Array.from(new Set([...remainingOtherPerms, ...originalCatPerms]));
+      const next = currentRolePerms.filter((p) => !catPerms.includes(p));
       setStagedCustomRolePerms((prev) => ({ ...prev, [roleId]: next }));
     }
   }
+
+  // Current entity title & description
+  const entityTitle = useMemo(() => {
+    if (selectedEntity.kind === "role") {
+      return BUILT_IN_ROLE_CONFIG[selectedEntity.roleKey].label;
+    }
+    if (selectedEntity.kind === "custom_role") {
+      return selectedCustomRole?.name || "Custom Role";
+    }
+    return selectedUser?.fullName || selectedUser?.username || "Staff Member";
+  }, [selectedEntity, selectedCustomRole, selectedUser]);
+
+  const entityDescription = useMemo(() => {
+    if (selectedEntity.kind === "role") {
+      return BUILT_IN_ROLE_CONFIG[selectedEntity.roleKey].description;
+    }
+    if (selectedEntity.kind === "custom_role") {
+      return selectedCustomRole?.description || "Custom operational role. Permissions apply additively to all assigned staff members.";
+    }
+    if (selectedUser?.isSuperadmin) {
+      return "Superadmin account holds full, unconditional system permissions.";
+    }
+    return `Role: ${selectedUser?.roleLabel}. Configured permissions combine additively with assigned roles.`;
+  }, [selectedEntity, selectedCustomRole, selectedUser]);
 
   return (
     <div className="discord-permissions-container">
@@ -761,12 +882,12 @@ export function DiscordPermissionsManager({
           </div>
 
           <div className="discord-roster-scroll-area">
-            {/* SECTION 1: ROLES */}
+            {/* SECTION 1: BUILT-IN ROLES */}
             <div className="discord-roster-group">
               <div className="discord-roster-group-title">
                 <span>Roles</span>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span className="discord-roster-count">{filteredRoles.length + filteredCustomRoles.length}</span>
+                  <span className="discord-roster-count">{filteredBuiltInRoles.length + filteredCustomRoles.length}</span>
                   {(actor.role === "admin" || actor.isSuperadmin) && (
                     <button
                       type="button"
@@ -781,11 +902,14 @@ export function DiscordPermissionsManager({
               </div>
 
               <div className="discord-roster-list" role="list">
-                {filteredRoles.map((roleKey) => {
-                  const meta = ROLE_METADATA[roleKey];
+                {filteredBuiltInRoles.map((roleKey) => {
+                  const cfg = BUILT_IN_ROLE_CONFIG[roleKey];
                   const isSelected =
                     selectedEntity.kind === "role" && selectedEntity.roleKey === roleKey;
-                  const memberCount = users.filter((u) => u.role === roleKey).length;
+                  const memberCount =
+                    roleKey === "superadmin"
+                      ? users.filter((u) => u.isSuperadmin).length
+                      : users.filter((u) => u.role === roleKey && !u.isSuperadmin).length;
 
                   return (
                     <button
@@ -796,7 +920,7 @@ export function DiscordPermissionsManager({
                       aria-selected={isSelected}
                     >
                       <div className="discord-roster-item-info">
-                        <div className="discord-roster-item-name">{meta.label}</div>
+                        <div className="discord-roster-item-name">{cfg.label}</div>
                         <div className="discord-roster-item-sub">
                           {memberCount} {memberCount === 1 ? "member" : "members"}
                         </div>
@@ -835,7 +959,7 @@ export function DiscordPermissionsManager({
               </div>
             </div>
 
-            {/* SECTION 2: MEMBERS (SUPERADMIN PINNED ON TOP) */}
+            {/* SECTION 2: STAFF MEMBERS (SUPERADMIN PINNED ON TOP) */}
             <div className="discord-roster-group">
               <div className="discord-roster-group-title">
                 <span>Staff</span>
@@ -897,7 +1021,7 @@ export function DiscordPermissionsManager({
                 <div className="discord-entity-banner-left">
                   <div className="discord-banner-user-avatar">
                     {selectedEntity.kind === "role"
-                      ? ROLE_METADATA[selectedEntity.roleKey].label.charAt(0)
+                      ? entityTitle.charAt(0)
                       : selectedEntity.kind === "custom_role"
                       ? selectedCustomRole?.name.charAt(0) || "C"
                       : getUserInitials(selectedUser?.fullName || selectedUser?.username || "U")}
@@ -905,13 +1029,7 @@ export function DiscordPermissionsManager({
 
                   <div className="discord-banner-details">
                     <div className="discord-banner-title-row">
-                      <h2 className="discord-banner-title">
-                        {selectedEntity.kind === "role"
-                          ? `${ROLE_METADATA[selectedEntity.roleKey].label} Role`
-                          : selectedEntity.kind === "custom_role"
-                          ? selectedCustomRole?.name
-                          : selectedUser?.fullName || selectedUser?.username}
-                      </h2>
+                      <h2 className="discord-banner-title">{entityTitle}</h2>
                       {selectedEntity.kind === "user" && selectedUser && (
                         <span className="discord-banner-username">@{selectedUser.username}</span>
                       )}
@@ -919,16 +1037,9 @@ export function DiscordPermissionsManager({
                         <span className="discord-banner-custom-tag">Custom Role</span>
                       )}
                     </div>
-
-                    <p className="discord-banner-description">
-                      {selectedEntity.kind === "role"
-                        ? ROLE_METADATA[selectedEntity.roleKey].summary
-                        : selectedEntity.kind === "custom_role"
-                        ? selectedCustomRole?.description || "Custom operational role. Permissions apply to all assigned members."
-                        : selectedUser?.isSuperadmin
-                        ? "Superadmin account holds full system permissions."
-                        : `Role: ${selectedUser?.roleLabel}. Configure individual permissions or assign additional roles.`}
-                    </p>
+                    {selectedEntity.kind !== "role" && entityDescription ? (
+                      <p className="discord-banner-desc-text">{entityDescription}</p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -967,7 +1078,7 @@ export function DiscordPermissionsManager({
                 )}
 
                 {/* Member Clone Tool */}
-                {selectedEntity.kind === "user" && selectedUser && !selectedUser.isSuperadmin && (
+                {selectedEntity.kind === "user" && selectedUser && !selectedUser.isSuperadmin && canModifySelected && (
                   <div className="discord-banner-actions">
                     <div className="discord-copy-tool">
                       <span className="discord-copy-label">Copy from:</span>
@@ -999,6 +1110,28 @@ export function DiscordPermissionsManager({
                 )}
               </div>
 
+              {/* Authority Notice Banners */}
+              {selectedEntity.kind === "role" && selectedEntity.roleKey === "superadmin" && (
+                <div className="discord-authority-notice info" role="status">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  <span>The Superadmin (President) holds unconditional full system authority. Permissions are permanent.</span>
+                </div>
+              )}
+
+              {selectedEntity.kind === "role" && selectedEntity.roleKey === "admin" && !actor.isSuperadmin && (
+                <div className="discord-authority-notice warning" role="status">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span>Protected Role: Only the Superadmin (President) has authority to modify the Admin role.</span>
+                </div>
+              )}
+
               {/* Assigned Roles & Memberships for Member */}
               {selectedEntity.kind === "user" && selectedUser && !selectedUser.isSuperadmin && (
                 <div className="discord-dept-section">
@@ -1021,7 +1154,7 @@ export function DiscordPermissionsManager({
                             dept.isArchived ? " archived" : ""
                           }`}
                           onClick={() => handleToggleDept(dept.id)}
-                          disabled={dept.isArchived}
+                          disabled={dept.isArchived || !canModifySelected}
                           title={dept.isArchived ? "Archived" : dept.description}
                         >
                           <span>{dept.name}</span>
@@ -1041,6 +1174,7 @@ export function DiscordPermissionsManager({
                             !cr.isEnabled ? " archived" : ""
                           }`}
                           onClick={() => handleToggleDept(cr.id)}
+                          disabled={!canModifySelected}
                           title={!cr.isEnabled ? "Role is disabled (no permissions contributed)" : cr.description}
                         >
                           <span>{cr.name}</span>
@@ -1095,107 +1229,153 @@ export function DiscordPermissionsManager({
                 </div>
               </div>
 
-              {/* PERMISSION CATEGORIES */}
+              {/* Clean separator between search/filters and permission sections */}
+              <div className="discord-section-divider" aria-hidden="true" />
+
+              {/* PERMISSION CATEGORIES (MODULE-BASED) */}
               <div className="discord-categories-container">
                 {PERMISSION_CATEGORIES.map((cat) => {
                   const perms = permissionsByCategory.get(cat.id) || [];
                   if (perms.length === 0) return null;
 
+                  const isCollapsed = Boolean(collapsedCategories[cat.id]);
+
+                  // Count enabled permissions in this module
+                  const enabledCount = perms.filter((def) => {
+                    if (selectedEntity.kind === "role") {
+                      return currentRolePerms.includes(def.key);
+                    }
+                    if (selectedEntity.kind === "custom_role") {
+                      return currentRolePerms.includes(def.key);
+                    }
+                    return effectiveUserPerms.has(def.key);
+                  }).length;
+
                   return (
                     <section key={cat.id} className="discord-category-card" aria-labelledby={`cat-${cat.id}`}>
-                      {/* Category Header */}
+                      {/* Module Category Header */}
                       <div className="discord-category-header">
-                        <div>
+                        <div
+                          className="discord-category-title-wrap"
+                          onClick={() => toggleCategoryCollapse(cat.id)}
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={!isCollapsed}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              toggleCategoryCollapse(cat.id);
+                            }
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className={`discord-collapse-btn${isCollapsed ? " is-collapsed" : ""}`}
+                            aria-label={isCollapsed ? `Expand ${cat.label}` : `Collapse ${cat.label}`}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                              <path
+                                fillRule="evenodd"
+                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </button>
                           <h3 id={`cat-${cat.id}`} className="discord-category-title">
                             {cat.label}
                           </h3>
-                          <p className="discord-category-desc">{cat.description}</p>
+                          <span className="discord-cat-count-chip">
+                            {enabledCount} / {perms.length}
+                          </span>
                         </div>
 
-                        {/* Quick Category Action Buttons */}
-                        {!(selectedEntity.kind === "user" && selectedUser?.isSuperadmin) && (
+                        {/* Module-level Selection Controls: Select All / Clear All */}
+                        {canModifySelected && (
                           <div className="discord-category-quick-actions">
                             <button
                               type="button"
                               className="discord-quick-btn"
-                              onClick={() => handleAllowAllInCategory(cat.id)}
+                              onClick={() => handleSelectAllInCategory(cat.id)}
+                              title={`Select all permissions in ${cat.label}`}
                             >
-                              Allow All
+                              Select All
                             </button>
                             <button
                               type="button"
                               className="discord-quick-btn reset"
-                              onClick={() => handleResetCategory(cat.id)}
+                              onClick={() => handleClearAllInCategory(cat.id)}
+                              title={`Clear all permissions in ${cat.label}`}
                             >
-                              Reset
+                              Clear All
                             </button>
                           </div>
                         )}
                       </div>
 
-                      {/* Permission Rows */}
-                      <div className="discord-permissions-list">
-                        {perms.map((def) => {
-                          const isRole = selectedEntity.kind === "role" || selectedEntity.kind === "custom_role";
-                          const isSuper = selectedEntity.kind === "user" && selectedUser?.isSuperadmin;
+                      {/* Permission Rows (Collapsible) */}
+                      {!isCollapsed && (
+                        <div className="discord-permissions-list">
+                          {perms.map((def) => {
+                            const isRole = selectedEntity.kind === "role" || selectedEntity.kind === "custom_role";
+                            const isSuperRole = selectedEntity.kind === "role" && selectedEntity.roleKey === "superadmin";
+                            const isSuperUser = selectedEntity.kind === "user" && selectedUser?.isSuperadmin;
+                            const isLocked = isSuperRole || isSuperUser || !canModifySelected;
 
-                          // For Roles:
-                          const roleAllowed = currentRolePerms.includes(def.key);
+                            // Active state
+                            const roleAllowed = currentRolePerms.includes(def.key);
+                            const userAllowed = effectiveUserPerms.has(def.key);
+                            const isSwitchOn = isSuperRole || isSuperUser ? true : isRole ? roleAllowed : userAllowed;
 
-                          // For Users:
-                          const userAllowed = effectiveUserPerms.has(def.key);
-                          const isCustomGrant = currentUserGrants.includes(def.key);
-                          const isCustomRestricted = currentUserRestrictions.includes(def.key);
-                          const isOverridden = isCustomGrant || isCustomRestricted;
+                            // Overrides
+                            const isCustomGrant = currentUserGrants.includes(def.key);
+                            const isCustomRestricted = currentUserRestrictions.includes(def.key);
+                            const isOverridden = isCustomGrant || isCustomRestricted;
 
-                          const isSwitchOn = isSuper ? true : isRole ? roleAllowed : userAllowed;
+                            return (
+                              <div
+                                key={def.key}
+                                className={`discord-perm-row${isSwitchOn ? " enabled" : ""}`}
+                              >
+                                <div className="discord-perm-info">
+                                  <div className="discord-perm-title">{def.title}</div>
+                                  <p className="discord-perm-description">{def.description}</p>
+                                </div>
 
-                          return (
-                            <div
-                              key={def.key}
-                              className={`discord-perm-row${isSwitchOn ? " enabled" : ""}`}
-                            >
-                              <div className="discord-perm-info">
-                                <div className="discord-perm-title">{def.title}</div>
-                                <p className="discord-perm-description">{def.description}</p>
-                              </div>
+                                <div className="discord-perm-actions">
+                                  {!isRole && !isLocked && isOverridden && (
+                                    <button
+                                      type="button"
+                                      className="discord-perm-reset-link"
+                                      onClick={() => handleResetUserPermission(def.key)}
+                                      title="Reset to role default"
+                                    >
+                                      Reset
+                                    </button>
+                                  )}
 
-                              <div className="discord-perm-actions">
-                                {/* Simple text reset if overridden */}
-                                {!isRole && !isSuper && isOverridden && (
                                   <button
                                     type="button"
-                                    className="discord-perm-reset-link"
-                                    onClick={() => handleResetUserPermission(def.key)}
-                                    title="Reset to role default"
+                                    role="switch"
+                                    aria-checked={isSwitchOn}
+                                    aria-label={`Toggle ${def.title}`}
+                                    disabled={isLocked}
+                                    className={`discord-switch${isSwitchOn ? " active" : ""}`}
+                                    onClick={() => {
+                                      if (isRole) {
+                                        handleToggleRolePermission(def.key);
+                                      } else {
+                                        handleToggleUserPermission(def.key);
+                                      }
+                                    }}
                                   >
-                                    Reset
+                                    <span className="discord-switch-knob" />
                                   </button>
-                                )}
-
-                                {/* Clean Toggle Switch */}
-                                <button
-                                  type="button"
-                                  role="switch"
-                                  aria-checked={isSwitchOn}
-                                  aria-label={`Toggle ${def.title}`}
-                                  disabled={Boolean(isSuper)}
-                                  className={`discord-switch${isSwitchOn ? " active" : ""}`}
-                                  onClick={() => {
-                                    if (isRole) {
-                                      handleToggleRolePermission(def.key);
-                                    } else {
-                                      handleToggleUserPermission(def.key);
-                                    }
-                                  }}
-                                >
-                                  <span className="discord-switch-knob" />
-                                </button>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </section>
                   );
                 })}
@@ -1248,13 +1428,13 @@ export function DiscordPermissionsManager({
               />
               <div
                 className="routex-dialog"
-                style={{ maxWidth: "480px" }}
+                style={{ maxWidth: "440px", width: "92vw" }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <header className="routex-dialog-header">
-                  <div>
-                    <h2 id="create-role-modal-title">Create Custom Role</h2>
-                  </div>
+                  <h3 id="create-role-modal-title" className="routex-dialog-title">
+                    Create Custom Role
+                  </h3>
                   <button
                     type="button"
                     className="routex-dialog-close"
@@ -1295,7 +1475,7 @@ export function DiscordPermissionsManager({
                       <input
                         id="create-role-desc"
                         type="text"
-                        placeholder="e.g. Monitors vehicle availability and dispatch assignments"
+                        placeholder="e.g. Oversees truck maintenance and driver dispatch"
                         value={newRoleDesc}
                         onChange={(e) => setNewRoleDesc(e.target.value)}
                         disabled={isCreatingRole}

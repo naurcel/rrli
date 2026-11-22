@@ -315,7 +315,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
                       ? "Small"
                       : preferences.fontSize === "large"
                       ? "Large"
-                      : "Default"}
+                      : "Default (Medium)"}
                   </span>
                 </div>
                 <div
@@ -332,7 +332,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
                       className={`profile-segmented-btn${preferences.fontSize === opt ? " active" : ""}`}
                       onClick={() => handleUpdatePreferences({ fontSize: opt })}
                     >
-                      {opt === "small" ? "Small" : opt === "large" ? "Large" : "Default"}
+                      {opt === "small" ? "Small" : opt === "large" ? "Large" : "Medium"}
                     </button>
                   ))}
                 </div>

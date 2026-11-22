@@ -101,7 +101,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const auth = await verifySuperadminOnly();
+  const auth = await verifyServerPermission("users:manage");
   if (!auth.ok) {
     return NextResponse.json(
       { ok: false, code: auth.code, message: auth.message },
@@ -117,7 +117,30 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: false, message: "Department ID is required." }, { status: 400 });
   }
 
+  // Superadmin protection: only Superadmin can edit or archive the Admin role
+  if (departmentId === "admin" || departmentId === "superadmin") {
+    if (!auth.actor.isSuperadmin) {
+      return NextResponse.json(
+        { ok: false, message: "Access Denied: Only Superadmin (President) can modify the Admin role." },
+        { status: 403 },
+      );
+    }
+  }
+
+  // Built-in roles cannot be archived
   if (action === "archive") {
+    if (["admin", "operations", "finance", "hr", "secretary", "customer_representative"].includes(departmentId)) {
+      return NextResponse.json(
+        { ok: false, message: "Built-in roles cannot be archived or deleted." },
+        { status: 400 },
+      );
+    }
+    if (!auth.actor.isSuperadmin) {
+      return NextResponse.json(
+        { ok: false, message: "Only Superadmin can archive departments." },
+        { status: 403 },
+      );
+    }
     const res = archiveDepartment(departmentId);
     if (!res.ok) {
       return NextResponse.json({ ok: false, message: res.message }, { status: 400 });
@@ -170,6 +193,17 @@ export async function PATCH(request: Request) {
   const defaultPermissions = Array.isArray(rawBody?.defaultPermissions)
     ? (rawBody.defaultPermissions as Permission[])
     : undefined;
+
+  // Authority check: Admin cannot grant permissions beyond their own authority
+  if (defaultPermissions && !auth.actor.isSuperadmin) {
+    const unauthorized = defaultPermissions.filter((p) => !auth.actor.permissions.includes(p));
+    if (unauthorized.length > 0) {
+      return NextResponse.json(
+        { ok: false, message: `Cannot grant permissions beyond your own authority: ${unauthorized.join(", ")}` },
+        { status: 403 },
+      );
+    }
+  }
 
   const res = updateDepartment(departmentId, { name, description, defaultPermissions });
   if (!res.ok) {

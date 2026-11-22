@@ -182,6 +182,18 @@ export async function POST(request: Request) {
     );
   }
 
+  // Authority Rule: Only Superadmin can assign or create Admin accounts
+  if (parsed.data.role === "admin" && !auth.actor.isSuperadmin) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "SUPERADMIN_AUTHORITY_REQUIRED",
+        message: "Only the Superadmin (President) can create or assign the Admin role.",
+      },
+      { status: 403 },
+    );
+  }
+
   if (isSupabaseConfigured()) {
     try {
       const supabase = await createServerSupabaseClient();
@@ -612,6 +624,18 @@ export async function PATCH(request: Request) {
         ok: false,
         code: "SUPERADMIN_PROTECTED",
         message: "Regular Admins cannot modify, deactivate, or alter the Superadmin (President) account.",
+      },
+      { status: 403 },
+    );
+  }
+
+  // Authority Rule: Only Superadmin can edit or assign the Admin role
+  if ((targetAccount.role === "admin" || parsed.data.role === "admin") && !auth.actor.isSuperadmin && parsed.data.userId !== auth.actor.id) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "SUPERADMIN_AUTHORITY_REQUIRED",
+        message: "Only the Superadmin (President) can edit or assign the Admin role.",
       },
       { status: 403 },
     );

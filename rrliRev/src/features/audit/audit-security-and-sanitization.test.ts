@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   listAuditEntries,
   recordAuditEntry,
-  type AuditEntry,
 } from "../../lib/audit/server-audit-store.ts";
 
 test("Audit Security: Never exposes passwords, security answers, or raw secrets in audit changes", () => {

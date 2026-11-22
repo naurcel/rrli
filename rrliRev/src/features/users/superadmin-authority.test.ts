@@ -5,16 +5,14 @@ import {
   archiveDepartment,
   createDepartment,
   duplicateDepartment,
-  findDepartmentById,
   listDepartments,
   restoreDepartment,
-  updateDepartment,
 } from "../../lib/auth/department-store.ts";
 import {
   evaluatePermissionBreakdown,
   resolveEffectivePermissions,
 } from "../../lib/auth/permission-engine.ts";
-import { PERMISSIONS, type Permission } from "../../lib/auth/rbac.ts";
+import { PERMISSIONS } from "../../lib/auth/rbac.ts";
 import {
   assignUserDepartments,
   countSuperadminAccounts,
