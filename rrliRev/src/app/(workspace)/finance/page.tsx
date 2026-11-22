@@ -172,25 +172,6 @@ export default function FinancePage() {
     );
   }, [expenses, range.startDate, range.endDate]);
 
-  // Aggregate Company Expenses metrics for selected period
-  const expenseMetrics = useMemo(() => {
-    const total = dateFilteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const count = dateFilteredExpenses.length;
-    const average = count > 0 ? total / count : 0;
-    const highestEntry = dateFilteredExpenses.reduce<CompanyExpense | null>(
-      (max, e) => (max === null || e.amount > max.amount ? e : max),
-      null,
-    );
-
-    return {
-      total,
-      count,
-      average,
-      highest: highestEntry ? highestEntry.amount : 0,
-      highestEntry,
-    };
-  }, [dateFilteredExpenses]);
-
   // Aggregate incoming, outgoing, and net finance activity
   const financeActivity = useMemo(() => {
     let totalIncoming = 0;
@@ -221,7 +202,7 @@ export default function FinancePage() {
   const actorFilterOptions = useMemo(() => {
     const actors = new Set<string>();
     actors.add("admin");
-    actors.add("operations");
+    actors.add("finance");
     expenses.forEach((e) => {
       const c = e.createdBy?.trim();
       if (c) actors.add(c);
@@ -232,8 +213,8 @@ export default function FinancePage() {
       const bLower = b.replace(/^@/, "").toLowerCase();
       if (aLower === "admin") return -1;
       if (bLower === "admin") return 1;
-      if (aLower === "operations") return -1;
-      if (bLower === "operations") return 1;
+      if (aLower === "finance") return -1;
+      if (bLower === "finance") return 1;
       if (aLower === "system") return 1;
       if (bLower === "system") return -1;
       return aLower.localeCompare(bLower);
@@ -245,7 +226,7 @@ export default function FinancePage() {
         const clean = val.replace(/^@/, "").toLowerCase();
         let label = val;
         if (clean === "admin") label = "@admin (Admin)";
-        else if (clean === "operations") label = "@operations (Operations)";
+        else if (clean === "finance") label = "@finance (Finance)";
         else if (clean === "system") label = "System";
         else label = val.startsWith("@") ? val : `@${val}`;
         return { value: val, label };
@@ -538,7 +519,7 @@ export default function FinancePage() {
         <header className="page-intro">
           <div>
             <h1>Company Finance</h1>
-            <p className="subtitle">Company income, operating expenses, and financial balance.</p>
+            <p className="subtitle">Company income and operating expenses.</p>
           </div>
           <div className="page-intro-actions">
             {canManage ? (
@@ -612,8 +593,8 @@ export default function FinancePage() {
             <div className="stat-card-header">
               <span className="stat-label">TOTAL COMPANY INCOME</span>
             </div>
-            <strong style={{ color: "var(--color-status-success, #059669)" }}>
-              +<CompactMoney value={financeActivity.totalIncoming} />
+            <strong>
+              <CompactMoney value={financeActivity.totalIncoming} />
             </strong>
             <span className="stat-meta">
               {financeActivity.incomingCount} income {financeActivity.incomingCount === 1 ? "record" : "records"}
@@ -624,23 +605,11 @@ export default function FinancePage() {
             <div className="stat-card-header">
               <span className="stat-label">TOTAL COMPANY EXPENSES</span>
             </div>
-            <strong style={{ color: "var(--color-danger, #dc2626)" }}>
-              -<CompactMoney value={financeActivity.totalOutgoing} />
+            <strong>
+              <CompactMoney value={financeActivity.totalOutgoing} />
             </strong>
             <span className="stat-meta">
               {financeActivity.outgoingCount} expense {financeActivity.outgoingCount === 1 ? "record" : "records"}
-            </span>
-          </article>
-
-          <article className="stat-card">
-            <div className="stat-card-header">
-              <span className="stat-label">NET BALANCE</span>
-            </div>
-            <strong style={{ color: financeActivity.netActivity >= 0 ? "var(--color-status-success, #059669)" : "var(--color-danger, #dc2626)" }}>
-              {financeActivity.netActivity >= 0 ? "+" : ""}<CompactMoney value={financeActivity.netActivity} />
-            </strong>
-            <span className="stat-meta">
-              Income - Expenses balance
             </span>
           </article>
 

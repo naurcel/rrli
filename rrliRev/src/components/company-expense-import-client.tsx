@@ -17,7 +17,7 @@ import {
   readBrowserPreviewExpenses,
   upsertBrowserPreviewExpense,
 } from "@/features/finance/browser-preview-expenses";
-import type { CompanyExpense, FinanceTransactionType } from "@/features/finance/company-expense-domain";
+import type { CompanyExpense } from "@/features/finance/company-expense-domain";
 import { formatPeso } from "@/lib/format";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB

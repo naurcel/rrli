@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   calculateCompanyProfitability,
   validateCompanyExpenseInput,
-  type CompanyExpense,
 } from "./company-expense-domain.ts";
 import {
   parseCsvCompanyExpenseImport,

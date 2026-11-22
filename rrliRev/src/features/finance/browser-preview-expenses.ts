@@ -1,7 +1,7 @@
 import { SMALL_MOCK_COMPANY_EXPENSES } from "../deliveries/small-mock-database.ts";
 import type { CompanyExpense } from "./company-expense-domain.ts";
 
-export const COMPANY_EXPENSES_STORAGE_KEY = "routex-browser-preview-company-expenses-v1";
+export const COMPANY_EXPENSES_STORAGE_KEY = "routex-browser-preview-company-expenses-v2";
 export const ROUTEX_COMPANY_EXPENSES_CHANGED = "routex:company-expenses-changed";
 
 function getInitialCompanyExpenses(): CompanyExpense[] {
