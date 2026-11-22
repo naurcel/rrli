@@ -16786,6 +16786,28 @@ html[data-theme="dark"] .revenue-chart-controls .global-date-picker .date-picker
 }
 
 html[data-theme="dark"] .revenue-chart-controls .date-picker-months button {
+  background: var(--color-surface-subtle, #18191d) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+}
+
+html[data-theme="dark"] .revenue-chart-controls .date-picker-months button:hover {
+  background: var(--color-accent-soft) !important;
+  border-color: var(--color-accent) !important;
+}
+
+/* 3. Attention Needed Expandable Sections & Independent Scrolling */
+.dashboard-attention-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-attention-card .records-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .expand-all-text-button {
   background: transparent;
   border: 0;

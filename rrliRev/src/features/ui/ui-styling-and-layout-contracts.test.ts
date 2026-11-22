@@ -139,4 +139,30 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
       assert.match(globalsCssContent, /@media print\s*\{[\s\S]*\.report-print-only-row\s*\{[^}]*display:\s*table-row\s*!important/);
     });
   });
+
+  describe("CSS Structural Integrity & Layout Edge Protection Contracts", () => {
+    it("ensures balanced opening and closing curly braces across globals.css", () => {
+      let openBraces = 0;
+      let closeBraces = 0;
+      for (const char of globalsCssContent) {
+        if (char === "{") openBraces++;
+        if (char === "}") closeBraces++;
+      }
+      assert.strictEqual(openBraces, closeBraces, `Unbalanced braces in globals.css: ${openBraces} open vs ${closeBraces} close`);
+    });
+
+    it("does not contain truncated diff markers or diff artifact strings", () => {
+      assert.ok(!globalsCssContent.includes("... [truncated for diff preview]"));
+    });
+
+    it("ensures content-wrap enforces generous horizontal padding across all layout modes", () => {
+      assert.match(globalsCssContent, /\.content-wrap\s*\{[^}]*padding-left:\s*42px\s*!important/);
+      assert.match(globalsCssContent, /\.content-wrap\s*\{[^}]*padding-right:\s*42px\s*!important/);
+    });
+
+    it("ensures page intro action buttons maintain gap and individual border radius", () => {
+      assert.match(globalsCssContent, /\.page-intro-actions[^{]*\{[^}]*gap:\s*12px\s*!important/);
+      assert.match(globalsCssContent, /\.page-intro-actions\s*>\s*\*[^}]*border-radius:\s*8px\s*!important/);
+    });
+  });
 });
