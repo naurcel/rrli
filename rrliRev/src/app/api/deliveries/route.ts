@@ -196,11 +196,28 @@ export async function GET(request: Request) {
     const result = await listDeliveryRecords(parsedQuery.value);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load delivery records.";
+    // If Supabase schema cache is missing delivery_ledger or unmigrated, gracefully fallback to bundled mock data
+    if (
+      message.includes("schema cache") ||
+      message.includes("does not exist") ||
+      message.includes("relation") ||
+      message.includes("delivery_ledger")
+    ) {
+      console.warn("Supabase schema missing delivery_ledger; falling back to bundled mock data:", message);
+      return NextResponse.json({
+        ok: true,
+        source: "bundled-mock",
+        fallbackNotice: message,
+        ...listSmallMockDeliveryRecords(parsedQuery.value),
+      });
+    }
+
     return NextResponse.json(
       {
         ok: false,
         code: "DELIVERY_QUERY_FAILED",
-        message: error instanceof Error ? error.message : "Unable to load delivery records.",
+        message,
       },
       { status: 500 },
     );

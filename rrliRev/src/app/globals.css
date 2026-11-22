@@ -12561,7 +12561,35 @@ html[data-theme="dark"] .sign-in-button:active:not(:disabled) {
 }
 
 .content-wrap {
-  padding-bottom: 24px !important;
+  width: 100% !important;
+  max-width: 1540px !important;
+  margin-inline: auto !important;
+  box-sizing: border-box !important;
+  padding-left: 42px !important;
+  padding-right: 42px !important;
+  padding-bottom: 32px !important;
+}
+
+@media (max-width: 1024px) {
+  .content-wrap {
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .content-wrap {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    padding-top: 20px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .content-wrap {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
 }
 
 /* Records Card Header Hierarchy & Meta */
@@ -17689,7 +17717,8 @@ html[data-compactness="compact"] .sidebar:not(.collapsed) .management-navigation
 
 html[data-compactness="compact"] .content-wrap {
   gap: 12px !important;
-  padding: 18px 0 24px !important;
+  padding-top: 18px !important;
+  padding-bottom: 24px !important;
 }
 
 html[data-compactness="compact"] .page-intro {
@@ -17791,7 +17820,8 @@ html[data-compactness="comfortable"] .sidebar:not(.collapsed) .management-naviga
 
 html[data-compactness="comfortable"] .content-wrap {
   gap: 28px !important;
-  padding: 40px 0 52px !important;
+  padding-top: 40px !important;
+  padding-bottom: 52px !important;
 }
 
 html[data-compactness="comfortable"] .page-intro {

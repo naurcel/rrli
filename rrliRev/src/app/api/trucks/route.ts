@@ -93,6 +93,19 @@ export async function GET() {
       .order("plate_number");
 
     if (error) {
+      if (
+        error.message.includes("schema cache") ||
+        error.message.includes("does not exist") ||
+        error.message.includes("trucks")
+      ) {
+        console.warn("Supabase missing trucks table; falling back to bundled mock trucks:", error.message);
+        return NextResponse.json({
+          ok: true,
+          source: "bundled-mock",
+          fallbackNotice: error.message,
+          trucks: getFleetTrucks(),
+        });
+      }
       throw error;
     }
 

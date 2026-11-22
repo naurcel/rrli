@@ -39,6 +39,22 @@ export async function GET(request: Request) {
     p_date_to: parsed.data.dateTo,
   });
   if (error) {
+    if (
+      error.message.includes("schema cache") ||
+      error.message.includes("does not exist") ||
+      error.message.includes("function") ||
+      error.message.includes("delivery_profitability_summary")
+    ) {
+      console.warn("Supabase missing delivery_profitability_summary; falling back to bundled mock summary:", error.message);
+      const summary = getSmallMockProfitabilitySummary(parsed.data);
+      return NextResponse.json({
+        ok: true,
+        source: "bundled-mock",
+        fallbackNotice: error.message,
+        includedDeliveryIds: summary.deliveryIds,
+        summary,
+      });
+    }
     return NextResponse.json({ ok: false, code: "SUMMARY_FAILED", message: error.message }, { status: 500 });
   }
   return NextResponse.json({ ok: true, summary: data });
