@@ -12,7 +12,7 @@ import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-brea
 import { DeliveryNavigator } from "@/components/delivery-navigator";
 import { DeliverySupportingDocumentsPane } from "@/components/delivery-supporting-documents-pane";
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
-import { DeliveryAttentionFlags } from "@/components/delivery-attention-flags";
+import { DeliveryAttentionModal } from "@/components/delivery-attention-flags";
 import {
   countUnresolvedDeliveryAttentionFlags,
   DELIVERY_FLAGS_CHANGED_EVENT,
@@ -114,6 +114,7 @@ function DeliveryDetailsPageContent({
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
   const [unresolvedFlagCount, setUnresolvedFlagCount] = useState(0);
+  const [isFlagsModalOpen, setIsFlagsModalOpen] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -807,10 +808,7 @@ function DeliveryDetailsPageContent({
                   <span className="simple-hero-badge-sep">·</span>
                   <button
                     type="button"
-                    onClick={() => {
-                      const el = document.getElementById("delivery-attention-flags-card");
-                      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
+                    onClick={() => setIsFlagsModalOpen(true)}
                     className="simple-hero-badge warning"
                     style={{
                       cursor: "pointer",
@@ -842,12 +840,7 @@ function DeliveryDetailsPageContent({
                 type="button"
                 className="secondary-button"
                 style={{ fontSize: "12px", padding: "5px 11px", display: "inline-flex", alignItems: "center", gap: "5px" }}
-                onClick={() => {
-                  const el = document.getElementById("delivery-attention-flags-card");
-                  el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  const input = el?.querySelector("input");
-                  input?.focus();
-                }}
+                onClick={() => setIsFlagsModalOpen(true)}
                 title="Flag missing document or attention item for this delivery"
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
@@ -856,6 +849,22 @@ function DeliveryDetailsPageContent({
                     <line x1="4" y1="22" x2="4" y2="15" />
                   </svg>
                   Flag Item
+                  {unresolvedFlagCount > 0 ? (
+                    <span
+                      style={{
+                        background: "var(--color-accent-deep, #b45309)",
+                        color: "#ffffff",
+                        borderRadius: "10px",
+                        padding: "0 6px",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        marginLeft: "3px",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {unresolvedFlagCount}
+                    </span>
+                  ) : null}
                 </span>
               </button>
               <button
@@ -1066,15 +1075,7 @@ function DeliveryDetailsPageContent({
           </div>
         </section>
 
-        {/* 3. Attention & Missing Items Card */}
-        <DeliveryAttentionFlags
-          deliveryId={delivery.id}
-          waybillNumber={delivery.waybillNumber}
-          canManage={canWrite}
-          currentUser={actor.username || actor.email || "Operations"}
-        />
-
-        {/* 4. Unified Store Drop-offs & Documents Card (Scalable Bottom Section) */}
+        {/* 3. Unified Store Drop-offs & Documents Card (Scalable Bottom Section) */}
         <section
           className="records-card delivery-section-card delivery-fulfillment-unified-card"
           aria-label="Store Drop-offs and POD Documents"
@@ -1165,6 +1166,16 @@ function DeliveryDetailsPageContent({
         title={viewingImage?.title ?? ""}
         subtitle={viewingImage?.subtitle}
         filename={viewingImage?.filename}
+      />
+
+      {/* Attention & Missing Items Dialog */}
+      <DeliveryAttentionModal
+        isOpen={isFlagsModalOpen}
+        onClose={() => setIsFlagsModalOpen(false)}
+        deliveryId={delivery.id}
+        waybillNumber={delivery.waybillNumber}
+        canManage={canWrite}
+        currentUser={actor.username || actor.email || "Operations"}
       />
     </>
   );
