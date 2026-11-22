@@ -39,7 +39,7 @@ RouteX is now scoped as a completed-delivery records and truck-profitability sys
 
 - Client creation and editing, including duplicate prevention and authorization.
 - Dedicated delivery detail and authorized correction flow; completed financial records currently have no correction UI.
-- Real document upload, private storage access, signed download, review notes, rejection/needs-correction state, and client-specific document requirements.
+- Real document upload, private storage access, signed download, review notes, and client-specific document requirements.
 - Excel parsing, editable staged rows, validation resolution, final review/confirmation, original-file retention, and import history UI.
 - Persisted server-side aggregate/report queries for datasets larger than the current paginated ledger fetch.
 - End-to-end database tests for atomic rollback, duplicate submissions, stale-write detection, storage access, and authorization against a disposable migrated Supabase project.

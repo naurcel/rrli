@@ -1004,36 +1004,30 @@ export default function DeliveriesPage() {
                             <strong className="waybill-code">#{trip.waybillNumber}</strong>
                             {trip.notes ? (
                               <span
-                                className="routex-badge tone-info"
                                 style={{
-                                  fontSize: "9px",
-                                  fontWeight: 600,
-                                  gap: "3px",
-                                  padding: "1px 5px",
-                                  borderRadius: "4px",
-                                  marginTop: "2px",
-                                  border: "1px solid rgba(59, 130, 246, 0.25)",
-                                  background: "rgba(59, 130, 246, 0.08)",
-                                  color: "var(--color-primary-text, #1d4ed8)",
+                                  fontSize: "11px",
+                                  color: "var(--color-text-muted, #64748b)",
                                   maxWidth: "140px",
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
                                   display: "inline-flex",
                                   alignItems: "center",
+                                  gap: "3px",
+                                  marginTop: "2px",
                                 }}
                                 title={`Note: ${trip.notes}`}
                               >
                                 <svg
-                                  width="9"
-                                  height="9"
+                                  width="10"
+                                  height="10"
                                   viewBox="0 0 24 24"
                                   fill="none"
                                   stroke="currentColor"
                                   strokeWidth="2"
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
-                                  style={{ flexShrink: 0 }}
+                                  style={{ flexShrink: 0, opacity: 0.7 }}
                                   aria-hidden="true"
                                 >
                                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />

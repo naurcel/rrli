@@ -27,7 +27,7 @@ All deliveries occur within the current seven-day window of October 27 through N
 | October 28 | Landers | 2 | Confirmed zero other expense; POD submitted |
 | October 28 | Landers | 1 | Finalized compact-truck urban trip; POD verified |
 | October 29 | MCCI | 1 | Entry fee explicitly not applicable; POD missing |
-| October 30 | MCCI | 2 | Low but positive margin; POD rejected |
+| October 30 | MCCI | 2 | Low but positive margin; POD submitted |
 | October 31 | Vanguard | 1 | Confirmed zero toll; POD verified |
 | November 1 | MCCI | 1 | Finalized frozen delivery; POD submitted |
 | November 1 | Vanguard | 1 | Finalized multi-temperature trip; POD verified |

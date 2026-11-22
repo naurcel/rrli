@@ -30,7 +30,7 @@ export type SmallMockEmployee = {
   assignmentType: "Driver" | "Helper";
 };
 
-export type SmallMockDocumentStatus = "Verified" | "Submitted" | "Missing" | "Rejected";
+export type SmallMockDocumentStatus = "Verified" | "Submitted" | "Missing";
 
 export type SmallMockDocument = {
   id: string;
@@ -199,7 +199,7 @@ const DELIVERIES = [
           documentRef: "SAMPLE-POD-LND-02B.pdf",
         },
       ],
-      notes: "POD rejected due to missing receiving stamp on Stop 1; requesting clean driver re-upload.",
+      notes: "Priority early-morning dispatch via SLEX; dual-store delivery completed on schedule.",
     }),
   },
   {
@@ -250,7 +250,7 @@ const DELIVERIES = [
     truckId: TRUCKS[1].id,
     driverId: DRIVERS[1].id,
     helperId: HELPERS[0].id,
-    scenario: "MCCI chilled commissary delivery servicing Kuya J SM Southmall and Popeyes SM Mall of Asia with high operating tolls resulting in tight profit margin; POD rejected for unreadable receiving stamp.",
+    scenario: "MCCI chilled commissary delivery servicing Kuya J SM Southmall and Popeyes SM Mall of Asia with high operating tolls resulting in tight profit margin.",
     record: buildDeliveryTripRecord({
       id: "40000000-0000-4000-8000-000000000004",
       waybillNumber: "WB-261030",
@@ -282,7 +282,7 @@ const DELIVERIES = [
           entryFee: 300,
           podSubmitted: true,
           supportingDocsComplete: false,
-          documentRef: "SAMPLE-POD-MCC-04A-REJECTED.pdf",
+          documentRef: "SAMPLE-POD-MCC-04A.pdf",
         },
         {
           id: "50000000-0000-4000-8000-000000000006",
@@ -292,10 +292,10 @@ const DELIVERIES = [
           entryFee: 300,
           podSubmitted: true,
           supportingDocsComplete: false,
-          documentRef: "SAMPLE-POD-MCC-04B-REJECTED.pdf",
+          documentRef: "SAMPLE-POD-MCC-04B.pdf",
         },
       ],
-      notes: "POD rejected due to missing receiving stamp on Stop 1; requesting clean driver re-upload.",
+      notes: "Cold chain commissary run; high toll window across SLEX and Skyway.",
     }),
   },
   {
@@ -390,7 +390,7 @@ const DELIVERIES = [
           documentRef: "SAMPLE-POD-VGD-06B.pdf",
         },
       ],
-      notes: "POD rejected due to missing receiving stamp on Stop 1; requesting clean driver re-upload.",
+      notes: "Commercial replenishment dispatch; toll audit pending receipt confirmation.",
     }),
   },
   {
@@ -1001,7 +1001,7 @@ const DOCUMENT_DELIVERY_STATUSES = [
   "Verified",
   "Submitted",
   "Missing",
-  "Rejected",
+  "Submitted",
   "Verified",
   "Submitted",
   "Verified",
@@ -1037,11 +1037,9 @@ const DOCUMENTS: readonly SmallMockDocument[] = DELIVERIES.flatMap((delivery, de
       mimeType: hasFile ? "application/pdf" as const : null,
       sizeBytes: hasFile ? 12000 + deliveryIndex * 1000 + dropoffIndex * 500 : null,
       verificationNotes:
-        status === "Rejected"
-          ? "Needs correction: the fictional sample receiving stamp is unreadable."
-          : status === "Missing"
-            ? "No sample POD has been submitted."
-            : null,
+        status === "Missing"
+          ? "No sample POD has been submitted."
+          : null,
     };
   }),
 );
@@ -1146,7 +1144,7 @@ export function validateSmallMockDatabase(): string[] {
   }
 
   const documentStatuses = new Set(documents.map((document) => document.status));
-  for (const status of ["Verified", "Submitted", "Missing", "Rejected"] as const) {
+  for (const status of ["Verified", "Submitted", "Missing"] as const) {
     if (!documentStatuses.has(status)) issues.push(`Missing ${status} POD document scenario.`);
   }
 

@@ -17,7 +17,7 @@ The mock delivery records now reflect authentic logistics corridors across Metro
 - Exactly **9 drop-offs** (three 1-stop deliveries and three 2-stop deliveries).
 - Exactly **6 canonical trucks** (`NGS 4281`, `DAA 7310`, `CBZ 1187`, `NBE 9042`, `ABX 2201`, and `XCY 6612`) with varied 4-, 6-, and 10-wheeler configurations.
 - Exactly **5 financially finalized trips** and **1 financially incomplete trip**.
-- Full test coverage across all 4 POD states (`Verified`, `Submitted`, `Missing`, `Rejected`).
+- Full test coverage across all 3 POD states (`Verified`, `Submitted`, `Missing`).
 - Deterministic IDs, financial totals, fuel rates, allowances, and margins.
 
 ---
@@ -198,7 +198,7 @@ flowchart TD
 | **WB-261027**<br>2026-10-27 | **Landers**<br>`NGS 4281`<br>(6W Multi-Temp) | Calamba, Laguna<br>(82 km) | 1. `Landers Superstore - Balintawak`<br>*(Balintawak, Quezon City)* | Normal finalized trip.<br>Revenue: ₱24,000<br>Expenses: ₱7,950<br>Margin: 66.88%<br>**POD: Verified** |
 | **WB-261028**<br>2026-10-28 | **Landers**<br>`CBZ 1187`<br>(10W Ambient) | Santa Rosa, Laguna<br>(118 km) | 1. `Landers Superstore - Alabang`<br>*(Almanza Dos, Las Piñas)*<br>2. `Landers Superstore - Vermosa`<br>*(Pasong Buaya II, Imus)* | Confirmed zero other expense.<br>Revenue: ₱28,000<br>Expenses: ₱9,600<br>Margin: 65.71%<br>**POD: Submitted** |
 | **WB-261029**<br>2026-10-29 | **MCCI**<br>`DAA 7310`<br>(6W Chilled) | San Pedro, Laguna<br>(54 km) | 1. `Kuya J Restaurant - Festival Mall`<br>*(Filinvest City, Muntinlupa)* | Mall entry fee Not Applicable.<br>Revenue: ₱18,500<br>Expenses: ₱5,900<br>Margin: 68.11%<br>**POD: Missing** |
-| **WB-261030**<br>2026-10-30 | **MCCI**<br>`DAA 7310`<br>(6W Chilled) | San Pedro, Laguna<br>(96 km) | 1. `Kuya J Restaurant - SM Southmall`<br>*(Almanza Uno, Las Piñas)*<br>2. `Popeyes - SM Mall of Asia`<br>*(Bay City, Pasay)* | High toll costs produce tight profit margin.<br>Revenue: ₱13,000<br>Expenses: ₱9,200<br>Margin: 29.23% (&lt; 35%)<br>**POD: Rejected** |
+| **WB-261030**<br>2026-10-30 | **MCCI**<br>`DAA 7310`<br>(6W Chilled) | San Pedro, Laguna<br>(96 km) | 1. `Kuya J Restaurant - SM Southmall`<br>*(Almanza Uno, Las Piñas)*<br>2. `Popeyes - SM Mall of Asia`<br>*(Bay City, Pasay)* | High toll costs produce tight profit margin.<br>Revenue: ₱13,000<br>Expenses: ₱9,200<br>Margin: 29.23% (&lt; 35%)<br>**POD: Submitted** |
 | **WB-261031**<br>2026-10-31 | **Vanguard**<br>`NGS 4281`<br>(6W Multi-Temp) | Carmona, Cavite<br>(68 km) | 1. `Wilcon Depot - Bacoor`<br>*(Mambog IV, Bacoor)* | Non-toll arterial route confirms ₱0 toll.<br>Revenue: ₱17,500<br>Expenses: ₱5,100<br>Margin: 70.86%<br>**POD: Verified** |
 | **WB-261102**<br>2026-11-02 | **Vanguard**<br>`CBZ 1187`<br>(10W Ambient) | Biñan, Laguna<br>(104 km) | 1. `Wilcon Depot - Las Piñas`<br>*(Almanza Uno, Las Piñas)*<br>2. `S&R Membership Shopping - Imus`<br>*(Anabu I-D, Imus)* | Toll receipt awaiting submission keeps finances incomplete.<br>Revenue: ₱21,000<br>Expenses: null (incomplete)<br>Margin: null<br>**POD: Submitted** |
 

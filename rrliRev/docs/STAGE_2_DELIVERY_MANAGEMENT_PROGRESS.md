@@ -53,7 +53,7 @@ Migration: [`20261101010000_stage2_delivery_management.sql`](../supabase/migrati
 
 - Delivery edit/correction screens backed by the database API.
 - Dedicated delivery detail page and editable multi-store drop-off workflow.
-- Full POD upload, signed-download URL, verification, rejection, and client-specific document checklist UI.
+- Full POD upload, signed-download URL, verification, and client-specific document checklist UI.
 - Excel upload, column mapping, row parsing, validation review, correction, and final commit workflow.
 - Full filtered aggregate totals; list summary values currently describe the returned page rather than the entire result set.
 - Server-side aggregate queries for totals beyond the current authorized delivery-page fetches.
@@ -68,7 +68,7 @@ The implementation deliberately does not invent these rules:
 2. Exact Excel column names and how one trip with multiple stores appears in source spreadsheets.
 3. Which supporting document types are mandatory for each client.
 4. Whether entry fees are supplied per drop-off or only as a trip-level total in imported files.
-5. Retention, replacement, and deletion rules for rejected or superseded POD files.
+5. Retention, replacement, and deletion rules for superseded POD files.
 6. Authorized correction rules for completed and financially locked records.
 
 ## Applying the database work

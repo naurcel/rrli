@@ -209,9 +209,9 @@ async function run(): Promise<void> {
       verification_notes: document.verificationNotes,
       uploaded_by: document.status === "Missing" ? null : seedActor.id,
       uploaded_at: document.status === "Missing" ? null : "2026-11-02T15:00:00+09:00",
-      verified_by: document.status === "Verified" || document.status === "Rejected" ? seedActor.id : null,
+      verified_by: document.status === "Verified" ? seedActor.id : null,
       verified_at:
-        document.status === "Verified" || document.status === "Rejected"
+        document.status === "Verified"
           ? "2026-11-02T16:00:00+09:00"
           : null,
     })),
@@ -284,7 +284,7 @@ async function run(): Promise<void> {
     "Database verification expected one POD document requirement per seeded drop-off.",
   );
   const documentStates = new Set(seededDocuments.data.map((document) => document.status));
-  for (const state of ["Verified", "Submitted", "Missing", "Rejected"]) {
+  for (const state of ["Verified", "Submitted", "Missing"]) {
     ensure(documentStates.has(state), `Database verification is missing the ${state} POD state.`);
   }
 

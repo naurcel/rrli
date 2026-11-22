@@ -137,17 +137,11 @@ test("maintains positive delivery and company net profit across All Time, Octobe
 
 test("represents every requested POD document state with explicitly fictional metadata", () => {
   const statuses = new Set(SMALL_MOCK_DATABASE.documents.map((document) => document.status));
-  assert.deepEqual([...statuses].sort(), ["Missing", "Rejected", "Submitted", "Verified"]);
+  assert.deepEqual([...statuses].sort(), ["Missing", "Submitted", "Verified"]);
   assert.ok(
     SMALL_MOCK_DATABASE.documents
       .filter((document) => document.originalFilename)
       .every((document) => document.originalFilename?.includes("SAMPLE-NOT-SIGNED")),
-  );
-  assert.ok(
-    SMALL_MOCK_DATABASE.documents.some(
-      (document) =>
-        document.status === "Rejected" && document.verificationNotes?.includes("Needs correction"),
-    ),
   );
 });
 
