@@ -46,20 +46,6 @@ import {
   readExportRequests,
   ROUTEX_EXPORT_REQUESTS_CHANGED,
 } from "@/features/reports/data-export-engine";
-import {
-  canImportAndReviewExcel,
-  canManageCompanyExpenses,
-  canManageDocuments,
-  canManageTrucks,
-  canManageUsers,
-  canMutateDeliveryRecords,
-  hasPermission,
-  ROLE_METADATA,
-  USER_ROLES,
-  type UserRole,
-} from "@/lib/auth/rbac";
-import { DiscordPermissionsManager } from "@/features/permissions/DiscordPermissionsManager";
-import { RolePermissionsMatrix } from "@/features/permissions/RolePermissionsMatrix";
 
 const SECURITY_QUESTION_OPTIONS: readonly SelectOption[] = [
   ...PREDEFINED_SECURITY_QUESTIONS.map((q) => ({
@@ -125,9 +111,8 @@ export default function SettingsPage() {
   const [hasExistingBackupKey, setHasExistingBackupKey] = useState(false);
 
   // Design Preferences state & Dark mode sync
-  type SettingsTab = "account" | "appearance" | "security" | "permissions" | "export";
+  type SettingsTab = "account" | "appearance" | "security" | "export";
   const [activeTab, setActiveTab] = useState<SettingsTab>("account");
-  const [permissionsView, setPermissionsView] = useState<"interactive" | "matrix">("interactive");
 
   const ALL_TIME_RANGE: DateRange = { startDate: null, endDate: null };
   const { range } = useGlobalDateRange();
@@ -182,7 +167,6 @@ export default function SettingsPage() {
       const hash = window.location.hash.replace("#", "").toLowerCase();
       if (hash === "appearance" || hash === "design") setActiveTab("appearance");
       else if (hash === "security") setActiveTab("security");
-      else if (hash === "permissions") setActiveTab("permissions");
       else if (hash === "export" || hash === "data-export") setActiveTab("export");
       else if (hash === "account") setActiveTab("account");
     }
@@ -661,8 +645,8 @@ export default function SettingsPage() {
     <>
       <OperationalTopbar contextLabel="Settings" showDateFilter={false} />
 
-      <div className={`content-wrap settings-page-wrap${activeTab === "export" || activeTab === "permissions" ? " is-export" : ""}`}>
-        <div className={`settings-layout-grid${activeTab === "export" || activeTab === "permissions" ? " is-export" : ""}`}>
+      <div className="content-wrap settings-page-wrap">
+        <div className="settings-layout-grid">
           {/* Left Navigation: Clean text tabs */}
           <aside className="settings-tabs-sidebar" aria-label="Settings categories">
             <nav className="settings-tabs-list" role="tablist">
@@ -698,17 +682,6 @@ export default function SettingsPage() {
                 onClick={() => handleSelectTab("security")}
               >
                 Security
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="tab-permissions"
-                aria-selected={activeTab === "permissions"}
-                aria-controls="panel-permissions"
-                className={`settings-tab-btn${activeTab === "permissions" ? " active" : ""}`}
-                onClick={() => handleSelectTab("permissions")}
-              >
-                Permissions
               </button>
               {canAccessDataExportTab(actor.role) && (
                 <button
@@ -747,7 +720,7 @@ export default function SettingsPage() {
           </aside>
 
           {/* Right Main Content Column */}
-          <div className={`settings-tab-content-area${activeTab === "export" || activeTab === "permissions" ? " is-expanded" : ""}`}>
+          <div className="settings-tab-content-area">
             {activeTab === "account" && (
               <div id="panel-account" role="tabpanel" aria-labelledby="tab-account" className="settings-tab-panel">
                 {/* Profile Centerpiece (Google Account Mobile Inspired - Borderless with Animated Glowing Avatar) */}
@@ -1029,7 +1002,7 @@ export default function SettingsPage() {
                       className={`profile-segmented-btn${preferences.fontSize === opt ? " active" : ""}`}
                       onClick={() => handleUpdatePreferences({ fontSize: opt })}
                     >
-                      {opt === "small" ? "Small (Compact)" : opt === "large" ? "Large (Accessible)" : "Default"}
+                      {opt === "small" ? "Small" : opt === "large" ? "Large" : "Default (Medium)"}
                     </button>
                   ))}
                 </div>
@@ -1055,7 +1028,7 @@ export default function SettingsPage() {
                       className={`profile-segmented-btn${preferences.compactness === opt ? " active" : ""}`}
                       onClick={() => handleUpdatePreferences({ compactness: opt })}
                     >
-                      {opt === "comfortable" ? "Comfortable (Spacious)" : "Compact (Dense)"}
+                      {opt === "comfortable" ? "Comfortable (Generous)" : "Compact"}
                     </button>
                   ))}
                 </div>
@@ -1493,59 +1466,8 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {activeTab === "permissions" && (
-              <div id="panel-permissions" role="tabpanel" aria-labelledby="tab-permissions" className="settings-tab-panel">
-                {canManageUsers(actor.role) ? (
-                  <div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "16px",
-                        flexWrap: "wrap",
-                        gap: "10px",
-                      }}
-                    >
-                      <div>
-                        <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0, color: "var(--color-text-primary)" }}>
-                          Roles & Permissions
-                        </h2>
-                        <p style={{ fontSize: "12.5px", color: "var(--color-text-secondary)", margin: "4px 0 0 0" }}>
-                          Configure operational permissions for roles and individual employees.
-                        </p>
-                      </div>
-                      <div className="user-management-tabs" style={{ margin: 0 }}>
-                        <button
-                          type="button"
-                          className={permissionsView === "interactive" ? "active" : ""}
-                          onClick={() => setPermissionsView("interactive")}
-                        >
-                          Roles & Staff
-                        </button>
-                        <button
-                          type="button"
-                          className={permissionsView === "matrix" ? "active" : ""}
-                          onClick={() => setPermissionsView("matrix")}
-                        >
-                          Access Matrix
-                        </button>
-                      </div>
-                    </div>
-                    {permissionsView === "interactive" ? (
-                      <DiscordPermissionsManager />
-                    ) : (
-                      <RolePermissionsMatrix />
-                    )}
-                  </div>
-                ) : (
-                  <RolePermissionsMatrix />
-                )}
-              </div>
-            )}
-
             {activeTab === "export" && canAccessDataExportTab(actor.role) && (
-              <div id="panel-export" role="tabpanel" aria-labelledby="tab-export" className="settings-tab-panel is-export">
+              <div id="panel-export" role="tabpanel" aria-labelledby="tab-export" className="settings-tab-panel">
                 <ReportsDataExportTab
                   actor={actor}
                   allDeliveries={allDeliveries}
@@ -1558,80 +1480,8 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
-
-          {/* Balanced Right Spacer: only when not in full-width export or permissions tab */}
-          {activeTab !== "export" && activeTab !== "permissions" && (
-            <div className="settings-grid-spacer" aria-hidden="true" />
-          )}
         </div>
       </div>
     </>
   );
-}
-
-const ROLE_CONCISE_SUMMARY: Record<UserRole, string> = {
-  admin: "Full administrative control and unrestricted data access.",
-  operations: "Create & edit deliveries, manage fleet trucks, and import trip reports.",
-  finance: "Record & manage company operating expenses and view financial reports.",
-  hr: "View-only access across workspace ledgers and reports.",
-  secretary: "View-only access across workspace ledgers and reports.",
-  customer_representative: "View-only access across workspace ledgers and reports.",
-};
-
-function renderDeliveriesCell(role: UserRole) {
-  if (role === "admin") {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full</strong>;
-  }
-  if (canMutateDeliveryRecords(role)) {
-    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Manage</strong>;
-  }
-  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
-}
-
-function renderFinanceCell(role: UserRole) {
-  if (role === "admin") {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full</strong>;
-  }
-  if (canManageCompanyExpenses(role)) {
-    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Manage</strong>;
-  }
-  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
-}
-
-function renderImportCell(role: UserRole) {
-  if (canImportAndReviewExcel(role)) {
-    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Upload</strong>;
-  }
-  return <span style={{ color: "var(--color-text-muted)" }}>—</span>;
-}
-
-function renderTrucksCell(role: UserRole) {
-  if (role === "admin") {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full</strong>;
-  }
-  if (canManageTrucks(role)) {
-    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Manage</strong>;
-  }
-  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
-}
-
-function renderPodCell(role: UserRole) {
-  if (canManageDocuments(role)) {
-    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Upload</strong>;
-  }
-  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
-}
-
-function renderReportsCell(role: UserRole) {
-  if (hasPermission(role, "reports:export")) {
-    return <strong style={{ color: "var(--color-primary, #2563eb)" }}>Export</strong>;
-  }
-  return <span style={{ color: "var(--color-text-muted)" }}>View</span>;
-}
-
-function renderUsersCell(role: UserRole) {
-  if (canManageUsers(role)) {
-    return <strong style={{ color: "var(--color-success, #10b981)" }}>Full</strong>;
-  }
-  return <span style={{ color: "var(--color-text-muted)" }}>—</span>;
 }

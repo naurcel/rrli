@@ -1,5 +1,3 @@
-import React from "react";
-
 export interface SimpleLoadingProps {
   message?: string;
   compact?: boolean;
