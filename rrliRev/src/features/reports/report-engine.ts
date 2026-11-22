@@ -46,7 +46,20 @@ export type ReportSummaryTotals = {
   totalTrips: number;
   totalCompanyExpenses?: number;
   companyNetProfit?: number;
+  companyIncoming?: number;
+  companyOutgoing?: number;
+  companyNetActivity?: number;
+  totalInflow?: number;
+  totalOutflow?: number;
+  companyMarginPercent?: number | null;
 };
+
+export type CompanyFinanceInput =
+  | number
+  | {
+      incoming?: number;
+      outgoing?: number;
+    };
 
 export type ProcessedReportResult = {
   template: ReportTemplate;
@@ -94,7 +107,7 @@ export function resolveTemplateColumns(
 export function processReport(
   deliveries: readonly DeliveryTripRecord[],
   template: ReportTemplate,
-  companyExpenses?: number,
+  companyExpenses?: CompanyFinanceInput,
 ): ProcessedReportResult {
   const columns = resolveTemplateColumns(template.baseType, template.columns);
   const { rows, totals } = generateReportRows(deliveries, template, companyExpenses);
@@ -139,7 +152,7 @@ export function filterDeliveriesForTemplate(
 export function generateReportRows(
   deliveries: readonly DeliveryTripRecord[],
   template: ReportTemplate,
-  companyExpenses?: number,
+  companyExpenses?: CompanyFinanceInput,
 ): { rows: ReportRowData[]; totals: ReportSummaryTotals } {
   const filtered = filterDeliveriesForTemplate(deliveries, template);
 
@@ -177,9 +190,26 @@ export function generateReportRows(
 
   const netProfit = grossEarnings - totalExpenses;
   const marginPercent = grossEarnings > 0 ? (netProfit / grossEarnings) * 100 : null;
+
+  // Extract company incoming and outgoing
+  const companyIncoming =
+    typeof companyExpenses === "object" && companyExpenses !== null
+      ? (companyExpenses.incoming ?? 0)
+      : 0;
+  const companyOutgoing =
+    typeof companyExpenses === "object" && companyExpenses !== null
+      ? (companyExpenses.outgoing ?? 0)
+      : typeof companyExpenses === "number"
+        ? companyExpenses
+        : 0;
+
   // Truck summary reports are strictly isolated from company-wide operating expenses
-  const companyExp = template.baseType === "truck_summary" ? 0 : (companyExpenses ?? 0);
-  const companyNetProfit = grossEarnings - totalExpenses - companyExp;
+  const companyInc = template.baseType === "truck_summary" ? 0 : companyIncoming;
+  const companyExp = template.baseType === "truck_summary" ? 0 : companyOutgoing;
+  const totalInflow = grossEarnings + companyInc;
+  const totalOutflow = totalExpenses + companyExp;
+  const companyNetProfit = totalInflow - totalOutflow;
+  const companyMarginPercent = totalInflow > 0 ? (companyNetProfit / totalInflow) * 100 : null;
 
   const totals: ReportSummaryTotals = {
     grossEarnings,
@@ -193,7 +223,13 @@ export function generateReportRows(
     totalCrewCosts,
     totalTrips: filtered.length,
     totalCompanyExpenses: companyExp,
+    companyIncoming: companyInc,
+    companyOutgoing: companyExp,
+    companyNetActivity: companyInc - companyExp,
+    totalInflow,
+    totalOutflow,
     companyNetProfit,
+    companyMarginPercent,
   };
 
   // Generate rows by baseType

@@ -42,7 +42,7 @@ import {
   validateCompanyExpenseInput,
 } from "@/features/finance/company-expense-domain";
 import { canManageCompanyExpenses } from "@/lib/auth/rbac";
-import { formatPeso } from "@/lib/format";
+import { formatPercent, formatPeso } from "@/lib/format";
 import { CompactMoney } from "@/components/compact-money";
 
 const PAGE_SIZE = 10;
@@ -50,7 +50,7 @@ const PAGE_SIZE = 10;
 export default function FinancePage() {
   const actor = useAuthenticatedActor();
   const canManage = canManageCompanyExpenses(actor.role);
-  const { range } = useGlobalDateRange();
+  const { range, setRange } = useGlobalDateRange();
 
   // Company expenses state
   const [expenses, setExpenses] = useState<CompanyExpense[]>([]);
@@ -291,13 +291,16 @@ export default function FinancePage() {
   }, [page, pageCount]);
 
   const hasActiveFilters = Boolean(
-    searchQuery.trim() || actorFilter !== "all" || typeFilter !== "all",
+    searchQuery.trim() ||
+    actorFilter !== "all" ||
+    range.startDate ||
+    range.endDate,
   );
 
   function clearFilters() {
     clearSearch();
     setActorFilter("all");
-    setTypeFilter("all");
+    setRange({ startDate: null, endDate: null });
     setPage(1);
   }
 
@@ -521,7 +524,7 @@ export default function FinancePage() {
             <h1>Company Finance</h1>
             <p className="subtitle">Company income and operating expenses.</p>
           </div>
-          <div className="page-intro-actions">
+          <div className="page-intro-actions fleet-intro-actions" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {canManage ? (
               <>
                 <Link
@@ -589,21 +592,45 @@ export default function FinancePage() {
 
         {/* Summary KPI Cards */}
         <section className="stat-grid" aria-label="Company finance summary">
-          <article className="stat-card">
+          <button
+            type="button"
+            className={`stat-card is-interactive${typeFilter === "Incoming" ? " is-active" : ""}`}
+            onClick={() => {
+              setTypeFilter((curr) => (curr === "Incoming" ? "all" : "Incoming"));
+              setPage(1);
+            }}
+            aria-pressed={typeFilter === "Incoming"}
+            aria-label="Filter company ledger to incoming income"
+          >
             <div className="stat-card-header">
-              <span className="stat-label">TOTAL COMPANY INCOME</span>
+              <span className="stat-label">INCOME</span>
+              <span className="kpi-click-pill">
+                {typeFilter === "Incoming" ? "Active" : "Filter ›"}
+              </span>
             </div>
             <strong>
               <CompactMoney value={financeActivity.totalIncoming} />
             </strong>
-            <span className="stat-meta">
+            <span className={`stat-meta ${financeActivity.totalIncoming > 0 ? "positive" : ""}`}>
               {financeActivity.incomingCount} income {financeActivity.incomingCount === 1 ? "record" : "records"}
             </span>
-          </article>
+          </button>
 
-          <article className="stat-card">
+          <button
+            type="button"
+            className={`stat-card is-interactive${typeFilter === "Outgoing" ? " is-active" : ""}`}
+            onClick={() => {
+              setTypeFilter((curr) => (curr === "Outgoing" ? "all" : "Outgoing"));
+              setPage(1);
+            }}
+            aria-pressed={typeFilter === "Outgoing"}
+            aria-label="Filter company ledger to outgoing expenses"
+          >
             <div className="stat-card-header">
-              <span className="stat-label">TOTAL COMPANY EXPENSES</span>
+              <span className="stat-label">EXPENSES</span>
+              <span className="kpi-click-pill">
+                {typeFilter === "Outgoing" ? "Active" : "Filter ›"}
+              </span>
             </div>
             <strong>
               <CompactMoney value={financeActivity.totalOutgoing} />
@@ -611,15 +638,33 @@ export default function FinancePage() {
             <span className="stat-meta">
               {financeActivity.outgoingCount} expense {financeActivity.outgoingCount === 1 ? "record" : "records"}
             </span>
-          </article>
+          </button>
 
-          <article className="stat-card">
+          <button
+            type="button"
+            className={`stat-card is-interactive${typeFilter === "all" ? " is-active" : ""}`}
+            onClick={() => {
+              setTypeFilter("all");
+              setPage(1);
+            }}
+            aria-pressed={typeFilter === "all"}
+            aria-label="View all transactions and net profit"
+          >
             <div className="stat-card-header">
-              <span className="stat-label">TOTAL TRANSACTIONS</span>
+              <span className="stat-label">NET PROFIT</span>
+              <span className="kpi-click-pill">
+                {typeFilter === "all" ? "All" : "View All ›"}
+              </span>
             </div>
-            <strong>{dateFilteredExpenses.length}</strong>
-            <span className="stat-meta">{formatDateRange(range)}</span>
-          </article>
+            <strong className={financeActivity.netActivity >= 0 ? undefined : "warning"}>
+              <CompactMoney value={financeActivity.netActivity} />
+            </strong>
+            <span className={`stat-meta ${financeActivity.netActivity >= 0 ? "positive" : "warning"}`}>
+              {financeActivity.totalIncoming > 0
+                ? `${formatPercent((financeActivity.netActivity / financeActivity.totalIncoming) * 100)} margin · ${dateFilteredExpenses.length} records`
+                : `${dateFilteredExpenses.length} transactions · ${formatDateRange(range)}`}
+            </span>
+          </button>
         </section>
 
         {/* Company Ledger */}
@@ -731,36 +776,26 @@ export default function FinancePage() {
               ariaLabel="Filter expenses by user or role"
               className="finance-actor-filter"
             />
-
-            <RoundedSelect
-              value={typeFilter}
-              options={[
-                { value: "all", label: "All Types" },
-                { value: "Incoming", label: "Incoming Only" },
-                { value: "Outgoing", label: "Outgoing Only" },
-              ]}
-              onChange={(val) => {
-                setTypeFilter(val);
-                setPage(1);
-              }}
-              ariaLabel="Filter transactions by incoming or outgoing type"
-              className="finance-type-filter"
-            />
-
-            {hasActiveFilters ? (
-              <button
-                type="button"
-                className="secondary-button filter-clear-action-btn"
-                onClick={clearFilters}
-              >
-                Clear Filters
-              </button>
-            ) : null}
           </div>
 
           {hasActiveFilters ? (
             <div className="active-filter-chips" aria-label="Active filters">
               <span className="filter-chips-label">Filtered by:</span>
+              {(range.startDate || range.endDate) ? (
+                <span className="filter-chip">
+                  <span className="filter-chip-category">Date:</span>{" "}
+                  {formatDateRange(range)}
+                  <button
+                    type="button"
+                    className="filter-chip-remove"
+                    aria-label="Remove date range filter"
+                    title="Remove date range filter"
+                    onClick={() => setRange({ startDate: null, endDate: null })}
+                  >
+                    ×
+                  </button>
+                </span>
+              ) : null}
               {searchQuery.trim() ? (
                 <span className="filter-chip">
                   <span className="filter-chip-category">Search:</span>{" "}
@@ -788,23 +823,6 @@ export default function FinancePage() {
                     aria-label="Remove actor filter"
                     onClick={() => {
                       setActorFilter("all");
-                      setPage(1);
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              ) : null}
-              {typeFilter !== "all" ? (
-                <span className="filter-chip">
-                  <span className="filter-chip-category">Type:</span>{" "}
-                  {typeFilter}
-                  <button
-                    type="button"
-                    className="filter-chip-remove"
-                    aria-label="Remove type filter"
-                    onClick={() => {
-                      setTypeFilter("all");
                       setPage(1);
                     }}
                   >
@@ -840,7 +858,6 @@ export default function FinancePage() {
                       onSort={handleSort}
                       onReset={handleResetSort}
                     />
-                    <th style={{ width: "105px" }}>Type</th>
                     <th>Description</th>
                     <th>Notes</th>
                     <th>User</th>
@@ -864,7 +881,7 @@ export default function FinancePage() {
                 <tbody>
                   {filteredAndSortedExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={canManage ? 7 : 6} className="table-empty-cell">
+                      <td colSpan={canManage ? 6 : 5} className="table-empty-cell">
                         <div className="empty-state minimal">
                           <strong className="empty-state-title">No records found</strong>
                           <span className="empty-state-desc">
@@ -890,18 +907,6 @@ export default function FinancePage() {
                         >
                           <td className="cell-date">{exp.expenseDate}</td>
                           <td>
-                            <span
-                              className={`routex-badge ${
-                                exp.transactionType === "Incoming"
-                                  ? "tone-success"
-                                  : "tone-warning"
-                              }`}
-                              style={{ fontSize: "10px", fontWeight: 700 }}
-                            >
-                              {exp.transactionType === "Incoming" ? "INCOMING" : "OUTGOING"}
-                            </span>
-                          </td>
-                          <td>
                             <strong>
                               {exp.description || "Total Company Expenses"}
                             </strong>
@@ -909,7 +914,14 @@ export default function FinancePage() {
                           <td className="finance-note-cell">{exp.notes || "—"}</td>
                           <td>{exp.createdBy || "system"}</td>
                           <td className="money">
-                            <strong style={{ color: exp.transactionType === "Incoming" ? "var(--color-status-success, #059669)" : "inherit" }}>
+                            <strong
+                              style={{
+                                color:
+                                  exp.transactionType === "Incoming"
+                                    ? "var(--color-status-success, #059669)"
+                                    : "var(--color-status-danger, #dc2626)",
+                              }}
+                            >
                               {exp.transactionType === "Incoming" ? "+ " : "- "}
                               <CompactMoney value={exp.amount} />
                             </strong>
