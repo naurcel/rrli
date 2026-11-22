@@ -94,3 +94,17 @@ Defined on `:root` for uniform, minimal, and functional status badges:
 | `--operational-sidebar-width` | `248px` (expanded) / `84px` (collapsed) / `66px` (mobile) | Dynamic sidebar width applied to root shell |
 | `--content-max` | `1250px` | Center container max width on wide screens |
 | `topbar` height | `72px` (desktop) / `60px` (mobile) | Header chrome |
+
+---
+
+## 6. Canonical Z-Index Stacking Hierarchy
+
+| Token | Canonical Value | Layer / Element Category |
+| :--- | :--- | :--- |
+| `--z-base` | `1` | In-flow content, card interiors, and local stacking contexts |
+| `--z-sticky` | `100` | Sticky topbars, sticky table headers, sticky settings navigation |
+| `--z-dropdown` | `200` | Dropdown menus, `<RoundedSelect />` listboxes, popovers, date picker overlays |
+| `--z-modal-backdrop` | `1000` | Fullscreen modal scrims and dialog backdrops |
+| `--z-modal` | `1050` | Floating modal containers, edit delivery dialogs, confirmation dialogs |
+| `--z-tooltip` | `1200` | System tooltips, toast notifications, floating help badges |
+

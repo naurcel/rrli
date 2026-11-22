@@ -92,3 +92,26 @@ When navigating between ledger tables, detail pages (`/deliveries/[id]`), and cr
 In browser preview mode:
 - Local mutations save to `localStorage` and broadcast custom DOM events (`ROUTEX_DELIVERIES_CHANGED`, `ROUTEX_COMPANY_EXPENSES_CHANGED`, `BROWSER_PREVIEW_TRUCKS_CHANGED`).
 - Components listen to these events to synchronize state seamlessly across tabs and views without requiring manual page refreshes.
+
+---
+
+## 5. UI Architecture & Regression Protection Rules
+
+To prevent recurring CSS regressions and layout breakages across pages:
+
+1. **Canonical Z-Index Tokens:**
+   - Always reference centralized elevation tokens (`--z-base: 1`, `--z-sticky: 100`, `--z-dropdown: 200`, `--z-modal-backdrop: 1000`, `--z-modal: 1050`, `--z-tooltip: 1200`).
+   - Never declare arbitrary, uncoordinated z-index numbers (e.g. `z-index: 501`, `z-index: 99999`).
+2. **Page-Level Scoping:**
+   - Any page-specific styling rule must be prefixed by its unique page wrapper (e.g., `.settings-page-wrap`, `.deliveries-page`, `.finance-page-wrap`, `.user-management-page`).
+   - Do not override shared component classes (like `.records-card`, `.stat-card`, `.secondary-button`) globally at the bottom of `globals.css`.
+3. **Ban on Unconstrained Bare-Element Selectors:**
+   - Never style unconstrained tags (`button { ... }`, `input { ... }`, `select { ... }`, `section { ... }`, `table { ... }`) in `globals.css`.
+   - Element resets must only normalize fonts, box-sizing, and focus-visible outlines. All interactive and layout styles must use semantic CSS classes.
+4. **App-Shell Viewport Scroll Containment:**
+   - The RouteX app shell uses strict fixed-height viewport containment:
+     - `html, body { height: 100%; overflow: hidden; }`
+     - `.app-shell { height: 100vh; overflow: hidden; }`
+     - `.main-content { height: 100vh; overflow-y: auto; }`
+   - Never set `.main-content { overflow: visible }` or `html { overflow: auto }`, which breaks sticky headers and causes double scrollbars.
+
