@@ -39,8 +39,6 @@ import {
 import { canExportReports } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 
-const ALL_TIME_RANGE: DateRange = { startDate: null, endDate: null };
-
 export default function ReportsPage() {
   const actor = useAuthenticatedActor();
   const { range } = useGlobalDateRange();
@@ -71,7 +69,6 @@ export default function ReportsPage() {
   }, [isDailyTripReport, dailyDate, range]);
 
   const { deliveries: filteredDeliveries, loading, error } = usePersistedDeliveries(effectiveRange);
-  const { deliveries: allDeliveries } = usePersistedDeliveries(ALL_TIME_RANGE);
 
   // Table sorting
   const [reportSort, setReportSort] = useState<{ key: string; direction: TableSortDirection }>({

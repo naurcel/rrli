@@ -327,8 +327,9 @@ export function buildScopedExportPayload(input: {
   const deliveryRevenue = finalized.reduce((sum, d) => sum + (d.deliveryRate ?? 0), 0);
   const deliveryExpenses = finalized.reduce((sum, d) => sum + (d.totalExpenses ?? 0), 0);
   const deliveryNetProfit = deliveryRevenue - deliveryExpenses;
-  const companyExpensesTotal = scopedExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const companyNetProfit = deliveryNetProfit - companyExpensesTotal;
+  const companyExpensesTotal = scopedExpenses.filter((e) => e.transactionType !== "Incoming").reduce((sum, e) => sum + e.amount, 0);
+  const companyIncomeTotal = scopedExpenses.filter((e) => e.transactionType === "Incoming").reduce((sum, e) => sum + e.amount, 0);
+  const companyNetProfit = deliveryNetProfit + companyIncomeTotal - companyExpensesTotal;
   const companyProfitMargin = calculateProfitMargin(deliveryRevenue, companyNetProfit);
 
   return {

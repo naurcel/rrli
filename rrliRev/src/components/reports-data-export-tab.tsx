@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Table, FileSpreadsheet, FileCode2, Database, Globe, Download, Send, Check, X, RotateCcw } from "lucide-react";
 
 import type { useAuthenticatedActor } from "@/components/auth-context";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
@@ -13,7 +14,6 @@ import {
   canDownloadExportRequest,
   canRequestDataExports,
   createDataExportRequest,
-  DATA_EXPORT_PACKAGE_CATALOG,
   readExportRequests,
   reviewDataExportRequest,
   ROUTEX_EXPORT_REQUESTS_CHANGED,
@@ -45,39 +45,57 @@ const SIMPLIFIED_PACKAGES: Record<
   {
     title: string;
     description: string;
-    badge: string;
     ext: string;
+    themeColor: string;
+    themeBg: string;
+    themeBorder: string;
+    icon: (size?: number) => React.ReactNode;
   }
 > = {
   datasets_xlsx: {
     title: "Excel Workbook",
     description: "Deliveries, store drop-offs, truck profitability, and expenses.",
-    badge: "XLSX",
     ext: "xlsx",
+    themeColor: "#059669",
+    themeBg: "rgba(5, 150, 105, 0.08)",
+    themeBorder: "rgba(5, 150, 105, 0.2)",
+    icon: (size = 20) => <Table size={size} strokeWidth={2} aria-hidden="true" />,
   },
   datasets_csv: {
     title: "CSV Spreadsheets",
     description: "Deliveries, stores, trucks, and expenses in comma-separated format.",
-    badge: "CSV",
     ext: "csv",
+    themeColor: "#0d9488",
+    themeBg: "rgba(13, 148, 136, 0.08)",
+    themeBorder: "rgba(13, 148, 136, 0.2)",
+    icon: (size = 20) => <FileSpreadsheet size={size} strokeWidth={2} aria-hidden="true" />,
   },
   database_json: {
     title: "JSON Database",
     description: "Structured JSON dump of all records, foreign keys, and tables.",
-    badge: "JSON",
     ext: "json",
+    themeColor: "#d97706",
+    themeBg: "rgba(217, 119, 6, 0.08)",
+    themeBorder: "rgba(217, 119, 6, 0.2)",
+    icon: (size = 20) => <FileCode2 size={size} strokeWidth={2} aria-hidden="true" />,
   },
   database_sql: {
     title: "SQL Database Dump",
     description: "Portable PostgreSQL schema definitions and INSERT statements.",
-    badge: "SQL",
     ext: "sql",
+    themeColor: "#4f46e5",
+    themeBg: "rgba(79, 70, 229, 0.08)",
+    themeBorder: "rgba(79, 70, 229, 0.2)",
+    icon: (size = 20) => <Database size={size} strokeWidth={2} aria-hidden="true" />,
   },
   website_recreation: {
     title: "Offline Web App",
     description: "Standalone interactive dashboard with preloaded data.",
-    badge: "HTML",
     ext: "html",
+    themeColor: "#7c3aed",
+    themeBg: "rgba(124, 58, 237, 0.08)",
+    themeBorder: "rgba(124, 58, 237, 0.2)",
+    icon: (size = 20) => <Globe size={size} strokeWidth={2} aria-hidden="true" />,
   },
 };
 
@@ -265,18 +283,18 @@ export function ReportsDataExportTab({
   }
 
   return (
-    <div className="export-unboxed-container">
+    <div className="settings-tab-panel" style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
       {feedbackMessage ? (
         <div
           role="status"
           style={{
-            padding: "9px 14px",
+            padding: "12px 18px",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             background: "rgba(16, 185, 129, 0.08)",
             border: "1px solid rgba(16, 185, 129, 0.25)",
-            borderRadius: "8px",
+            borderRadius: "10px",
             color: "var(--color-status-success, #047857)",
             fontSize: "13px",
             fontWeight: 500,
@@ -303,65 +321,35 @@ export function ReportsDataExportTab({
         </div>
       ) : null}
 
-      {/* 1. Export Data Formats Section (Unboxed) */}
-      <section className="export-section" aria-label="Available Export Formats">
-        <div className="export-section-header">
+      {/* 1. Export Data Formats Section */}
+      <section className="records-card settings-card-section" aria-label="Available Export Formats">
+        <div
+          className="settings-section-header"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "16px",
+            padding: "24px 28px 20px",
+            borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.06))",
+          }}
+        >
           <div>
-            <h2>Export Data</h2>
-            <p>Export operational and financial data for the selected period.</p>
+            <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "var(--color-text-primary)" }}>Export Data</h2>
+            <p style={{ margin: "4px 0 0", fontSize: "12.5px", color: "var(--color-text-muted)" }}>Export operational and financial data for the selected period.</p>
           </div>
 
-          <div className="export-header-meta">
+          <div className="export-header-meta" style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             {dateRangePicker}
-            <span
-              className="routex-badge tone-primary"
-              style={{
-                fontSize: "11px",
-                fontWeight: 650,
-                padding: "3px 9px",
-                borderRadius: "6px",
-                background: "var(--color-accent-soft, #fffbeb)",
-                color: "var(--color-accent-deep, #7c2d12)",
-                border: "1px solid rgba(245, 158, 11, 0.25)",
-              }}
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ marginRight: "4px", verticalAlign: "-1px" }}
-                aria-hidden="true"
-              >
-                <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-                <line x1="16" x2="16" y1="2" y2="6" />
-                <line x1="8" x2="8" y1="2" y2="6" />
-                <line x1="3" x2="21" y1="10" y2="10" />
-              </svg>
-              {periodLabel}
-            </span>
-            <span
-              className="routex-badge tone-neutral"
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                padding: "3px 9px",
-                borderRadius: "6px",
-                background: "var(--color-surface-subtle, #f1f5f9)",
-                color: "var(--color-text-secondary)",
-              }}
-            >
+            <span style={{ fontSize: "12.5px", color: "var(--color-text-muted)" }}>
               {activeScopedPayload.summary.totalDeliveries} trips · {activeScopedPayload.companyExpenses.length} expenses
             </span>
           </div>
         </div>
 
-        {/* Unboxed Package List */}
-        <div className="export-package-list">
+        {/* Package List */}
+        <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: "14px" }}>
           {PACKAGE_ORDER.map((pkgId) => {
             const simple = SIMPLIFIED_PACKAGES[pkgId];
             const matchingApprovedReq = !isAdmin
@@ -387,42 +375,99 @@ export function ReportsDataExportTab({
               : null;
 
             return (
-              <div key={pkgId} className="export-package-row">
-                <div className="export-package-left">
-                  <span className="export-format-tag">{simple.badge}</span>
-                  <div className="export-package-meta">
-                    <div className="export-package-title-line">
-                      <span className="export-package-name">{simple.title}</span>
-                      <span className="export-package-ext">.{simple.ext}</span>
+              <div
+                key={pkgId}
+                className="export-package-row"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "20px",
+                  padding: "18px 22px",
+                  borderRadius: "12px",
+                  background: "var(--color-surface, #ffffff)",
+                  border: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08))",
+                  transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      width: "44px",
+                      height: "44px",
+                      borderRadius: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      background: simple.themeBg,
+                      border: `1px solid ${simple.themeBorder}`,
+                      color: simple.themeColor,
+                    }}
+                  >
+                    {simple.icon(22)}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "3px", minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                      <span style={{ fontSize: "14.5px", fontWeight: 650, color: "var(--color-text-primary)" }}>
+                        {simple.title}
+                      </span>
+                      <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text-muted)" }}>
+                        .{simple.ext}
+                      </span>
                     </div>
-                    <p className="export-package-desc">{simple.description}</p>
+                    <p style={{ margin: 0, fontSize: "12.5px", color: "var(--color-text-secondary)", lineHeight: 1.45 }}>
+                      {simple.description}
+                    </p>
                   </div>
                 </div>
 
-                <div className="export-package-action">
+                <div style={{ flexShrink: 0 }}>
                   {isAdmin ? (
                     <button
                       type="button"
                       className="primary-action-button"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "7px",
+                        minHeight: "36px",
+                        padding: "0 18px",
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        borderRadius: "8px",
+                      }}
                       onClick={() => handleDirectDownload(pkgId)}
                     >
-                      Export .{simple.ext}
+                      <Download size={14} strokeWidth={2.2} aria-hidden="true" />
+                      Export
                     </button>
                   ) : matchingApprovedReq ? (
                     <button
                       type="button"
                       className="primary-action-button"
-                      style={{ background: "var(--color-status-success, #059669)" }}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "7px",
+                        background: "var(--color-status-success, #059669)",
+                        minHeight: "36px",
+                        padding: "0 18px",
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        borderRadius: "8px",
+                      }}
                       onClick={() => handleDownloadApprovedRequest(matchingApprovedReq)}
                     >
-                      Download .{simple.ext}
+                      <Download size={14} strokeWidth={2.2} aria-hidden="true" />
+                      Download
                     </button>
                   ) : matchingPendingReq ? (
                     <button
                       type="button"
                       className="secondary-button"
                       disabled
-                      style={{ opacity: 0.7 }}
+                      style={{ opacity: 0.7, minHeight: "36px", padding: "0 18px", fontSize: "12.5px", borderRadius: "8px" }}
                     >
                       Pending Approval
                     </button>
@@ -430,11 +475,22 @@ export function ReportsDataExportTab({
                     <button
                       type="button"
                       className="secondary-button"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "7px",
+                        minHeight: "36px",
+                        padding: "0 18px",
+                        fontSize: "12.5px",
+                        fontWeight: 500,
+                        borderRadius: "8px",
+                      }}
                       onClick={() => {
                         setRequestingPackage(pkgId);
                         setRequestError(null);
                       }}
                     >
+                      <Send size={14} strokeWidth={2} aria-hidden="true" />
                       Request Export
                     </button>
                   )}
@@ -442,73 +498,114 @@ export function ReportsDataExportTab({
               </div>
             );
           })}
-        </div>
 
-        {/* Inline Request Form */}
-        {requestingPackage && canRequest ? (
-          <form onSubmit={handleSubmitExportRequest} className="export-request-form">
-            <div className="export-request-form-header">
-              <div>
-                <strong className="export-request-form-title">
-                  Request Export: {SIMPLIFIED_PACKAGES[requestingPackage].title}
-                </strong>
-                <span className="export-request-scope-badge">
-                  {periodLabel} ({activeScopedPayload.summary.totalDeliveries} trips)
-                </span>
-              </div>
-              <button
-                type="button"
-                className="secondary-button"
-                style={{ padding: "4px 10px", fontSize: "12px" }}
-                onClick={() => {
-                  setRequestingPackage(null);
-                  setRequestError(null);
+          {/* Inline Request Form */}
+          {requestingPackage && canRequest ? (
+            <form
+              onSubmit={handleSubmitExportRequest}
+              className="export-request-form"
+              style={{
+                marginTop: "14px",
+                padding: "22px 24px",
+                borderRadius: "12px",
+                background: "var(--color-surface-subtle, #f8fafc)",
+                border: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.1))",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+              }}
+            >
+              <div
+                className="export-request-form-header"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
-                Cancel
-              </button>
-            </div>
-
-            {requestError ? (
-              <div className="delivery-form-alert" role="alert" style={{ margin: 0 }}>
-                {requestError}
+                <div>
+                  <strong style={{ fontSize: "14px", fontWeight: 650, color: "var(--color-text-primary)" }}>
+                    Request Export: {SIMPLIFIED_PACKAGES[requestingPackage].title}
+                  </strong>
+                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginLeft: "8px" }}>
+                    · {periodLabel} ({activeScopedPayload.summary.totalDeliveries} trips)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ minHeight: "30px", padding: "0 12px", fontSize: "12px", borderRadius: "6px" }}
+                  onClick={() => {
+                    setRequestingPackage(null);
+                    setRequestError(null);
+                  }}
+                >
+                  Cancel
+                </button>
               </div>
-            ) : null}
 
-            <div className="export-request-field">
-              <label htmlFor="export-reason-input">Reason for export</label>
-              <input
-                id="export-reason-input"
-                type="text"
-                required
-                minLength={5}
-                value={requestReason}
-                onChange={(e) => setRequestReason(e.target.value)}
-                placeholder="e.g. Monthly financial audit or offline operations backup"
-                className="settings-input"
-                style={{ padding: "8px 12px", fontSize: "13px" }}
-              />
-            </div>
+              {requestError ? (
+                <div className="delivery-form-alert" role="alert" style={{ margin: 0 }}>
+                  {requestError}
+                </div>
+              ) : null}
 
-            <div className="export-request-actions">
-              <button
-                type="submit"
-                className="primary-action-button"
-                style={{ padding: "6px 16px", fontSize: "12.5px" }}
-              >
-                Submit Request
-              </button>
-            </div>
-          </form>
-        ) : null}
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label htmlFor="export-reason-input" style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                  Reason for export
+                </label>
+                <input
+                  id="export-reason-input"
+                  type="text"
+                  required
+                  minLength={5}
+                  value={requestReason}
+                  onChange={(e) => setRequestReason(e.target.value)}
+                  placeholder="e.g. Monthly financial audit or offline operations backup"
+                  className="settings-input"
+                  style={{
+                    height: "38px",
+                    padding: "0 14px",
+                    fontSize: "13px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--color-border, #d1d5db)",
+                    background: "var(--color-surface, #ffffff)",
+                    color: "var(--color-text-primary)",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  style={{ minHeight: "36px", padding: "0 20px", fontSize: "13px", fontWeight: 600, borderRadius: "8px" }}
+                >
+                  Submit Request
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </div>
       </section>
 
-      {/* 2. Requests & Approvals Queue Section (Unboxed) */}
-      <section className="export-section" aria-label="Export Requests Queue">
-        <div className="export-section-header">
+      {/* 2. Requests & Approvals Queue Section */}
+      <section className="records-card settings-card-section" aria-label="Export Requests Queue">
+        <div
+          className="settings-section-header"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "16px",
+            padding: "24px 28px 20px",
+            borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.06))",
+          }}
+        >
           <div>
-            <h2>{isAdmin ? "Approval Queue" : "My Requests"}</h2>
-            <p>
+            <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "var(--color-text-primary)" }}>{isAdmin ? "Approval Queue" : "My Requests"}</h2>
+            <p style={{ margin: "4px 0 0", fontSize: "12.5px", color: "var(--color-text-muted)" }}>
               {isAdmin
                 ? "Review and authorize export requests."
                 : "Track authorization status and download approved exports."}
@@ -538,23 +635,23 @@ export function ReportsDataExportTab({
           </div>
         </div>
 
-        {/* Unboxed Table */}
-        <div className="export-unboxed-table-wrap">
-          <table className="export-queue-table">
+        {/* Table Wrap */}
+        <div className="table-wrap" style={{ overflowX: "auto" }}>
+          <table className="export-queue-table" style={{ width: "100%", minWidth: "880px", borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
             <thead>
-              <tr>
-                <th className="export-th-requester">Requester</th>
-                <th className="export-th-package">Package</th>
-                <th className="export-th-period">Period</th>
-                <th className="export-th-reason">Reason</th>
-                <th className="export-th-status">Status</th>
-                <th className="export-th-actions">Actions</th>
+              <tr style={{ background: "var(--color-surface-subtle, #f8fafc)" }}>
+                <th className="export-th-requester" style={{ width: "18%", textAlign: "left", padding: "14px 18px", paddingLeft: "28px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08))" }}>Requester</th>
+                <th className="export-th-package" style={{ width: "19%", textAlign: "left", padding: "14px 18px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08))" }}>Package</th>
+                <th className="export-th-period" style={{ width: "14%", textAlign: "left", padding: "14px 18px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08))" }}>Period</th>
+                <th className="export-th-reason" style={{ width: "23%", textAlign: "left", padding: "14px 18px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08))" }}>Reason &amp; Notes</th>
+                <th className="export-th-status" style={{ width: "11%", textAlign: "left", padding: "14px 18px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08))" }}>Status</th>
+                <th className="export-th-actions" style={{ width: "15%", textAlign: "right", padding: "14px 18px", paddingRight: "28px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-muted)", borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08))" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {visibleRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="export-empty-cell">
+                  <td colSpan={6} className="export-empty-cell" style={{ textAlign: "center", padding: "36px 20px", color: "var(--color-text-muted)", fontSize: "13px" }}>
                     No export requests found.
                   </td>
                 </tr>
@@ -566,24 +663,54 @@ export function ReportsDataExportTab({
                     username: actor.username,
                   });
                   return (
-                    <tr key={req.id}>
-                      <td className="export-td-requester">
-                        <strong className="export-user-name">@{req.requestedByUsername}</strong>
-                        <div className="export-user-meta">
+                    <tr key={req.id} style={{ borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.06))", transition: "background-color 0.15s ease" }}>
+                      <td className="export-td-requester" style={{ padding: "16px 18px", paddingLeft: "28px", verticalAlign: "middle" }}>
+                        <strong className="export-user-name" style={{ fontSize: "13.5px", fontWeight: 650, color: "var(--color-text-primary)", display: "block" }}>
+                          @{req.requestedByUsername}
+                        </strong>
+                        <div className="export-user-meta" style={{ fontSize: "11.5px", color: "var(--color-text-muted)", marginTop: "2px" }}>
                           {req.requestedByRole} · {req.requestedAt.slice(0, 10)}
                         </div>
                       </td>
-                      <td className="export-td-package">
-                        <strong className="export-pkg-title">{meta?.title ?? req.packageLabel}</strong>
-                        <div className="export-pkg-ext">.{meta?.ext ?? ""}</div>
+                      <td className="export-td-package" style={{ padding: "16px 18px", verticalAlign: "middle" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <div
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "7px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                              background: meta?.themeBg ?? "rgba(0,0,0,0.04)",
+                              border: `1px solid ${meta?.themeBorder ?? "rgba(0,0,0,0.1)"}`,
+                              color: meta?.themeColor ?? "var(--color-text-secondary)",
+                            }}
+                          >
+                            {meta?.icon ? meta.icon(16) : null}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <strong className="export-pkg-title" style={{ fontSize: "13.5px", fontWeight: 650, color: "var(--color-text-primary)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {meta?.title ?? req.packageLabel}
+                            </strong>
+                            <span className="export-pkg-ext" style={{ fontSize: "11.5px", color: "var(--color-text-muted)" }}>
+                              .{meta?.ext ?? ""}
+                            </span>
+                          </div>
+                        </div>
                       </td>
-                      <td className="export-td-period">
-                        <span className="export-period-tag">{req.periodLabel}</span>
+                      <td className="export-td-period" style={{ padding: "16px 18px", verticalAlign: "middle" }}>
+                        <span style={{ fontSize: "12.5px", color: "var(--color-text-secondary)" }}>
+                          {req.periodLabel}
+                        </span>
                       </td>
-                      <td className="export-td-reason">
-                        <div className="export-reason-text">{req.reason}</div>
+                      <td className="export-td-reason" style={{ padding: "16px 18px", verticalAlign: "middle", whiteSpace: "normal" }}>
+                        <div className="export-reason-text" style={{ fontSize: "12.5px", color: "var(--color-text-primary)", lineHeight: 1.45 }}>
+                          {req.reason}
+                        </div>
                         {req.reviewNotes ? (
-                          <div className="export-reason-admin-note">
+                          <div className="export-reason-admin-note" style={{ fontSize: "11.5px", color: "var(--color-text-muted)", marginTop: "4px", fontStyle: "italic" }}>
                             Admin note: {req.reviewNotes}
                           </div>
                         ) : null}
@@ -597,11 +724,47 @@ export function ReportsDataExportTab({
                             placeholder="Optional review note…"
                             aria-label={`Review note for ${req.id}`}
                             className="export-review-input"
+                            style={{
+                              marginTop: "8px",
+                              width: "100%",
+                              boxSizing: "border-box",
+                              height: "30px",
+                              padding: "0 10px",
+                              fontSize: "12px",
+                              borderRadius: "6px",
+                              border: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.15))",
+                              background: "var(--color-surface, #ffffff)",
+                              color: "var(--color-text-primary)",
+                            }}
                           />
                         ) : null}
                       </td>
-                      <td className="export-td-status">
-                        <span className={`export-status-pill status-${req.status}`}>
+                      <td className="export-td-status" style={{ padding: "16px 18px", verticalAlign: "middle" }}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontSize: "12px",
+                            fontWeight: 650,
+                            color:
+                              req.status === "approved"
+                                ? "var(--color-status-success, #059669)"
+                                : req.status === "rejected"
+                                  ? "var(--color-status-danger, #dc2626)"
+                                  : "var(--color-status-warning, #d97706)",
+                          }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: "6px",
+                              height: "6px",
+                              borderRadius: "50%",
+                              backgroundColor: "currentColor",
+                              flexShrink: 0,
+                            }}
+                          />
                           {req.status === "approved"
                             ? "Approved"
                             : req.status === "rejected"
@@ -609,22 +772,55 @@ export function ReportsDataExportTab({
                               : "Pending"}
                         </span>
                       </td>
-                      <td className="export-td-actions">
-                        <div className="export-actions-group">
+                      <td className="export-td-actions" style={{ padding: "16px 18px", paddingRight: "28px", verticalAlign: "middle", textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", justifyContent: "flex-end", flexWrap: "wrap" }}>
                           {isAdmin && req.status === "pending" ? (
                             <>
                               <button
                                 type="button"
                                 className="export-btn-approve"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  height: "30px",
+                                  padding: "0 12px",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  borderRadius: "6px",
+                                  border: "none",
+                                  background: "var(--color-status-success, #059669)",
+                                  color: "#ffffff",
+                                  cursor: "pointer",
+                                  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)",
+                                  transition: "opacity 0.15s ease",
+                                }}
                                 onClick={() => handleAdminDecision(req, "approved")}
                               >
+                                <Check size={12} strokeWidth={2.5} aria-hidden="true" />
                                 Approve
                               </button>
                               <button
                                 type="button"
                                 className="export-btn-reject"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  height: "30px",
+                                  padding: "0 11px",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  borderRadius: "6px",
+                                  border: "1px solid rgba(220, 38, 38, 0.25)",
+                                  background: "rgba(220, 38, 38, 0.06)",
+                                  color: "var(--color-status-danger, #dc2626)",
+                                  cursor: "pointer",
+                                  transition: "background-color 0.15s ease",
+                                }}
                                 onClick={() => handleAdminDecision(req, "rejected")}
                               >
+                                <X size={12} strokeWidth={2.2} aria-hidden="true" />
                                 Reject
                               </button>
                             </>
@@ -634,6 +830,20 @@ export function ReportsDataExportTab({
                             <button
                               type="button"
                               className="export-btn-revoke"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                height: "28px",
+                                padding: "0 10px",
+                                fontSize: "11.5px",
+                                fontWeight: 500,
+                                borderRadius: "6px",
+                                border: "1px solid rgba(220, 38, 38, 0.25)",
+                                background: "transparent",
+                                color: "var(--color-status-danger, #dc2626)",
+                                cursor: "pointer",
+                              }}
                               onClick={() => handleAdminDecision(req, "rejected")}
                             >
                               Revoke
@@ -644,6 +854,20 @@ export function ReportsDataExportTab({
                             <button
                               type="button"
                               className="export-btn-approve-secondary"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                height: "28px",
+                                padding: "0 10px",
+                                fontSize: "11.5px",
+                                fontWeight: 600,
+                                borderRadius: "6px",
+                                border: "1px solid rgba(5, 150, 105, 0.3)",
+                                background: "rgba(5, 150, 105, 0.08)",
+                                color: "var(--color-status-success, #059669)",
+                                cursor: "pointer",
+                              }}
                               onClick={() => handleAdminDecision(req, "approved")}
                             >
                               Approve
@@ -654,9 +878,25 @@ export function ReportsDataExportTab({
                             <button
                               type="button"
                               className={isAdmin ? "export-btn-download-secondary" : "export-btn-download-primary"}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                height: "30px",
+                                padding: "0 13px",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                borderRadius: "6px",
+                                border: "none",
+                                background: "var(--color-accent-deep, #1e293b)",
+                                color: "#ffffff",
+                                cursor: "pointer",
+                                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)",
+                              }}
                               onClick={() => handleDownloadApprovedRequest(req)}
                             >
-                              Download .{meta?.ext ?? ""}
+                              <Download size={13} strokeWidth={2.2} aria-hidden="true" />
+                              Download
                             </button>
                           ) : null}
                         </div>
