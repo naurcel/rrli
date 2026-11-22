@@ -132,8 +132,12 @@ test("TC-TIME-003: backdating ticket queue lifecycle permits non-admin backdated
   });
 });
 
-test("TC-TIME-003: admin role can record deliveries across dates back to company founding year (2024)", () => {
+test("TC-TIME-003: admin and superadmin roles can record deliveries across dates back to company founding year (2024)", () => {
   assert.deepEqual(validateDeliveryDateWindow("2024-01-01", reference, "admin"), {
+    ok: true,
+    isLate: true,
+  });
+  assert.deepEqual(validateDeliveryDateWindow("2024-01-01", reference, "superadmin"), {
     ok: true,
     isLate: true,
   });
@@ -150,5 +154,6 @@ test("TC-TIME-003: admin role can record deliveries across dates back to company
     isLate: false,
   });
   assert.equal(validateDeliveryDateWindow("2023-12-31", reference, "admin").ok, false);
+  assert.equal(validateDeliveryDateWindow("2023-12-31", reference, "superadmin").ok, false);
   assert.equal(validateDeliveryDateWindow("not-a-date", reference, "admin").ok, false);
 });

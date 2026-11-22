@@ -121,14 +121,16 @@ test("maintains positive delivery and company net profit across All Time, Octobe
 
   const allRevenue = finalized.reduce((sum, r) => sum + (r.deliveryRate ?? 0), 0);
   const allDeliveryExp = finalized.reduce((sum, r) => sum + (r.totalExpenses ?? 0), 0);
-  const allCompanyExp = SMALL_MOCK_COMPANY_EXPENSES.reduce((sum, e) => sum + e.amount, 0);
+  const allCompanyExp = SMALL_MOCK_COMPANY_EXPENSES
+    .filter((e) => (e as { transactionType?: string }).transactionType !== "Incoming")
+    .reduce((sum, e) => sum + e.amount, 0);
   assert.ok(allRevenue - allDeliveryExp - allCompanyExp > 0, "All Time company net profit must be positive");
 
   const novDeliveries = finalized.filter((r) => r.deliveryDate.startsWith("2026-11-"));
   const novRevenue = novDeliveries.reduce((sum, r) => sum + (r.deliveryRate ?? 0), 0);
   const novDeliveryExp = novDeliveries.reduce((sum, r) => sum + (r.totalExpenses ?? 0), 0);
   const novCompanyExp = SMALL_MOCK_COMPANY_EXPENSES
-    .filter((e) => e.expenseDate.startsWith("2026-11-"))
+    .filter((e) => e.expenseDate.startsWith("2026-11-") && (e as { transactionType?: string }).transactionType !== "Incoming")
     .reduce((sum, e) => sum + e.amount, 0);
   assert.ok(novRevenue - novDeliveryExp - novCompanyExp > 0, "November 2026 company net profit must be positive");
 });

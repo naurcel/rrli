@@ -6,7 +6,6 @@
  */
 
 import {
-  formatManilaDateKey,
   getRollingWorkingDayWindow,
   parseDateKey,
 } from "./philippine-calendar.ts";
@@ -77,7 +76,7 @@ export function validateDeliveryDateWindow(
   const window = getDeliveryDateWindow(reference, options?.workingDaysBack ?? 3);
 
   // 1. Admin & Superadmin can record deliveries back to company foundation year
-  if (userRole === "admin") {
+  if (userRole === "admin" || userRole === "superadmin") {
     if (deliveryDate < COMPANY_FOUNDATION_DATE) {
       return {
         ok: false,

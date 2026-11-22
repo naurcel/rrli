@@ -5,7 +5,6 @@ import { toast } from "sonner";
 
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
-  getSupportingDocName,
   normalizeSupportingDocument,
   type SupportingDocumentItem,
   type SupportingDocumentRecord,

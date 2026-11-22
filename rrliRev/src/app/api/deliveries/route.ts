@@ -21,7 +21,11 @@ import {
 } from "@/features/deliveries/small-mock-repository";
 import { listDeliveryRecords } from "@/features/deliveries/server/delivery-repository";
 import { getFleetTrucks, registerFleetTruck } from "@/features/deliveries/truck-registry";
-import { registerFleetDriver } from "@/features/deliveries/driver-registry";
+import {
+  checkCrewDateAvailability,
+  isCrewMemberEligibleForNewDelivery,
+  registerFleetDriver,
+} from "@/features/deliveries/driver-registry";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -326,6 +330,72 @@ export async function POST(request: Request) {
         { ok: false, code: "DUPLICATE_WAYBILL", message: `Waybill ${parsed.data.waybillNumber} already exists.` },
         { status: 409 },
       );
+    }
+
+    // Crew Eligibility Check (Inactive / Removed employees cannot be assigned to new deliveries)
+    const driverEligibility = isCrewMemberEligibleForNewDelivery(parsed.data.driverName);
+    if (!driverEligibility.ok) {
+      return NextResponse.json({ ok: false, code: "CREW_INACTIVE", message: driverEligibility.message }, { status: 400 });
+    }
+    const helper1Eligibility = isCrewMemberEligibleForNewDelivery(parsed.data.helperName);
+    if (!helper1Eligibility.ok) {
+      return NextResponse.json({ ok: false, code: "CREW_INACTIVE", message: helper1Eligibility.message }, { status: 400 });
+    }
+    if (parsed.data.hasSecondHelper && parsed.data.helper2Name) {
+      const helper2Eligibility = isCrewMemberEligibleForNewDelivery(parsed.data.helper2Name);
+      if (!helper2Eligibility.ok) {
+        return NextResponse.json({ ok: false, code: "CREW_INACTIVE", message: helper2Eligibility.message }, { status: 400 });
+      }
+    }
+
+    // Crew Same-Date Conflict Check (An employee cannot be assigned to multiple trips on the same date)
+    const allExistingDeliveries = [
+      ...SMALL_MOCK_DATABASE.deliveries.map((d) => ({
+        id: d.record.id,
+        waybillNumber: d.record.waybillNumber,
+        deliveryDate: d.record.deliveryDate,
+        driverName: (d as unknown as { driverName?: string | null }).driverName ?? SMALL_MOCK_DATABASE.drivers.find((dr) => dr.id === d.driverId)?.fullName ?? null,
+        helperName: (d as unknown as { helperName?: string | null }).helperName ?? SMALL_MOCK_DATABASE.helpers.find((hl) => hl.id === d.helperId)?.fullName ?? null,
+      })),
+      ...dynamicMockDeliveries.map((d) => ({
+        id: d.record.id,
+        waybillNumber: d.record.waybillNumber,
+        deliveryDate: d.record.deliveryDate,
+        driverName: (d as unknown as { driverName?: string | null }).driverName ?? null,
+        helperName: (d as unknown as { helperName?: string | null }).helperName ?? null,
+      })),
+    ];
+
+    const driverConflict = checkCrewDateAvailability({
+      employeeName: parsed.data.driverName,
+      deliveryDate: parsed.data.deliveryDate,
+      currentWaybillOrId: parsed.data.waybillNumber,
+      deliveries: allExistingDeliveries,
+    });
+    if (!driverConflict.ok) {
+      return NextResponse.json({ ok: false, code: "CREW_DATE_CONFLICT", message: driverConflict.message }, { status: 409 });
+    }
+
+    const helper1Conflict = checkCrewDateAvailability({
+      employeeName: parsed.data.helperName,
+      deliveryDate: parsed.data.deliveryDate,
+      currentWaybillOrId: parsed.data.waybillNumber,
+      deliveries: allExistingDeliveries,
+    });
+    if (!helper1Conflict.ok) {
+      return NextResponse.json({ ok: false, code: "CREW_DATE_CONFLICT", message: helper1Conflict.message }, { status: 409 });
+    }
+
+    if (parsed.data.hasSecondHelper && parsed.data.helper2Name) {
+      const helper2Conflict = checkCrewDateAvailability({
+        employeeName: parsed.data.helper2Name,
+        deliveryDate: parsed.data.deliveryDate,
+        currentWaybillOrId: parsed.data.waybillNumber,
+        deliveries: allExistingDeliveries,
+      });
+      if (!helper2Conflict.ok) {
+        return NextResponse.json({ ok: false, code: "CREW_DATE_CONFLICT", message: helper2Conflict.message }, { status: 409 });
+      }
     }
 
     const record = buildDeliveryTripRecord({

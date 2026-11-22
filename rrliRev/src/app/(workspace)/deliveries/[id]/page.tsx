@@ -10,7 +10,6 @@ import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-del
 import { DeliveryDropoffTimeline } from "@/components/delivery-dropoff-timeline";
 import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-breakdown";
 import { DeliveryNavigator } from "@/components/delivery-navigator";
-import { DeliveryPodDocuments } from "@/components/delivery-pod-documents";
 import { DeliverySupportingDocumentsPane } from "@/components/delivery-supporting-documents-pane";
 import { DeliveryTruckTripSection } from "@/components/delivery-truck-trip-section";
 import { DeliveryAttentionFlags } from "@/components/delivery-attention-flags";

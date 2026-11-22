@@ -217,3 +217,84 @@ export function resetDynamicFleetDrivers(): void {
   overriddenFleetCrew.clear();
 }
 export const resetDynamicFleetCrew = resetDynamicFleetDrivers;
+
+/**
+ * Unambiguous crew label formatting helper.
+ * Displays unique employee code, full name, and primary assignment role.
+ * e.g. "Mateo Dela Vega [DRV-01 • Driver]"
+ */
+export function formatCrewMemberOptionLabel(member: FleetCrewMember, servingAs?: "Driver" | "Helper"): string {
+  const roleText = servingAs && servingAs !== member.assignmentType
+    ? `${member.assignmentType} (as ${servingAs})`
+    : member.assignmentType;
+  return `${member.fullName} [${member.employeeCode} • ${roleText}]`;
+}
+
+/**
+ * Checks whether an employee is currently active and can be assigned to new deliveries.
+ */
+export function isCrewMemberEligibleForNewDelivery(
+  nameOrCode: string,
+): { ok: true; member?: FleetCrewMember } | { ok: false; message: string } {
+  const clean = nameOrCode.trim().toLowerCase();
+  if (!clean || clean.includes("unknown")) return { ok: true };
+  const all = getFleetCrew();
+  const matched = all.find(
+    (c) =>
+      c.fullName.toLowerCase() === clean ||
+      c.employeeCode.toLowerCase() === clean ||
+      c.id.toLowerCase() === clean,
+  );
+  if (matched && !matched.isActive) {
+    return {
+      ok: false,
+      message: `Crew member "${matched.fullName}" (${matched.employeeCode}) is inactive/removed and cannot be assigned to new deliveries.`,
+    };
+  }
+  return { ok: true, member: matched };
+}
+
+/**
+ * Checks for crew double-booking on the same delivery date.
+ * An employee cannot be assigned to multiple trips on the same date.
+ */
+export function checkCrewDateAvailability(input: {
+  employeeName: string;
+  deliveryDate: string;
+  currentWaybillOrId?: string;
+  deliveries: Array<{
+    id?: string;
+    waybillNumber?: string;
+    deliveryDate: string;
+    driverName?: string | null;
+    helperName?: string | null;
+  }>;
+}): { ok: true } | { ok: false; message: string } {
+  const cleanTarget = input.employeeName.trim().toLowerCase();
+  if (!cleanTarget || cleanTarget.includes("unknown")) return { ok: true };
+
+  for (const del of input.deliveries) {
+    if (del.deliveryDate !== input.deliveryDate) continue;
+    if (
+      input.currentWaybillOrId &&
+      (del.id === input.currentWaybillOrId || del.waybillNumber === input.currentWaybillOrId)
+    ) {
+      continue;
+    }
+    const dName = (del.driverName ?? "").trim().toLowerCase();
+    const hNames = (del.helperName ?? "")
+      .split(/[,/&]/)
+      .map((n) => n.trim().toLowerCase())
+      .filter(Boolean);
+
+    const isAssigned = dName === cleanTarget || hNames.includes(cleanTarget);
+    if (isAssigned) {
+      const waybill = del.waybillNumber || del.id || "another delivery";
+      return {
+        ok: false,
+        message: `Crew conflict: "${input.employeeName}" is already assigned to delivery ${waybill} on ${input.deliveryDate}. An employee cannot be assigned to multiple trips on the same date.`,
+      };
+    }
+  }
+  return { ok: true };
+}

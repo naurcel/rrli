@@ -21,18 +21,9 @@ import { TablePagination } from "@/components/table-pagination";
 import { EditDeliveryModal } from "@/components/edit-delivery-modal";
 import { ViewTripExpensesModal } from "@/components/view-trip-expenses-modal";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
-import { RoundedSelect } from "@/components/rounded-select";
 import { useSearchBuffer } from "@/components/search-buffer";
 import { SimpleLoading } from "@/components/simple-loading";
-import type {
-  DeliveryStoreDropoff,
-  ExpenseResolutionStatus,
-  FinancialState,
-} from "@/features/deliveries/delivery-domain";
 import {
-  calculateProfitMargin,
-  calculateTripExpenseTotal,
-  derivePodVerificationStatus,
   getTripTotalDropoffs,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
@@ -47,16 +38,10 @@ import {
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 import {
-  readBrowserPreviewDeliveries,
   selectBrowserPreviewDeliveries,
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
 import { deleteDeliveryRecord } from "@/features/deliveries/delivery-deletion-client";
-import {
-  handlePositiveDecimalKeyDown,
-  sanitizePersonNameInput,
-  sanitizePositiveDecimalInput,
-} from "@/features/deliveries/delivery-input-utils";
 import {
   countUnresolvedDeliveryAttentionFlags,
   DELIVERY_FLAGS_CHANGED_EVENT,
@@ -74,17 +59,6 @@ function toDateKey(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-
-type CorrectionDropoffDraft = {
-  id: string;
-  storeName: string;
-  destinationArea: string;
-  entryFee: string;
-  entryFeeStatus: ExpenseResolutionStatus;
-  podSubmitted: boolean;
-  supportingDocsComplete: boolean;
-  documentRef: string;
-};
 
 function sortDeliveryLedgerItems(
   items: readonly DeliveryLedgerItem[],
@@ -178,8 +152,8 @@ export default function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState<readonly DeliveryLedgerItem[]>([]);
   const [clients, setClients] = useState<DeliveryFilterOption[]>([]);
   const [trucks, setTrucks] = useState<DeliveryFilterOption[]>([]);
-  const [drivers, setDrivers] = useState<DeliveryFilterOption[]>([]);
-  const [helpers, setHelpers] = useState<DeliveryFilterOption[]>([]);
+  const [, setDrivers] = useState<DeliveryFilterOption[]>([]);
+  const [, setHelpers] = useState<DeliveryFilterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const {

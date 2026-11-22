@@ -10,7 +10,7 @@ export function BackdatingTicketsModal({
   isOpen,
   onClose,
   currentUserRole,
-  currentUsername,
+  currentUsername: _currentUsername,
   initialWaybill,
   initialDeliveryDate,
   onTicketApproved,

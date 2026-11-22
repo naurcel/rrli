@@ -14,7 +14,6 @@ import {
   calculateTripExpenseTotal,
   derivePodVerificationStatus,
   normalizeSupportingDocument,
-  type SupportingDocumentItem,
   type SupportingDocumentRecord,
 } from "@/features/deliveries/delivery-domain";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
@@ -970,36 +969,57 @@ export function EditDeliveryModal({
 
             {/* Trip Expenses */}
             <div className="routex-dialog-section">
-              <h3 className="delivery-finance-group-title">Trip Expenses</h3>
-              <div className="routex-dialog-grid-2">
-                <DialogExpenseField
-                  id="corr-diesel"
-                  label="Diesel"
-                  value={expenses.dieselExpenses ?? ""}
-                  status={statuses.dieselExpenses ?? "confirmed"}
-                  onValueChange={(val) => setExpenses((prev) => ({ ...prev, dieselExpenses: val }))}
-                  onStatusChange={(st) => {
-                    setStatuses((prev) => ({ ...prev, dieselExpenses: st }));
-                    if (st !== "confirmed") setExpenses((prev) => ({ ...prev, dieselExpenses: "" }));
-                  }}
-                />
-                <DialogExpenseField
-                  id="corr-toll"
-                  label="Toll gates"
-                  value={expenses.tollGateExpenses ?? ""}
-                  status={statuses.tollGateExpenses ?? "confirmed"}
-                  onValueChange={(val) => setExpenses((prev) => ({ ...prev, tollGateExpenses: val }))}
-                  onStatusChange={(st) => {
-                    setStatuses((prev) => ({ ...prev, tollGateExpenses: st }));
-                    if (st !== "confirmed") setExpenses((prev) => ({ ...prev, tollGateExpenses: "" }));
-                  }}
-                />
-              </div>
+              <h3 className="delivery-finance-group-title">
+                {isSubcontracted ? "Subcontracted Expense" : "Trip Expenses"}
+              </h3>
+              {isSubcontracted ? (
+                <div style={{ maxWidth: "420px" }}>
+                  <DialogExpenseField
+                    id="corr-subcontracted"
+                    label="Total Subcontracted Expense"
+                    value={expenses.otherExpenses ?? ""}
+                    status={statuses.otherExpenses ?? "confirmed"}
+                    onValueChange={(val) => setExpenses((prev) => ({ ...prev, otherExpenses: val }))}
+                    onStatusChange={(st) => {
+                      setStatuses((prev) => ({ ...prev, otherExpenses: st }));
+                      if (st !== "confirmed") setExpenses((prev) => ({ ...prev, otherExpenses: "" }));
+                    }}
+                    hideStatusSwitch
+                  />
+                </div>
+              ) : (
+                <div className="routex-dialog-grid-2">
+                  <DialogExpenseField
+                    id="corr-diesel"
+                    label="Diesel"
+                    value={expenses.dieselExpenses ?? ""}
+                    status={statuses.dieselExpenses ?? "confirmed"}
+                    onValueChange={(val) => setExpenses((prev) => ({ ...prev, dieselExpenses: val }))}
+                    onStatusChange={(st) => {
+                      setStatuses((prev) => ({ ...prev, dieselExpenses: st }));
+                      if (st !== "confirmed") setExpenses((prev) => ({ ...prev, dieselExpenses: "" }));
+                    }}
+                  />
+                  <DialogExpenseField
+                    id="corr-toll"
+                    label="Toll gates"
+                    value={expenses.tollGateExpenses ?? ""}
+                    status={statuses.tollGateExpenses ?? "confirmed"}
+                    onValueChange={(val) => setExpenses((prev) => ({ ...prev, tollGateExpenses: val }))}
+                    onStatusChange={(st) => {
+                      setStatuses((prev) => ({ ...prev, tollGateExpenses: st }));
+                      if (st !== "confirmed") setExpenses((prev) => ({ ...prev, tollGateExpenses: "" }));
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Crew Rates & Allowances */}
             <div className="routex-dialog-section">
-              <h3 className="delivery-finance-group-title">Crew Rates & Allowances</h3>
+              <h3 className="delivery-finance-group-title">
+                {isSubcontracted ? "Crew Assignment" : "Crew Rates & Allowances"}
+              </h3>
               <div className="crew-cards-grid">
                 {/* Driver Card */}
                 <section className="crew-expense-group">
@@ -1015,34 +1035,35 @@ export function EditDeliveryModal({
                       ariaLabel="Assigned Driver selection"
                     />
                   </div>
-                  <div className="crew-rates-fields">
-                    <DialogExpenseField
-                      id="corr-driver-rate"
-                      label="Daily Rate"
-                      value={expenses.driverDailyRate ?? ""}
-                      status={statuses.driverDailyRate ?? "confirmed"}
-                      onValueChange={(val) => setExpenses((prev) => ({ ...prev, driverDailyRate: val }))}
-                      onStatusChange={(st) => {
-                        setStatuses((prev) => ({ ...prev, driverDailyRate: st }));
-                        if (st !== "confirmed") setExpenses((prev) => ({ ...prev, driverDailyRate: "" }));
-                      }}
-                    />
-                    <DialogExpenseField
-                      id="corr-driver-allowance"
-                      label="Trip Allowance"
-                      value={expenses.driverAllowance ?? ""}
-                      status={statuses.driverAllowance ?? (isSubcontracted ? "not_applicable" : "confirmed")}
-                      onValueChange={(val) => {
-                        setExpenses((prev) => ({ ...prev, driverAllowance: val }));
-                        setStatuses((prev) => ({ ...prev, driverAllowance: "confirmed" }));
-                      }}
-                      onStatusChange={(st) => {
-                        setStatuses((prev) => ({ ...prev, driverAllowance: st }));
-                        if (st !== "confirmed") setExpenses((prev) => ({ ...prev, driverAllowance: "" }));
-                      }}
-                      hideStatusSwitch={!isSubcontracted}
-                    />
-                  </div>
+                  {!isSubcontracted && (
+                    <div className="crew-rates-fields">
+                      <DialogExpenseField
+                        id="corr-driver-rate"
+                        label="Daily Rate"
+                        value={expenses.driverDailyRate ?? ""}
+                        status={statuses.driverDailyRate ?? "confirmed"}
+                        onValueChange={(val) => setExpenses((prev) => ({ ...prev, driverDailyRate: val }))}
+                        onStatusChange={(st) => {
+                          setStatuses((prev) => ({ ...prev, driverDailyRate: st }));
+                          if (st !== "confirmed") setExpenses((prev) => ({ ...prev, driverDailyRate: "" }));
+                        }}
+                      />
+                      <DialogExpenseField
+                        id="corr-driver-allowance"
+                        label="Trip Allowance"
+                        value={expenses.driverAllowance ?? ""}
+                        status={statuses.driverAllowance ?? "confirmed"}
+                        onValueChange={(val) => {
+                          setExpenses((prev) => ({ ...prev, driverAllowance: val }));
+                          setStatuses((prev) => ({ ...prev, driverAllowance: "confirmed" }));
+                        }}
+                        onStatusChange={(st) => {
+                          setStatuses((prev) => ({ ...prev, driverAllowance: st }));
+                          if (st !== "confirmed") setExpenses((prev) => ({ ...prev, driverAllowance: "" }));
+                        }}
+                      />
+                    </div>
+                  )}
                 </section>
 
                 {/* Helper Card */}
@@ -1062,34 +1083,35 @@ export function EditDeliveryModal({
                       searchPlaceholder="Search or enter helper"
                     />
                   </div>
-                  <div className="crew-rates-fields">
-                    <DialogExpenseField
-                      id="corr-helper-rate"
-                      label="Daily Rate"
-                      value={expenses.helperDailyRate ?? ""}
-                      status={statuses.helperDailyRate ?? "confirmed"}
-                      onValueChange={(val) => setExpenses((prev) => ({ ...prev, helperDailyRate: val }))}
-                      onStatusChange={(st) => {
-                        setStatuses((prev) => ({ ...prev, helperDailyRate: st }));
-                        if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helperDailyRate: "" }));
-                      }}
-                    />
-                    <DialogExpenseField
-                      id="corr-helper-allowance"
-                      label="Trip Allowance"
-                      value={expenses.helperAllowance ?? ""}
-                      status={statuses.helperAllowance ?? (isSubcontracted ? "not_applicable" : "confirmed")}
-                      onValueChange={(val) => {
-                        setExpenses((prev) => ({ ...prev, helperAllowance: val }));
-                        setStatuses((prev) => ({ ...prev, helperAllowance: "confirmed" }));
-                      }}
-                      onStatusChange={(st) => {
-                        setStatuses((prev) => ({ ...prev, helperAllowance: st }));
-                        if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helperAllowance: "" }));
-                      }}
-                      hideStatusSwitch={!isSubcontracted}
-                    />
-                  </div>
+                  {!isSubcontracted && (
+                    <div className="crew-rates-fields">
+                      <DialogExpenseField
+                        id="corr-helper-rate"
+                        label="Daily Rate"
+                        value={expenses.helperDailyRate ?? ""}
+                        status={statuses.helperDailyRate ?? "confirmed"}
+                        onValueChange={(val) => setExpenses((prev) => ({ ...prev, helperDailyRate: val }))}
+                        onStatusChange={(st) => {
+                          setStatuses((prev) => ({ ...prev, helperDailyRate: st }));
+                          if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helperDailyRate: "" }));
+                        }}
+                      />
+                      <DialogExpenseField
+                        id="corr-helper-allowance"
+                        label="Trip Allowance"
+                        value={expenses.helperAllowance ?? ""}
+                        status={statuses.helperAllowance ?? "confirmed"}
+                        onValueChange={(val) => {
+                          setExpenses((prev) => ({ ...prev, helperAllowance: val }));
+                          setStatuses((prev) => ({ ...prev, helperAllowance: "confirmed" }));
+                        }}
+                        onStatusChange={(st) => {
+                          setStatuses((prev) => ({ ...prev, helperAllowance: st }));
+                          if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helperAllowance: "" }));
+                        }}
+                      />
+                    </div>
+                  )}
                 </section>
 
                 {/* Helper 2 Card (When added) */}
@@ -1124,34 +1146,35 @@ export function EditDeliveryModal({
                         × Remove
                       </button>
                     </div>
-                    <div className="crew-rates-fields">
-                      <DialogExpenseField
-                        id="corr-helper2-rate"
-                        label="Daily Rate"
-                        value={expenses.helper2DailyRate ?? ""}
-                        status={statuses.helper2DailyRate ?? (isSubcontracted ? "not_applicable" : "confirmed")}
-                        onValueChange={(val) => setExpenses((prev) => ({ ...prev, helper2DailyRate: val }))}
-                        onStatusChange={(st) => {
-                          setStatuses((prev) => ({ ...prev, helper2DailyRate: st }));
-                          if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helper2DailyRate: "" }));
-                        }}
-                      />
-                      <DialogExpenseField
-                        id="corr-helper2-allowance"
-                        label="Trip Allowance"
-                        value={expenses.helper2Allowance ?? ""}
-                        status={statuses.helper2Allowance ?? (isSubcontracted ? "not_applicable" : "confirmed")}
-                        onValueChange={(val) => {
-                          setExpenses((prev) => ({ ...prev, helper2Allowance: val }));
-                          setStatuses((prev) => ({ ...prev, helper2Allowance: "confirmed" }));
-                        }}
-                        onStatusChange={(st) => {
-                          setStatuses((prev) => ({ ...prev, helper2Allowance: st }));
-                          if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helper2Allowance: "" }));
-                        }}
-                        hideStatusSwitch={!isSubcontracted}
-                      />
-                    </div>
+                    {!isSubcontracted && (
+                      <div className="crew-rates-fields">
+                        <DialogExpenseField
+                          id="corr-helper2-rate"
+                          label="Daily Rate"
+                          value={expenses.helper2DailyRate ?? ""}
+                          status={statuses.helper2DailyRate ?? "confirmed"}
+                          onValueChange={(val) => setExpenses((prev) => ({ ...prev, helper2DailyRate: val }))}
+                          onStatusChange={(st) => {
+                            setStatuses((prev) => ({ ...prev, helper2DailyRate: st }));
+                            if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helper2DailyRate: "" }));
+                          }}
+                        />
+                        <DialogExpenseField
+                          id="corr-helper2-allowance"
+                          label="Trip Allowance"
+                          value={expenses.helper2Allowance ?? ""}
+                          status={statuses.helper2Allowance ?? "confirmed"}
+                          onValueChange={(val) => {
+                            setExpenses((prev) => ({ ...prev, helper2Allowance: val }));
+                            setStatuses((prev) => ({ ...prev, helper2Allowance: "confirmed" }));
+                          }}
+                          onStatusChange={(st) => {
+                            setStatuses((prev) => ({ ...prev, helper2Allowance: st }));
+                            if (st !== "confirmed") setExpenses((prev) => ({ ...prev, helper2Allowance: "" }));
+                          }}
+                        />
+                      </div>
+                    )}
                   </section>
                 ) : (
                   <div className="crew-add-helper-slot">
@@ -1191,22 +1214,24 @@ export function EditDeliveryModal({
             </div>
 
             {/* Other Operational Expenses */}
-            <div className="routex-dialog-section">
-              <h3 className="delivery-finance-group-title">Other Operational Expenses</h3>
-              <div style={{ maxWidth: "420px" }}>
-                <DialogExpenseField
-                  id="corr-other"
-                  label="Other expenses"
-                  value={expenses.otherExpenses ?? ""}
-                  status={statuses.otherExpenses ?? "confirmed"}
-                  onValueChange={(val) => setExpenses((prev) => ({ ...prev, otherExpenses: val }))}
-                  onStatusChange={(st) => {
-                    setStatuses((prev) => ({ ...prev, otherExpenses: st }));
-                    if (st !== "confirmed") setExpenses((prev) => ({ ...prev, otherExpenses: "" }));
-                  }}
-                />
+            {!isSubcontracted && (
+              <div className="routex-dialog-section">
+                <h3 className="delivery-finance-group-title">Other Operational Expenses</h3>
+                <div style={{ maxWidth: "420px" }}>
+                  <DialogExpenseField
+                    id="corr-other"
+                    label="Other expenses"
+                    value={expenses.otherExpenses ?? ""}
+                    status={statuses.otherExpenses ?? "confirmed"}
+                    onValueChange={(val) => setExpenses((prev) => ({ ...prev, otherExpenses: val }))}
+                    onStatusChange={(st) => {
+                      setStatuses((prev) => ({ ...prev, otherExpenses: st }));
+                      if (st !== "confirmed") setExpenses((prev) => ({ ...prev, otherExpenses: "" }));
+                    }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Supporting Documents */}
             <div className="routex-dialog-section">

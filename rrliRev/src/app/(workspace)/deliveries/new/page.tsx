@@ -18,7 +18,13 @@ import {
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
 import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
-import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
+import {
+  BASE_HELPERS,
+  checkCrewDateAvailability,
+  formatCrewMemberOptionLabel,
+  getFleetCrew,
+  isCrewMemberEligibleForNewDelivery,
+} from "@/features/deliveries/driver-registry";
 import { getFleetTrucks } from "@/features/deliveries/truck-registry";
 import {
   calculateProfitMargin,
@@ -116,7 +122,7 @@ function todayKey(): string {
 export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliveryId }: { editDeliveryId?: string } = {}) {
   const router = useRouter();
   const actor = useAuthenticatedActor();
-  const isAdmin = actor.role === "admin";
+  const isAdmin = actor.role === "admin" || Boolean(actor.isSuperadmin);
   const deliveryDateWindow = useMemo(() => getDeliveryDateWindow(), []);
   const [references, setReferences] = useState<ReferenceData>({ clients: [], trucks: [], drivers: [], helpers: [] });
   const [referencesLoading, setReferencesLoading] = useState(true);
@@ -131,7 +137,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
   const [supportingFileLinks, setSupportingFileLinks] = useState<Record<string, string>>({});
   const [truckTemperature, setTruckTemperature] = useState("");
   const [dropoffs, setDropoffs] = useState<DropoffDraft[]>([initialDropoff]);
-  const podFiles = useMemo(() => dropoffs.flatMap((d) => (d.podFile ? [d.podFile] : [])), [dropoffs]);
   const [resolvedEditId, setResolvedEditId] = useState<string | undefined>(propEditDeliveryId);
   const [existingDelivery, setExistingDelivery] = useState<DeliveryLedgerItem | null>(null);
   const isEditMode = Boolean(resolvedEditId || propEditDeliveryId || existingDelivery);
@@ -799,29 +804,29 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       fuelRate: numberValue(values.fuelRate),
       deliveryRate: numberValue(values.deliveryRate),
       additionalCharges: numberValue(values.additionalCharges),
-      dieselExpenses: numberValue(values.dieselExpenses),
-      tollGateExpenses: numberValue(values.tollGateExpenses),
-      driverAllowance: dAllowance,
-      driverDailyRate: dDailyRate,
+      dieselExpenses: isSubcontracted ? null : numberValue(values.dieselExpenses),
+      tollGateExpenses: isSubcontracted ? null : numberValue(values.tollGateExpenses),
+      driverAllowance: isSubcontracted ? null : dAllowance,
+      driverDailyRate: isSubcontracted ? null : dDailyRate,
       driverName: driverName.trim() || null,
-      helperAllowance: hAllowance,
-      helperDailyRate: hDailyRate,
+      helperAllowance: isSubcontracted ? null : hAllowance,
+      helperDailyRate: isSubcontracted ? null : hDailyRate,
       helperName: helper1Name.trim(),
       hasSecondHelper,
-      helper2Allowance: h2Allowance,
-      helper2DailyRate: h2DailyRate,
+      helper2Allowance: isSubcontracted ? null : h2Allowance,
+      helper2DailyRate: isSubcontracted ? null : h2DailyRate,
       helper2Name: hasSecondHelper ? (helper2Name.trim() || null) : null,
       otherExpenses: numberValue(values.otherExpenses) ?? 0,
       notes: values.notes.trim() || null,
-      dieselExpensesStatus: resolveExpenseStatus(values.dieselExpenses, expenseStatuses.dieselExpenses),
-      tollGateExpensesStatus: resolveExpenseStatus(values.tollGateExpenses, expenseStatuses.tollGateExpenses),
-      driverAllowanceStatus: dAllowanceStatus,
-      driverDailyRateStatus: dRateStatus,
-      helperAllowanceStatus: hAllowanceStatus,
-      helperDailyRateStatus: hRateStatus,
-      helper2AllowanceStatus: h2AllowanceStatus,
-      helper2DailyRateStatus: h2RateStatus,
-      otherExpensesStatus: resolveExpenseStatus(values.otherExpenses, expenseStatuses.otherExpenses),
+      dieselExpensesStatus: isSubcontracted ? "not_applicable" : resolveExpenseStatus(values.dieselExpenses, expenseStatuses.dieselExpenses),
+      tollGateExpensesStatus: isSubcontracted ? "not_applicable" : resolveExpenseStatus(values.tollGateExpenses, expenseStatuses.tollGateExpenses),
+      driverAllowanceStatus: isSubcontracted ? "not_applicable" : dAllowanceStatus,
+      driverDailyRateStatus: isSubcontracted ? "not_applicable" : dRateStatus,
+      helperAllowanceStatus: isSubcontracted ? "not_applicable" : hAllowanceStatus,
+      helperDailyRateStatus: isSubcontracted ? "not_applicable" : hRateStatus,
+      helper2AllowanceStatus: isSubcontracted ? "not_applicable" : h2AllowanceStatus,
+      helper2DailyRateStatus: isSubcontracted ? "not_applicable" : h2RateStatus,
+      otherExpensesStatus: isSubcontracted ? "confirmed" : resolveExpenseStatus(values.otherExpenses, expenseStatuses.otherExpenses),
       supportingDocuments:
         supportingFiles.length > 0
           ? [
@@ -944,17 +949,75 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       setSubmitError("Rate must have a valid value.");
       return;
     }
-    if (!isEditMode && (!values.dieselExpenses || Number(values.dieselExpenses) < 0)) {
+    if (!isEditMode && !isSubcontracted && (!values.dieselExpenses || Number(values.dieselExpenses) < 0)) {
       setSubmitError("Diesel expense must have a valid value.");
       return;
     }
-    if (!isEditMode && (!values.tollGateExpenses || Number(values.tollGateExpenses) < 0)) {
+    if (!isEditMode && !isSubcontracted && (!values.tollGateExpenses || Number(values.tollGateExpenses) < 0)) {
       setSubmitError("Toll gates expense must have a valid value.");
       return;
     }
-    if (!isEditMode && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
+    if (!isEditMode && isSubcontracted && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
+      setSubmitError("Total subcontracted expense must have a valid value.");
+      return;
+    }
+    if (!isEditMode && !isSubcontracted && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
       setSubmitError("Other expenses must have a valid value.");
       return;
+    }
+
+    // Crew Inactivity / Removal check
+    const driverEligibility = isCrewMemberEligibleForNewDelivery(driverName);
+    if (!driverEligibility.ok) {
+      setSubmitError(driverEligibility.message);
+      return;
+    }
+    const helper1Eligibility = isCrewMemberEligibleForNewDelivery(helper1Name);
+    if (!helper1Eligibility.ok) {
+      setSubmitError(helper1Eligibility.message);
+      return;
+    }
+    if (hasSecondHelper && helper2Name) {
+      const helper2Eligibility = isCrewMemberEligibleForNewDelivery(helper2Name);
+      if (!helper2Eligibility.ok) {
+        setSubmitError(helper2Eligibility.message);
+        return;
+      }
+    }
+
+    // Crew Same-Date Double-Booking check
+    const allDeliveriesForCheck = readBrowserPreviewDeliveries();
+    const dConflict = checkCrewDateAvailability({
+      employeeName: driverName,
+      deliveryDate: values.deliveryDate,
+      currentWaybillOrId: existingDelivery?.id || values.waybillNumber,
+      deliveries: allDeliveriesForCheck,
+    });
+    if (!dConflict.ok) {
+      setSubmitError(dConflict.message);
+      return;
+    }
+    const h1Conflict = checkCrewDateAvailability({
+      employeeName: helper1Name,
+      deliveryDate: values.deliveryDate,
+      currentWaybillOrId: existingDelivery?.id || values.waybillNumber,
+      deliveries: allDeliveriesForCheck,
+    });
+    if (!h1Conflict.ok) {
+      setSubmitError(h1Conflict.message);
+      return;
+    }
+    if (hasSecondHelper && helper2Name) {
+      const h2Conflict = checkCrewDateAvailability({
+        employeeName: helper2Name,
+        deliveryDate: values.deliveryDate,
+        currentWaybillOrId: existingDelivery?.id || values.waybillNumber,
+        deliveries: allDeliveriesForCheck,
+      });
+      if (!h2Conflict.ok) {
+        setSubmitError(h2Conflict.message);
+        return;
+      }
     }
     if (values.deliveryDate < "2024-01-01") {
       setSubmitError("Delivery date cannot be earlier than company foundation year (2024).");
@@ -2100,63 +2163,92 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
               </div>
             </div>
 
-            <h3 className="delivery-finance-group-title wide">Trip Expenses</h3>
-            <div className="direct-expense-field">
-              <label>
-                <span className="field-label-text">Diesel</span>
-                <span className="peso-input-wrap">
-                  <span className="peso-prefix" aria-hidden="true">₱</span>
-                  <input
-                    required
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    className="no-spin-stepper peso-input"
-                    value={values.dieselExpenses}
-                    onKeyDown={handlePositiveDecimalKeyDown}
-                    onChange={(event) => updateValue("dieselExpenses", sanitizePositiveDecimalInput(event.target.value, 2))}
-                  />
-                </span>
-              </label>
-            </div>
+            <h3 className="delivery-finance-group-title wide">
+              {isSubcontracted ? "Subcontracted Expense" : "Trip Expenses"}
+            </h3>
 
-            <div className="direct-expense-field">
-              <label>
-                <span className="field-label-text">Toll gates</span>
-                <span className="peso-input-wrap">
-                  <span className="peso-prefix" aria-hidden="true">₱</span>
-                  <input
-                    required
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    className="no-spin-stepper peso-input"
-                    value={values.tollGateExpenses}
-                    onKeyDown={handlePositiveDecimalKeyDown}
-                    onChange={(event) => updateValue("tollGateExpenses", sanitizePositiveDecimalInput(event.target.value, 2))}
-                  />
+            {isSubcontracted ? (
+              <div className="direct-expense-field wide" style={{ gridColumn: "1 / -1" }}>
+                <label>
+                  <span className="field-label-text">Total Subcontracted Expense</span>
+                  <span className="peso-input-wrap">
+                    <span className="peso-prefix" aria-hidden="true">₱</span>
+                    <input
+                      required
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      className="no-spin-stepper peso-input"
+                      value={values.otherExpenses}
+                      onKeyDown={handlePositiveDecimalKeyDown}
+                      onChange={(event) => updateValue("otherExpenses", sanitizePositiveDecimalInput(event.target.value, 2))}
+                    />
+                  </span>
+                </label>
+                <span className="field-hint" style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "block", marginTop: "4px" }}>
+                  Single total expense for subcontracted trip.
                 </span>
-              </label>
-            </div>
+              </div>
+            ) : (
+              <>
+                <div className="direct-expense-field">
+                  <label>
+                    <span className="field-label-text">Diesel</span>
+                    <span className="peso-input-wrap">
+                      <span className="peso-prefix" aria-hidden="true">₱</span>
+                      <input
+                        required
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        className="no-spin-stepper peso-input"
+                        value={values.dieselExpenses}
+                        onKeyDown={handlePositiveDecimalKeyDown}
+                        onChange={(event) => updateValue("dieselExpenses", sanitizePositiveDecimalInput(event.target.value, 2))}
+                      />
+                    </span>
+                  </label>
+                </div>
 
-            <div className="direct-expense-field">
-              <label>
-                <span className="field-label-text">Other expenses</span>
-                <span className="peso-input-wrap">
-                  <span className="peso-prefix" aria-hidden="true">₱</span>
-                  <input
-                    required
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    className="no-spin-stepper peso-input"
-                    value={values.otherExpenses}
-                    onKeyDown={handlePositiveDecimalKeyDown}
-                    onChange={(event) => updateValue("otherExpenses", sanitizePositiveDecimalInput(event.target.value, 2))}
-                  />
-                </span>
-              </label>
-            </div>
+                <div className="direct-expense-field">
+                  <label>
+                    <span className="field-label-text">Toll gates</span>
+                    <span className="peso-input-wrap">
+                      <span className="peso-prefix" aria-hidden="true">₱</span>
+                      <input
+                        required
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        className="no-spin-stepper peso-input"
+                        value={values.tollGateExpenses}
+                        onKeyDown={handlePositiveDecimalKeyDown}
+                        onChange={(event) => updateValue("tollGateExpenses", sanitizePositiveDecimalInput(event.target.value, 2))}
+                      />
+                    </span>
+                  </label>
+                </div>
+
+                <div className="direct-expense-field">
+                  <label>
+                    <span className="field-label-text">Other expenses</span>
+                    <span className="peso-input-wrap">
+                      <span className="peso-prefix" aria-hidden="true">₱</span>
+                      <input
+                        required
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        className="no-spin-stepper peso-input"
+                        value={values.otherExpenses}
+                        onKeyDown={handlePositiveDecimalKeyDown}
+                        onChange={(event) => updateValue("otherExpenses", sanitizePositiveDecimalInput(event.target.value, 2))}
+                      />
+                    </span>
+                  </label>
+                </div>
+              </>
+            )}
 
             {/* Crew Expenses with Support for 2 Helpers */}
             <div className="crew-expense-groups wide">
@@ -2178,10 +2270,13 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       value={driverName}
                       options={references.drivers
                         .filter((driver) => !driver.label.toLowerCase().includes("unknown"))
-                        .map((driver) => ({
-                          value: driver.label,
-                          label: driver.label,
-                        }))}
+                        .map((driver) => {
+                          const fleet = getFleetCrew().find((c) => c.fullName.toLowerCase() === driver.label.toLowerCase());
+                          return {
+                            value: driver.label,
+                            label: fleet ? formatCrewMemberOptionLabel(fleet) : driver.label,
+                          };
+                        })}
                       onChange={(val) => setDriverName(sanitizePersonNameInput(val))}
                       inputFilter={sanitizePersonNameInput}
                       ariaLabel="Driver name"
@@ -2193,48 +2288,50 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       searchPlaceholder="Search or enter a new driver"
                     />
                   </div>
-                  <div className="crew-expense-fields-row">
-                    <div className="daily-rate-field">
-                      <label>
-                        <span className="field-label-text">Daily rate</span>
-                        <span className="peso-input-wrap">
-                          <span className="peso-prefix" aria-hidden="true">₱</span>
-                          <input
-                            aria-label="Driver daily rate"
-                            required={!isSubcontracted}
-                            type="text"
-                            inputMode="decimal"
-                            placeholder={isSubcontracted ? "N/A" : "0.00"}
-                            className="no-spin-stepper peso-input"
-                            value={values.driverDailyRate}
-                            onKeyDown={handlePositiveDecimalKeyDown}
-                            onChange={(event) => updateValue("driverDailyRate", sanitizePositiveDecimalInput(event.target.value, 2))}
-                          />
-                        </span>
-                      </label>
+                  {!isSubcontracted && (
+                    <div className="crew-expense-fields-row">
+                      <div className="daily-rate-field">
+                        <label>
+                          <span className="field-label-text">Daily rate</span>
+                          <span className="peso-input-wrap">
+                            <span className="peso-prefix" aria-hidden="true">₱</span>
+                            <input
+                              aria-label="Driver daily rate"
+                              required
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              className="no-spin-stepper peso-input"
+                              value={values.driverDailyRate}
+                              onKeyDown={handlePositiveDecimalKeyDown}
+                              onChange={(event) => updateValue("driverDailyRate", sanitizePositiveDecimalInput(event.target.value, 2))}
+                            />
+                          </span>
+                        </label>
+                      </div>
+                      <div className="daily-rate-field allowance-field">
+                        <label>
+                          <span className="field-label-text">Allowance</span>
+                          <span className="peso-input-wrap">
+                            <span className="peso-prefix" aria-hidden="true">₱</span>
+                            <input
+                              aria-label="Driver allowance"
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              className="no-spin-stepper peso-input"
+                              value={values.driverAllowance}
+                              onKeyDown={handlePositiveDecimalKeyDown}
+                              onChange={(event) => {
+                                updateValue("driverAllowance", sanitizePositiveDecimalInput(event.target.value, 2));
+                                setExpenseStatuses((current) => ({ ...current, driverAllowance: "confirmed" }));
+                              }}
+                            />
+                          </span>
+                        </label>
+                      </div>
                     </div>
-                    <div className="daily-rate-field allowance-field">
-                      <label>
-                        <span className="field-label-text">Allowance</span>
-                        <span className="peso-input-wrap">
-                          <span className="peso-prefix" aria-hidden="true">₱</span>
-                          <input
-                            aria-label="Driver allowance"
-                            type="text"
-                            inputMode="decimal"
-                            placeholder={isSubcontracted ? "N/A" : "0.00"}
-                            className="no-spin-stepper peso-input"
-                            value={values.driverAllowance}
-                            onKeyDown={handlePositiveDecimalKeyDown}
-                            onChange={(event) => {
-                              updateValue("driverAllowance", sanitizePositiveDecimalInput(event.target.value, 2));
-                              setExpenseStatuses((current) => ({ ...current, driverAllowance: "confirmed" }));
-                            }}
-                          />
-                        </span>
-                      </label>
-                    </div>
-                  </div>
+                  )}
                 </section>
 
                 {/* Helper 1 Card */}
@@ -2245,10 +2342,13 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       value={helper1Name}
                       options={references.helpers
                         .filter((helper) => !helper.label.toLowerCase().includes("unknown"))
-                        .map((helper) => ({
-                          value: helper.label,
-                          label: helper.label,
-                        }))}
+                        .map((helper) => {
+                          const fleet = getFleetCrew().find((c) => c.fullName.toLowerCase() === helper.label.toLowerCase());
+                          return {
+                            value: helper.label,
+                            label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : helper.label,
+                          };
+                        })}
                       onChange={(val) => setHelper1Name(sanitizePersonNameInput(val))}
                       inputFilter={sanitizePersonNameInput}
                       ariaLabel="Helper name"
@@ -2260,48 +2360,50 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       searchPlaceholder="Search or enter a new helper"
                     />
                   </div>
-                  <div className="crew-expense-fields-row">
-                    <div className="daily-rate-field">
-                      <label>
-                        <span className="field-label-text">Daily rate</span>
-                        <span className="peso-input-wrap">
-                          <span className="peso-prefix" aria-hidden="true">₱</span>
-                          <input
-                            aria-label="Helper daily rate"
-                            required={!isSubcontracted}
-                            type="text"
-                            inputMode="decimal"
-                            placeholder={isSubcontracted ? "N/A" : "0.00"}
-                            className="no-spin-stepper peso-input"
-                            value={values.helperDailyRate}
-                            onKeyDown={handlePositiveDecimalKeyDown}
-                            onChange={(event) => updateValue("helperDailyRate", sanitizePositiveDecimalInput(event.target.value, 2))}
-                          />
-                        </span>
-                      </label>
+                  {!isSubcontracted && (
+                    <div className="crew-expense-fields-row">
+                      <div className="daily-rate-field">
+                        <label>
+                          <span className="field-label-text">Daily rate</span>
+                          <span className="peso-input-wrap">
+                            <span className="peso-prefix" aria-hidden="true">₱</span>
+                            <input
+                              aria-label="Helper daily rate"
+                              required
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              className="no-spin-stepper peso-input"
+                              value={values.helperDailyRate}
+                              onKeyDown={handlePositiveDecimalKeyDown}
+                              onChange={(event) => updateValue("helperDailyRate", sanitizePositiveDecimalInput(event.target.value, 2))}
+                            />
+                          </span>
+                        </label>
+                      </div>
+                      <div className="daily-rate-field allowance-field">
+                        <label>
+                          <span className="field-label-text">Allowance</span>
+                          <span className="peso-input-wrap">
+                            <span className="peso-prefix" aria-hidden="true">₱</span>
+                            <input
+                              aria-label="Helper allowance"
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              className="no-spin-stepper peso-input"
+                              value={values.helperAllowance}
+                              onKeyDown={handlePositiveDecimalKeyDown}
+                              onChange={(event) => {
+                                updateValue("helperAllowance", sanitizePositiveDecimalInput(event.target.value, 2));
+                                setExpenseStatuses((current) => ({ ...current, helperAllowance: "confirmed" }));
+                              }}
+                            />
+                          </span>
+                        </label>
+                      </div>
                     </div>
-                    <div className="daily-rate-field allowance-field">
-                      <label>
-                        <span className="field-label-text">Allowance</span>
-                        <span className="peso-input-wrap">
-                          <span className="peso-prefix" aria-hidden="true">₱</span>
-                          <input
-                            aria-label="Helper allowance"
-                            type="text"
-                            inputMode="decimal"
-                            placeholder={isSubcontracted ? "N/A" : "0.00"}
-                            className="no-spin-stepper peso-input"
-                            value={values.helperAllowance}
-                            onKeyDown={handlePositiveDecimalKeyDown}
-                            onChange={(event) => {
-                              updateValue("helperAllowance", sanitizePositiveDecimalInput(event.target.value, 2));
-                              setExpenseStatuses((current) => ({ ...current, helperAllowance: "confirmed" }));
-                            }}
-                          />
-                        </span>
-                      </label>
-                    </div>
-                  </div>
+                  )}
                 </section>
 
                 {/* Helper 2 Card (When added) */}
@@ -2313,10 +2415,13 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                         value={helper2Name}
                         options={references.helpers
                           .filter((helper) => !helper.label.toLowerCase().includes("unknown"))
-                          .map((helper) => ({
-                            value: helper.label,
-                            label: helper.label,
-                          }))}
+                          .map((helper) => {
+                            const fleet = getFleetCrew().find((c) => c.fullName.toLowerCase() === helper.label.toLowerCase());
+                            return {
+                              value: helper.label,
+                              label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : helper.label,
+                            };
+                          })}
                         onChange={(val) => setHelper2Name(sanitizePersonNameInput(val))}
                         inputFilter={sanitizePersonNameInput}
                         ariaLabel="Helper 2 name"
@@ -2341,48 +2446,50 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                         × Remove
                       </button>
                     </div>
-                    <div className="crew-expense-fields-row">
-                      <div className="daily-rate-field">
-                        <label>
-                          <span className="field-label-text">Daily rate</span>
-                          <span className="peso-input-wrap">
-                            <span className="peso-prefix" aria-hidden="true">₱</span>
-                            <input
-                              aria-label="Helper 2 daily rate"
-                              required={!isSubcontracted}
-                              type="text"
-                              inputMode="decimal"
-                              placeholder={isSubcontracted ? "N/A" : "0.00"}
-                              className="no-spin-stepper peso-input"
-                              value={values.helper2DailyRate}
-                              onKeyDown={handlePositiveDecimalKeyDown}
-                              onChange={(event) => updateValue("helper2DailyRate", sanitizePositiveDecimalInput(event.target.value, 2))}
-                            />
-                          </span>
-                        </label>
+                    {!isSubcontracted && (
+                      <div className="crew-expense-fields-row">
+                        <div className="daily-rate-field">
+                          <label>
+                            <span className="field-label-text">Daily rate</span>
+                            <span className="peso-input-wrap">
+                              <span className="peso-prefix" aria-hidden="true">₱</span>
+                              <input
+                                aria-label="Helper 2 daily rate"
+                                required
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0.00"
+                                className="no-spin-stepper peso-input"
+                                value={values.helper2DailyRate}
+                                onKeyDown={handlePositiveDecimalKeyDown}
+                                onChange={(event) => updateValue("helper2DailyRate", sanitizePositiveDecimalInput(event.target.value, 2))}
+                              />
+                            </span>
+                          </label>
+                        </div>
+                        <div className="daily-rate-field allowance-field">
+                          <label>
+                            <span className="field-label-text">Allowance</span>
+                            <span className="peso-input-wrap">
+                              <span className="peso-prefix" aria-hidden="true">₱</span>
+                              <input
+                                aria-label="Helper 2 allowance"
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0.00"
+                                className="no-spin-stepper peso-input"
+                                value={values.helper2Allowance}
+                                onKeyDown={handlePositiveDecimalKeyDown}
+                                onChange={(event) => {
+                                  updateValue("helper2Allowance", sanitizePositiveDecimalInput(event.target.value, 2));
+                                  setExpenseStatuses((current) => ({ ...current, helper2Allowance: "confirmed" }));
+                                }}
+                              />
+                            </span>
+                          </label>
+                        </div>
                       </div>
-                      <div className="daily-rate-field allowance-field">
-                        <label>
-                          <span className="field-label-text">Allowance</span>
-                          <span className="peso-input-wrap">
-                            <span className="peso-prefix" aria-hidden="true">₱</span>
-                            <input
-                              aria-label="Helper 2 allowance"
-                              type="text"
-                              inputMode="decimal"
-                              placeholder={isSubcontracted ? "N/A" : "0.00"}
-                              className="no-spin-stepper peso-input"
-                              value={values.helper2Allowance}
-                              onKeyDown={handlePositiveDecimalKeyDown}
-                              onChange={(event) => {
-                                updateValue("helper2Allowance", sanitizePositiveDecimalInput(event.target.value, 2));
-                                setExpenseStatuses((current) => ({ ...current, helper2Allowance: "confirmed" }));
-                              }}
-                            />
-                          </span>
-                        </label>
-                      </div>
-                    </div>
+                    )}
                   </section>
                 ) : (
                   <div className="crew-add-helper-slot">

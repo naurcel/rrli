@@ -16,8 +16,6 @@ import {
 import {
   getFleetTrucks,
   getTruckStorageCapability,
-  OWNED_TRUCKS,
-  SUBCONTRACTED_TRUCKS,
 } from "./truck-registry.ts";
 import {
   getMockClients,
@@ -52,7 +50,6 @@ test("Delivery Ops: Registered truck auto-determines classification, storage cap
 });
 
 test("Delivery Ops: Adding a new client dynamically registers it permanently for selection", () => {
-  const initialClients = getMockClients();
   const newClientName = `Test Enterprise Retail ${Date.now()}`;
 
   const created = registerMockClient(newClientName);
