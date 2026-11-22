@@ -129,17 +129,24 @@ function buildSmoothPath(
 
   let path = `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
 
+  // Centripetal Catmull-Rom cubic spline conversion with gentle curvature
+  const tension = 0.35; // optimal curvature preventing overshooting peaks
   for (let i = 0; i < points.length - 1; i++) {
     const p0 = points[i === 0 ? 0 : i - 1];
     const p1 = points[i];
     const p2 = points[i + 1];
     const p3 = points[i + 2 < points.length ? i + 2 : points.length - 1];
 
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = clampY(p1.y + (p2.y - p0.y) / 6);
+    const dx1 = p2.x - p0.x;
+    const dy1 = p2.y - p0.y;
+    const dx2 = p3.x - p1.x;
+    const dy2 = p3.y - p1.y;
 
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = clampY(p2.y - (p3.y - p1.y) / 6);
+    const cp1x = p1.x + dx1 * tension;
+    const cp1y = clampY(p1.y + dy1 * tension);
+
+    const cp2x = p2.x - dx2 * tension;
+    const cp2y = clampY(p2.y - dy2 * tension);
 
     path += ` C ${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
   }
@@ -329,6 +336,21 @@ function DashboardFinancialChart({
     [compProfitCoords],
   );
 
+  const areaRevenue = useMemo(() => {
+    if (metric !== "comparison" || compRevenueCoords.length === 0) return "";
+    return `${lineRevenue} L ${compRevenueCoords.at(-1)?.x ?? padding.left},${zeroY} L ${compRevenueCoords[0]?.x ?? padding.left},${zeroY} Z`;
+  }, [lineRevenue, compRevenueCoords, zeroY, metric]);
+
+  const areaExpenses = useMemo(() => {
+    if (metric !== "comparison" || compExpensesCoords.length === 0) return "";
+    return `${lineExpenses} L ${compExpensesCoords.at(-1)?.x ?? padding.left},${zeroY} L ${compExpensesCoords[0]?.x ?? padding.left},${zeroY} Z`;
+  }, [lineExpenses, compExpensesCoords, zeroY, metric]);
+
+  const areaProfit = useMemo(() => {
+    if (metric !== "comparison" || compProfitCoords.length === 0) return "";
+    return `${lineProfit} L ${compProfitCoords.at(-1)?.x ?? padding.left},${zeroY} L ${compProfitCoords[0]?.x ?? padding.left},${zeroY} Z`;
+  }, [lineProfit, compProfitCoords, zeroY, metric]);
+
   const tickIndexes = series.length <= 12
     ? series.map((_, index) => index)
     : Array.from(
@@ -355,9 +377,15 @@ function DashboardFinancialChart({
         width - padding.right - tooltipWidth,
       )
     : 0;
-  const tooltipY = selectedCoord
-    ? Math.max(8, Math.min(selectedCoord.y - tooltipHeight - 12, height - padding.bottom - tooltipHeight))
-    : 8;
+  const compCoordY = activeIndex !== null && metric === "comparison"
+    ? Math.min(
+        yFor(series[activeIndex]?.revenue ?? 0),
+        yFor(series[activeIndex]?.expenses ?? 0),
+        yFor(series[activeIndex]?.profit ?? 0),
+      )
+    : null;
+  const targetPointY = selectedCoord?.y ?? compCoordY ?? 60;
+  const tooltipY = Math.max(6, Math.min(targetPointY - tooltipHeight - 10, height - padding.bottom - tooltipHeight));
 
   const selectClosestPoint = (clientX: number, chartBounds: DOMRect) => {
     const x = ((clientX - chartBounds.left) / chartBounds.width) * width;
@@ -671,7 +699,10 @@ function DashboardFinancialChart({
                   </>
                 ) : (
                   <>
-                    {/* Comparison Multi-Line Mode */}
+                    {/* Comparison Multi-Line Mode with Organic Gradient Underfills */}
+                    <path className="chart-area-comp-revenue" d={areaRevenue} />
+                    <path className="chart-area-comp-expenses" d={areaExpenses} />
+                    <path className="chart-area-comp-profit" d={areaProfit} />
                     <path className="chart-line-revenue" d={lineRevenue} />
                     <path className="chart-line-expenses" d={lineExpenses} />
                     <path className="chart-line-profit" d={lineProfit} />
@@ -837,7 +868,7 @@ function DashboardFinancialChart({
                 pointerEvents="none"
                 style={{ transform: `translate(${tooltipX}px, ${tooltipY}px)` }}
               >
-                <rect width={tooltipWidth} height={tooltipHeight} rx="8" />
+                <rect width={tooltipWidth} height={tooltipHeight} rx="10" />
                 <text className="chart-tooltip-label" x="11" y="16">
                   {selectedPoint.label ?? formatDashboardDate(selectedPoint.date)}
                 </text>
@@ -1357,8 +1388,12 @@ export default function DashboardPage() {
                         </td>
                         <td className="truck-code">
                           <strong>{trip.plateNumber}</strong>
-                          <br />
-                          <small>{trip.truckType}</small>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                            <small>{trip.truckType}</small>
+                            <span className={`truck-ownership-badge ${trip.truckOwnership ? trip.truckOwnership.toLowerCase() : "owned"}`}>
+                              {trip.truckOwnership === "Subcontracted" ? "Subcon" : "Owned"}
+                            </span>
+                          </div>
                         </td>
                         <td>
                           <span className="recent-dropoff-pill">

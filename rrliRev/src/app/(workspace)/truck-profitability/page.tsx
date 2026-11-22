@@ -94,7 +94,7 @@ export default function TruckProfitabilityPage() {
   const { range, setRange } = useGlobalDateRange();
   const { deliveries: dateFilteredTrips, loading, error } = usePersistedDeliveries(range);
 
-  // Filter & sort states
+  // Filter & sort states - Owned Trucks search
   const {
     value: plateSearch,
     setValue: setPlateSearch,
@@ -102,6 +102,15 @@ export default function TruckProfitabilityPage() {
     isBuffering: isPlateSearchBuffering,
     clear: clearPlateSearch,
     reset: resetPlateSearch,
+  } = useSearchBuffer({ delay: 500 });
+
+  // Subcontracted Trucks search
+  const {
+    value: subconSearch,
+    setValue: setSubconSearch,
+    bufferedQuery: debouncedSubconSearch,
+    isBuffering: isSubconSearchBuffering,
+    clear: clearSubconSearch,
   } = useSearchBuffer({ delay: 500 });
   const [classificationFilter, setClassificationFilter] = useState<TruckClassificationFilterKey>("all");
   const [performanceFilter, setPerformanceFilter] = useState<TruckPerformanceFilterKey>("all");
@@ -172,7 +181,13 @@ export default function TruckProfitabilityPage() {
   // Fleet Crew (Drivers & Helpers) state
   const [crew, setCrew] = useState<FleetCrewMember[]>(() => [...getFleetCrew()]);
   const [crewRoleFilter, setCrewRoleFilter] = useState<"All" | "Driver" | "Helper">("All");
-  const [crewSearch, setCrewSearch] = useState("");
+  const {
+    value: crewSearch,
+    setValue: setCrewSearch,
+    bufferedQuery: debouncedCrewSearch,
+    isBuffering: isCrewSearchBuffering,
+    clear: clearCrewSearch,
+  } = useSearchBuffer({ delay: 500 });
   const [isAddCrewOpen, setIsAddCrewOpen] = useState(false);
   const [crewFullName, setCrewFullName] = useState("");
   const [crewRole, setCrewRole] = useState<"Driver" | "Helper">("Driver");
@@ -280,16 +295,17 @@ export default function TruckProfitabilityPage() {
     if (crewRoleFilter !== "All") {
       list = list.filter((c) => c.assignmentType === crewRoleFilter);
     }
-    if (crewSearch.trim()) {
-      const q = crewSearch.trim().toLowerCase();
+    if (debouncedCrewSearch.trim()) {
+      const q = debouncedCrewSearch.trim().toLowerCase();
       list = list.filter(
         (c) =>
           c.fullName.toLowerCase().includes(q) ||
-          (c.contactNumber && c.contactNumber.toLowerCase().includes(q)),
+          (c.contactNumber && c.contactNumber.toLowerCase().includes(q)) ||
+          c.assignmentType.toLowerCase().includes(q),
       );
     }
     return list;
-  }, [crew, crewRoleFilter, crewSearch]);
+  }, [crew, crewRoleFilter, debouncedCrewSearch]);
 
   const [crewPage, setCrewPage] = useState(1);
   const CREW_PAGE_SIZE = 10;
@@ -302,7 +318,7 @@ export default function TruckProfitabilityPage() {
       return;
     }
     setCrewPage(1);
-  }, [crewRoleFilter, crewSearch]);
+  }, [crewRoleFilter, debouncedCrewSearch]);
 
   const paginatedCrew = useMemo(() => {
     const start = (crewPage - 1) * CREW_PAGE_SIZE;
@@ -879,19 +895,20 @@ export default function TruckProfitabilityPage() {
         return normCap === classificationFilter;
       });
     }
-    if (!debouncedPlateSearch.trim()) return result;
-    const clean = debouncedPlateSearch.trim().toLowerCase().replace(/\s+/g, "");
+    if (!debouncedSubconSearch.trim()) return result;
+    const clean = debouncedSubconSearch.trim().toLowerCase().replace(/\s+/g, "");
+    const q = debouncedSubconSearch.trim().toLowerCase();
     return result.filter(
       (t) =>
-        t.plateNumber.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase()) ||
+        t.plateNumber.toLowerCase().includes(q) ||
         t.plateNumber.replace(/\s+/g, "").toLowerCase().includes(clean) ||
-        (t.provider && t.provider.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())) ||
-        (t.driverName && t.driverName.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())) ||
-        (t.helperName && t.helperName.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())) ||
-        (t.contactPerson &&
-          t.contactPerson.toLowerCase().includes(debouncedPlateSearch.trim().toLowerCase())),
+        (t.provider && t.provider.toLowerCase().includes(q)) ||
+        (t.driverName && t.driverName.toLowerCase().includes(q)) ||
+        (t.helperName && t.helperName.toLowerCase().includes(q)) ||
+        (t.contactPerson && t.contactPerson.toLowerCase().includes(q)) ||
+        (t.truckType && t.truckType.toLowerCase().includes(q)),
     );
-  }, [classificationFilter, debouncedPlateSearch, sortedSubcontractedTrucks]);
+  }, [classificationFilter, debouncedSubconSearch, sortedSubcontractedTrucks]);
 
   const [ownedPage, setOwnedPage] = useState(1);
   const OWNED_PAGE_SIZE = 10;
@@ -922,7 +939,7 @@ export default function TruckProfitabilityPage() {
       return;
     }
     setSubcontractedPage(1);
-  }, [debouncedPlateSearch, subcontractedSort]);
+  }, [debouncedSubconSearch, classificationFilter, subcontractedSort]);
 
   const isInitialUrlHydrated = useRef(false);
   useEffect(() => {
@@ -1726,8 +1743,11 @@ export default function TruckProfitabilityPage() {
                           <div className="fleet-card-title">
                             <div>
                               <h2>{truck.plateNumber}</h2>
-                              <div className="truck-type-meta-row">
+                              <div className="truck-type-meta-row" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                                 <span className="truck-spec-badge">{truck.truckType}</span>
+                                <span className={`truck-capability-pill ${capability.toLowerCase()}`} style={{ position: "static", transform: "none" }}>
+                                  {capability}
+                                </span>
                               </div>
                             </div>
                             <span className={`fleet-status ${ownedTruckSort === "deliveries" ? "highlight-metric" : ""}`}>
@@ -1992,6 +2012,37 @@ export default function TruckProfitabilityPage() {
             </span>
           </div>
 
+          <div className="filters subcontracted-filters">
+            <label className={`search-box${isSubconSearchBuffering ? " is-buffering" : ""}`}>
+              <span className="sr-only">Search subcontracted trucks</span>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ flexShrink: 0 }}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search subcontracted trucks by plate, trucker, or driver…"
+                aria-label="Filter subcontracted trucks by plate, trucker, or driver"
+                value={subconSearch}
+                onChange={(e) => setSubconSearch(e.target.value)}
+              />
+              {isSubconSearchBuffering && (
+                <span className="search-buffer-indicator" title="Buffering search…" aria-label="Buffering search…" />
+              )}
+            </label>
+          </div>
+
           <div className="table-wrap">
             <table>
               <thead>
@@ -2017,8 +2068,12 @@ export default function TruckProfitabilityPage() {
                       className="table-empty-cell"
                     >
                       <div className="empty-state minimal" title="No subcontracted trucks">
-                        <strong className="empty-state-title">No subcontracted trucks registered</strong>
-                        <span className="empty-state-desc">Subcontracted trucks will appear here once added.</span>
+                        <strong className="empty-state-title">No subcontracted trucks found</strong>
+                        <span className="empty-state-desc">
+                          {debouncedSubconSearch.trim()
+                            ? `No subcontracted trucks matching "${debouncedSubconSearch.trim()}".`
+                            : "Subcontracted trucks will appear here once added."}
+                        </span>
                       </div>
                     </td>
                   </tr>
@@ -2115,47 +2170,10 @@ export default function TruckProfitabilityPage() {
             <div>
               <h2>Crew</h2>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <input
-                type="search"
-                className="crew-search-input"
-                placeholder="Search crew members..."
-                value={crewSearch}
-                onChange={(e) => setCrewSearch(e.target.value)}
-                aria-label="Search crew members"
-              />
-
-              <div className="crew-role-filter-pills" role="tablist" aria-label="Filter crew by role">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={crewRoleFilter === "All"}
-                  className={`crew-role-tab ${crewRoleFilter === "All" ? "active" : ""}`}
-                  title="All crew"
-                  onClick={() => setCrewRoleFilter("All")}
-                >
-                  All ({crew.length})
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={crewRoleFilter === "Driver"}
-                  className={`crew-role-tab ${crewRoleFilter === "Driver" ? "active" : ""}`}
-                  onClick={() => setCrewRoleFilter("Driver")}
-                >
-                  Drivers ({driverCount})
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={crewRoleFilter === "Helper"}
-                  className={`crew-role-tab ${crewRoleFilter === "Helper" ? "active" : ""}`}
-                  onClick={() => setCrewRoleFilter("Helper")}
-                >
-                  Helpers ({helperCount})
-                </button>
-              </div>
-
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span className="truck-history-count">
+                {filteredCrew.length} member{filteredCrew.length === 1 ? "" : "s"}
+              </span>
               {canAdd && (
                 <button
                   type="button"
@@ -2172,6 +2190,68 @@ export default function TruckProfitabilityPage() {
                   + Add Crew Member
                 </button>
               )}
+            </div>
+          </div>
+
+          <div className="filters crew-filters" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+            <label className={`search-box${isCrewSearchBuffering ? " is-buffering" : ""}`}>
+              <span className="sr-only">Search crew members</span>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ flexShrink: 0 }}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search crew members by name or contact…"
+                aria-label="Filter crew members by name or contact"
+                value={crewSearch}
+                onChange={(e) => setCrewSearch(e.target.value)}
+              />
+              {isCrewSearchBuffering && (
+                <span className="search-buffer-indicator" title="Buffering search…" aria-label="Buffering search…" />
+              )}
+            </label>
+
+            <div className="crew-role-filter-pills" role="tablist" aria-label="Filter crew by role">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={crewRoleFilter === "All"}
+                className={`crew-role-tab ${crewRoleFilter === "All" ? "active" : ""}`}
+                title="All crew"
+                onClick={() => setCrewRoleFilter("All")}
+              >
+                All ({crew.length})
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={crewRoleFilter === "Driver"}
+                className={`crew-role-tab ${crewRoleFilter === "Driver" ? "active" : ""}`}
+                onClick={() => setCrewRoleFilter("Driver")}
+              >
+                Drivers ({driverCount})
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={crewRoleFilter === "Helper"}
+                className={`crew-role-tab ${crewRoleFilter === "Helper" ? "active" : ""}`}
+                onClick={() => setCrewRoleFilter("Helper")}
+              >
+                Helpers ({helperCount})
+              </button>
             </div>
           </div>
 
@@ -2195,8 +2275,8 @@ export default function TruckProfitabilityPage() {
                       <div className="empty-state minimal">
                         <strong className="empty-state-title">No crew members found</strong>
                         <span className="empty-state-desc">
-                          {crewSearch.trim()
-                            ? `No crew members matching "${crewSearch.trim()}".`
+                          {debouncedCrewSearch.trim()
+                            ? `No crew members matching "${debouncedCrewSearch.trim()}".`
                             : `No ${crewRoleFilter === "All" ? "crew members" : crewRoleFilter.toLowerCase() + "s"} registered yet.`}
                         </span>
                       </div>

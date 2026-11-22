@@ -855,26 +855,6 @@ export default function DeliveriesPage() {
                 setRange({ startDate: null, endDate: null });
               }}
             />
-
-            {searchQuery ||
-            selectedClients.length > 0 ||
-            selectedTrucks.length > 0 ||
-            range.startDate ||
-            range.endDate ? (
-              <button
-                type="button"
-                className="filter-button filter-clear"
-                onClick={() => {
-                  clearSearch();
-                  setSelectedClients([]);
-                  setSelectedTrucks([]);
-                  setRange({ startDate: null, endDate: null });
-                }}
-              >
-                Clear filters
-              </button>
-            ) : null}
-
           </div>
 
           {(selectedClients.length > 0 ||
@@ -1111,12 +1091,14 @@ export default function DeliveriesPage() {
                       <td className="truck-code cell-truck">
                         <div className="truck-info-stack">
                           <span className="truck-plate-label">{trip.plateNumber}</span>
-                          <span className="truck-type-meta">{trip.truckType}</span>
-                          <span className={`truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
-                            {trip.truckOwnership === "Subcontracted"
-                              ? (truckerByPlate.get(trip.plateNumber.toUpperCase()) || "Subcon")
-                              : "Owned"}
-                          </span>
+                          <div className="truck-type-row" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            <span className="truck-type-meta">{trip.truckType}</span>
+                            <span className={`truck-ownership-badge truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
+                              {trip.truckOwnership === "Subcontracted"
+                                ? (truckerByPlate.get(trip.plateNumber.toUpperCase()) || "Subcon")
+                                : "Owned"}
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td className="cell-temp">
