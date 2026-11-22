@@ -1089,15 +1089,9 @@ export default function DeliveriesPage() {
                         <span className="client-name-label">{trip.clientName}</span>
                       </td>
                       <td className="truck-code cell-truck">
-                        <div className="truck-info-stack">
-                          <span className="truck-plate-label">{trip.plateNumber}</span>
-                          <span className="truck-type-meta">{trip.truckType}</span>
-                          <span className={`truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
-                            {trip.truckOwnership === "Subcontracted"
-                              ? (truckerByPlate.get(trip.plateNumber.toUpperCase()) || "Subcon")
-                              : "Owned"}
-                          </span>
-                        </div>
+                        <strong>{trip.plateNumber}</strong>
+                        <br />
+                        <small>{trip.truckType}{trip.truckOwnership === "Subcontracted" ? ` · ${truckerByPlate.get(trip.plateNumber.toUpperCase()) || "Subcon"}` : ""}</small>
                       </td>
                       <td className="cell-temp">
                         <span className="temp-value">{trip.truckTemperature}</span>

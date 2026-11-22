@@ -1355,8 +1355,8 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <form onSubmit={handleGenerateBackupKey} className="settings-stacked-form" noValidate>
-              <div className="settings-field-group">
+            <form onSubmit={handleGenerateBackupKey} className="settings-backup-key-form" noValidate>
+              <div className="settings-field-group" style={{ maxWidth: "380px", flex: "1 1 280px" }}>
                 <label htmlFor="input-backupkey-password" className="settings-field-label">
                   Current Password (Identity Verification)
                 </label>
@@ -1368,17 +1368,16 @@ export default function SettingsPage() {
                   value={backupKeyPassword}
                   onChange={(e) => setBackupKeyPassword(e.target.value)}
                   className="settings-input"
-                  style={{ maxWidth: "340px" }}
                   minLength={8}
                 />
               </div>
 
-              <div className="settings-form-actions">
+              <div className="settings-backup-key-action">
                 <button
                   type="submit"
                   className="primary-action-button"
                   disabled={backupKeySubmitting}
-                  style={{ minHeight: "42px", padding: "0 22px" }}
+                  style={{ minHeight: "40px", padding: "0 20px" }}
                 >
                   {backupKeySubmitting ? "Generating…" : hasExistingBackupKey ? "Regenerate Backup Key" : "Generate Emergency Backup Key"}
                 </button>
@@ -1393,74 +1392,42 @@ export default function SettingsPage() {
               <p>Security protections enabled for your account.</p>
             </div>
 
-            <div className="settings-security-checklist-card">
-              <ul className="settings-security-checklist">
-                <li className="settings-security-item">
-                  <span className="settings-check-pill ok" aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+            <div className="settings-security-minimal-list">
+              <div className="settings-security-minimal-row">
+                <div className="settings-security-minimal-info">
+                  <span className="settings-security-minimal-title">Password Protection</span>
+                  <span className="settings-security-minimal-desc">Argon2id encryption</span>
+                </div>
+                <span className="settings-security-status-text ok">Active</span>
+              </div>
+
+              <div className="settings-security-minimal-row">
+                <div className="settings-security-minimal-info">
+                  <span className="settings-security-minimal-title">Security Question</span>
+                  <span className="settings-security-minimal-desc">
+                    {currentQuestion !== "Not yet configured"
+                      ? "Recovery question configured"
+                      : "Required for self-service recovery"}
                   </span>
-                  <div>
-                    <strong>Argon2id Password Encryption</strong>
-                    <p className="settings-security-subtext">RFC 9106 cryptographic standard</p>
-                  </div>
-                </li>
-                <li className="settings-security-item">
-                  <span
-                    className={`settings-check-pill ${currentQuestion !== "Not yet configured" ? "ok" : "pending"}`}
-                    aria-hidden="true"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    {currentQuestion !== "Not yet configured" ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    ) : (
-                      "!"
-                    )}
+                </div>
+                <span className={`settings-security-status-text ${currentQuestion !== "Not yet configured" ? "ok" : "pending"}`}>
+                  {currentQuestion !== "Not yet configured" ? "Configured" : "Pending"}
+                </span>
+              </div>
+
+              <div className="settings-security-minimal-row">
+                <div className="settings-security-minimal-info">
+                  <span className="settings-security-minimal-title">Emergency Backup Key</span>
+                  <span className="settings-security-minimal-desc">
+                    {hasExistingBackupKey || Boolean(generatedBackupKey)
+                      ? "Single-use key ready for emergency recovery"
+                      : "Recommended for secure offline recovery"}
                   </span>
-                  <div>
-                    <strong>
-                      {currentQuestion !== "Not yet configured"
-                        ? "Security Question Configured"
-                        : "Security Question Pending"}
-                    </strong>
-                    <p className="settings-security-subtext">
-                      {currentQuestion !== "Not yet configured"
-                        ? "Active self-service recovery"
-                        : "Required for self-service recovery"}
-                    </p>
-                  </div>
-                </li>
-                <li className="settings-security-item">
-                  <span
-                    className={`settings-check-pill ${hasExistingBackupKey || Boolean(generatedBackupKey) ? "ok" : "pending"}`}
-                    aria-hidden="true"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    {hasExistingBackupKey || Boolean(generatedBackupKey) ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    ) : (
-                      "!"
-                    )}
-                  </span>
-                  <div>
-                    <strong>
-                      {hasExistingBackupKey || Boolean(generatedBackupKey)
-                        ? "Emergency Backup Key Configured"
-                        : "Emergency Backup Key Not Yet Generated"}
-                    </strong>
-                    <p className="settings-security-subtext">
-                      {hasExistingBackupKey || Boolean(generatedBackupKey)
-                        ? "Single-use key ready for emergency recovery"
-                        : "Recommended for secure offline recovery"}
-                    </p>
-                  </div>
-                </li>
-              </ul>
+                </div>
+                <span className={`settings-security-status-text ${hasExistingBackupKey || Boolean(generatedBackupKey) ? "ok" : "pending"}`}>
+                  {hasExistingBackupKey || Boolean(generatedBackupKey) ? "Configured" : "Not generated"}
+                </span>
+              </div>
             </div>
           </section>
               </div>
