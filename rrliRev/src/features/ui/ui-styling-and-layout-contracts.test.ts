@@ -84,23 +84,23 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
   describe("Design Preferences (Font Size & Compactness) Scaling Contracts", () => {
     it("enforces small font size scale across body, tables, inputs, and buttons", () => {
       assert.ok(globalsCssContent.includes('html[data-font-size="small"]'));
-      assert.ok(globalsCssContent.includes('font-size: 13.5px;'));
-      assert.ok(globalsCssContent.includes('font-size: 10px !important;'));
-      assert.ok(globalsCssContent.includes('font-size: 12px !important;'));
+      assert.ok(globalsCssContent.includes('font-size: 12px;'));
+      assert.ok(globalsCssContent.includes('font-size: 8px !important;'));
+      assert.ok(globalsCssContent.includes('font-size: 10.5px !important;'));
     });
 
     it("enforces default medium font size scale across body, tables, and buttons", () => {
       assert.ok(globalsCssContent.includes('html[data-font-size="default"]'));
-      assert.ok(globalsCssContent.includes('font-size: 15.5px;'));
-      assert.ok(globalsCssContent.includes('font-size: 11px;'));
-      assert.ok(globalsCssContent.includes('font-size: 13.5px;'));
+      assert.ok(globalsCssContent.includes('font-size: 14px;'));
+      assert.ok(globalsCssContent.includes('font-size: 9px;'));
+      assert.ok(globalsCssContent.includes('font-size: 12px;'));
     });
 
     it("enforces large font size scale across body, tables, inputs, and buttons", () => {
       assert.ok(globalsCssContent.includes('html[data-font-size="large"]'));
-      assert.ok(globalsCssContent.includes('font-size: 17.5px;'));
-      assert.ok(globalsCssContent.includes('font-size: 12.5px !important;'));
-      assert.ok(globalsCssContent.includes('font-size: 15.5px !important;'));
+      assert.ok(globalsCssContent.includes('font-size: 16px;'));
+      assert.ok(globalsCssContent.includes('font-size: 11px !important;'));
+      assert.ok(globalsCssContent.includes('font-size: 14px !important;'));
     });
 
     it("enforces compact layout density modifiers for dense whitespace", () => {
