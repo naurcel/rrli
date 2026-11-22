@@ -1730,9 +1730,6 @@ export default function TruckProfitabilityPage() {
                       >
                         <div className="truck-card-photo-wrap" style={{ overflow: "hidden", borderRadius: "23px 23px 0 0" }}>
                           <TruckPhoto plateNumber={truck.plateNumber} />
-                          <span className={`truck-capability-pill ${capability.toLowerCase()}`}>
-                            {capability}
-                          </span>
                           {isPerformanceSort && (
                             <span className="truck-rank-badge">
                               #{index + 1}
@@ -1743,14 +1740,13 @@ export default function TruckProfitabilityPage() {
                           <div className="fleet-card-title">
                             <div>
                               <h2>{truck.plateNumber}</h2>
-                              <div className="truck-type-meta-row" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                                <span className="truck-spec-badge">{truck.truckType}</span>
-                                <span className={`truck-capability-pill ${capability.toLowerCase()}`} style={{ position: "static", transform: "none" }}>
-                                  {capability}
+                              <div className="truck-type-meta-row">
+                                <span className="truck-spec-text">
+                                  {truck.truckType} · {capability}
                                 </span>
                               </div>
                             </div>
-                            <span className={`fleet-status ${ownedTruckSort === "deliveries" ? "highlight-metric" : ""}`}>
+                            <span className={`fleet-trips-text ${ownedTruckSort === "deliveries" ? "highlight-metric" : ""}`}>
                               {truck.completedTrips} trip{truck.completedTrips === 1 ? "" : "s"}
                             </span>
                           </div>
@@ -1903,7 +1899,7 @@ export default function TruckProfitabilityPage() {
                             <td><span className="truck-table-spec">{truck.truckType}</span></td>
                             <td>{capability}</td>
                             <td>
-                              <span className="fleet-status">
+                              <span className="fleet-trips-text">
                                 {truck.completedTrips} trip{truck.completedTrips === 1 ? "" : "s"}
                               </span>
                             </td>

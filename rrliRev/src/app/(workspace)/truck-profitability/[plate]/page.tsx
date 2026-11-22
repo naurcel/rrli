@@ -539,12 +539,8 @@ export default function TruckProfilePage({
               <div>
                 <h1>{activeTruck.plateNumber}</h1>
                 <div className="truck-profile-subtitle-wrap">
-                  <span className="truck-profile-type-badge">{activeTruck.truckType}</span>
-                  <span
-                    className={`truck-capability-pill ${getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability).toLowerCase()}`}
-                    style={{ position: "static", boxShadow: "none" }}
-                  >
-                    {getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability)}
+                  <span className="truck-spec-text" style={{ fontSize: "13px" }}>
+                    {activeTruck.truckType} · {getTruckStorageCapability(activeTruck.plateNumber, registeredTruck?.storageCapability)}
                   </span>
                   <span className="truck-profile-date-range" style={{ color: "var(--color-text-muted)", fontSize: "13px" }}>
                     · {formatDateRange(range)}
