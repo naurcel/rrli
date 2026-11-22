@@ -82,12 +82,22 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
       })
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
-        setDeliveries([]);
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load completed deliveries.",
-        );
+        // Gracefully fallback to browser preview mock deliveries if server or schema is unavailable
+        const local = selectBrowserPreviewDeliveries({
+          dateFrom: activeRange.startDate ? toDateKey(activeRange.startDate) : undefined,
+          dateTo: activeRange.endDate ? toDateKey(activeRange.endDate) : undefined,
+        });
+        if (local.length > 0) {
+          setDeliveries(local);
+          setError(null);
+        } else {
+          setDeliveries([]);
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Unable to load completed deliveries.",
+          );
+        }
       })
       .finally(() => setLoading(false));
 

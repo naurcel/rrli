@@ -2,7 +2,7 @@
 
 export function RouteXFooter() {
   return (
-    <footer className="routex-footer" aria-label="RouteX Application Footer">
+    <footer className="routex-footer no-print" aria-label="RouteX Application Footer">
       <div className="routex-footer-content">
         <p className="routex-footer-brand">
           Developed by RouteX for Redeemed Route Logistics Inc.

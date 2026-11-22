@@ -4823,7 +4823,18 @@ html[data-theme="dark"] .access-pill.view_only::before {
 
 /* Page-header actions keep short labels visible while their full purpose remains available on hover and focus. */
 .page-intro > div:first-child { flex: 1 1 auto; min-width: 0; }
-.fleet-intro-actions, .page-intro-actions, .report-actions { flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; }
+.fleet-intro-actions, .page-intro-actions, .report-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.fleet-intro-actions > *, .page-intro-actions > *, .report-actions > * {
+  margin: 0 !important;
+  border-radius: 8px !important;
+}
 .page-intro-action {
   position: relative;
   flex: 0 0 auto;
@@ -16775,28 +16786,6 @@ html[data-theme="dark"] .revenue-chart-controls .global-date-picker .date-picker
 }
 
 html[data-theme="dark"] .revenue-chart-controls .date-picker-months button {
-  background: var(--color-surface-subtle, #18191d) !important;
-  border-color: var(--color-border) !important;
-  color: var(--color-text-primary) !important;
-}
-
-html[data-theme="dark"] .revenue-chart-controls .date-picker-months button:hover {
-  background: var(--color-accent-soft) !important;
-  border-color: var(--color-accent) !important;
-}
-
-/* 3. Attention Needed Expandable Sections & Independent Scrolling */
-.dashboard-attention-card {
-  display: flex;
-  flex-direction: column;
-}
-
-.dashboard-attention-card .records-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .expand-all-text-button {
   background: transparent;
   border: 0;
@@ -19458,15 +19447,16 @@ html[data-theme="dark"] .permission-badge.restricted {
   display: none !important;
 }
 
+/* Page print orientation and margins */
+@page {
+  size: portrait;
+  margin: 14mm 15mm 14mm 15mm;
+}
+
 /* ==========================================================================
    Authoritative Print Stylesheet (@media print)
    ========================================================================== */
 @media print {
-  @page {
-    size: portrait;
-    margin: 14mm 15mm 14mm 15mm;
-  }
-
   /* Universal shadow, outline, transition, and animation reset */
   *,
   *::before,
@@ -19515,13 +19505,17 @@ html[data-theme="dark"] .permission-badge.restricted {
   }
 
   /* Completely suppress all web application chrome, navigation, toolbars, and controls */
+  .no-print,
+  .no-print *,
   aside.sidebar,
   .sidebar,
+  .sidebar *,
   .sidebar-header,
   .sidebar-collapse-toggle,
   .sidebar-radiating-rays,
   header.topbar,
   .topbar,
+  .topbar *,
   .topbar-primary,
   .topbar-actions,
   .account-control,
@@ -19548,6 +19542,12 @@ html[data-theme="dark"] .permission-badge.restricted {
   .theme-toggle-floating,
   .screen-only,
   .report-screen-only-row {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* In reports workspace, only print the report document sheet */
+  .report-workspace > *:not(.report-document) {
     display: none !important;
   }
 

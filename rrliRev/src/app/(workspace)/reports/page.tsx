@@ -273,7 +273,7 @@ export default function ReportsPage() {
       />
 
       <div className="content-wrap report-page">
-        <header className="page-intro report-intro">
+        <header className="page-intro report-intro no-print">
           <div>
             <h1>Reports</h1>
             <p className="subtitle">
@@ -348,7 +348,7 @@ export default function ReportsPage() {
 
         <div className={`report-workspace${loading ? " is-loading" : ""}`}>
           {/* Report Format Selection Tabs */}
-          <div className="report-tabs-bar">
+          <div className="report-tabs-bar no-print">
             <div className="report-tabs" role="tablist" aria-label="Standard report formats">
               {BUILTIN_REPORT_TEMPLATES.map((tpl) => (
                 <button
@@ -373,7 +373,7 @@ export default function ReportsPage() {
 
           {/* Daily Trip Fixed-Day Date Navigation Controls */}
           {isDailyTripReport && (
-            <div className="daily-trip-date-bar">
+            <div className="daily-trip-date-bar no-print">
               <div className="daily-trip-date-controls">
                 <span className="daily-trip-date-label">Trip Date:</span>
                 <button
@@ -763,15 +763,17 @@ export default function ReportsPage() {
               </div>
 
               {processedReport.rows.length > 0 ? (
-                <TablePagination
-                  page={reportPage}
-                  pageCount={reportPageCount}
-                  totalItems={sortedRows.length}
-                  pageSize={REPORT_PAGE_SIZE}
-                  onPageChange={setReportPage}
-                  itemLabel={activeTemplate.baseType === "trip_ledger" ? "trips" : "records"}
-                  itemCountInPage={paginatedRows.length}
-                />
+                <div className="no-print">
+                  <TablePagination
+                    page={reportPage}
+                    pageCount={reportPageCount}
+                    totalItems={sortedRows.length}
+                    pageSize={REPORT_PAGE_SIZE}
+                    onPageChange={setReportPage}
+                    itemLabel={activeTemplate.baseType === "trip_ledger" ? "trips" : "records"}
+                    itemCountInPage={paginatedRows.length}
+                  />
+                </div>
               ) : null}
             </section>
 

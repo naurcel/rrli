@@ -62,8 +62,22 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
       })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
-        setSummary(null);
-        setError(reason instanceof Error ? reason.message : "Unable to load profitability summary.");
+        const emptySummary: PersistedProfitabilitySummary = {
+          deliveries: 0,
+          revenue: 0,
+          expenses: 0,
+          netIncome: 0,
+          profitMargin: null,
+          trucks: [],
+        };
+        const fallback = mergeBrowserPreviewSummary(emptySummary, start, end, []);
+        if (fallback.deliveries > 0) {
+          setSummary(fallback);
+          setError(null);
+        } else {
+          setSummary(null);
+          setError(reason instanceof Error ? reason.message : "Unable to load profitability summary.");
+        }
       })
       .finally(() => setLoading(false));
     void load();

@@ -524,13 +524,14 @@ export default function FinancePage() {
             <h1>Company Finance</h1>
             <p className="subtitle">Company income and operating expenses.</p>
           </div>
-          <div className="page-intro-actions fleet-intro-actions" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div className="page-intro-actions fleet-intro-actions" style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             {canManage ? (
               <>
                 <Link
                   className="secondary-button page-intro-action"
                   href="/finance/import"
                   aria-label="Import company finance spreadsheet"
+                  style={{ borderRadius: "8px", margin: "0" }}
                 >
                   Import
                 </Link>
@@ -538,6 +539,7 @@ export default function FinancePage() {
                   type="button"
                   className="secondary-button page-intro-action finance-record-income-btn"
                   onClick={openRecordIncomeModal}
+                  style={{ borderRadius: "8px", margin: "0" }}
                 >
                   + Record Income
                 </button>
@@ -545,6 +547,7 @@ export default function FinancePage() {
                   type="button"
                   className="primary-action-button page-intro-action"
                   onClick={openRecordExpenseModal}
+                  style={{ borderRadius: "8px", margin: "0" }}
                 >
                   + Record Expense
                 </button>

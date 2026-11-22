@@ -49,7 +49,7 @@ export function OperationalSidebar() {
 
   return (
     <aside
-      className={`sidebar${sidebarReady ? " sidebar-ready" : ""}${collapsed ? " collapsed" : ""}${collapsed && headerHovered ? " collapsed-hovered" : ""}`}
+      className={`sidebar no-print${sidebarReady ? " sidebar-ready" : ""}${collapsed ? " collapsed" : ""}${collapsed && headerHovered ? " collapsed-hovered" : ""}`}
       style={{ "--sidebar-width": `${width}px` } as React.CSSProperties}
     >
       <div

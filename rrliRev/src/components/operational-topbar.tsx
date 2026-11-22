@@ -11,7 +11,7 @@ export function OperationalTopbar({
   showDateFilter?: boolean;
 }) {
   return (
-    <header className="topbar">
+    <header className="topbar no-print">
       <div className="topbar-primary">
         {showDateFilter ? (
           <div className="topbar-filter-slot">
