@@ -46,9 +46,6 @@ const SIMPLIFIED_PACKAGES: Record<
     title: string;
     description: string;
     ext: string;
-    themeColor: string;
-    themeBg: string;
-    themeBorder: string;
     icon: (size?: number) => React.ReactNode;
   }
 > = {
@@ -56,46 +53,31 @@ const SIMPLIFIED_PACKAGES: Record<
     title: "Excel Workbook",
     description: "Deliveries, store drop-offs, truck profitability, and expenses.",
     ext: "xlsx",
-    themeColor: "#059669",
-    themeBg: "rgba(5, 150, 105, 0.08)",
-    themeBorder: "rgba(5, 150, 105, 0.2)",
-    icon: (size = 20) => <Table size={size} strokeWidth={2} aria-hidden="true" />,
+    icon: (size = 18) => <Table size={size} strokeWidth={1.8} aria-hidden="true" />,
   },
   datasets_csv: {
     title: "CSV Spreadsheets",
     description: "Deliveries, stores, trucks, and expenses in comma-separated format.",
     ext: "csv",
-    themeColor: "#0d9488",
-    themeBg: "rgba(13, 148, 136, 0.08)",
-    themeBorder: "rgba(13, 148, 136, 0.2)",
-    icon: (size = 20) => <FileSpreadsheet size={size} strokeWidth={2} aria-hidden="true" />,
+    icon: (size = 18) => <FileSpreadsheet size={size} strokeWidth={1.8} aria-hidden="true" />,
   },
   database_json: {
     title: "JSON Database",
     description: "Structured JSON dump of all records, foreign keys, and tables.",
     ext: "json",
-    themeColor: "#d97706",
-    themeBg: "rgba(217, 119, 6, 0.08)",
-    themeBorder: "rgba(217, 119, 6, 0.2)",
-    icon: (size = 20) => <FileCode2 size={size} strokeWidth={2} aria-hidden="true" />,
+    icon: (size = 18) => <FileCode2 size={size} strokeWidth={1.8} aria-hidden="true" />,
   },
   database_sql: {
     title: "SQL Database Dump",
     description: "Portable PostgreSQL schema definitions and INSERT statements.",
     ext: "sql",
-    themeColor: "#4f46e5",
-    themeBg: "rgba(79, 70, 229, 0.08)",
-    themeBorder: "rgba(79, 70, 229, 0.2)",
-    icon: (size = 20) => <Database size={size} strokeWidth={2} aria-hidden="true" />,
+    icon: (size = 18) => <Database size={size} strokeWidth={1.8} aria-hidden="true" />,
   },
   website_recreation: {
     title: "Offline Web App",
     description: "Standalone interactive dashboard with preloaded data.",
     ext: "html",
-    themeColor: "#7c3aed",
-    themeBg: "rgba(124, 58, 237, 0.08)",
-    themeBorder: "rgba(124, 58, 237, 0.2)",
-    icon: (size = 20) => <Globe size={size} strokeWidth={2} aria-hidden="true" />,
+    icon: (size = 18) => <Globe size={size} strokeWidth={1.8} aria-hidden="true" />,
   },
 };
 
@@ -349,7 +331,7 @@ export function ReportsDataExportTab({
         </div>
 
         {/* Package List */}
-        <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: "14px" }}>
+        <div className="export-package-list">
           {PACKAGE_ORDER.map((pkgId) => {
             const simple = SIMPLIFIED_PACKAGES[pkgId];
             const matchingApprovedReq = !isAdmin
@@ -375,137 +357,75 @@ export function ReportsDataExportTab({
               : null;
 
             return (
-              <div
-                key={pkgId}
-                className="export-package-row"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "20px",
-                  padding: "18px 22px",
-                  borderRadius: "12px",
-                  background: "var(--color-surface, #ffffff)",
-                  border: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08))",
-                  transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "16px", minWidth: 0, flex: 1 }}>
-                  <div
-                    style={{
-                      width: "44px",
-                      height: "44px",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      background: simple.themeBg,
-                      border: `1px solid ${simple.themeBorder}`,
-                      color: simple.themeColor,
-                    }}
-                  >
-                    {simple.icon(22)}
+              <div key={pkgId} className="export-package-row">
+                <div className="export-package-info-wrap">
+                  <div className="export-package-icon">
+                    {simple.icon(18)}
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "3px", minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                      <span style={{ fontSize: "14.5px", fontWeight: 650, color: "var(--color-text-primary)" }}>
+                  <div className="export-package-text">
+                    <div className="export-package-title-line">
+                      <span className="export-package-title">
                         {simple.title}
                       </span>
-                      <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text-muted)" }}>
+                      <span className="export-package-ext">
                         .{simple.ext}
                       </span>
                     </div>
-                    <p style={{ margin: 0, fontSize: "12.5px", color: "var(--color-text-secondary)", lineHeight: 1.45 }}>
+                    <p className="export-package-desc">
                       {simple.description}
                     </p>
                   </div>
                 </div>
 
-                <div style={{ flexShrink: 0 }}>
+                <div className="export-package-action">
                   {isAdmin ? (
                     <button
                       type="button"
-                      className="primary-action-button"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "7px",
-                        minHeight: "36px",
-                        padding: "0 18px",
-                        fontSize: "12.5px",
-                        fontWeight: 600,
-                        borderRadius: "8px",
-                      }}
+                      className="export-action-btn"
                       onClick={() => handleDirectDownload(pkgId)}
                     >
-                      <Download size={14} strokeWidth={2.2} aria-hidden="true" />
-                      Export
+                      <Download size={13} strokeWidth={2} aria-hidden="true" />
+                      <span>Export</span>
                     </button>
                   ) : matchingApprovedReq ? (
                     <button
                       type="button"
-                      className="primary-action-button"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "7px",
-                        background: "var(--color-status-success, #059669)",
-                        minHeight: "36px",
-                        padding: "0 18px",
-                        fontSize: "12.5px",
-                        fontWeight: 600,
-                        borderRadius: "8px",
-                      }}
+                      className="export-action-btn is-approved"
                       onClick={() => handleDownloadApprovedRequest(matchingApprovedReq)}
                     >
-                      <Download size={14} strokeWidth={2.2} aria-hidden="true" />
-                      Download
+                      <Download size={13} strokeWidth={2} aria-hidden="true" />
+                      <span>Download</span>
                     </button>
                   ) : matchingPendingReq ? (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled
-                      style={{ opacity: 0.7, minHeight: "36px", padding: "0 18px", fontSize: "12.5px", borderRadius: "8px" }}
-                    >
+                    <span className="export-status-pending-text">
                       Pending Approval
-                    </button>
+                    </span>
                   ) : (
                     <button
                       type="button"
-                      className="secondary-button"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "7px",
-                        minHeight: "36px",
-                        padding: "0 18px",
-                        fontSize: "12.5px",
-                        fontWeight: 500,
-                        borderRadius: "8px",
-                      }}
+                      className="export-action-btn"
                       onClick={() => {
                         setRequestingPackage(pkgId);
                         setRequestError(null);
                       }}
                     >
-                      <Send size={14} strokeWidth={2} aria-hidden="true" />
-                      Request Export
+                      <Send size={13} strokeWidth={2} aria-hidden="true" />
+                      <span>Request</span>
                     </button>
                   )}
                 </div>
               </div>
             );
           })}
+        </div>
 
-          {/* Inline Request Form */}
-          {requestingPackage && canRequest ? (
+        {/* Inline Request Form */}
+        {requestingPackage && canRequest ? (
+          <div style={{ padding: "0 28px 24px" }}>
             <form
               onSubmit={handleSubmitExportRequest}
               className="export-request-form"
               style={{
-                marginTop: "14px",
                 padding: "22px 24px",
                 borderRadius: "12px",
                 background: "var(--color-surface-subtle, #f8fafc)",
@@ -578,15 +498,15 @@ export function ReportsDataExportTab({
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                   type="submit"
-                  className="primary-action-button"
-                  style={{ minHeight: "36px", padding: "0 20px", fontSize: "13px", fontWeight: 600, borderRadius: "8px" }}
+                  className="export-action-btn is-approved"
+                  style={{ minHeight: "34px", padding: "0 18px", fontSize: "12.5px" }}
                 >
                   Submit Request
                 </button>
               </div>
             </form>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </section>
 
       {/* 2. Requests & Approvals Queue Section */}
@@ -675,20 +595,14 @@ export function ReportsDataExportTab({
                       <td className="export-td-package" style={{ padding: "16px 18px", verticalAlign: "middle" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                           <div
+                            className="export-package-icon"
                             style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "7px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                              background: meta?.themeBg ?? "rgba(0,0,0,0.04)",
-                              border: `1px solid ${meta?.themeBorder ?? "rgba(0,0,0,0.1)"}`,
-                              color: meta?.themeColor ?? "var(--color-text-secondary)",
+                              width: "30px",
+                              height: "30px",
+                              borderRadius: "6px",
                             }}
                           >
-                            {meta?.icon ? meta.icon(16) : null}
+                            {meta?.icon ? meta.icon(15) : null}
                           </div>
                           <div style={{ minWidth: 0 }}>
                             <strong className="export-pkg-title" style={{ fontSize: "13.5px", fontWeight: 650, color: "var(--color-text-primary)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -877,26 +791,12 @@ export function ReportsDataExportTab({
                           {canDownloadThis ? (
                             <button
                               type="button"
-                              className={isAdmin ? "export-btn-download-secondary" : "export-btn-download-primary"}
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                height: "30px",
-                                padding: "0 13px",
-                                fontSize: "12px",
-                                fontWeight: 600,
-                                borderRadius: "6px",
-                                border: "none",
-                                background: "var(--color-accent-deep, #1e293b)",
-                                color: "#ffffff",
-                                cursor: "pointer",
-                                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)",
-                              }}
+                              className="export-action-btn is-approved"
+                              style={{ minHeight: "28px", padding: "0 11px", fontSize: "11.5px" }}
                               onClick={() => handleDownloadApprovedRequest(req)}
                             >
-                              <Download size={13} strokeWidth={2.2} aria-hidden="true" />
-                              Download
+                              <Download size={12} strokeWidth={2} aria-hidden="true" />
+                              <span>Download</span>
                             </button>
                           ) : null}
                         </div>

@@ -13107,24 +13107,6 @@ html[data-theme="dark"] .delivery-status-tab.is-incomplete-tab .tab-count-badge 
   color: var(--color-text-primary);
 }
 
-/* Truck Info Stack */
-.truck-info-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.truck-plate-label {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-primary);
-}
-
-.truck-type-meta {
-  font-size: 11px;
-  color: var(--color-text-muted);
-}
-
 /* Delivery Ledger Temperature (Clean Text) */
 .cell-temp {
   font-variant-numeric: tabular-nums;
@@ -16867,4 +16849,16 @@ html[data-theme="dark"] .revenue-chart-controls .global-date-filter {
   background: var(--color-surface, #121316) !important;
   border: 1px solid var(--color-border) !important;
   color: var(--color-text-primary, #f1f5f9) !important;
+  box-shadow: none !important;
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+}
+
+html[data-theme="dark"] .revenue-chart-controls .global-date-filter:hover {
+  transform: translateY(-1.5px) !important;
+  background: var(--color-surface-subtle, #18191d) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  color: var(--color-text-primary, #f1f5f9) !important;
+  box-shadow: none !important;
+}
+
 ... [truncated for diff preview]
