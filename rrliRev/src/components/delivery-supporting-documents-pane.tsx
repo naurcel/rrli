@@ -265,15 +265,12 @@ export function DeliverySupportingDocumentsPane({
       {/* Header Bar */}
       <div className="supporting-docs-header-bar">
         <div className="supporting-docs-header-titles">
-          <div className="supporting-docs-title-row">
-            <h3 className="supporting-docs-pane-title">Supporting Documents</h3>
-            <span
-              className="routex-badge tone-neutral"
-              style={{ fontSize: "10.5px", padding: "1px 6px", fontWeight: 700 }}
-            >
-              {normalizedDocs.length}
+          <h3 className="supporting-docs-pane-title">
+            Supporting Documents{" "}
+            <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text-muted)" }}>
+              ({normalizedDocs.length})
             </span>
-          </div>
+          </h3>
           <span className="supporting-docs-pane-hint">
             Receipts, gate passes, fuel invoices &amp; store attachments
           </span>
@@ -282,13 +279,14 @@ export function DeliverySupportingDocumentsPane({
         {canManage ? (
           <button
             type="button"
-            className="supporting-docs-attach-btn"
+            className="secondary-button supporting-docs-attach-btn"
             onClick={() => fileInputRef.current?.click()}
             title="Browse and attach files"
+            style={{ fontSize: "11.5px", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: "5px" }}
           >
             <svg
-              width="13"
-              height="13"
+              width="12"
+              height="12"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -354,8 +352,8 @@ export function DeliverySupportingDocumentsPane({
               </svg>
             </div>
             <div className="supporting-docs-upload-copy">
-              <strong>Drop files here, or click to browse</strong>
-              <small>PDF, PNG, JPG up to 10MB</small>
+              <span className="supporting-docs-upload-title">Drop files here, or click to browse</span>
+              <span className="supporting-docs-upload-hint">PDF, PNG, JPG up to 10MB</span>
             </div>
           </div>
 
@@ -435,18 +433,18 @@ export function DeliverySupportingDocumentsPane({
                 <line x1="9" y1="15" x2="15" y2="15" />
               </svg>
             </div>
-            <strong className="supporting-docs-empty-title">
+            <div className="supporting-docs-empty-title">
               {filter === "all"
                 ? "No supporting documents"
                 : filter === "trip"
                   ? "No trip-wide documents"
                   : "No store-linked documents"}
-            </strong>
-            <span className="supporting-docs-empty-desc">
+            </div>
+            <div className="supporting-docs-empty-desc">
               {canManage
                 ? "Drop receipts, gate passes, or fuel slips to attach them."
                 : "No supporting files have been attached to this trip yet."}
-            </span>
+            </div>
           </div>
         ) : (
           displayedDocs.map((doc, displayIndex) => {

@@ -1089,21 +1089,14 @@ function DeliveryDetailsPageContent({
                 Stop sequence, entry fees, and proof of delivery records
               </p>
             </div>
-            <div className="delivery-fulfillment-summary-badges">
-              <span className="routex-badge tone-primary">
-                {totalDropoffs} {totalDropoffs === 1 ? "DROP-OFF" : "DROP-OFFS"}
+            <div className="delivery-fulfillment-summary-meta">
+              <span>
+                <strong>{totalDropoffs}</strong> {totalDropoffs === 1 ? "drop-off" : "drop-offs"}
+                {totalDropoffs !== delivery.dropoffs.length ? ` (${delivery.dropoffs.length} locations)` : ""}
               </span>
-              {totalDropoffs !== delivery.dropoffs.length ? (
-                <span className="routex-badge tone-neutral">
-                  {delivery.dropoffs.length} {delivery.dropoffs.length === 1 ? "LOCATION" : "LOCATIONS"}
-                </span>
-              ) : null}
-              <span
-                className={`routex-badge ${
-                  delivery.dropoffs.every((s) => s.podSubmitted) ? "tone-success" : "tone-warning"
-                }`}
-              >
-                {delivery.dropoffs.filter((s) => s.podSubmitted).length}/{delivery.dropoffs.length} POD
+              <span className="delivery-fulfillment-meta-sep">·</span>
+              <span className={delivery.dropoffs.every((s) => s.podSubmitted) ? "fulfillment-meta-pod-success" : "fulfillment-meta-pod-missing"}>
+                {delivery.dropoffs.filter((s) => s.podSubmitted).length}/{delivery.dropoffs.length} POD attached
               </span>
             </div>
           </div>

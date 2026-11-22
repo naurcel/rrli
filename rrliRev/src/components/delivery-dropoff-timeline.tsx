@@ -109,38 +109,34 @@ export function DeliveryDropoffTimeline({
             <div className="drawer-dropoff-card">
               <div className="drawer-dropoff-card-header">
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                  <span className="drawer-dropoff-stop-tag">Stop #{stopNumber}</span>
-                  <span
-                    className="routex-badge tone-neutral"
-                    style={{ fontSize: "10px", padding: "1px 6px", fontWeight: 600 }}
-                  >
-                    {stop.dropoffCount ?? 1} {stop.dropoffCount === 1 ? "drop-off" : "drop-offs"}
+                  <strong style={{ fontSize: "12.5px", color: "var(--color-text-primary)" }}>Stop #{stopNumber}</strong>
+                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
+                    · {stop.dropoffCount ?? 1} {(stop.dropoffCount ?? 1) === 1 ? "drop-off" : "drop-offs"}
                   </span>
                   {linkedDocs.length > 0 ? (
                     <span
-                      className="routex-badge tone-primary"
-                      style={{ fontSize: "9.5px", padding: "1px 5px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}
+                      style={{ fontSize: "11px", color: "var(--color-text-muted)", display: "inline-flex", alignItems: "center", gap: "3px" }}
                       title={`Linked supporting documents: ${linkedDocs.map((d) => d.name).join(", ")}`}
                     >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      · <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l7.9-7.9" />
                       </svg>
                       {linkedDocs.length} {linkedDocs.length === 1 ? "doc" : "docs"}
                     </span>
                   ) : null}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   {stop.podSubmitted ? (
-                    <button
-                      type="button"
-                      className="drawer-dropoff-doc-pill has-doc"
-                      title="View Proof of Delivery"
-                      aria-label="View Proof of Delivery"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onViewPod?.(stop);
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontSize: "11.5px",
+                        fontWeight: 600,
+                        color: "var(--color-status-success, #059669)",
                       }}
-                      style={{ border: "none", cursor: "pointer" }}
+                      title="Proof of delivery attached (click stop to preview)"
                     >
                       <svg
                         width="11"
@@ -156,9 +152,19 @@ export function DeliveryDropoffTimeline({
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                       <span>POD Attached</span>
-                    </button>
+                    </span>
                   ) : (
-                    <span className="drawer-dropoff-doc-pill no-doc" title="Missing POD" aria-label="Missing POD">
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontSize: "11.5px",
+                        fontWeight: 600,
+                        color: "var(--color-accent-deep, #b45309)",
+                      }}
+                      title="Proof of delivery document missing"
+                    >
                       <svg
                         width="11"
                         height="11"
@@ -181,7 +187,7 @@ export function DeliveryDropoffTimeline({
                   {canManage ? (
                     <button
                       type="button"
-                      className="pod-inline-attach-btn"
+                      className="secondary-button"
                       onClick={(e) => triggerAttach(stop.id, e)}
                       title={stop.podSubmitted ? "Replace POD document" : "Attach POD document"}
                       style={{
@@ -189,17 +195,13 @@ export function DeliveryDropoffTimeline({
                         alignItems: "center",
                         gap: "4px",
                         fontSize: "11px",
-                        padding: "2px 7px",
-                        borderRadius: "6px",
-                        border: "1px solid var(--line, rgba(255,255,255,0.12))",
-                        background: "var(--color-surface-subtle, rgba(255,255,255,0.06))",
-                        color: "inherit",
-                        cursor: "pointer",
+                        padding: "2px 8px",
+                        lineHeight: 1.4,
                       }}
                     >
                       <svg
-                        width="11"
-                        height="11"
+                        width="10"
+                        height="10"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
