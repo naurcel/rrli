@@ -127,28 +127,67 @@ function buildSmoothPath(
     return Math.min(Math.max(val, bounds.minY), bounds.maxY);
   };
 
+  const n = points.length;
+  const dxs: number[] = [];
+  const dys: number[] = [];
+  const slopes: number[] = [];
+
+  for (let i = 0; i < n - 1; i++) {
+    const dx = points[i + 1].x - points[i].x;
+    const dy = points[i + 1].y - points[i].y;
+    dxs.push(dx);
+    dys.push(dy);
+    slopes.push(dx === 0 ? 0 : dy / dx);
+  }
+
+  // Monotone cubic Hermite spline tangents (Fritsch-Carlson algorithm)
+  // Preserves monotonicity, eliminates unnatural overshoots, loops, and kinks
+  const tangents: number[] = new Array(n).fill(0);
+  tangents[0] = slopes[0];
+  tangents[n - 1] = slopes[n - 2];
+
+  for (let i = 1; i < n - 1; i++) {
+    const m0 = slopes[i - 1];
+    const m1 = slopes[i];
+    if (m0 * m1 <= 0) {
+      tangents[i] = 0;
+    } else {
+      const dx0 = dxs[i - 1];
+      const dx1 = dxs[i];
+      tangents[i] = (3 * (dx0 + dx1)) / ((2 * dx1 + dx0) / m0 + (dx1 + 2 * dx0) / m1);
+    }
+  }
+
+  for (let i = 0; i < n - 1; i++) {
+    const slope = slopes[i];
+    if (Math.abs(slope) < 1e-7) {
+      tangents[i] = 0;
+      tangents[i + 1] = 0;
+    } else {
+      const alpha = tangents[i] / slope;
+      const beta = tangents[i + 1] / slope;
+      const dist = alpha * alpha + beta * beta;
+      if (dist > 9) {
+        const tau = 3 / Math.sqrt(dist);
+        tangents[i] = tau * alpha * slope;
+        tangents[i + 1] = tau * beta * slope;
+      }
+    }
+  }
+
   let path = `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const dx = dxs[i] / 3;
 
-  // Centripetal Catmull-Rom cubic spline conversion with gentle curvature
-  const tension = 0.35; // optimal curvature preventing overshooting peaks
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i === 0 ? 0 : i - 1];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2 < points.length ? i + 2 : points.length - 1];
+    const cp1x = p0.x + dx;
+    const cp1y = clampY(p0.y + tangents[i] * dx);
 
-    const dx1 = p2.x - p0.x;
-    const dy1 = p2.y - p0.y;
-    const dx2 = p3.x - p1.x;
-    const dy2 = p3.y - p1.y;
+    const cp2x = p1.x - dx;
+    const cp2y = clampY(p1.y - tangents[i + 1] * dx);
 
-    const cp1x = p1.x + dx1 * tension;
-    const cp1y = clampY(p1.y + dy1 * tension);
-
-    const cp2x = p2.x - dx2 * tension;
-    const cp2y = clampY(p2.y - dy2 * tension);
-
-    path += ` C ${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+    path += ` C ${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p1.x.toFixed(2)},${p1.y.toFixed(2)}`;
   }
 
   return path;
@@ -671,6 +710,8 @@ function DashboardFinancialChart({
                     />
                     {singleCoordinates.map((point, index) => {
                       const isActive = activeIndex === index;
+                      const showPoint = isActive || singleCoordinates.length <= 16;
+                      if (!showPoint) return null;
                       return (
                         <g
                           className={`chart-point${isActive ? " active" : ""}`}

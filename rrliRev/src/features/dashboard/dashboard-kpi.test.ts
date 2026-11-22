@@ -325,3 +325,29 @@ test("buildFinancialTimeSeries divides custom ranges into evenly sized buckets",
   assert.deepEqual(series.map((point) => point.label), ["Nov 1–2", "Nov 3–5", "Nov 6–7", "Nov 8–10", "Nov 11–12", "Nov 13–15", "Nov 16–17", "Nov 18–20"]);
   assert.ok(series.every((point) => point.granularity === "custom"));
 });
+
+test("buildFinancialTimeSeries cleanly buckets multi-week spans for All time", () => {
+  const trips: DeliveryTripRecord[] = [
+    createMockTrip({
+      id: "trip-oct",
+      deliveryDate: "2026-10-15",
+      deliveryRate: 30_000,
+    }),
+    createMockTrip({
+      id: "trip-nov",
+      deliveryDate: "2026-11-15",
+      deliveryRate: 40_000,
+    }),
+  ];
+
+  const series = buildFinancialTimeSeries(trips, [], {
+    startDate: null,
+    endDate: null,
+    preset: "all",
+  });
+
+  // Span is ~32 days (15-90 days range), so it buckets by week into 5 weekly buckets
+  assert.equal(series.length, 5);
+  assert.ok(series.every((point) => point.granularity === "week"));
+  assert.equal(series.reduce((sum, p) => sum + p.revenue, 0), 70_000);
+});

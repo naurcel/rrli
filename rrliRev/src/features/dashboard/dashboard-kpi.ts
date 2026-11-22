@@ -431,7 +431,62 @@ export function buildFinancialTimeSeries(
     ...companyExpenseAggregates.keys(),
   ]);
 
-  return Array.from(allDates)
-    .sort((a, b) => a.localeCompare(b))
-    .map(makePoint);
+  if (allDates.size === 0) return [];
+
+  const sortedDates = Array.from(allDates).sort((a, b) => a.localeCompare(b));
+  const earliestParts = sortedDates[0].split("-").map(Number);
+  const latestParts = sortedDates[sortedDates.length - 1].split("-").map(Number);
+  const earliestDate = new Date(earliestParts[0], earliestParts[1] - 1, earliestParts[2]);
+  const latestDate = new Date(latestParts[0], latestParts[1] - 1, latestParts[2]);
+  const daySpan = Math.round((latestDate.getTime() - earliestDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+  // For short spans (<= 14 days), provide a continuous daily series
+  if (daySpan <= 14) {
+    const days: FinancialTimeSeriesPoint[] = [];
+    const cursor = new Date(earliestDate);
+    while (cursor <= latestDate) {
+      days.push({ ...makePoint(dateKey(cursor)), granularity: "day" });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  }
+
+  // Multi-week span (15 to 90 days): bucket into 7-day intervals for smooth, meaningful financial trends
+  if (daySpan <= 90) {
+    const allDays: FinancialTimeSeriesPoint[] = [];
+    const cursor = new Date(earliestDate);
+    while (cursor <= latestDate) {
+      allDays.push(makePoint(dateKey(cursor)));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    const buckets: FinancialTimeSeriesPoint[] = [];
+    for (let index = 0; index < allDays.length; index += 7) {
+      const bucketPoints = allDays.slice(index, index + 7);
+      const bucketStart = addCalendarDays(earliestDate, index);
+      const bucketEnd = addCalendarDays(bucketStart, bucketPoints.length - 1);
+      buckets.push(
+        sumPoints(bucketPoints, bucketStart, "week", shortRangeLabel(bucketStart, bucketEnd)),
+      );
+    }
+    return buckets;
+  }
+
+  // Long span (> 90 days): bucket into clean monthly / evenly distributed intervals
+  const allDays: FinancialTimeSeriesPoint[] = [];
+  const cursor = new Date(earliestDate);
+  while (cursor <= latestDate) {
+    allDays.push(makePoint(dateKey(cursor)));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  const bucketCount = Math.min(12, Math.max(6, Math.round(daySpan / 30)));
+  return Array.from({ length: bucketCount }, (_, index) => {
+    const startIndex = Math.floor((index * allDays.length) / bucketCount);
+    const endIndex = Math.floor(((index + 1) * allDays.length) / bucketCount);
+    const bucketPoints = allDays.slice(startIndex, endIndex);
+    const bucketStart = addCalendarDays(earliestDate, startIndex);
+    const bucketEnd = addCalendarDays(bucketStart, bucketPoints.length - 1);
+    return sumPoints(bucketPoints, bucketStart, "month", shortRangeLabel(bucketStart, bucketEnd));
+  });
 }
