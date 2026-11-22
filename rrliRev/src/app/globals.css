@@ -1164,46 +1164,16 @@ html[data-reduce-motion="true"] .sidebar-rays-glow {
 .subcontracted-trucks-table { margin-top: 34px; }
 .subcontracted-trucks-table .records-heading { align-items: center; }
 .subcontracted-trucks-table table { min-width: 760px; }
-.truck-ownership-badge,
 .truck-ownership-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1.3;
-  white-space: nowrap;
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: 600;
 }
 
-.truck-ownership-badge.owned,
-.truck-ownership-label.owned {
-  background: color-mix(in srgb, var(--color-status-success, #059669) 14%, transparent);
-  color: var(--color-status-success, #059669);
-  border: 1px solid color-mix(in srgb, var(--color-status-success, #059669) 25%, transparent);
-}
-
-.truck-ownership-badge.subcontracted,
 .truck-ownership-label.subcontracted {
-  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-  color: var(--color-accent-deep, #b45309);
-  border: 1px solid color-mix(in srgb, var(--color-accent) 25%, transparent);
-}
-
-html[data-theme="dark"] .truck-ownership-badge.owned,
-html[data-theme="dark"] .truck-ownership-label.owned {
-  background: color-mix(in srgb, var(--color-status-success, #059669) 20%, transparent);
-  color: #34d399;
-  border-color: color-mix(in srgb, var(--color-status-success, #059669) 35%, transparent);
-}
-
-html[data-theme="dark"] .truck-ownership-badge.subcontracted,
-html[data-theme="dark"] .truck-ownership-label.subcontracted {
-  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
-  color: #fbbf24;
-  border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  color: var(--color-accent-deep);
 }
 .truck-profitability-card { width: 100%; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; position: relative; }
 .truck-card-delete-btn {

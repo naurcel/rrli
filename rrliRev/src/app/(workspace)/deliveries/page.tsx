@@ -1091,14 +1091,12 @@ export default function DeliveriesPage() {
                       <td className="truck-code cell-truck">
                         <div className="truck-info-stack">
                           <span className="truck-plate-label">{trip.plateNumber}</span>
-                          <div className="truck-type-row" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                            <span className="truck-type-meta">{trip.truckType}</span>
-                            <span className={`truck-ownership-badge truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
-                              {trip.truckOwnership === "Subcontracted"
-                                ? (truckerByPlate.get(trip.plateNumber.toUpperCase()) || "Subcon")
-                                : "Owned"}
-                            </span>
-                          </div>
+                          <span className="truck-type-meta">{trip.truckType}</span>
+                          <span className={`truck-ownership-label ${trip.truckOwnership.toLowerCase()}`}>
+                            {trip.truckOwnership === "Subcontracted"
+                              ? (truckerByPlate.get(trip.plateNumber.toUpperCase()) || "Subcon")
+                              : "Owned"}
+                          </span>
                         </div>
                       </td>
                       <td className="cell-temp">

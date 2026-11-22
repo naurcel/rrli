@@ -1388,12 +1388,8 @@ export default function DashboardPage() {
                         </td>
                         <td className="truck-code">
                           <strong>{trip.plateNumber}</strong>
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                            <small>{trip.truckType}</small>
-                            <span className={`truck-ownership-badge ${trip.truckOwnership ? trip.truckOwnership.toLowerCase() : "owned"}`}>
-                              {trip.truckOwnership === "Subcontracted" ? "Subcon" : "Owned"}
-                            </span>
-                          </div>
+                          <br />
+                          <small>{trip.truckType}</small>
                         </td>
                         <td>
                           <span className="recent-dropoff-pill">
