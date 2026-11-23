@@ -597,7 +597,7 @@ export default function FinancePage() {
         <section className="stat-grid" aria-label="Company finance summary">
           <button
             type="button"
-            className={`stat-card is-interactive${typeFilter === "Incoming" ? " is-active" : ""}`}
+            className={`stat-card stat-card-revenue stat-card-income is-interactive${typeFilter === "Incoming" ? " is-active" : ""}`}
             onClick={() => {
               setTypeFilter((curr) => (curr === "Incoming" ? "all" : "Incoming"));
               setPage(1);
@@ -621,7 +621,7 @@ export default function FinancePage() {
 
           <button
             type="button"
-            className={`stat-card is-interactive${typeFilter === "Outgoing" ? " is-active" : ""}`}
+            className={`stat-card stat-card-expenses stat-card-outgoing is-interactive${typeFilter === "Outgoing" ? " is-active" : ""}`}
             onClick={() => {
               setTypeFilter((curr) => (curr === "Outgoing" ? "all" : "Outgoing"));
               setPage(1);
@@ -645,7 +645,7 @@ export default function FinancePage() {
 
           <button
             type="button"
-            className={`stat-card is-interactive${typeFilter === "all" ? " is-active" : ""}`}
+            className={`stat-card stat-card-profit is-interactive${typeFilter === "all" ? " is-active" : ""}`}
             onClick={() => {
               setTypeFilter("all");
               setPage(1);

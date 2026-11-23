@@ -118,7 +118,7 @@ export function ViewCompanyExpenseModal({
         </header>
 
         <div className="routex-dialog-body" style={{ padding: "18px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-          {/* Amount and Category Hero Card */}
+          {/* Amount Hero Card */}
           <div
             style={{
               display: "flex",
@@ -156,23 +156,6 @@ export function ViewCompanyExpenseModal({
                 {isIncome ? "+ " : "- "}
                 {formatPeso(expense.amount)}
               </strong>
-            </div>
-
-            <div style={{ textAlign: "right" }}>
-              <span
-                style={{
-                  display: "inline-block",
-                  padding: "4px 10px",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  background: "var(--color-surface)",
-                  border: "1px solid var(--color-border)",
-                  color: "var(--color-text-primary)",
-                }}
-              >
-                {expense.category || (isIncome ? "Company Income" : "Company Expenses")}
-              </span>
             </div>
           </div>
 

@@ -17,6 +17,7 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
+import { useSearchBuffer } from "@/components/search-buffer";
 import {
   getTruckPhotoFromStorage,
   saveTruckPhotoFile,
@@ -242,9 +243,29 @@ export default function TruckProfilePage({
     } : null;
   }, [truck, truckTrips, totalDropoffsCount, normalizedPlate, registeredTruck]);
 
+  const {
+    value: historySearch,
+    setValue: setHistorySearch,
+    bufferedQuery: debouncedHistorySearch,
+    isBuffering: isHistorySearchBuffering,
+    clear: clearHistorySearch,
+  } = useSearchBuffer({ delay: 500 });
+
+  const filteredTruckTrips = useMemo(() => {
+    const q = debouncedHistorySearch.trim().toLowerCase();
+    if (!q) return truckTrips;
+    return truckTrips.filter((t) =>
+      t.waybillNumber.toLowerCase().includes(q) ||
+      t.clientName.toLowerCase().includes(q) ||
+      (t.driverName && t.driverName.toLowerCase().includes(q)) ||
+      t.deliveryDate.toLowerCase().includes(q) ||
+      t.dropoffs.some((d) => d.storeName.toLowerCase().includes(q))
+    );
+  }, [truckTrips, debouncedHistorySearch]);
+
   const sortedTruckTrips = useMemo(() => {
     const multiplier = historySort.direction === "asc" ? 1 : -1;
-    return [...truckTrips].sort((left, right) => {
+    return [...filteredTruckTrips].sort((left, right) => {
       const values: Record<string, [string | number, string | number]> = {
         date: [left.deliveryDate, right.deliveryDate],
         client: [left.clientName, right.clientName],
@@ -260,7 +281,7 @@ export default function TruckProfilePage({
         : String(leftValue).localeCompare(String(rightValue));
       return compared * multiplier || left.id.localeCompare(right.id);
     });
-  }, [historySort, truckTrips]);
+  }, [historySort, filteredTruckTrips]);
 
   const [historyPage, setHistoryPage] = useState(1);
   const HISTORY_PAGE_SIZE = 10;
@@ -273,7 +294,7 @@ export default function TruckProfilePage({
       return;
     }
     setHistoryPage(1);
-  }, [range, historySort, normalizedPlate]);
+  }, [range, historySort, normalizedPlate, debouncedHistorySearch]);
 
   const { href: backHref, label: backLabel } = useMemo(() => {
     const dateParams = new URLSearchParams();
@@ -610,7 +631,7 @@ export default function TruckProfilePage({
               </article>
 
               <div className="truck-performance-kpis" aria-label="Truck performance metrics">
-                <article className="stat-card">
+                <article className="stat-card stat-card-revenue">
                   <span className="stat-label">REVENUE</span>
                   <strong>{formatPeso(activeTruck.totalEarnings)}</strong>
                   <span
@@ -631,7 +652,7 @@ export default function TruckProfilePage({
                   ) : null}
                 </article>
 
-                <article className="stat-card">
+                <article className="stat-card stat-card-expenses">
                   <span className="stat-label">EXPENSES</span>
                   <strong>{formatPeso(activeTruck.totalExpenses)}</strong>
                   <span className="stat-meta">
@@ -641,7 +662,7 @@ export default function TruckProfilePage({
                   </span>
                 </article>
 
-                <article className="stat-card">
+                <article className="stat-card stat-card-profit">
                   <span className="stat-label">NET PROFIT</span>
                   <strong className={activeTruck.netProfit >= 0 ? undefined : "warning"}>
                     {formatPeso(activeTruck.netProfit)}
@@ -666,7 +687,32 @@ export default function TruckProfilePage({
                 <div>
                   <h2>Delivery History</h2>
                 </div>
-                <GlobalDateRangePicker />
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                  <label className={`search-box${isHistorySearchBuffering ? " is-buffering" : ""}`} style={{ maxWidth: "340px", flex: 1, minWidth: "220px" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input
+                      type="search"
+                      placeholder="Search waybill, client, drop-off store..."
+                      value={historySearch}
+                      onChange={(e) => setHistorySearch(e.target.value)}
+                      aria-label="Search truck delivery history"
+                    />
+                    {historySearch ? (
+                      <button
+                        type="button"
+                        className="search-clear-btn"
+                        onClick={clearHistorySearch}
+                        aria-label="Clear search"
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </label>
+                  <GlobalDateRangePicker />
+                </div>
               </div>
               <div className="table-wrap">
                 <table>
@@ -687,9 +733,15 @@ export default function TruckProfilePage({
                       <tr>
                         <td colSpan={8} className="table-empty-cell">
                           <div className="empty-state minimal">
-                            <strong className="empty-state-title">No completed deliveries in this range</strong>
+                            <strong className="empty-state-title">
+                              {debouncedHistorySearch.trim()
+                                ? `No deliveries match "${historySearch.trim()}"`
+                                : "No completed deliveries in this range"}
+                            </strong>
                             <span className="empty-state-desc">
-                              No finalized trips have been recorded for {activeTruck.plateNumber} within the selected date range.
+                              {debouncedHistorySearch.trim()
+                                ? `No trips for ${activeTruck.plateNumber} match this search. Try a different search term or clear the search input.`
+                                : `No finalized trips have been recorded for ${activeTruck.plateNumber} within the selected date range.`}
                             </span>
                           </div>
                         </td>

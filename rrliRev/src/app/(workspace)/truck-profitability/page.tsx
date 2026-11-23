@@ -1594,7 +1594,7 @@ export default function TruckProfitabilityPage() {
 
               <GlobalDateRangePicker />
 
-              <div className="filter-select-wrapper" style={{ minWidth: "165px" }}>
+              <div className="filter-select-wrapper">
                 <RoundedSelect
                   value={classificationFilter}
                   options={TRUCK_CLASSIFICATION_FILTER_OPTIONS}
@@ -1604,7 +1604,7 @@ export default function TruckProfitabilityPage() {
                 />
               </div>
 
-              <div className="filter-select-wrapper" style={{ minWidth: "185px" }}>
+              <div className="filter-select-wrapper">
                 <RoundedSelect
                   value={performanceFilter}
                   options={TRUCK_PERFORMANCE_FILTER_OPTIONS}
@@ -1614,7 +1614,7 @@ export default function TruckProfitabilityPage() {
                 />
               </div>
 
-              <div className="filter-select-wrapper" style={{ minWidth: "195px" }}>
+              <div className="filter-select-wrapper">
                 <RoundedSelect
                   value={ownedTruckSort}
                   options={OWNED_TRUCK_SORT_OPTIONS}
@@ -2166,27 +2166,22 @@ export default function TruckProfitabilityPage() {
             <div>
               <h2>Crew</h2>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span className="truck-history-count">
-                {filteredCrew.length} member{filteredCrew.length === 1 ? "" : "s"}
-              </span>
-              {canAdd && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  style={{ padding: "6px 12px", fontSize: "12px" }}
-                  onClick={() => {
-                    setCrewFormError(null);
-                    setCrewFullName("");
-                    setCrewContact("");
-                    setCrewRole("Driver");
-                    setIsAddCrewOpen(true);
-                  }}
-                >
-                  + Add Crew Member
-                </button>
-              )}
-            </div>
+            {canAdd && (
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ padding: "6px 12px", fontSize: "12px" }}
+                onClick={() => {
+                  setCrewFormError(null);
+                  setCrewFullName("");
+                  setCrewContact("");
+                  setCrewRole("Driver");
+                  setIsAddCrewOpen(true);
+                }}
+              >
+                + Add Crew Member
+              </button>
+            )}
           </div>
 
           <div className="filters crew-filters" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>

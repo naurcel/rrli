@@ -58,6 +58,13 @@ function getMockExpensesStore(): CompanyExpense[] {
   return mockExpensesGlobal.__routexCompanyExpenses;
 }
 
+export function resetCompanyExpensesStore(): CompanyExpense[] {
+  mockExpensesGlobal.__routexCompanyExpenses = SMALL_MOCK_COMPANY_EXPENSES.map((e) => ({
+    ...e,
+  }));
+  return mockExpensesGlobal.__routexCompanyExpenses;
+}
+
 export async function listCompanyExpenses(query: CompanyExpenseQuery = {}): Promise<CompanyExpenseListResult> {
   const page = Math.max(1, query.page ?? 1);
   const pageSize = Math.max(1, Math.min(100, query.pageSize ?? 10));

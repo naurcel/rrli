@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Table, FileSpreadsheet, FileCode2, Database, Globe, Download, Send, Check, X, RotateCcw } from "lucide-react";
 
+import { useSearchBuffer } from "@/components/search-buffer";
 import type { useAuthenticatedActor } from "@/components/auth-context";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import type { CompanyExpense } from "@/features/finance/company-expense-domain";
@@ -92,6 +93,13 @@ export function ReportsDataExportTab({
 }: ReportsDataExportTabProps) {
   const [requests, setRequests] = useState<DataExportRequest[]>(() => readExportRequests());
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const {
+    value: exportSearch,
+    setValue: setExportSearch,
+    bufferedQuery: debouncedExportSearch,
+    isBuffering: isExportSearchBuffering,
+    clear: clearExportSearch,
+  } = useSearchBuffer({ delay: 500 });
   const [requestingPackage, setRequestingPackage] = useState<DataExportPackageType | null>(null);
   const [requestReason, setRequestReason] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -134,9 +142,19 @@ export function ReportsDataExportTab({
             r.requestedByRole === actor.role ||
             r.requestedByUsername.toLowerCase() === actor.username.toLowerCase(),
         );
-    if (statusFilter === "all") return base;
-    return base.filter((r) => r.status === statusFilter);
-  }, [requests, isAdmin, actor.role, actor.username, statusFilter]);
+    const filteredByStatus = statusFilter === "all" ? base : base.filter((r) => r.status === statusFilter);
+    const q = debouncedExportSearch.trim().toLowerCase();
+    if (!q) return filteredByStatus;
+    return filteredByStatus.filter((r) =>
+      r.requestedByUsername.toLowerCase().includes(q) ||
+      r.requestedByFullName.toLowerCase().includes(q) ||
+      r.packageLabel.toLowerCase().includes(q) ||
+      r.periodLabel.toLowerCase().includes(q) ||
+      r.reason.toLowerCase().includes(q) ||
+      (r.reviewNotes && r.reviewNotes.toLowerCase().includes(q)) ||
+      r.status.toLowerCase().includes(q)
+    );
+  }, [requests, isAdmin, actor.role, actor.username, statusFilter, debouncedExportSearch]);
 
   const counts = useMemo(() => {
     const base = isAdmin
@@ -532,26 +550,52 @@ export function ReportsDataExportTab({
             </p>
           </div>
 
-          <div className="metric-tabs" role="tablist" aria-label="Filter export requests by status">
-            {(
-              [
-                { id: "all", label: `All (${counts.all})` },
-                { id: "pending", label: `Pending (${counts.pending})` },
-                { id: "approved", label: `Approved (${counts.approved})` },
-                { id: "rejected", label: `Rejected (${counts.rejected})` },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={statusFilter === tab.id}
-                className={statusFilter === tab.id ? "active" : ""}
-                onClick={() => setStatusFilter(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <label className={`search-box${isExportSearchBuffering ? " is-buffering" : ""}`} style={{ maxWidth: "260px", minWidth: "180px", minHeight: "32px", height: "32px", padding: "0 10px" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search requests..."
+                value={exportSearch}
+                onChange={(e) => setExportSearch(e.target.value)}
+                aria-label="Search export requests"
+              />
+              {exportSearch ? (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={clearExportSearch}
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              ) : null}
+            </label>
+
+            <div className="metric-tabs" role="tablist" aria-label="Filter export requests by status">
+              {(
+                [
+                  { id: "all", label: `All (${counts.all})` },
+                  { id: "pending", label: `Pending (${counts.pending})` },
+                  { id: "approved", label: `Approved (${counts.approved})` },
+                  { id: "rejected", label: `Rejected (${counts.rejected})` },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={statusFilter === tab.id}
+                  className={statusFilter === tab.id ? "active" : ""}
+                  onClick={() => setStatusFilter(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -572,7 +616,9 @@ export function ReportsDataExportTab({
               {visibleRequests.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="export-empty-cell" style={{ textAlign: "center", padding: "36px 20px", color: "var(--color-text-muted)", fontSize: "13px" }}>
-                    No export requests found.
+                    {debouncedExportSearch.trim()
+                      ? `No export requests match "${exportSearch.trim()}".`
+                      : "No export requests found."}
                   </td>
                 </tr>
               ) : (

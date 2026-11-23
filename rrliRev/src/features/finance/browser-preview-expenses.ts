@@ -28,7 +28,10 @@ export function readBrowserPreviewExpenses(): CompanyExpense[] {
       return seeded;
     }
 
-    return parsed as CompanyExpense[];
+    return parsed.map((item: any) => ({
+      ...item,
+      category: item.transactionType === "Incoming" ? "Company Income" : "Company Expenses",
+    })) as CompanyExpense[];
   } catch {
     return getInitialCompanyExpenses();
   }

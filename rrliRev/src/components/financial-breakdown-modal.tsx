@@ -263,15 +263,6 @@ export function FinancialBreakdownModal({
               className="breakdown-tab-controls"
               role="tablist"
               aria-label="Breakdown views"
-              style={{
-                display: "inline-flex",
-                background: "var(--color-surface-subtle)",
-                padding: "3px",
-                borderRadius: "10px",
-                border: "1px solid var(--color-border)",
-                gap: "2px",
-                flexShrink: 0,
-              }}
             >
               <button
                 type="button"
@@ -279,19 +270,6 @@ export function FinancialBreakdownModal({
                 aria-selected={activeTab === "earnings"}
                 onClick={() => onTabChange("earnings")}
                 className={`breakdown-tab-btn ${activeTab === "earnings" ? "active" : ""}`}
-                style={{
-                  border: "none",
-                  padding: "6px 14px",
-                  borderRadius: "7px",
-                  fontSize: "12px",
-                  fontWeight: 650,
-                  cursor: "pointer",
-                  background: activeTab === "earnings" ? "var(--color-surface)" : "transparent",
-                  color: activeTab === "earnings" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
-                  boxShadow: activeTab === "earnings" ? "var(--shadow-soft, 0 1px 3px rgba(0,0,0,0.08))" : "none",
-                  transition: "all 0.15s ease",
-                  whiteSpace: "nowrap",
-                }}
               >
                 Revenue
               </button>
@@ -301,19 +279,6 @@ export function FinancialBreakdownModal({
                 aria-selected={activeTab === "expenses"}
                 onClick={() => onTabChange("expenses")}
                 className={`breakdown-tab-btn ${activeTab === "expenses" ? "active" : ""}`}
-                style={{
-                  border: "none",
-                  padding: "6px 14px",
-                  borderRadius: "7px",
-                  fontSize: "12px",
-                  fontWeight: 650,
-                  cursor: "pointer",
-                  background: activeTab === "expenses" ? "var(--color-surface)" : "transparent",
-                  color: activeTab === "expenses" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
-                  boxShadow: activeTab === "expenses" ? "var(--shadow-soft, 0 1px 3px rgba(0,0,0,0.08))" : "none",
-                  transition: "all 0.15s ease",
-                  whiteSpace: "nowrap",
-                }}
               >
                 Expenses
               </button>
@@ -323,19 +288,6 @@ export function FinancialBreakdownModal({
                 aria-selected={activeTab === "profit"}
                 onClick={() => onTabChange("profit")}
                 className={`breakdown-tab-btn ${activeTab === "profit" ? "active" : ""}`}
-                style={{
-                  border: "none",
-                  padding: "6px 14px",
-                  borderRadius: "7px",
-                  fontSize: "12px",
-                  fontWeight: 650,
-                  cursor: "pointer",
-                  background: activeTab === "profit" ? "var(--color-surface)" : "transparent",
-                  color: activeTab === "profit" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
-                  boxShadow: activeTab === "profit" ? "var(--shadow-soft, 0 1px 3px rgba(0,0,0,0.08))" : "none",
-                  transition: "all 0.15s ease",
-                  whiteSpace: "nowrap",
-                }}
               >
                 Net Profit
               </button>
