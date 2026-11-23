@@ -1,10 +1,11 @@
-import { PERMISSIONS, ROLE_PERMISSIONS, type Permission, type UserRole } from "./rbac.ts";
+import { isValidUserRole, PERMISSIONS, ROLE_PERMISSIONS, type Permission, type UserRole } from "./rbac.ts";
 import { findDepartmentById } from "./department-store.ts";
 import { findCustomRoleById } from "./custom-role-store.ts";
 
 export type PermissionEvaluationInput = {
   isSuperadmin?: boolean;
   role?: UserRole;
+  roles?: readonly string[];
   departmentIds?: readonly string[];
   departments?: readonly string[];
   customGrants?: readonly Permission[];
@@ -36,23 +37,34 @@ export function resolveEffectivePermissions(
   }
 
   const inheritedSet = new Set<Permission>();
-  const deptList = input.departmentIds ?? input.departments;
+  const roleList = input.roles ?? (input.role ? [input.role] : []);
+  const deptList = input.departmentIds ?? input.departments ?? [];
+  const combinedIdentifers = Array.from(new Set([...roleList, ...deptList]));
 
-  // 2. Additive department & enabled custom role permissions
-  if (deptList && deptList.length > 0) {
-    for (const deptId of deptList) {
-      const dept = findDepartmentById(deptId);
-      // Archived departments no longer grant permissions
+  // 2. Additive permissions across all assigned roles (built-in presets and custom roles) & departments
+  if (combinedIdentifers.length > 0) {
+    for (const id of combinedIdentifers) {
+      // Built-in role preset
+      if (isValidUserRole(id)) {
+        const baseRolePerms = ROLE_PERMISSIONS[id as UserRole] ?? [];
+        for (const p of baseRolePerms) {
+          inheritedSet.add(p);
+        }
+      }
+
+      // Custom role preset
+      const customRole = findCustomRoleById(id);
+      if (customRole && customRole.isEnabled) {
+        for (const p of customRole.permissions) {
+          inheritedSet.add(p);
+        }
+      }
+
+      // Department baseline
+      const dept = findDepartmentById(id);
       if (dept && !dept.isArchived) {
         for (const p of dept.defaultPermissions) {
           inheritedSet.add(p);
-        }
-      } else {
-        const customRole = findCustomRoleById(deptId);
-        if (customRole && customRole.isEnabled) {
-          for (const p of customRole.permissions) {
-            inheritedSet.add(p);
-          }
         }
       }
     }
@@ -100,20 +112,26 @@ export function evaluatePermissionBreakdown(
   }
 
   const inheritedSet = new Set<Permission>();
-  const deptList = input.departmentIds ?? input.departments;
-  if (deptList && deptList.length > 0) {
-    for (const deptId of deptList) {
-      const dept = findDepartmentById(deptId);
+  const roleList = input.roles ?? (input.role ? [input.role] : []);
+  const deptList = input.departmentIds ?? input.departments ?? [];
+  const combinedIdentifers = Array.from(new Set([...roleList, ...deptList]));
+
+  if (combinedIdentifers.length > 0) {
+    for (const id of combinedIdentifers) {
+      if (isValidUserRole(id)) {
+        const base = ROLE_PERMISSIONS[id as UserRole] ?? [];
+        for (const p of base) inheritedSet.add(p);
+      }
+      const customRole = findCustomRoleById(id);
+      if (customRole && customRole.isEnabled) {
+        for (const p of customRole.permissions) {
+          inheritedSet.add(p);
+        }
+      }
+      const dept = findDepartmentById(id);
       if (dept && !dept.isArchived) {
         for (const p of dept.defaultPermissions) {
           inheritedSet.add(p);
-        }
-      } else {
-        const customRole = findCustomRoleById(deptId);
-        if (customRole && customRole.isEnabled) {
-          for (const p of customRole.permissions) {
-            inheritedSet.add(p);
-          }
         }
       }
     }

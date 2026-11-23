@@ -184,6 +184,13 @@ export default function UserManagementPage() {
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
   const {
+    value: userSearch,
+    setValue: setUserSearch,
+    bufferedQuery: debouncedUserSearch,
+    isBuffering: isUserSearchBuffering,
+    clear: clearUserSearch,
+  } = useSearchBuffer({ delay: 500 });
+  const {
     value: auditSearch,
     setValue: setAuditSearch,
     bufferedQuery: debouncedAuditSearch,
@@ -414,15 +421,30 @@ export default function UserManagementPage() {
   const activeUsers = useMemo(() => users.filter((u) => u.isActive && !u.isPermanentlyDeleted), [users]);
   const deactivatedUsers = useMemo(() => users.filter((u) => !u.isActive && !u.isPermanentlyDeleted), [users]);
 
-  const sortedUsers = useMemo(() => {
+  const filteredUsers = useMemo(() => {
     const list =
       userStatusTab === "active"
         ? activeUsers
         : userStatusTab === "deactivated"
         ? deactivatedUsers
         : deletedUsers;
+    const q = debouncedUserSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((u) =>
+      u.fullName.toLowerCase().includes(q) ||
+      (u.username && u.username.toLowerCase().includes(q)) ||
+      u.email.toLowerCase().includes(q) ||
+      (u.phoneNumber && u.phoneNumber.toLowerCase().includes(q)) ||
+      u.roleLabel.toLowerCase().includes(q) ||
+      u.accessLevelLabel.toLowerCase().includes(q) ||
+      (u.deletedReason && u.deletedReason.toLowerCase().includes(q)) ||
+      (u.deletedBy && u.deletedBy.toLowerCase().includes(q))
+    );
+  }, [userStatusTab, activeUsers, deactivatedUsers, deletedUsers, debouncedUserSearch]);
+
+  const sortedUsers = useMemo(() => {
     const multiplier = userSort.direction === "asc" ? 1 : -1;
-    return [...list].sort((left, right) => {
+    return [...filteredUsers].sort((left, right) => {
       // Superadmin is pinned strictly at the top
       if (left.isSuperadmin && !right.isSuperadmin) return -1;
       if (!left.isSuperadmin && right.isSuperadmin) return 1;
@@ -441,7 +463,7 @@ export default function UserManagementPage() {
         : String(leftValue).localeCompare(String(rightValue));
       return compared * multiplier || left.id.localeCompare(right.id);
     });
-  }, [userSort, activeUsers, deactivatedUsers, userStatusTab]);
+  }, [userSort, filteredUsers]);
 
   const [userPage, setUserPage] = useState(1);
   const USER_PAGE_SIZE = 10;
@@ -449,7 +471,7 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     setUserPage(1);
-  }, [userSort, userStatusTab]);
+  }, [userSort, userStatusTab, debouncedUserSearch]);
 
   const paginatedUsers = useMemo(() => {
     const start = (userPage - 1) * USER_PAGE_SIZE;
@@ -513,6 +535,7 @@ export default function UserManagementPage() {
         ok?: boolean;
         user?: ManagedUserRecord;
         message?: string;
+        temporaryPassword?: string;
       } | null;
 
       if (!response.ok || !payload?.ok || !payload.user) {
@@ -538,7 +561,7 @@ export default function UserManagementPage() {
         fullName: payload.user.fullName,
         username: payload.user.username,
         roleLabel: payload.user.roleLabel,
-        password: assignedTempPassword,
+        password: payload.temporaryPassword || assignedTempPassword,
         isNewlyProvisioned: true,
       });
       setTempPasswordCopied(false);
@@ -568,6 +591,7 @@ export default function UserManagementPage() {
         ok?: boolean;
         user?: ManagedUserRecord;
         message?: string;
+        temporaryPassword?: string;
       } | null;
 
       if (!response.ok || !payload?.ok || !payload.user) {
@@ -608,6 +632,7 @@ export default function UserManagementPage() {
         ok?: boolean;
         user?: ManagedUserRecord;
         message?: string;
+        temporaryPassword?: string;
       } | null;
 
       if (!response.ok || !payload?.ok || !payload.user) {
@@ -1182,6 +1207,32 @@ export default function UserManagementPage() {
                 </div>
               </div>
 
+              <div className="filters" style={{ borderBottom: "1px solid var(--line)", padding: "0 23px 17px" }}>
+                <label className={`search-box${isUserSearchBuffering ? " is-buffering" : ""}`} style={{ maxWidth: "420px", flex: 1 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <input
+                    type="search"
+                    placeholder="Search staff by name, @username, email, role..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    aria-label="Search staff accounts"
+                  />
+                  {userSearch ? (
+                    <button
+                      type="button"
+                      className="search-clear-btn"
+                      onClick={clearUserSearch}
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </label>
+              </div>
+
               {userStatusTab === "deleted" && (
                 <div
                   style={{
@@ -1265,17 +1316,25 @@ export default function UserManagementPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {deletedUsers.length === 0 ? (
+                      {sortedUsers.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="table-empty-cell">
                             <div className="empty-state minimal">
-                              <strong className="empty-state-title">No permanently deleted employee records</strong>
-                              <span className="empty-state-desc">Historical accounts will appear here after permanent executive deletion.</span>
+                              <strong className="empty-state-title">
+                                {debouncedUserSearch.trim()
+                                  ? `No deleted employee records match "${userSearch.trim()}"`
+                                  : "No permanently deleted employee records"}
+                              </strong>
+                              <span className="empty-state-desc">
+                                {debouncedUserSearch.trim()
+                                  ? "Try searching with a different term or clear the search input."
+                                  : "Historical accounts will appear here after permanent executive deletion."}
+                              </span>
                             </div>
                           </td>
                         </tr>
                       ) : (
-                        deletedUsers.map((delUser) => (
+                        sortedUsers.map((delUser) => (
                           <tr key={delUser.id}>
                             <td>
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -1398,12 +1457,16 @@ export default function UserManagementPage() {
                           <td colSpan={6} className="table-empty-cell">
                             <div className="empty-state minimal">
                               <strong className="empty-state-title">
-                                {userStatusTab === "active"
+                                {debouncedUserSearch.trim()
+                                  ? `No staff accounts match "${userSearch.trim()}"`
+                                  : userStatusTab === "active"
                                   ? "No active staff accounts found"
                                   : "No deactivated accounts in archive"}
                               </strong>
                               <span className="empty-state-desc">
-                                {userStatusTab === "active"
+                                {debouncedUserSearch.trim()
+                                  ? "Try searching for a different name, username, email, or role."
+                                  : userStatusTab === "active"
                                   ? "No registered staff users match the active view."
                                   : "When former employees depart, deactivating their accounts archives them here."}
                               </span>

@@ -74,10 +74,10 @@ export default function LoginPage() {
     setStatus("submitting");
     setMessage("");
 
-    const trimmedUsername = username.trim();
-    if (!trimmedUsername) {
+    const trimmedIdentifier = username.trim();
+    if (!trimmedIdentifier) {
       setStatus("error");
-      setMessage("Enter your username.");
+      setMessage("Enter your email address.");
       return;
     }
 
@@ -97,7 +97,8 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: trimmedUsername,
+          email: trimmedIdentifier,
+          username: trimmedIdentifier,
           password,
           rememberMe,
           next: nextParam,
@@ -121,7 +122,7 @@ export default function LoginPage() {
 
       try {
         if (rememberMe) {
-          window.localStorage.setItem("routex-remembered-username", trimmedUsername);
+          window.localStorage.setItem("routex-remembered-username", trimmedIdentifier);
         } else {
           window.localStorage.removeItem("routex-remembered-username");
         }
@@ -131,7 +132,7 @@ export default function LoginPage() {
 
       setStatus("success");
       setMessage(
-        `Authenticated as @${payload.actor?.username ?? trimmedUsername} (${payload.actor?.roleLabel ?? "Authorized"}). Redirecting…`,
+        `Authenticated as ${payload.actor?.username ?? trimmedIdentifier} (${payload.actor?.roleLabel ?? "Authorized"}). Redirecting…`,
       );
 
       const destination = payload.redirectTo ?? "/dashboard";
@@ -152,7 +153,7 @@ export default function LoginPage() {
     const trimmed = recoveryUsername.trim();
     if (!trimmed) {
       setStatus("error");
-      setMessage("Enter your RouteX username.");
+      setMessage("Enter your registered RouteX email.");
       return;
     }
 
@@ -162,6 +163,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "check-user",
+          email: trimmed,
           username: trimmed,
         }),
       });
@@ -444,12 +446,12 @@ export default function LoginPage() {
           {viewMode === "login" ? (
             <form onSubmit={handleLoginSubmit} noValidate>
               <label>
-                Username
+                Email Address
                 <input
-                  name="username"
-                  type="text"
-                  placeholder="Enter your username"
-                  autoComplete="username"
+                  name="email"
+                  type="email"
+                  placeholder="Enter your email address"
+                  autoComplete="email"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   required
@@ -545,12 +547,12 @@ export default function LoginPage() {
               {forgotStep === "username" && (
                 <form onSubmit={handleRecoveryCheckUsername} noValidate>
                   <label>
-                    RouteX Username
+                    Registered Email Address
                     <input
-                      name="recoveryUsername"
-                      type="text"
-                      placeholder="Enter your username"
-                      autoComplete="username"
+                      name="recoveryEmail"
+                      type="email"
+                      placeholder="Enter your registered email"
+                      autoComplete="email"
                       value={recoveryUsername}
                       onChange={(event) => setRecoveryUsername(event.target.value)}
                       required

@@ -15,23 +15,25 @@ import {
   verifyServerAccountBackupKey,
   verifyServerAccountSecurityAnswer,
 } from "@/lib/auth/server-account-store";
+import { isSupabaseAdminConfigured } from "@/lib/config/env";
+import { createAdminSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const action = typeof body?.action === "string" ? body.action : "check-user";
 
-  // 1. Check recovery options for a username
+  // 1. Check recovery options for an email address or username
   if (action === "check-user") {
     const parsed = checkRecoveryUserSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { ok: false, message: "Enter your RouteX username." },
+        { ok: false, message: "Enter your registered email address." },
         { status: 400 },
       );
     }
 
-    const { username } = parsed.data;
-    const recoveryState = getServerAccountRecoveryState(username);
+    const rawIdentifier = (parsed.data.email || parsed.data.username || "").trim();
+    const recoveryState = getServerAccountRecoveryState(rawIdentifier);
 
     if (recoveryState.status === "admin_authorized") {
       return NextResponse.json({
@@ -59,44 +61,45 @@ export async function POST(request: Request) {
         ok: false,
         code: "NO_SECURITY_QUESTION",
         message:
-          "No security question or backup key has been configured for this account. Please contact an Administrator or President to authorize a password reset.",
+          "No security question or backup key has been configured for this account. Please contact an Administrator to authorize a password reset.",
       });
     }
 
-    // Generic error to prevent username enumeration
+    // Informative neutral message to prevent email and username enumeration
     return NextResponse.json(
       {
         ok: false,
         code: "USER_NOT_FOUND",
         message:
-          "If an active RouteX account matches that username, recovery options have been loaded. Otherwise, contact an Administrator.",
+          "If an active RouteX account matches that email address, recovery options have been loaded. Otherwise, contact an Administrator.",
       },
       { status: 404 },
     );
   }
 
-  // 2. Verify backup key
+  // 2. Verify emergency backup key
   if (action === "verify-backup-key") {
     const parsed = verifyBackupKeySchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { ok: false, message: "Username and emergency backup key are required." },
+        { ok: false, message: "Email and emergency backup key are required." },
         { status: 400 },
       );
     }
 
-    const { username, backupKey } = parsed.data;
-    const rateLimitKey = `backup-key:${username.toLowerCase().trim()}`;
+    const identifier = (parsed.data.email || parsed.data.username || "").trim();
+    const backupKey = parsed.data.backupKey;
+    const rateLimitKey = `backup-key:${identifier.toLowerCase()}`;
 
-    // Rate limit: 3 attempts per 5 minutes
+    // Rate limit: 3 attempts per 5 minutes to prevent brute-force attacks
     const rateLimit = checkRateLimit(rateLimitKey, 3, 5 * 60 * 1000, 10 * 60 * 1000);
     if (!rateLimit.allowed) {
       recordAuditEntry({
         actorId: "system",
-        actorEmail: `${username.toLowerCase().trim()}@routex.local`,
+        actorEmail: identifier.includes("@") ? identifier : `${identifier}@routex.local`,
         action: "user.recovery_lockout",
         entityType: "user",
-        entityId: username,
+        entityId: identifier,
         summary: `Account password recovery locked due to multiple failed backup key attempts.`,
       });
 
@@ -110,15 +113,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const verification = verifyServerAccountBackupKey(username, backupKey);
+    const verification = verifyServerAccountBackupKey(identifier, backupKey);
     if (!verification.ok) {
       recordAuditEntry({
         actorId: "system",
-        actorEmail: `${username.toLowerCase().trim()}@routex.local`,
+        actorEmail: identifier.includes("@") ? identifier : `${identifier}@routex.local`,
         action: "user.recovery_failed",
         entityType: "user",
-        entityId: username,
-        summary: `Failed backup key recovery attempt for username '${username}'.`,
+        entityId: identifier,
+        summary: `Failed backup key recovery attempt for '${identifier}'.`,
       });
 
       return NextResponse.json(
@@ -138,28 +141,29 @@ export async function POST(request: Request) {
     });
   }
 
-  // 2. Verify security answer
+  // 3. Verify security answer
   if (action === "verify-answer") {
     const parsed = verifySecurityAnswerSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { ok: false, message: "Username and security answer are required." },
+        { ok: false, message: "Email and security answer are required." },
         { status: 400 },
       );
     }
 
-    const { username, answer } = parsed.data;
-    const rateLimitKey = `security-answer:${username.toLowerCase().trim()}`;
+    const identifier = (parsed.data.email || parsed.data.username || "").trim();
+    const answer = parsed.data.answer;
+    const rateLimitKey = `security-answer:${identifier.toLowerCase()}`;
 
     // Rate limit: 3 attempts per 5 minutes
     const rateLimit = checkRateLimit(rateLimitKey, 3, 5 * 60 * 1000, 10 * 60 * 1000);
     if (!rateLimit.allowed) {
       recordAuditEntry({
         actorId: "system",
-        actorEmail: `${username.toLowerCase().trim()}@routex.local`,
+        actorEmail: identifier.includes("@") ? identifier : `${identifier}@routex.local`,
         action: "user.recovery_lockout",
         entityType: "user",
-        entityId: username,
+        entityId: identifier,
         summary: `Account password recovery locked due to multiple failed security answer attempts.`,
       });
 
@@ -173,15 +177,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const verification = verifyServerAccountSecurityAnswer(username, answer);
+    const verification = verifyServerAccountSecurityAnswer(identifier, answer);
     if (!verification.ok) {
       recordAuditEntry({
         actorId: "system",
-        actorEmail: `${username.toLowerCase().trim()}@routex.local`,
+        actorEmail: identifier.includes("@") ? identifier : `${identifier}@routex.local`,
         action: "user.recovery_failed",
         entityType: "user",
-        entityId: username,
-        summary: `Failed security question recovery attempt for username '${username}'.`,
+        entityId: identifier,
+        summary: `Failed security question recovery attempt for '${identifier}'.`,
       });
 
       return NextResponse.json(
@@ -201,7 +205,7 @@ export async function POST(request: Request) {
     });
   }
 
-  // 3. Reset password using valid single-use token (Admin-authorized or verified Security Answer)
+  // 4. Reset password using valid single-use token (verified Security Answer or Backup Key)
   if (action === "reset") {
     const parsed = resetPasswordWithTokenSchema.safeParse(body);
     if (!parsed.success) {
@@ -214,7 +218,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const { username, token, newPassword, confirmPassword, mode } = parsed.data;
+    const identifier = (parsed.data.email || parsed.data.username || "").trim();
+    const { token, newPassword, confirmPassword, mode } = parsed.data;
 
     if (newPassword !== confirmPassword) {
       return NextResponse.json(
@@ -224,7 +229,7 @@ export async function POST(request: Request) {
     }
 
     const resetResult = resetServerAccountPasswordWithToken(
-      username,
+      identifier,
       token,
       newPassword,
       mode,
@@ -237,11 +242,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const targetUser = findServerAccountByUsername(username);
+    const targetUser = findServerAccountByUsername(identifier);
+
+    // If Supabase Admin is configured, update the actual password in Supabase Auth
+    if (isSupabaseAdminConfigured() && targetUser?.id) {
+      try {
+        const adminSupabase = createAdminSupabaseClient();
+        await adminSupabase.auth.admin.updateUserById(targetUser.id, {
+          password: newPassword,
+        });
+      } catch {
+        // Fallback gracefully
+      }
+    }
 
     recordAuditEntry({
       actorId: targetUser?.id || "unknown",
-      actorEmail: targetUser?.email || `${username}@routex.local`,
+      actorEmail: targetUser?.email || identifier,
       action:
         mode === "admin"
           ? "user.recovery_completed_admin"
@@ -249,16 +266,16 @@ export async function POST(request: Request) {
           ? "user.recovery_completed_backup_key"
           : "user.password_recovered",
       entityType: "user",
-      entityId: targetUser?.id || username,
+      entityId: targetUser?.id || identifier,
       summary:
         mode === "admin"
-          ? `User completed Admin-authorized password recovery for username '${username}'.`
+          ? `User completed Admin-authorized password recovery for '${identifier}'.`
           : mode === "backup_key"
-          ? `User completed emergency backup-key password recovery for username '${username}'. Replacement key issued.`
-          : `User completed self-service security question password recovery for username '${username}'.`,
+          ? `User completed emergency backup-key password recovery for '${identifier}'. Replacement key issued.`
+          : `User completed self-service security question password recovery for '${identifier}'.`,
       changes: {
         mode,
-        username,
+        identifier,
         recoveryCompletedAt: new Date().toISOString(),
       },
     });

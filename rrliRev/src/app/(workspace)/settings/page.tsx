@@ -761,7 +761,7 @@ export default function SettingsPage() {
             <p className="settings-hero-username">@{currentUsername}</p>
 
             <div className="settings-hero-badges">
-              <span className={`access-pill ${actor.accessLevel}`}>
+              <span className="settings-hero-role">
                 {actor.roleLabel}
               </span>
               <span className="settings-hero-dot" aria-hidden="true">·</span>

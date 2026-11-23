@@ -1,138 +1,169 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { findServerAccountById } from "@/lib/auth/server-account-store";
-import { isValidUserRole } from "@/lib/auth/rbac";
+import { isValidUserRole, type UserRole } from "@/lib/auth/rbac";
 import {
   canRoleAccessPath,
   getLoginRedirectUrl,
   isPublicRoute,
 } from "@/lib/auth/route-policy";
-import {
-  VERIFIED_SESSION_COOKIE,
-  verifySignedSessionToken,
-} from "@/lib/auth/session-token";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createProxySupabaseClient } from "@/lib/supabase/server";
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  if (isSupabaseConfigured()) {
-    let applySessionUpdates = (response: NextResponse) => response;
-
-    const supabase = createProxySupabaseClient(request, (updater) => {
-      const previous = applySessionUpdates;
-      applySessionUpdates = (response) => updater(previous(response));
-    });
-
-    try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
-
-      if (!error && Boolean(user?.id)) {
-        const role = isValidUserRole(user?.app_metadata?.role)
-          ? user.app_metadata.role
-          : null;
-
-        // Only treat as authenticated via Supabase if the user has a valid assigned role or profile
-        if (role) {
-          if (pathname === "/login") {
-            return applySessionUpdates(
-              NextResponse.redirect(new URL("/dashboard", request.url)),
-            );
-          }
-
-          if (!canRoleAccessPath(role, pathname)) {
-            if (pathname.startsWith("/api/")) {
-              return applySessionUpdates(
-                NextResponse.json(
-                  {
-                    ok: false,
-                    code: "FORBIDDEN",
-                    message: `Access denied for role '${role}'.`,
-                  },
-                  { status: 403 },
-                ),
-              );
-            }
-
-            const deniedUrl = new URL("/dashboard", request.url);
-            deniedUrl.searchParams.set("access", "restricted");
-            return applySessionUpdates(NextResponse.redirect(deniedUrl));
-          }
-
-          return applySessionUpdates(NextResponse.next({ request }));
-        }
-      }
-    } catch {
-      // Supabase unavailable; fall through to server-verified session cookie
-    }
+  // Static assets and internal next requests pass through directly
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/static") ||
+    pathname.endsWith(".ico") ||
+    pathname.endsWith(".png") ||
+    pathname.endsWith(".jpg") ||
+    pathname.endsWith(".svg")
+  ) {
+    return NextResponse.next();
   }
 
-  // Server-verified signed HttpOnly cookie verification
-  const rawToken = request.cookies.get(VERIFIED_SESSION_COOKIE)?.value;
-  const payload = verifySignedSessionToken(rawToken);
-  const account = payload ? findServerAccountById(payload.sub) : null;
-  const isAuthenticated = Boolean(account && account.isActive);
-
-  if (!isAuthenticated && !isPublicRoute(pathname)) {
+  // Supabase Auth is the SOLE authentication provider. Fail securely if unconfigured.
+  if (!isSupabaseConfigured()) {
+    if (isPublicRoute(pathname)) {
+      return NextResponse.next();
+    }
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         {
           ok: false,
-          code: "UNAUTHENTICATED",
-          message: "You must log in to access this resource.",
+          code: "AUTH_SERVICE_UNAVAILABLE",
+          message: "RouteX authentication service is unavailable.",
         },
-        { status: 401 },
+        { status: 503 },
+      );
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  let applySessionUpdates = (response: NextResponse) => response;
+
+  const supabase = createProxySupabaseClient(request, (updater) => {
+    const previous = applySessionUpdates;
+    applySessionUpdates = (response) => updater(previous(response));
+  });
+
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    const isAuthenticated = !error && Boolean(user?.id);
+
+    // If unauthenticated:
+    if (!isAuthenticated || !user) {
+      if (isPublicRoute(pathname)) {
+        return applySessionUpdates(NextResponse.next({ request }));
+      }
+
+      if (pathname.startsWith("/api/")) {
+        return applySessionUpdates(
+          NextResponse.json(
+            {
+              ok: false,
+              code: "UNAUTHENTICATED",
+              message: "You must log in to access this resource.",
+            },
+            { status: 401 },
+          ),
+        );
+      }
+
+      return applySessionUpdates(NextResponse.redirect(getLoginRedirectUrl(request.url)));
+    }
+
+    // Authenticated user:
+    // Determine mandatory password change status
+    const mustChangePassword = Boolean(
+      user.user_metadata?.must_change_password ?? user.app_metadata?.must_change_password,
+    );
+
+    // If user must change password, enforce redirect to /initial-setup
+    if (
+      mustChangePassword &&
+      pathname !== "/initial-setup" &&
+      !pathname.startsWith("/api/auth/")
+    ) {
+      if (pathname.startsWith("/api/")) {
+        return applySessionUpdates(
+          NextResponse.json(
+            {
+              ok: false,
+              code: "PASSWORD_CHANGE_REQUIRED",
+              message: "You must change your temporary password before accessing RouteX.",
+            },
+            { status: 403 },
+          ),
+        );
+      }
+      return applySessionUpdates(
+        NextResponse.redirect(new URL("/initial-setup", request.url)),
       );
     }
 
-    const redirectResponse = NextResponse.redirect(getLoginRedirectUrl(request.url));
-    if (rawToken) {
-      redirectResponse.cookies.delete(VERIFIED_SESSION_COOKIE);
-    }
-    return redirectResponse;
-  }
-
-  if (isAuthenticated && account) {
-    if (account.mustChangePassword && pathname !== "/initial-setup" && !pathname.startsWith("/api/")) {
-      return NextResponse.redirect(new URL("/initial-setup", request.url));
-    }
-
-    if (!account.mustChangePassword && pathname === "/initial-setup") {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-
+    // If already on /login while authenticated, redirect to /dashboard
     if (pathname === "/login") {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      if (mustChangePassword) {
+        return applySessionUpdates(
+          NextResponse.redirect(new URL("/initial-setup", request.url)),
+        );
+      }
+      return applySessionUpdates(
+        NextResponse.redirect(new URL("/dashboard", request.url)),
+      );
     }
 
-    if (!canRoleAccessPath(account.role, pathname)) {
+    // Role-based route authorization
+    const role: UserRole = isValidUserRole(user.app_metadata?.role)
+      ? user.app_metadata.role
+      : "customer_representative";
+
+    const isSuperadmin = Boolean(user.app_metadata?.is_superadmin);
+
+    if (!isSuperadmin && !canRoleAccessPath(role, pathname)) {
       if (pathname.startsWith("/api/")) {
-        return NextResponse.json(
-          {
-            ok: false,
-            code: "FORBIDDEN",
-            message: `Access denied for role '${account.role}'.`,
-          },
-          { status: 403 },
+        return applySessionUpdates(
+          NextResponse.json(
+            {
+              ok: false,
+              code: "FORBIDDEN",
+              message: `Access denied for role '${role}'.`,
+            },
+            { status: 403 },
+          ),
         );
       }
 
       const deniedUrl = new URL("/dashboard", request.url);
       deniedUrl.searchParams.set("access", "restricted");
-      return NextResponse.redirect(deniedUrl);
+      return applySessionUpdates(NextResponse.redirect(deniedUrl));
     }
+
+    return applySessionUpdates(NextResponse.next({ request }));
+  } catch {
+    // Fail securely if Supabase check throws an exception
+    if (isPublicRoute(pathname)) {
+      return applySessionUpdates(NextResponse.next({ request }));
+    }
+    if (pathname.startsWith("/api/")) {
+      return applySessionUpdates(
+        NextResponse.json(
+          {
+            ok: false,
+            code: "UNAUTHENTICATED",
+            message: "Authentication verification failed.",
+          },
+          { status: 401 },
+        ),
+      );
+    }
+    return applySessionUpdates(NextResponse.redirect(getLoginRedirectUrl(request.url)));
   }
-
-  return NextResponse.next({ request });
 }
-
-export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
-};
-

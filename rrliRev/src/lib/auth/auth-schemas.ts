@@ -2,10 +2,11 @@ import * as z from "zod";
 import { USER_ROLES } from "./rbac";
 
 export const signInSchema = z.object({
-  username: z
+  email: z
     .string()
     .trim()
-    .min(1, "Enter your username."),
+    .min(1, "Enter your email address.")
+    .email("Enter a valid email address."),
   password: z
     .string()
     .min(1, "Enter your password."),
@@ -15,17 +16,22 @@ export const signInSchema = z.object({
 export type SignInInput = z.infer<typeof signInSchema>;
 
 export const checkRecoveryUserSchema = z.object({
-  username: z
+  email: z
     .string()
     .trim()
-    .min(1, "Enter your username."),
+    .min(1, "Enter your email address.")
+    .email("Enter a valid email address.")
+    .or(z.string().trim().min(1, "Enter your username or email.")),
+  username: z.string().trim().optional(),
 });
 
 export const verifySecurityAnswerSchema = z.object({
-  username: z
+  email: z
     .string()
     .trim()
-    .min(1, "Enter your username."),
+    .min(1, "Enter your email address.")
+    .optional(),
+  username: z.string().trim().optional(),
   answer: z
     .string()
     .trim()
@@ -33,7 +39,8 @@ export const verifySecurityAnswerSchema = z.object({
 });
 
 export const resetPasswordWithTokenSchema = z.object({
-  username: z.string().trim().min(1, "Username is required."),
+  email: z.string().trim().optional(),
+  username: z.string().trim().optional(),
   token: z.string().trim().min(1, "Recovery token is required."),
   mode: z.enum(["admin", "security_question", "backup_key"]),
   newPassword: z.string().min(8, "Password must be at least 8 characters."),
@@ -41,7 +48,8 @@ export const resetPasswordWithTokenSchema = z.object({
 });
 
 export const verifyBackupKeySchema = z.object({
-  username: z.string().trim().min(1, "Username is required."),
+  email: z.string().trim().optional(),
+  username: z.string().trim().optional(),
   backupKey: z.string().trim().min(6, "Enter your emergency backup key."),
 });
 
@@ -81,29 +89,33 @@ export const initialSetupSchema = z.object({
 });
 
 export const createUserAccountSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .min(3, "Username must be at least 3 characters.")
-    .max(30, "Username cannot exceed 30 characters."),
+  email: z.string().trim().email("Please enter a valid email address."),
   fullName: z
     .string()
     .trim()
     .min(2, "Enter the staff member's full name.")
     .max(100, "Full name must be 100 characters or fewer."),
+  username: z
+    .string()
+    .trim()
+    .min(3, "Username must be at least 3 characters.")
+    .max(30, "Username cannot exceed 30 characters.")
+    .optional(),
   role: z.enum(USER_ROLES, {
     error: "Select a valid RouteX access role.",
-  }),
+  }).optional().default("customer_representative"),
+  roles: z.array(z.string().trim().min(1)).min(1, "Assign at least one role.").optional(),
+  designation: z.string().trim().max(100).optional(),
   temporaryPassword: z
     .string()
-    .min(8, "Temporary password must be at least 8 characters."),
+    .min(8, "Temporary password must be at least 8 characters.")
+    .optional(),
   confirmTemporaryPassword: z.string().optional(),
-  email: z.string().trim().email("Please enter a valid email address."),
   phoneNumber: z
     .string()
     .trim()
-    .min(7, "Phone number must be at least 7 digits.")
-    .max(25, "Phone number cannot exceed 25 characters."),
+    .max(25, "Phone number cannot exceed 25 characters.")
+    .optional(),
 });
 
 export const updateContactInfoSchema = z.object({

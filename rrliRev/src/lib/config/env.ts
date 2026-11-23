@@ -124,3 +124,22 @@ export function isSupabaseConfigured(
   }).success;
 }
 
+export function getServiceRoleKey(): string | null {
+  if (typeof window !== "undefined") {
+    throw new Error(
+      "SECURITY_VIOLATION: SUPABASE_SERVICE_ROLE_KEY must never be accessed in the browser or client components.",
+    );
+  }
+
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key || key === "your-service-role-key" || key.trim() === "") {
+    return null;
+  }
+
+  return key.trim();
+}
+
+export function isSupabaseAdminConfigured(): boolean {
+  return isSupabaseConfigured() && getServiceRoleKey() !== null;
+}
+

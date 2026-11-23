@@ -10,6 +10,7 @@ import {
   initialSetupSchema,
   updateContactInfoSchema,
 } from "@/lib/auth/auth-schemas";
+import { hashWithArgon2id } from "@/lib/auth/argon2id";
 import { normalizeSecurityAnswer } from "@/lib/auth/password-policy";
 import {
   completeInitialServerAccountSetup,
@@ -157,6 +158,35 @@ export async function POST(request: Request) {
       );
     }
 
+    // Supabase Auth password update
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = await createServerSupabaseClient();
+        const { error: authError } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+
+        if (authError) {
+          return NextResponse.json(
+            { ok: false, message: authError.message || "Failed to update password with authentication service." },
+            { status: 400 },
+          );
+        }
+
+        await supabase
+          .from("user_profiles")
+          .update({
+            password_changed_at: new Date().toISOString(),
+          })
+          .eq("id", actor.id);
+      } catch (err) {
+        return NextResponse.json(
+          { ok: false, message: err instanceof Error ? err.message : "Failed to update password." },
+          { status: 500 },
+        );
+      }
+    }
+
     const result = updateServerAccountPassword(actor.id, newPassword);
     if (!result.ok) {
       return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
@@ -257,6 +287,43 @@ export async function POST(request: Request) {
         { ok: false, message: "Security answers do not match." },
         { status: 400 },
       );
+    }
+
+    // Supabase Auth: update user password and clear must_change_password requirement
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = await createServerSupabaseClient();
+        const { error: authError } = await supabase.auth.updateUser({
+          password: newPassword,
+          data: {
+            must_change_password: false,
+          },
+        });
+
+        if (authError) {
+          return NextResponse.json(
+            { ok: false, message: authError.message || "Failed to update password with authentication service." },
+            { status: 400 },
+          );
+        }
+
+        const answerHash = hashWithArgon2id(normalizeSecurityAnswer(answer));
+        await supabase
+          .from("user_profiles")
+          .update({
+            must_change_password: false,
+            security_question: question.trim(),
+            security_answer_hash: answerHash,
+            password_changed_at: new Date().toISOString(),
+            avatar_url: avatarUrl || undefined,
+          })
+          .eq("id", actor.id);
+      } catch (err) {
+        return NextResponse.json(
+          { ok: false, message: err instanceof Error ? err.message : "Failed to save initial setup." },
+          { status: 500 },
+        );
+      }
     }
 
     const result = completeInitialServerAccountSetup(

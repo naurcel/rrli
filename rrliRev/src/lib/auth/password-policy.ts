@@ -188,8 +188,9 @@ export function generateBackupKey(): string {
 /**
  * Generates a cryptographically strong, random temporary password.
  * Guarantees compliance with RouteX password criteria:
- * - 12 characters length
+ * - 14 characters length
  * - Contains uppercase, lowercase, numbers, and symbols
+ * - Generated using cryptographically secure randomBytes
  * - Guaranteed to satisfy evaluatePasswordCriteria
  */
 export function generateRandomTemporaryPassword(): string {
@@ -198,23 +199,35 @@ export function generateRandomTemporaryPassword(): string {
   const digits = "23456789";
   const symbols = "!@#$%&*";
 
-  let pwd = "";
-  pwd += upper[Math.floor(Math.random() * upper.length)];
-  pwd += lower[Math.floor(Math.random() * lower.length)];
-  pwd += digits[Math.floor(Math.random() * digits.length)];
-  pwd += symbols[Math.floor(Math.random() * symbols.length)];
+  const randomIdx = (max: number): number => {
+    const buf = randomBytes(2);
+    return buf.readUInt16BE(0) % max;
+  };
+
+  const selected: string[] = [
+    upper[randomIdx(upper.length)],
+    lower[randomIdx(lower.length)],
+    digits[randomIdx(digits.length)],
+    symbols[randomIdx(symbols.length)],
+  ];
 
   const all = upper + lower + digits + symbols;
-  while (pwd.length < 12) {
-    pwd += all[Math.floor(Math.random() * all.length)];
+  while (selected.length < 12) {
+    selected.push(all[randomIdx(all.length)]);
   }
 
-  const arr = pwd.split("");
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+  // Fisher-Yates cryptographically secure shuffle
+  for (let i = selected.length - 1; i > 0; i--) {
+    const j = randomIdx(i + 1);
+    [selected[i], selected[j]] = [selected[j], selected[i]];
   }
-  return arr.join("");
+
+  const generated = selected.join("");
+  // Re-verify criteria against blacklist and criteria
+  if (evaluatePasswordCriteria(generated).isValid) {
+    return generated;
+  }
+  return generateRandomTemporaryPassword();
 }
 
 

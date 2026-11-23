@@ -8,6 +8,7 @@ import {
   createUserAccountSchema,
   updateUserRoleSchema,
 } from "@/lib/auth/auth-schemas";
+import { generateRandomTemporaryPassword } from "@/lib/auth/password-policy";
 import { resolveEffectivePermissions } from "@/lib/auth/permission-engine";
 import { getRoleMetadata, isValidUserRole, type Permission, type UserRole } from "@/lib/auth/rbac";
 import {
@@ -24,8 +25,8 @@ import {
   updateUserCustomPermissions,
 } from "@/lib/auth/server-account-store";
 import { verifyServerPermission } from "@/lib/auth/server-session";
-import { isSupabaseConfigured } from "@/lib/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured, isSupabaseAdminConfigured } from "@/lib/config/env";
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const auth = await verifyServerPermission("users:manage");
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
       const supabase = await createServerSupabaseClient();
       let query = supabase
         .from("user_profiles")
-        .select("id, email, username, full_name, role, is_active, must_change_password, security_question, recovery_authorized_at, recovery_expires_at, is_superadmin, designation, is_permanently_deleted, deleted_at, deleted_reason, deleted_by, custom_grants, custom_restrictions, created_at, updated_at")
+        .select("id, email, username, full_name, role, roles, is_active, must_change_password, security_question, recovery_authorized_at, recovery_expires_at, is_superadmin, designation, is_permanently_deleted, deleted_at, deleted_reason, deleted_by, custom_grants, custom_restrictions, phone_number, created_at, updated_at")
         .order("created_at", { ascending: true });
 
       if (!includeDeleted) {
@@ -75,10 +76,12 @@ export async function GET(request: Request) {
           const meta = getRoleMetadata(row.role);
           const username = row.username || row.email.split("@")[0];
           const isSuperadmin = Boolean(row.is_superadmin);
+          const userRoles: string[] = Array.isArray(row.roles) && row.roles.length > 0 ? row.roles : [row.role];
           const effectivePermissions = resolveEffectivePermissions({
             role: row.role,
+            roles: userRoles,
             isSuperadmin,
-            departments: [row.role],
+            departments: userRoles,
             customGrants: row.custom_grants,
             customRestrictions: row.custom_restrictions,
           });
@@ -87,9 +90,11 @@ export async function GET(request: Request) {
             id: row.id,
             username,
             email: row.email,
+            phoneNumber: row.phone_number || undefined,
             fullName: row.full_name,
             role: row.role,
-            roleLabel: isSuperadmin ? "Superadmin" : meta.label,
+            roles: userRoles,
+            roleLabel: isSuperadmin ? "Superadmin" : userRoles.length > 1 ? userRoles.join(" + ") : meta.label,
             accessLevel: isSuperadmin ? "admin" : meta.accessLevel,
             accessLevelLabel: isSuperadmin ? "Full Access" : meta.accessLevelLabel,
             isActive: row.is_active,
@@ -99,47 +104,32 @@ export async function GET(request: Request) {
             deletedAt: row.deleted_at,
             deletedReason: row.deleted_reason,
             deletedBy: row.deleted_by,
-            customGrants: row.custom_grants ?? [],
-            customRestrictions: row.custom_restrictions ?? [],
-            effectivePermissions,
             mustChangePassword: Boolean(row.must_change_password),
             hasSecurityQuestion: Boolean(row.security_question),
             recoveryAuthorizedAt: row.recovery_authorized_at,
             recoveryExpiresAt: row.recovery_expires_at,
+            customGrants: row.custom_grants ?? [],
+            customRestrictions: row.custom_restrictions ?? [],
+            effectivePermissions,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
           };
         });
 
       return NextResponse.json({ ok: true, users });
-    } catch (err) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "USER_QUERY_FAILED",
-          message: err instanceof Error ? err.message : "Unable to load user accounts.",
-        },
-        { status: 500 },
-      );
+    } catch {
+      // Fall through to in-memory store if Supabase database query fails
     }
   }
 
-  const users = listServerAccountProfiles({ includeDeleted }).map((profile) => {
-    const meta = getRoleMetadata(profile.role);
-    const effectivePermissions = resolveEffectivePermissions({
-      role: profile.role,
-      isSuperadmin: profile.isSuperadmin,
-      departments: profile.departments,
-      customGrants: profile.customGrants,
-      customRestrictions: profile.customRestrictions,
-    });
-
+  const profiles = listServerAccountProfiles({ includeDeleted });
+  const users = profiles.map((p) => {
+    const meta = getRoleMetadata(p.role);
     return {
-      ...profile,
-      roleLabel: profile.isSuperadmin ? "Superadmin" : meta.label,
-      accessLevel: profile.isSuperadmin ? "admin" : meta.accessLevel,
-      accessLevelLabel: profile.isSuperadmin ? "Full Access" : meta.accessLevelLabel,
-      effectivePermissions,
+      ...p,
+      roleLabel: p.isSuperadmin ? "Superadmin" : meta.label,
+      accessLevel: p.isSuperadmin ? "admin" : meta.accessLevel,
+      accessLevelLabel: p.isSuperadmin ? "Full Access" : meta.accessLevelLabel,
     };
   });
 
@@ -182,8 +172,13 @@ export async function POST(request: Request) {
     );
   }
 
+  const primaryRole: UserRole = parsed.data.role || "customer_representative";
+  const assignedRoles: string[] =
+    parsed.data.roles && parsed.data.roles.length > 0 ? parsed.data.roles : [primaryRole];
+
   // Authority Rule: Only Superadmin can assign or create Admin accounts
-  if (parsed.data.role === "admin" && !auth.actor.isSuperadmin) {
+  const hasAdminRole = assignedRoles.includes("admin") || primaryRole === "admin";
+  if (hasAdminRole && !auth.actor.isSuperadmin) {
     return NextResponse.json(
       {
         ok: false,
@@ -194,71 +189,130 @@ export async function POST(request: Request) {
     );
   }
 
-  if (isSupabaseConfigured()) {
+  // Generate cryptographically secure random temporary password
+  const temporaryPassword = generateRandomTemporaryPassword();
+  const email = parsed.data.email.trim().toLowerCase();
+  const fullName = parsed.data.fullName.trim();
+  const username = parsed.data.username?.trim() || email.split("@")[0];
+
+  // Supabase Auth Admin User Provisioning
+  if (isSupabaseAdminConfigured()) {
+    const adminSupabase = createAdminSupabaseClient();
+
     try {
-      const supabase = await createServerSupabaseClient();
-      const newId = crypto.randomUUID();
-      const now = new Date().toISOString();
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .insert({
-          id: newId,
-          username: parsed.data.username.trim(),
-          normalized_username: parsed.data.username.trim().toLowerCase(),
-          email: (parsed.data.email || `${parsed.data.username.trim().toLowerCase()}@routex.local`).toLowerCase(),
-          full_name: parsed.data.fullName.trim(),
-          role: parsed.data.role,
+      // 1. Create the Supabase Auth user through the Admin API
+      const { data: authUser, error: authError } = await adminSupabase.auth.admin.createUser({
+        email,
+        password: temporaryPassword,
+        email_confirm: true,
+        user_metadata: {
+          full_name: fullName,
+          username,
+          must_change_password: true,
+        },
+        app_metadata: {
+          role: primaryRole,
+          roles: assignedRoles,
           is_active: true,
           must_change_password: true,
-          is_superadmin: false,
-          created_at: now,
-          updated_at: now,
-        })
-        .select("id, email, username, full_name, role, is_active, must_change_password, created_at")
-        .single();
+        },
+      });
 
-      if (error) {
-        const isConflict = error.code === "23505" || error.message.includes("unique");
+      if (authError || !authUser.user) {
+        const isConflict =
+          authError?.message?.toLowerCase().includes("already registered") ||
+          authError?.message?.toLowerCase().includes("unique");
+
         return NextResponse.json(
           {
             ok: false,
-            code: isConflict ? "CONFLICT" : "USER_CREATION_FAILED",
+            code: isConflict ? "CONFLICT" : "AUTH_USER_CREATION_FAILED",
             message: isConflict
-              ? "An account with this username already exists."
-              : error.message,
+              ? `An account with email '${email}' already exists.`
+              : authError?.message || "Failed to create authentication user.",
           },
           { status: isConflict ? 409 : 400 },
         );
       }
 
-      const meta = getRoleMetadata(data.role as UserRole);
+      const userId = authUser.user.id;
+      const now = new Date().toISOString();
+
+      // 2. Link RouteX profile in user_profiles table with the Supabase Auth user UUID
+      const { data: profileData, error: profileError } = await adminSupabase
+        .from("user_profiles")
+        .insert({
+          id: userId,
+          email,
+          username,
+          normalized_username: username.toLowerCase(),
+          full_name: fullName,
+          role: primaryRole,
+          roles: assignedRoles,
+          is_active: true,
+          must_change_password: true,
+          is_superadmin: false,
+          designation: parsed.data.designation?.trim() || undefined,
+          phone_number: parsed.data.phoneNumber?.trim() || undefined,
+          created_at: now,
+          updated_at: now,
+        })
+        .select("id, email, username, full_name, role, roles, is_active, must_change_password, created_at")
+        .single();
+
+      // 3. Coordinate reliability: If profile creation fails, perform safe rollback to prevent orphaned auth accounts
+      if (profileError || !profileData) {
+        await adminSupabase.auth.admin.deleteUser(userId).catch(() => {});
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "PROFILE_CREATION_FAILED",
+            message: `Account creation failed during profile setup: ${profileError?.message || "Database error"}. The pending Auth user was rolled back.`,
+          },
+          { status: 500 },
+        );
+      }
+
+      const meta = getRoleMetadata(primaryRole);
       recordAuditEntry({
         actorId: auth.actor.id,
         actorEmail: auth.actor.email,
         action: "user.created",
         entityType: "user",
-        entityId: data.id,
-        summary: `Created account for ${data.full_name} (@${data.username}).`,
-        changes: { role: data.role, username: data.username, isActive: data.is_active, mustChangePassword: true },
+        entityId: userId,
+        summary: `Admin @${auth.actor.username} created account for ${fullName} (${email}) with temporary credentials.`,
+        changes: {
+          role: primaryRole,
+          roles: assignedRoles,
+          email,
+          username,
+          isActive: true,
+          mustChangePassword: true,
+        },
       });
 
+      // Display the temporary password to the administrator ONLY ONCE
       return NextResponse.json(
         {
           ok: true,
+          message: "User account created successfully.",
           user: {
-            id: data.id,
-            username: data.username,
-            email: data.email,
-            fullName: data.full_name,
-            role: data.role,
+            id: profileData.id,
+            username: profileData.username,
+            email: profileData.email,
+            fullName: profileData.full_name,
+            role: profileData.role,
+            roles: profileData.roles,
             roleLabel: meta.label,
             accessLevel: meta.accessLevel,
             accessLevelLabel: meta.accessLevelLabel,
-            isActive: data.is_active,
+            isActive: profileData.is_active,
             mustChangePassword: true,
             hasSecurityQuestion: false,
-            createdAt: data.created_at,
+            createdAt: profileData.created_at,
           },
+          // Temporary password returned once for admin to securely communicate to the user
+          temporaryPassword,
         },
         { status: 201 },
       );
@@ -267,19 +321,20 @@ export async function POST(request: Request) {
         {
           ok: false,
           code: "USER_CREATION_FAILED",
-          message: err instanceof Error ? err.message : "Unable to create user.",
+          message: err instanceof Error ? err.message : "Unable to complete account creation.",
         },
         { status: 500 },
       );
     }
   }
 
+  // Fallback for isolated local tests where Supabase Admin API is not active
   const created = createServerAccountProfile({
-    username: parsed.data.username,
-    fullName: parsed.data.fullName,
-    role: parsed.data.role,
-    temporaryPassword: parsed.data.temporaryPassword,
-    email: parsed.data.email,
+    username,
+    fullName,
+    role: primaryRole,
+    temporaryPassword,
+    email,
     phoneNumber: parsed.data.phoneNumber,
   });
 
@@ -319,6 +374,7 @@ export async function POST(request: Request) {
         accessLevel: meta.accessLevel,
         accessLevelLabel: meta.accessLevelLabel,
       },
+      temporaryPassword,
     },
     { status: 201 },
   );
@@ -389,7 +445,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
     }
 
-    // Regular Admin cannot modify Superadmin
     if (targetUser.isSuperadmin && !auth.actor.isSuperadmin) {
       return NextResponse.json(
         { ok: false, code: "FORBIDDEN", message: "Regular Admins cannot modify the Superadmin (President) account." },
@@ -438,7 +493,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
     }
 
-    // Regular Admin cannot modify Superadmin
     if (targetUser.isSuperadmin && !auth.actor.isSuperadmin) {
       return NextResponse.json(
         { ok: false, code: "FORBIDDEN", message: "Regular Admins cannot modify the Superadmin (President) account." },
@@ -655,6 +709,28 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // Synchronize with Supabase if configured
+  if (isSupabaseAdminConfigured()) {
+    try {
+      const adminSupabase = createAdminSupabaseClient();
+      const updates: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (parsed.data.role) updates.role = parsed.data.role;
+      if (typeof parsed.data.isActive === "boolean") updates.is_active = parsed.data.isActive;
+
+      await adminSupabase.from("user_profiles").update(updates).eq("id", parsed.data.userId);
+      await adminSupabase.auth.admin.updateUserById(parsed.data.userId, {
+        app_metadata: {
+          ...(parsed.data.role ? { role: parsed.data.role } : {}),
+          ...(typeof parsed.data.isActive === "boolean" ? { is_active: parsed.data.isActive } : {}),
+        },
+      });
+    } catch {
+      // Continue to local account store update
+    }
+  }
+
   const updated = updateServerAccountProfile(parsed.data);
   if (!updated.ok) {
     return NextResponse.json({ ok: false, message: updated.message }, { status: 400 });
@@ -708,7 +784,6 @@ export async function DELETE(request: Request) {
   const userId = searchParams.get("userId") || searchParams.get("id");
   let reason = searchParams.get("reason") || "";
 
-  // Reason may also be passed via JSON body
   if (!reason) {
     const rawBody = await request.clone().json().catch(() => null);
     if (rawBody && typeof rawBody.reason === "string") {
@@ -720,7 +795,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ ok: false, message: "User ID is required." }, { status: 400 });
   }
 
-  // Deletion reason is strictly required (min 5 characters)
   if (!reason || reason.trim().length < 5) {
     return NextResponse.json(
       {
@@ -749,6 +823,23 @@ export async function DELETE(request: Request) {
       { ok: false, message: "The Superadmin account cannot be permanently deleted." },
       { status: 400 },
     );
+  }
+
+  // If Supabase Admin is configured, delete or mark deleted in Supabase
+  if (isSupabaseAdminConfigured()) {
+    try {
+      const adminSupabase = createAdminSupabaseClient();
+      await adminSupabase.from("user_profiles").update({
+        is_permanently_deleted: true,
+        deleted_at: new Date().toISOString(),
+        deleted_reason: reason.trim(),
+        deleted_by: auth.actor.username,
+        is_active: false,
+      }).eq("id", userId);
+      await adminSupabase.auth.admin.deleteUser(userId);
+    } catch {
+      // Continue to local account store deletion
+    }
   }
 
   const result = permanentlyDeleteServerAccount(userId, auth.actor.username, reason.trim());

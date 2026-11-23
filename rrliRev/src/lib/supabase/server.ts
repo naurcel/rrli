@@ -1,12 +1,34 @@
 import "server-only";
 
 import { createServerClient } from "@supabase/ssr";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { NextRequest, NextResponse } from "next/server";
 
-import { getPublicEnvironment } from "@/lib/config/env";
+import { getPublicEnvironment, getServiceRoleKey } from "@/lib/config/env";
 
 export const REMEMBER_ME_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+/**
+ * Privileged Admin Supabase Client for server-side user provisioning and password resets.
+ * Uses the server-only SUPABASE_SERVICE_ROLE_KEY and never exposes credentials to clients.
+ */
+export function createAdminSupabaseClient(): SupabaseClient {
+  const serviceRoleKey = getServiceRoleKey();
+  if (!serviceRoleKey) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is not configured. Server administrator operations require a valid service role key.",
+    );
+  }
+
+  const { supabaseUrl } = getPublicEnvironment();
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
 
 /**
  * Request-scoped server Supabase client for Server Components and read verification.
