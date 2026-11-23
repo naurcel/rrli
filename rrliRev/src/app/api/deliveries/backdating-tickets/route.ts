@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { verifyServerPermission } from "@/lib/auth/server-session";
+import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 import {
   createBackdatingTicket,
   decideBackdatingTicket,
   listBackdatingTickets,
+  setBackdatingTicketAuditRecorder,
   type BackdatingTicketStatus,
 } from "@/features/deliveries/delivery-backdating-ticket-store";
+
+// Ensure backdating audit events are logged to the server audit store
+setBackdatingTicketAuditRecorder(recordAuditEntry);
 
 export async function GET(request: Request) {
   const auth = await verifyServerPermission("deliveries:view");

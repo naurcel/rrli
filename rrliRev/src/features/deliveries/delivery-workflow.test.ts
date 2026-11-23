@@ -5,6 +5,9 @@ import {
   buildDeliveryTripRecord,
 } from "./delivery-domain.ts";
 import {
+  checkCrewDateAvailability,
+} from "./driver-registry.ts";
+import {
   SMALL_MOCK_DATABASE,
 } from "./small-mock-database.ts";
 import {
@@ -296,4 +299,100 @@ test("subcontracted delivery supports adding 2nd helper without requiring owned 
     assert.equal(correction.record.expenseStates.helperAllowance, "not_applicable");
     assert.equal(correction.record.financialState, "finalized");
   }
+});
+
+test("delivery edit works by waybill number (#WB-... and WB-...) and handles missing version safely", () => {
+  const target = SMALL_MOCK_DATABASE.deliveries[0];
+  assert.ok(target, "Fixture must exist");
+
+  const waybill = target.record.waybillNumber;
+  const currentVer = target.record.version ?? 1;
+
+  // Correct using prefixed waybill number
+  const result1 = correctSmallMockDelivery({
+    deliveryId: `#${waybill}`,
+    expectedVersion: currentVer,
+    reason: "Updated notes via prefixed waybill lookup",
+    changes: {
+      notes: "Test note updated by waybill",
+    },
+  });
+
+  assert.equal(result1.ok, true);
+  if (result1.ok) {
+    assert.equal(result1.version, currentVer + 1);
+    assert.equal(result1.record.notes, "Test note updated by waybill");
+    assert.ok(!Number.isNaN(result1.version), "Version must not be NaN");
+  }
+
+  // Correct using unprefixed waybill number
+  const result2 = correctSmallMockDelivery({
+    deliveryId: waybill,
+    expectedVersion: (result1.ok ? result1.version : currentVer + 1),
+    reason: "Updated notes via raw waybill lookup",
+    changes: {
+      notes: "Test note updated again",
+    },
+  });
+
+  assert.equal(result2.ok, true);
+  if (result2.ok) {
+    assert.equal(result2.record.notes, "Test note updated again");
+  }
+});
+
+test("checkCrewDateAvailability exempts editing delivery by ID or waybill with/without # and search matches ID", () => {
+  const testDeliveries = [
+    {
+      id: "del-crew-check-101",
+      waybillNumber: "#WB-CREW-909",
+      deliveryDate: "2024-07-20",
+      driverName: "Juan Dela Cruz",
+      helperName: "Pedro Penduko",
+    },
+  ];
+
+  // Self-conflict should be exempted when matching ID or Waybill (even with/without #)
+  const selfCheck1 = checkCrewDateAvailability({
+    employeeName: "Juan Dela Cruz",
+    deliveryDate: "2024-07-20",
+    currentWaybillOrId: "del-crew-check-101",
+    deliveries: testDeliveries,
+  });
+  assert.equal(selfCheck1.ok, true, "Matching delivery ID must exempt self from crew conflict");
+
+  const selfCheck2 = checkCrewDateAvailability({
+    employeeName: "Juan Dela Cruz",
+    deliveryDate: "2024-07-20",
+    currentWaybillOrId: "WB-CREW-909",
+    deliveries: testDeliveries,
+  });
+  assert.equal(selfCheck2.ok, true, "Matching waybill without # must exempt self from crew conflict");
+
+  const selfCheck3 = checkCrewDateAvailability({
+    employeeName: "Pedro Penduko",
+    deliveryDate: "2024-07-20",
+    currentWaybillOrId: "#wb-crew-909",
+    deliveries: testDeliveries,
+  });
+  assert.equal(selfCheck3.ok, true, "Matching case-insensitive waybill with # must exempt helper self");
+
+  // Conflict on a different delivery on the same date should be blocked
+  const diffConflict = checkCrewDateAvailability({
+    employeeName: "Juan Dela Cruz",
+    deliveryDate: "2024-07-20",
+    currentWaybillOrId: "del-different-trip",
+    deliveries: testDeliveries,
+  });
+  assert.equal(diffConflict.ok, false, "Different delivery on same date must be detected as conflict");
+
+  // listSmallMockDeliveryRecords finds delivery by ID
+  const firstId = SMALL_MOCK_DATABASE.deliveries[0].record.id;
+  const searchById = listSmallMockDeliveryRecords({
+    search: firstId,
+    page: 1,
+    pageSize: 10,
+  });
+  assert.ok(searchById.items.length > 0, "listSmallMockDeliveryRecords must match deliveries by ID");
+  assert.equal(searchById.items[0]?.id, firstId);
 });

@@ -31,7 +31,7 @@ import {
   derivePodVerificationStatus,
   type ExpenseResolutionStatus,
 } from "@/features/deliveries/delivery-domain";
-import { getDeliveryDateWindow } from "@/features/deliveries/delivery-recording-policy";
+import { getDeliveryDateWindow } from "@/features/deliveries/delivery-date-policy";
 import { BackdatingTicketsModal } from "@/components/backdating-tickets-modal";
 import {
   handlePositiveDecimalKeyDown,
@@ -257,25 +257,39 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           }))
         );
       }
+      setEditReason((prev) => (prev.trim().length >= 5 ? prev : "Operational details update"));
     }
 
-    const local = readBrowserPreviewDeliveries().find(
-      (d) => d.id === resolvedEditId || d.id === decodedEditId,
-    );
+    const cleanId = (decodedEditId || "").replace(/^#/, "").trim().toLowerCase();
+    const matchDelivery = (d: DeliveryLedgerItem) =>
+      d.id.toLowerCase() === cleanId ||
+      d.id.toLowerCase() === (decodedEditId || "").toLowerCase() ||
+      Boolean(d.waybillNumber && d.waybillNumber.replace(/^#/, "").trim().toLowerCase() === cleanId);
+
+    const local = readBrowserPreviewDeliveries().find(matchDelivery);
     if (local) {
       applyDelivery(local);
       return;
     }
 
-    fetch("/api/deliveries?page=1&pageSize=100")
+    fetch(`/api/deliveries?page=1&pageSize=100&q=${encodeURIComponent(cleanId)}`)
       .then((res) => res.json())
       .then((data) => {
         const list = (data.items ?? data.deliveries ?? []) as DeliveryLedgerItem[];
-        const found = list.find(
-          (d: DeliveryLedgerItem) => d.id === resolvedEditId || d.id === decodedEditId,
-        );
+        const found = list.find(matchDelivery);
         if (found) {
           applyDelivery(found);
+        } else {
+          fetch("/api/deliveries?page=1&pageSize=100")
+            .then((res) => res.json())
+            .then((allData) => {
+              const allList = (allData.items ?? allData.deliveries ?? []) as DeliveryLedgerItem[];
+              const broadFound = allList.find(matchDelivery);
+              if (broadFound) {
+                applyDelivery(broadFound);
+              }
+            })
+            .catch(() => {});
         }
       })
       .catch((err) => console.error("Error loading delivery for edit:", err));
@@ -462,8 +476,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           helpers: mergedHelpers,
         };
         setReferences(mergedReferences);
-        setClientName(mergedReferences.clients[0]?.label ?? "");
-        setPlateNumber(mergedReferences.trucks[0]?.label ?? "");
+        if (!isEditMode && !resolvedEditId && !propEditDeliveryId) {
+          setClientName(mergedReferences.clients[0]?.label ?? "");
+          setPlateNumber(mergedReferences.trucks[0]?.label ?? "");
+        }
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -793,6 +809,11 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     const h2DailyRate = hasSecondHelper ? (h2RateStatus === "not_applicable" ? null : numberValue(values.helper2DailyRate)) : null;
     const h2Allowance = hasSecondHelper ? (h2AllowanceStatus === "not_applicable" ? null : (numberValue(values.helper2Allowance) ?? 0)) : null;
 
+    const otherStatus = isSubcontracted
+      ? "confirmed"
+      : resolveExpenseStatus(values.otherExpenses, expenseStatuses.otherExpenses);
+    const otherExpVal = otherStatus === "not_applicable" ? null : (numberValue(values.otherExpenses) ?? 0);
+
     return {
       ...values,
       idempotencyKey: idempotencyKeyRef.current,
@@ -802,7 +823,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       recordingDelayed: values.deliveryDate < deliveryDateWindow.max,
       distanceKm: numberValue(values.distanceKm),
       fuelRate: numberValue(values.fuelRate),
-      deliveryRate: numberValue(values.deliveryRate),
+      deliveryRate: numberValue(values.deliveryRate) ?? (existingDelivery?.deliveryRate ?? 0),
       additionalCharges: numberValue(values.additionalCharges),
       dieselExpenses: isSubcontracted ? null : numberValue(values.dieselExpenses),
       tollGateExpenses: isSubcontracted ? null : numberValue(values.tollGateExpenses),
@@ -816,7 +837,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       helper2Allowance: isSubcontracted ? null : h2Allowance,
       helper2DailyRate: isSubcontracted ? null : h2DailyRate,
       helper2Name: hasSecondHelper ? (helper2Name.trim() || null) : null,
-      otherExpenses: numberValue(values.otherExpenses) ?? 0,
+      otherExpenses: otherExpVal,
       notes: values.notes.trim() || null,
       dieselExpensesStatus: isSubcontracted ? "not_applicable" : resolveExpenseStatus(values.dieselExpenses, expenseStatuses.dieselExpenses),
       tollGateExpensesStatus: isSubcontracted ? "not_applicable" : resolveExpenseStatus(values.tollGateExpenses, expenseStatuses.tollGateExpenses),
@@ -826,7 +847,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       helperDailyRateStatus: isSubcontracted ? "not_applicable" : hRateStatus,
       helper2AllowanceStatus: isSubcontracted ? "not_applicable" : h2AllowanceStatus,
       helper2DailyRateStatus: isSubcontracted ? "not_applicable" : h2RateStatus,
-      otherExpensesStatus: isSubcontracted ? "confirmed" : resolveExpenseStatus(values.otherExpenses, expenseStatuses.otherExpenses),
+      otherExpensesStatus: otherStatus,
       supportingDocuments:
         supportingFiles.length > 0
           ? [
@@ -882,162 +903,195 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     };
   }
 
+  function triggerSubmitError(msg: string) {
+    setSubmitError(msg);
+    toast.error(msg);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
   function submitDelivery(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError(null);
     if (!clientName.trim()) {
-      setSubmitError("Select or enter a client name.");
+      triggerSubmitError("Select or enter a client name.");
       return;
     }
     if (!plateNumber.trim()) {
-      setSubmitError("Select a registered truck.");
+      triggerSubmitError("Select a registered truck.");
       return;
     }
     if (!truckTemperature.trim() || !Number.isFinite(Number(truckTemperature))) {
-      setSubmitError("Enter a valid truck temperature.");
+      triggerSubmitError("Enter a valid truck temperature.");
       return;
     }
     if (!values.distanceKm.trim() || !Number.isFinite(Number(values.distanceKm)) || Number(values.distanceKm) <= 0) {
-      setSubmitError("Enter a valid trip distance in kilometers.");
+      triggerSubmitError("Enter a valid trip distance in kilometers.");
       return;
     }
     if (!values.fuelRate.trim() || !Number.isFinite(Number(values.fuelRate)) || Number(values.fuelRate) <= 0) {
-      setSubmitError("Enter a valid fuel rate per liter.");
+      triggerSubmitError("Enter a valid fuel rate per liter.");
       return;
     }
     if (driverName.trim().length < 2) {
-      setSubmitError("Select a saved driver or enter a new driver name.");
+      triggerSubmitError("Select a saved driver or enter a new driver name.");
       return;
     }
     const isExistingUnknownDriver = Boolean(existingDelivery?.driverName && existingDelivery.driverName.toLowerCase().includes("unknown"));
     if (driverName.trim().toLowerCase().includes("unknown") && !isExistingUnknownDriver) {
-      setSubmitError("Unknown driver is not permitted when adding or editing a delivery. Please select or enter a real driver name.");
+      triggerSubmitError("Unknown driver is not permitted when adding or editing a delivery. Please select or enter a real driver name.");
       return;
     }
-    if (!isSubcontracted && (!values.driverDailyRate || Number(values.driverDailyRate) <= 0)) {
-      setSubmitError("Driver daily rate must have a valid value.");
+    if (!isSubcontracted && expenseStatuses.driverDailyRate === "confirmed" && (!values.driverDailyRate || Number(values.driverDailyRate) <= 0)) {
+      triggerSubmitError("Driver daily rate must have a valid value.");
       return;
     }
     if (helper1Name.trim().length < 2) {
-      setSubmitError("Select a saved helper or enter a new helper name.");
+      triggerSubmitError("Select a saved helper or enter a new helper name.");
       return;
     }
     const isExistingUnknownHelper1 = Boolean(existingDelivery?.helperName && existingDelivery.helperName.toLowerCase().includes("unknown"));
     if (helper1Name.trim().toLowerCase().includes("unknown") && !isExistingUnknownHelper1) {
-      setSubmitError("Unknown helper is not permitted when adding or editing a delivery. Please select or enter a real helper name.");
+      triggerSubmitError("Unknown helper is not permitted when adding or editing a delivery. Please select or enter a real helper name.");
       return;
     }
-    if (!isSubcontracted && (!values.helperDailyRate || Number(values.helperDailyRate) <= 0)) {
-      setSubmitError("Helper daily rate must have a valid value.");
+    if (!isSubcontracted && expenseStatuses.helperDailyRate === "confirmed" && (!values.helperDailyRate || Number(values.helperDailyRate) <= 0)) {
+      triggerSubmitError("Helper daily rate must have a valid value.");
       return;
     }
     if (hasSecondHelper) {
       if (helper2Name.trim().length < 2) {
-        setSubmitError("Select or enter a name for Helper 2.");
+        triggerSubmitError("Select or enter a name for Helper 2.");
         return;
       }
       if (helper2Name.trim().toLowerCase().includes("unknown")) {
-        setSubmitError("Unknown helper is not permitted when adding or editing a delivery. Please select or enter a real helper name.");
+        triggerSubmitError("Unknown helper is not permitted when adding or editing a delivery. Please select or enter a real helper name.");
         return;
       }
-      if (!isSubcontracted && (!values.helper2DailyRate || Number(values.helper2DailyRate) <= 0)) {
-        setSubmitError("Daily rate for Helper 2 must have a valid value.");
+      if (!isSubcontracted && expenseStatuses.helper2DailyRate === "confirmed" && (!values.helper2DailyRate || Number(values.helper2DailyRate) <= 0)) {
+        triggerSubmitError("Daily rate for Helper 2 must have a valid value.");
         return;
       }
     }
-    if (!values.deliveryRate || Number(values.deliveryRate) <= 0) {
-      setSubmitError("Rate must have a valid value.");
+    if (!isEditMode && (!values.deliveryRate || Number(values.deliveryRate) <= 0)) {
+      triggerSubmitError("Rate must have a valid value.");
       return;
     }
-    if (!isEditMode && !isSubcontracted && (!values.dieselExpenses || Number(values.dieselExpenses) < 0)) {
-      setSubmitError("Diesel expense must have a valid value.");
+    if (isEditMode && values.deliveryRate && Number(values.deliveryRate) <= 0) {
+      triggerSubmitError("Rate must have a valid value.");
       return;
     }
-    if (!isEditMode && !isSubcontracted && (!values.tollGateExpenses || Number(values.tollGateExpenses) < 0)) {
-      setSubmitError("Toll gates expense must have a valid value.");
+    if (!isEditMode && !isSubcontracted && expenseStatuses.dieselExpenses === "confirmed" && (!values.dieselExpenses || Number(values.dieselExpenses) < 0)) {
+      triggerSubmitError("Diesel expense must have a valid value.");
       return;
     }
-    if (!isEditMode && isSubcontracted && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
-      setSubmitError("Total subcontracted expense must have a valid value.");
+    if (!isEditMode && !isSubcontracted && expenseStatuses.tollGateExpenses === "confirmed" && (!values.tollGateExpenses || Number(values.tollGateExpenses) < 0)) {
+      triggerSubmitError("Toll gates expense must have a valid value.");
       return;
     }
-    if (!isEditMode && !isSubcontracted && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
-      setSubmitError("Other expenses must have a valid value.");
+    if (!isEditMode && isSubcontracted && expenseStatuses.otherExpenses === "confirmed" && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
+      triggerSubmitError("Total subcontracted expense must have a valid value.");
       return;
+    }
+    if (!isEditMode && !isSubcontracted && expenseStatuses.otherExpenses === "confirmed" && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
+      triggerSubmitError("Other expenses must have a valid value.");
+      return;
+    }
+
+    if (!dropoffs || dropoffs.length === 0) {
+      triggerSubmitError("At least one store drop-off is required.");
+      return;
+    }
+    for (let i = 0; i < dropoffs.length; i++) {
+      const stop = dropoffs[i];
+      if (!stop.storeName.trim()) {
+        triggerSubmitError(`Stop #${i + 1}: Store name is required.`);
+        return;
+      }
+      if (!stop.destinationArea.trim()) {
+        triggerSubmitError(`Stop #${i + 1}: Destination area is required.`);
+        return;
+      }
     }
 
     // Crew Inactivity / Removal check
     const driverEligibility = isCrewMemberEligibleForNewDelivery(driverName);
     if (!driverEligibility.ok) {
-      setSubmitError(driverEligibility.message);
+      triggerSubmitError(driverEligibility.message);
       return;
     }
     const helper1Eligibility = isCrewMemberEligibleForNewDelivery(helper1Name);
     if (!helper1Eligibility.ok) {
-      setSubmitError(helper1Eligibility.message);
+      triggerSubmitError(helper1Eligibility.message);
       return;
     }
     if (hasSecondHelper && helper2Name) {
       const helper2Eligibility = isCrewMemberEligibleForNewDelivery(helper2Name);
       if (!helper2Eligibility.ok) {
-        setSubmitError(helper2Eligibility.message);
+        triggerSubmitError(helper2Eligibility.message);
         return;
       }
     }
 
-    // Crew Same-Date Double-Booking check
+    // Crew Same-Date Double-Booking check (exempt current delivery being edited)
     const allDeliveriesForCheck = readBrowserPreviewDeliveries();
+    const currentRef = existingDelivery?.id || resolvedEditId || propEditDeliveryId || values.waybillNumber;
     const dConflict = checkCrewDateAvailability({
       employeeName: driverName,
       deliveryDate: values.deliveryDate,
-      currentWaybillOrId: existingDelivery?.id || values.waybillNumber,
+      currentWaybillOrId: currentRef,
       deliveries: allDeliveriesForCheck,
     });
     if (!dConflict.ok) {
-      setSubmitError(dConflict.message);
+      triggerSubmitError(dConflict.message);
       return;
     }
     const h1Conflict = checkCrewDateAvailability({
       employeeName: helper1Name,
       deliveryDate: values.deliveryDate,
-      currentWaybillOrId: existingDelivery?.id || values.waybillNumber,
+      currentWaybillOrId: currentRef,
       deliveries: allDeliveriesForCheck,
     });
     if (!h1Conflict.ok) {
-      setSubmitError(h1Conflict.message);
+      triggerSubmitError(h1Conflict.message);
       return;
     }
     if (hasSecondHelper && helper2Name) {
       const h2Conflict = checkCrewDateAvailability({
         employeeName: helper2Name,
         deliveryDate: values.deliveryDate,
-        currentWaybillOrId: existingDelivery?.id || values.waybillNumber,
+        currentWaybillOrId: currentRef,
         deliveries: allDeliveriesForCheck,
       });
       if (!h2Conflict.ok) {
-        setSubmitError(h2Conflict.message);
+        triggerSubmitError(h2Conflict.message);
         return;
       }
     }
     if (values.deliveryDate < "2024-01-01") {
-      setSubmitError("Delivery date cannot be earlier than company foundation year (2024).");
+      triggerSubmitError("Delivery date cannot be earlier than company foundation year (2024).");
       return;
     }
     if (!isEditMode && !isAdmin && values.deliveryDate > deliveryDateWindow.max) {
-      setSubmitError(`Delivery date cannot be in the future. Today in Manila is ${deliveryDateWindow.max}.`);
+      triggerSubmitError(`Delivery date cannot be in the future. Today in Manila is ${deliveryDateWindow.max}.`);
       return;
     }
     if (!isEditMode && !isAdmin && values.deliveryDate < deliveryDateWindow.min) {
       if (!approvedTicket) {
-        setSubmitError(
+        triggerSubmitError(
           `Delivery date precedes the rolling 3-working-day window (${deliveryDateWindow.min}). Please submit an Admin Backdating Request.`
         );
         return;
       }
     }
     if (isEditMode && editReason.trim().length < 5) {
-      setSubmitError("Please provide a reason for editing this delivery (at least 5 characters).");
-      return;
+      if (!editReason.trim()) {
+        setEditReason("Operational details update");
+      } else {
+        triggerSubmitError("Please provide a reason for editing this delivery (at least 5 characters).");
+        return;
+      }
     }
     buildPayload();
     setPreviewing(true);
@@ -1051,7 +1105,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     setSubmitting(true);
     const payload = buildPayload();
 
-    const editId = resolvedEditId || existingDelivery?.id || propEditDeliveryId;
+    const editId = existingDelivery?.id || resolvedEditId || propEditDeliveryId;
     if (isEditMode && editId) {
       const combinedHelperName =
         hasSecondHelper && payload.helper2Name
@@ -1118,7 +1172,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             deliveryId: editId,
             expectedVersion: existingDelivery?.version ?? 1,
             idempotencyKey: crypto.randomUUID(),
-            reason: editReason.trim(),
+            reason: editReason.trim().length >= 5 ? editReason.trim() : "Operational details update",
             changes: {
               waybillNumber: payload.waybillNumber,
               deliveryDate: payload.deliveryDate,
@@ -1252,7 +1306,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         }
         return;
       } catch (error) {
-        setSubmitError(error instanceof Error ? error.message : "Unable to update delivery record.");
+        triggerSubmitError(error instanceof Error ? error.message : "Unable to update delivery record.");
         setSubmitting(false);
         setPreviewing(false);
         return;
@@ -1293,7 +1347,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         router.push(returnToParam && isValidInternalReturnPath(returnToParam) ? returnToParam : "/deliveries");
       }
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Unable to record the completed delivery.");
+      triggerSubmitError(error instanceof Error ? error.message : "Unable to record the completed delivery.");
       setSubmitting(false);
       setPreviewing(false);
     }

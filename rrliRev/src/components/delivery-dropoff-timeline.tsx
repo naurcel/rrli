@@ -260,7 +260,6 @@ export function DeliveryDropoffTimeline({
                       e.stopPropagation();
                       onViewPod?.(stop);
                     }}
-                    style={{ border: "none", cursor: "pointer", background: "none", padding: 0 }}
                   >
                     <svg
                       width="11"

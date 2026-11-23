@@ -100,7 +100,7 @@ export function DeliverySupportingDocumentsPane({
         body: JSON.stringify({
           action: "correct_financials",
           deliveryId: trip.id,
-          expectedVersion: trip.version,
+          expectedVersion: trip.version ?? 1,
           reason,
           changes: {
             supportingDocuments: nextDocs,
@@ -303,8 +303,8 @@ export function DeliverySupportingDocumentsPane({
         ) : null}
       </div>
 
-      {/* Sleek Upload & Drop Target */}
-      {canManage ? (
+      {/* Sleek Upload & Drop Target (shown when documents already exist) */}
+      {canManage && normalizedDocs.length > 0 ? (
         <div
           className={`supporting-docs-upload-bar ${isDragging ? "is-drag-over" : ""}`}
           onDragOver={(e) => {
@@ -415,37 +415,114 @@ export function DeliverySupportingDocumentsPane({
       {/* Documents List */}
       <div className="supporting-docs-items-list" role="list" aria-label="Attached supporting documents">
         {displayedDocs.length === 0 ? (
-          <div className="supporting-docs-empty-card">
-            <div className="supporting-docs-empty-icon" aria-hidden="true">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="12" y1="18" x2="12" y2="12" />
-                <line x1="9" y1="15" x2="15" y2="15" />
-              </svg>
+          canManage && normalizedDocs.length === 0 ? (
+            <div
+              className={`supporting-docs-empty-card is-interactive-dropzone ${isDragging ? "is-drag-over" : ""}`}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (e.dataTransfer.files) {
+                  handleFilesAdded(e.dataTransfer.files);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              style={{ cursor: "pointer", padding: "26px 18px", gap: "6px" }}
+            >
+              <div className="supporting-docs-empty-icon" aria-hidden="true">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </div>
+              <div className="supporting-docs-empty-title">
+                Drop receipts, gate passes, or fuel slips here
+              </div>
+              <div className="supporting-docs-empty-desc">
+                PDF, PNG, or JPG up to 10MB. Or click to browse files.
+              </div>
+              {trip.dropoffs.length > 0 ? (
+                <div
+                  className="supporting-docs-target-select-wrap"
+                  style={{ marginTop: "10px" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="supporting-docs-target-select-label">Attach to:</span>
+                  <select
+                    className="supporting-docs-store-select"
+                    value={targetDropoffId}
+                    onChange={(e) => setTargetDropoffId(e.target.value)}
+                    aria-label="Select default store link for new uploads"
+                    title="Newly attached files will link to this location"
+                  >
+                    <option value="trip">Entire Trip (General)</option>
+                    {trip.dropoffs.map((stop, i) => (
+                      <option key={stop.id} value={stop.id}>
+                        Stop #{stop.sequence || i + 1}: {stop.storeName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </div>
-            <div className="supporting-docs-empty-title">
-              {filter === "all"
-                ? "No supporting documents"
-                : filter === "trip"
-                  ? "No trip-wide documents"
-                  : "No store-linked documents"}
+          ) : (
+            <div className="supporting-docs-empty-card">
+              <div className="supporting-docs-empty-icon" aria-hidden="true">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="12" y1="18" x2="12" y2="12" />
+                  <line x1="9" y1="15" x2="15" y2="15" />
+                </svg>
+              </div>
+              <div className="supporting-docs-empty-title">
+                {filter === "all"
+                  ? "No supporting documents"
+                  : filter === "trip"
+                    ? "No trip-wide documents"
+                    : "No store-linked documents"}
+              </div>
+              <div className="supporting-docs-empty-desc">
+                {canManage
+                  ? "No documents match the selected filter."
+                  : "No supporting files have been attached to this trip yet."}
+              </div>
             </div>
-            <div className="supporting-docs-empty-desc">
-              {canManage
-                ? "Drop receipts, gate passes, or fuel slips to attach them."
-                : "No supporting files have been attached to this trip yet."}
-            </div>
-          </div>
+          )
         ) : (
           displayedDocs.map((doc, displayIndex) => {
             const originalIndex = normalizedDocs.findIndex((d) => d.name === doc.name);

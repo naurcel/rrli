@@ -714,7 +714,7 @@ export default function DeliveriesPage() {
         <section className="stat-grid" aria-label="Current delivery page totals">
           <button
             type="button"
-            className={`stat-card is-interactive${activeKpi === "earnings" ? " is-active" : ""}`}
+            className={`stat-card stat-card-revenue is-interactive${activeKpi === "earnings" ? " is-active" : ""}`}
             onClick={() => {
               setActiveKpi((curr) => (curr === "earnings" ? null : "earnings"));
             }}
@@ -732,7 +732,7 @@ export default function DeliveriesPage() {
           </button>
           <button
             type="button"
-            className={`stat-card is-interactive${activeKpi === "expenses" ? " is-active" : ""}`}
+            className={`stat-card stat-card-expenses is-interactive${activeKpi === "expenses" ? " is-active" : ""}`}
             onClick={() => {
               setActiveKpi((curr) => (curr === "expenses" ? null : "expenses"));
             }}
@@ -750,7 +750,7 @@ export default function DeliveriesPage() {
           </button>
           <button
             type="button"
-            className={`stat-card is-interactive${activeKpi === "profit" ? " is-active" : ""}`}
+            className={`stat-card stat-card-profit is-interactive${activeKpi === "profit" ? " is-active" : ""}`}
             onClick={() => {
               setActiveKpi((curr) => (curr === "profit" ? null : "profit"));
             }}

@@ -5,7 +5,21 @@
  * than the rolling 3-working-day window (TC-TIME-003).
  */
 
-import { recordAuditEntry } from "../../lib/audit/server-audit-store.ts";
+export type BackdatingAuditRecorder = (entry: {
+  actorId: string;
+  actorEmail: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  summary: string;
+  changes?: Record<string, unknown>;
+}) => void;
+
+let externalAuditRecorder: BackdatingAuditRecorder | null = null;
+
+export function setBackdatingTicketAuditRecorder(recorder: BackdatingAuditRecorder | null): void {
+  externalAuditRecorder = recorder;
+}
 
 export type BackdatingTicketStatus = "pending" | "approved" | "rejected";
 
@@ -98,7 +112,7 @@ export function createBackdatingTicket(input: {
 
   ticketsMap.set(id, ticket);
 
-  recordAuditEntry({
+  externalAuditRecorder?.({
     actorId: input.requestedBy.id,
     actorEmail: `${input.requestedBy.username.toLowerCase()}@routex.local`,
     action: "delivery.backdating_ticket_created",
@@ -182,7 +196,7 @@ export function decideBackdatingTicket(input: {
     ticket.decisionNotes = input.decisionNotes.trim();
   }
 
-  recordAuditEntry({
+  externalAuditRecorder?.({
     actorId: input.decidedBy.id,
     actorEmail: `${input.decidedBy.username.toLowerCase()}@routex.local`,
     action: input.decision === "approve" ? "delivery.backdating_ticket_approved" : "delivery.backdating_ticket_rejected",

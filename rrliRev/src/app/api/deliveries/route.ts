@@ -667,15 +667,20 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const auth = await verifyServerPermission("deliveries:complete");
+  const mutation = parsed.data;
+
+  const requiredPermission =
+    mutation.action === "finalize_financials" ? "deliveries:complete" : "deliveries:edit";
+  let auth = await verifyServerPermission(requiredPermission);
+  if (!auth.ok && mutation.action === "correct_financials") {
+    auth = await verifyServerPermission("deliveries:complete");
+  }
   if (!auth.ok) {
     return NextResponse.json(
       { ok: false, code: auth.code, message: auth.message },
       { status: auth.status },
     );
   }
-
-  const mutation = parsed.data;
 
   if (!isSupabaseConfigured()) {
     const mockResult = mutation.action === "finalize_financials"

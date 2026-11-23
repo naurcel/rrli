@@ -519,7 +519,7 @@ function DeliveryDetailsPageContent({
         body: JSON.stringify({
           action: "correct_financials",
           deliveryId: delivery.id,
-          expectedVersion: delivery.version,
+          expectedVersion: delivery.version ?? 1,
           idempotencyKey: crypto.randomUUID(),
           reason: "Updated trip notes",
           changes: {
@@ -613,7 +613,7 @@ function DeliveryDetailsPageContent({
         body: JSON.stringify({
           action: "correct_financials",
           deliveryId: delivery.id,
-          expectedVersion: delivery.version,
+          expectedVersion: delivery.version ?? 1,
           reason: "Update drop-off POD remarks",
           changes: { dropoffs: updatedDropoffs },
           fallbackRecord: updatedTrip,
@@ -1096,7 +1096,23 @@ function DeliveryDetailsPageContent({
                 </div>
 
                 <div
-                  className="delivery-embedded-notes-scrollable"
+                  className={`delivery-embedded-notes-scrollable ${canWrite && !isEditingNotes ? "is-clickable" : ""}`}
+                  onClick={() => {
+                    if (canWrite && !isEditingNotes) {
+                      setNoteDraft(delivery.notes ?? "");
+                      setIsEditingNotes(true);
+                    }
+                  }}
+                  role={canWrite && !isEditingNotes ? "button" : undefined}
+                  tabIndex={canWrite && !isEditingNotes ? 0 : undefined}
+                  onKeyDown={(e) => {
+                    if (canWrite && !isEditingNotes && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      setNoteDraft(delivery.notes ?? "");
+                      setIsEditingNotes(true);
+                    }
+                  }}
+                  title={canWrite && !isEditingNotes ? (delivery.notes ? "Click to edit notes" : "Click to add notes") : undefined}
                   style={{
                     flex: 1,
                     minHeight: "72px",
@@ -1108,6 +1124,7 @@ function DeliveryDetailsPageContent({
                     padding: "10px 12px",
                     fontSize: "13px",
                     lineHeight: "1.5",
+                    cursor: canWrite && !isEditingNotes ? "pointer" : "default",
                   }}
                 >
                   {isEditingNotes ? (
@@ -1125,6 +1142,15 @@ function DeliveryDetailsPageContent({
                         placeholder="Enter operational notes, special handling, or dispatch instructions for this delivery..."
                         value={noteDraft}
                         onChange={(e) => setNoteDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                            e.preventDefault();
+                            void handleSaveNotes();
+                          } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            setIsEditingNotes(false);
+                          }
+                        }}
                         autoFocus
                       />
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
@@ -1163,9 +1189,33 @@ function DeliveryDetailsPageContent({
                       style={{
                         color: "var(--color-text-muted, #64748b)",
                         fontStyle: "italic",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
                     >
-                      No operational notes recorded for this delivery trip.
+                      {canWrite ? (
+                        <>
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ opacity: 0.7, flexShrink: 0 }}
+                            aria-hidden="true"
+                          >
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                          <span>Click to add operational notes, special handling, or dispatch instructions…</span>
+                        </>
+                      ) : (
+                        <span>No operational notes recorded for this delivery trip.</span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1204,12 +1254,17 @@ function DeliveryDetailsPageContent({
             {/* Left Pane: Store Drop-offs Sequence & POD */}
             <div className="delivery-fulfillment-pane is-dropoffs">
               <div className="delivery-fulfillment-pane-header">
-                <h3 className="delivery-fulfillment-pane-title">
-                  Store Drop-offs &amp; POD ({totalDropoffs} across {delivery.dropoffs.length} {delivery.dropoffs.length === 1 ? "location" : "locations"})
-                </h3>
-                <span className="delivery-fulfillment-pane-hint">
-                  Click drop-off to view POD document
-                </span>
+                <div className="delivery-fulfillment-pane-titles">
+                  <h3 className="delivery-fulfillment-pane-title">
+                    Store Drop-offs &amp; POD{" "}
+                    <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text-muted)" }}>
+                      ({totalDropoffs})
+                    </span>
+                  </h3>
+                  <span className="delivery-fulfillment-pane-hint">
+                    Stop sequence, entry fees, and proof of delivery
+                  </span>
+                </div>
               </div>
               <div className="delivery-fulfillment-scroll">
                 <DeliveryDropoffTimeline

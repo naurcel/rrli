@@ -27,6 +27,7 @@ import {
   sanitizePositiveDecimalInput,
 } from "@/features/deliveries/delivery-input-utils";
 import { formatPeso } from "@/lib/format";
+import { useAuthenticatedActor } from "@/components/auth-context";
 
 function numberValue(val: string): number | null {
   const clean = val.replace(/,/g, "").trim();
@@ -63,6 +64,13 @@ export function EditDeliveryModal({
   onClose,
   onSaved,
 }: EditDeliveryModalProps) {
+  let actor: ReturnType<typeof useAuthenticatedActor> | null = null;
+  try {
+    actor = useAuthenticatedActor();
+  } catch {
+    actor = null;
+  }
+
   const [reason, setReason] = useState("");
   const [rate, setRate] = useState("");
   const [driverName, setDriverName] = useState("");
@@ -528,11 +536,14 @@ export function EditDeliveryModal({
     try {
       const response = await fetch("/api/deliveries", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(actor ? { "x-actor-role": actor.role, "x-actor-username": actor.username } : {}),
+        },
         body: JSON.stringify({
           action: "correct_financials",
           deliveryId: delivery.id,
-          expectedVersion: delivery.version,
+          expectedVersion: delivery.version ?? 1,
           idempotencyKey: crypto.randomUUID(),
           reason: reason.trim(),
           changes: {
@@ -551,7 +562,7 @@ export function EditDeliveryModal({
       });
 
       const data = await response.json().catch(() => ({}));
-      let newVersion = delivery.version + 1;
+      let newVersion = (delivery.version ?? 1) + 1;
 
       if (!response.ok || !data.ok) {
         if (response.status === 409 || data.code === "VERSION_CONFLICT") {
@@ -577,7 +588,7 @@ export function EditDeliveryModal({
           return;
         }
       } else {
-        newVersion = data.result?.version ?? delivery.version + 1;
+        newVersion = data.result?.version ?? (delivery.version ?? 1) + 1;
       }
 
       const updated: DeliveryLedgerItem = {

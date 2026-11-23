@@ -5,38 +5,21 @@
  * working-day arithmetic, weekend & holiday exclusion, and Admin approval ticket integration (TC-TIME-003).
  */
 
-import {
-  getRollingWorkingDayWindow,
-  parseDateKey,
-} from "./philippine-calendar.ts";
+import { parseDateKey } from "./philippine-calendar.ts";
 import { findApprovedTicketForDelivery } from "./delivery-backdating-ticket-store.ts";
+import {
+  COMPANY_FOUNDATION_DATE,
+  COMPANY_FOUNDATION_YEAR,
+  getDeliveryDateWindow,
+  type DeliveryDateWindowResult,
+} from "./delivery-date-policy.ts";
 
-export const COMPANY_FOUNDATION_YEAR = 2024;
-export const COMPANY_FOUNDATION_DATE = "2024-01-01";
-
-export type DeliveryDateWindowResult = {
-  min: string;
-  max: string;
-  workingDaysCount: number;
-  holidaysEncountered: string[];
+export {
+  COMPANY_FOUNDATION_DATE,
+  COMPANY_FOUNDATION_YEAR,
+  getDeliveryDateWindow,
+  type DeliveryDateWindowResult,
 };
-
-/**
- * Returns the rolling 3-working-day delivery date window (today + 3 past working days).
- * Excludes weekends (Saturday & Sunday) and official Philippine Holidays.
- */
-export function getDeliveryDateWindow(
-  reference: Date = new Date(),
-  workingDaysBack: number = 3,
-): DeliveryDateWindowResult {
-  const window = getRollingWorkingDayWindow(reference, workingDaysBack);
-  return {
-    min: window.min,
-    max: window.max,
-    workingDaysCount: window.workingDaysCount,
-    holidaysEncountered: window.holidaysEncountered,
-  };
-}
 
 export type DeliveryDateValidationResult =
   | {

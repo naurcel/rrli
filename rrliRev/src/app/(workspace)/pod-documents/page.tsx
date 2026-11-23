@@ -15,6 +15,7 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import { RoundedSelect } from "@/components/rounded-select";
 import { TablePagination } from "@/components/table-pagination";
 import { ImageViewerModal } from "@/components/image-viewer-modal";
+import { useSearchBuffer } from "@/components/search-buffer";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import { isImageDocument, triggerDocumentDownload } from "@/features/deliveries/pod-utils";
 import { derivePodVerificationStatus } from "@/features/deliveries/delivery-domain";
@@ -38,6 +39,14 @@ export default function PodDocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState("All Drop-offs");
+  const {
+    value: searchQuery,
+    setValue: setSearchQuery,
+    bufferedQuery,
+    isBuffering: isSearchBuffering,
+    clear: clearSearch,
+    reset: resetSearch,
+  } = useSearchBuffer();
   const [feedback, setFeedback] = useState<{
     tone: "success" | "error";
     text: string;
@@ -138,6 +147,7 @@ export default function PodDocumentsPage() {
         deliveryDate: trip.deliveryDate,
         clientName: trip.clientName,
         plateNumber: trip.plateNumber,
+        driverName: trip.driverName,
         version: trip.version,
         stop,
         hasPod: Boolean(stop.podSubmitted && stop.documentRef && stop.documentRef !== "Pending upload"),
@@ -146,14 +156,23 @@ export default function PodDocumentsPage() {
   }, [dateFilteredDeliveries]);
 
   const filteredStops = useMemo(() => {
+    let list = flattenedStops;
     if (filterStatus === "POD Attached") {
-      return flattenedStops.filter((item) => item.hasPod);
+      list = list.filter((item) => item.hasPod);
+    } else if (filterStatus === "Missing POD") {
+      list = list.filter((item) => !item.hasPod);
     }
-    if (filterStatus === "Missing POD") {
-      return flattenedStops.filter((item) => !item.hasPod);
-    }
-    return flattenedStops;
-  }, [flattenedStops, filterStatus]);
+    const q = bufferedQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((item) =>
+      item.waybillNumber.toLowerCase().includes(q) ||
+      item.clientName.toLowerCase().includes(q) ||
+      item.plateNumber.toLowerCase().includes(q) ||
+      item.stop.storeName.toLowerCase().includes(q) ||
+      (item.driverName && item.driverName.toLowerCase().includes(q)) ||
+      (item.stop.documentRef && item.stop.documentRef.toLowerCase().includes(q))
+    );
+  }, [flattenedStops, filterStatus, bufferedQuery]);
 
   const [podPage, setPodPage] = useState(1);
   const POD_PAGE_SIZE = 10;
@@ -164,12 +183,16 @@ export default function PodDocumentsPage() {
     if (isInitialPodParamsParsed.current) {
       setPodPage(1);
     }
-  }, [filterStatus, range]);
+  }, [filterStatus, range, bufferedQuery]);
 
   useEffect(() => {
     if (isInitialPodParamsParsed.current) return;
     isInitialPodParamsParsed.current = true;
     const params = new URLSearchParams(window.location.search);
+    const searchParam = params.get("search");
+    if (searchParam) {
+      resetSearch(searchParam);
+    }
     const statusParam = params.get("status");
     if (statusParam === "All Drop-offs" || statusParam === "POD Attached" || statusParam === "Missing POD") {
       setFilterStatus(statusParam);
@@ -186,10 +209,11 @@ export default function PodDocumentsPage() {
         endDate: dateToParam ? parseDateValue(dateToParam) : null,
       });
     }
-  }, [setRange]);
+  }, [setRange, resetSearch]);
 
   function buildCurrentPodUrl(): string {
     const params = new URLSearchParams();
+    if (searchQuery.trim()) params.set("search", searchQuery.trim());
     if (filterStatus !== "All Drop-offs") params.set("status", filterStatus);
     if (podPage > 1) params.set("page", String(podPage));
     if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
@@ -388,7 +412,30 @@ export default function PodDocumentsPage() {
             <div>
               <h2>Drop-off Documents</h2>
             </div>
-            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
+              <label className={`search-box${isSearchBuffering ? " is-buffering" : ""}`} style={{ maxWidth: "340px", flex: 1, minWidth: "220px" }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="search"
+                  placeholder="Search waybill, client, plate, store..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Search drop-off documents"
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    className="search-clear-btn"
+                    onClick={clearSearch}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </label>
               <GlobalDateRangePicker />
               <RoundedSelect
                 value={filterStatus}
@@ -431,8 +478,14 @@ export default function PodDocumentsPage() {
                     <tr>
                       <td colSpan={6} className="table-empty-cell">
                         <div className="empty-state minimal" title="No store drop-offs match the selected document filter or date range">
-                          <strong className="empty-state-title">No drop-offs match this view</strong>
-                          <span className="empty-state-desc">Change the document filter or selected date range.</span>
+                          <strong className="empty-state-title">
+                            {bufferedQuery.trim() ? `No drop-offs match "${searchQuery.trim()}"` : "No drop-offs match this view"}
+                          </strong>
+                          <span className="empty-state-desc">
+                            {bufferedQuery.trim()
+                              ? "Try searching for a different keyword or clear the search input."
+                              : "Change the document filter or selected date range."}
+                          </span>
                         </div>
                       </td>
                     </tr>

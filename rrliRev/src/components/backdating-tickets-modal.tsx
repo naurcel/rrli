@@ -240,37 +240,16 @@ export function BackdatingTicketsModal({
           }}
         >
           <div
+            className="backdating-view-tabs"
             role="tablist"
             aria-label="Request views"
-            style={{
-              display: "inline-flex",
-              background: "var(--color-surface)",
-              padding: "3px",
-              borderRadius: "8px",
-              border: "1px solid var(--color-border)",
-              gap: "3px",
-            }}
           >
             <button
               type="button"
               role="tab"
               aria-selected={viewTab === "queue"}
               onClick={() => setViewTab("queue")}
-              style={{
-                border: "none",
-                padding: "6px 14px",
-                borderRadius: "6px",
-                fontSize: "12px",
-                fontWeight: 650,
-                cursor: "pointer",
-                background: viewTab === "queue" ? "var(--color-surface-subtle)" : "transparent",
-                color: viewTab === "queue" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
-                boxShadow: viewTab === "queue" ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
+              className={`backdating-tab-btn ${viewTab === "queue" ? "active" : ""}`}
             >
               <span>Requests Queue ({counts.all})</span>
               {counts.pending > 0 ? (
@@ -295,18 +274,7 @@ export function BackdatingTicketsModal({
               role="tab"
               aria-selected={viewTab === "request"}
               onClick={() => setViewTab("request")}
-              style={{
-                border: "none",
-                padding: "6px 14px",
-                borderRadius: "6px",
-                fontSize: "12px",
-                fontWeight: 650,
-                cursor: "pointer",
-                background: viewTab === "request" ? "var(--color-surface-subtle)" : "transparent",
-                color: viewTab === "request" ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
-                boxShadow: viewTab === "request" ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
-                transition: "all 0.15s ease",
-              }}
+              className={`backdating-tab-btn ${viewTab === "request" ? "active" : ""}`}
             >
               + New Request
             </button>
@@ -318,38 +286,31 @@ export function BackdatingTicketsModal({
           {viewTab === "queue" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {/* Filter pills */}
-              <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ fontSize: "11.5px", color: "var(--color-text-muted)", fontWeight: 600, marginRight: "4px" }}>
                   Filter:
                 </span>
-                {(
-                  [
-                    { id: "all", label: `All (${counts.all})` },
-                    { id: "pending", label: `Pending (${counts.pending})` },
-                    { id: "approved", label: `Approved (${counts.approved})` },
-                    { id: "rejected", label: `Rejected (${counts.rejected})` },
-                  ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setFilterStatus(tab.id)}
-                    style={{
-                      padding: "4px 11px",
-                      borderRadius: "6px",
-                      fontSize: "11.5px",
-                      fontWeight: filterStatus === tab.id ? 650 : 500,
-                      border: "1px solid",
-                      cursor: "pointer",
-                      backgroundColor: filterStatus === tab.id ? "var(--color-surface-subtle)" : "transparent",
-                      color: filterStatus === tab.id ? "var(--color-accent-deep)" : "var(--color-text-secondary)",
-                      borderColor: filterStatus === tab.id ? "var(--color-accent)" : "var(--color-border)",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+                <div className="backdating-filter-tabs" role="tablist" aria-label="Filter requests by status">
+                  {(
+                    [
+                      { id: "all", label: `All (${counts.all})` },
+                      { id: "pending", label: `Pending (${counts.pending})` },
+                      { id: "approved", label: `Approved (${counts.approved})` },
+                      { id: "rejected", label: `Rejected (${counts.rejected})` },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={filterStatus === tab.id}
+                      className={filterStatus === tab.id ? "active" : ""}
+                      onClick={() => setFilterStatus(tab.id)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {loading ? (

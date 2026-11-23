@@ -275,9 +275,12 @@ export function checkCrewDateAvailability(input: {
 
   for (const del of input.deliveries) {
     if (del.deliveryDate !== input.deliveryDate) continue;
+    const cleanCurrent = (input.currentWaybillOrId ?? "").replace(/^#/, "").trim().toLowerCase();
+    const cleanDelId = (del.id ?? "").toLowerCase();
+    const cleanDelWb = (del.waybillNumber ?? "").replace(/^#/, "").trim().toLowerCase();
     if (
-      input.currentWaybillOrId &&
-      (del.id === input.currentWaybillOrId || del.waybillNumber === input.currentWaybillOrId)
+      cleanCurrent &&
+      (cleanDelId === cleanCurrent || cleanDelWb === cleanCurrent)
     ) {
       continue;
     }
