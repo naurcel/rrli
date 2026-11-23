@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { isSupabaseConfigured } from "@/lib/config/env";
@@ -14,8 +15,13 @@ import {
   type UserRole,
 } from "./rbac";
 import { resolveEffectivePermissions } from "./permission-engine";
+import { findServerAccountById } from "./server-account-store";
+import {
+  VERIFIED_SESSION_COOKIE,
+  verifySignedSessionToken,
+} from "./session-token";
 
-export type AuthProviderMode = "supabase";
+export type AuthProviderMode = "supabase" | "server_verified";
 
 export type AuthenticatedActor = {
   id: string;
@@ -41,7 +47,7 @@ export type AuthenticatedActor = {
 };
 
 export function getAuthProviderMode(): AuthProviderMode {
-  return "supabase";
+  return isSupabaseConfigured() ? "supabase" : "server_verified";
 }
 
 function buildAuthenticatedActor(params: {
@@ -88,7 +94,7 @@ function buildAuthenticatedActor(params: {
     accessLevel: params.isSuperadmin ? "admin" : getAccessLevelForRole(params.role),
     accessLevelLabel: params.isSuperadmin ? "Full Access" : meta.accessLevelLabel,
     permissions: effectivePermissions,
-    providerMode: "supabase",
+    providerMode: isSupabaseConfigured() ? "supabase" : "server_verified",
     mustChangePassword: Boolean(params.mustChangePassword),
     hasSecurityQuestion: Boolean(params.hasSecurityQuestion),
     avatarUrl: params.avatarUrl ?? null,
@@ -102,96 +108,130 @@ function buildAuthenticatedActor(params: {
 
 /**
  * Resolves the current authenticated user and their database-assigned role on the server.
- * Supabase Auth is the sole authentication provider. Fails securely if unavailable.
- * Never trusts client-supplied role parameters or user-editable metadata.
+ * When Supabase Auth is configured, it is the primary provider.
+ * When unconfigured (local development/tests), it verifies the signed HMAC session cookie.
  */
 export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null> {
-  if (!isSupabaseConfigured()) {
-    return null;
+  // 1. If Supabase Auth is configured, attempt Supabase session resolution
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = await createServerSupabaseClient();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (!userError && user && user.email) {
+        // Primary source of truth: public.user_profiles table in Supabase PostgreSQL
+        const { data: profileRow, error: profileError } = await supabase
+          .from("user_profiles")
+          .select("id, email, username, full_name, role, roles, is_active, must_change_password, security_question, security_answer_hash, is_superadmin, designation, is_permanently_deleted, custom_grants, custom_restrictions, phone_number, avatar_url")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!profileError && profileRow) {
+          if (!profileRow.is_active || profileRow.is_permanently_deleted) {
+            return null;
+          }
+
+          const assignedRole = isValidUserRole(profileRow.role)
+            ? (profileRow.role as UserRole)
+            : "customer_representative";
+
+          const rolesArray: string[] = Array.isArray(profileRow.roles) && profileRow.roles.length > 0
+            ? profileRow.roles
+            : [assignedRole];
+
+          const username = profileRow.username || user.email.split("@")[0];
+
+          return buildAuthenticatedActor({
+            id: profileRow.id,
+            username,
+            email: profileRow.email || user.email,
+            phoneNumber: profileRow.phone_number || undefined,
+            fullName: profileRow.full_name || username,
+            role: assignedRole,
+            roles: rolesArray,
+            mustChangePassword: Boolean(profileRow.must_change_password),
+            hasSecurityQuestion: Boolean(profileRow.security_answer_hash),
+            avatarUrl: profileRow.avatar_url || null,
+            isSuperadmin: Boolean(profileRow.is_superadmin),
+            designation: profileRow.designation || (profileRow.is_superadmin ? "President" : undefined),
+            customGrants: profileRow.custom_grants,
+            customRestrictions: profileRow.custom_restrictions,
+          });
+        }
+
+        // Protected admin-assigned app_metadata fallback
+        const adminAssignedRole = user.app_metadata?.role;
+        const adminAssignedActive = user.app_metadata?.is_active ?? true;
+        if (adminAssignedActive !== false && isValidUserRole(adminAssignedRole)) {
+          const username = user.app_metadata?.username || user.email.split("@")[0];
+          const displayName =
+            typeof user.app_metadata?.full_name === "string"
+              ? user.app_metadata.full_name
+              : username;
+
+          const rolesFromMeta: string[] = Array.isArray(user.app_metadata?.roles)
+            ? user.app_metadata.roles
+            : [adminAssignedRole];
+
+          return buildAuthenticatedActor({
+            id: user.id,
+            username,
+            email: user.email,
+            fullName: displayName,
+            role: adminAssignedRole,
+            roles: rolesFromMeta,
+            mustChangePassword: Boolean(user.app_metadata?.must_change_password),
+            hasSecurityQuestion: Boolean(user.app_metadata?.has_security_question),
+            isSuperadmin: Boolean(user.app_metadata?.is_superadmin),
+            designation: user.app_metadata?.designation,
+          });
+        }
+      }
+    } catch {
+      // Supabase call failed, fall through to cookie-based session verification
+    }
   }
 
+  // 2. Local signed HMAC session cookie verification
   try {
-    const supabase = await createServerSupabaseClient();
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user || !user.email) {
+    const cookieStore = await cookies();
+    const rawToken = cookieStore.get(VERIFIED_SESSION_COOKIE)?.value;
+    const session = verifySignedSessionToken(rawToken);
+    if (!session) {
       return null;
     }
 
-    // 1. Primary source of truth: public.user_profiles table in Supabase PostgreSQL
-    const { data: profileRow, error: profileError } = await supabase
-      .from("user_profiles")
-      .select("id, email, username, full_name, role, roles, is_active, must_change_password, security_question, security_answer_hash, is_superadmin, designation, is_permanently_deleted, custom_grants, custom_restrictions, phone_number, avatar_url")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (!profileError && profileRow) {
-      if (!profileRow.is_active || profileRow.is_permanently_deleted) {
-        return null;
-      }
-
-      const assignedRole = isValidUserRole(profileRow.role)
-        ? (profileRow.role as UserRole)
-        : "customer_representative";
-
-      const rolesArray: string[] = Array.isArray(profileRow.roles) && profileRow.roles.length > 0
-        ? profileRow.roles
-        : [assignedRole];
-
-      const username = profileRow.username || user.email.split("@")[0];
-
-      return buildAuthenticatedActor({
-        id: profileRow.id,
-        username,
-        email: profileRow.email || user.email,
-        phoneNumber: profileRow.phone_number || undefined,
-        fullName: profileRow.full_name || username,
-        role: assignedRole,
-        roles: rolesArray,
-        mustChangePassword: Boolean(profileRow.must_change_password),
-        hasSecurityQuestion: Boolean(profileRow.security_answer_hash),
-        avatarUrl: profileRow.avatar_url || null,
-        isSuperadmin: Boolean(profileRow.is_superadmin),
-        designation: profileRow.designation || (profileRow.is_superadmin ? "President" : undefined),
-        customGrants: profileRow.custom_grants,
-        customRestrictions: profileRow.custom_restrictions,
-      });
+    const account = findServerAccountById(session.sub);
+    if (!account || !account.isActive || account.isPermanentlyDeleted) {
+      return null;
     }
 
-    // 2. Protected admin-assigned app_metadata fallback (for users before profile trigger runs)
-    const adminAssignedRole = user.app_metadata?.role;
-    const adminAssignedActive = user.app_metadata?.is_active ?? true;
-    if (adminAssignedActive !== false && isValidUserRole(adminAssignedRole)) {
-      const username = user.app_metadata?.username || user.email.split("@")[0];
-      const displayName =
-        typeof user.app_metadata?.full_name === "string"
-          ? user.app_metadata.full_name
-          : username;
+    const assignedRole = isValidUserRole(account.role) ? account.role : "customer_representative";
+    const userRoles = account.departments && account.departments.length > 0
+      ? account.departments
+      : [assignedRole];
 
-      const rolesFromMeta: string[] = Array.isArray(user.app_metadata?.roles)
-        ? user.app_metadata.roles
-        : [adminAssignedRole];
-
-      return buildAuthenticatedActor({
-        id: user.id,
-        username,
-        email: user.email,
-        fullName: displayName,
-        role: adminAssignedRole,
-        roles: rolesFromMeta,
-        mustChangePassword: Boolean(user.app_metadata?.must_change_password),
-        hasSecurityQuestion: Boolean(user.app_metadata?.has_security_question),
-        isSuperadmin: Boolean(user.app_metadata?.is_superadmin),
-        designation: user.app_metadata?.designation,
-      });
-    }
-
-    return null;
+    return buildAuthenticatedActor({
+      id: account.id,
+      username: account.username,
+      email: account.email,
+      phoneNumber: account.phoneNumber,
+      fullName: account.fullName,
+      role: assignedRole,
+      roles: userRoles,
+      mustChangePassword: Boolean(account.mustChangePassword),
+      hasSecurityQuestion: Boolean(account.hasSecurityQuestion),
+      avatarUrl: account.avatarUrl || null,
+      isSuperadmin: Boolean(account.isSuperadmin),
+      designation: account.designation || (account.isSuperadmin ? "President" : undefined),
+      departments: account.departments,
+      customGrants: account.customGrants,
+      customRestrictions: account.customRestrictions,
+    });
   } catch {
-    // Fail securely if Supabase Auth is unavailable
     return null;
   }
 }

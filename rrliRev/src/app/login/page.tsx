@@ -77,7 +77,7 @@ export default function LoginPage() {
     const trimmedIdentifier = username.trim();
     if (!trimmedIdentifier) {
       setStatus("error");
-      setMessage("Enter your email address.");
+      setMessage("Enter your email address or username.");
       return;
     }
 
@@ -446,12 +446,12 @@ export default function LoginPage() {
           {viewMode === "login" ? (
             <form onSubmit={handleLoginSubmit} noValidate>
               <label>
-                Email Address
+                Email or Username
                 <input
                   name="email"
-                  type="email"
-                  placeholder="Enter your email address"
-                  autoComplete="email"
+                  type="text"
+                  placeholder="Enter your email or username"
+                  autoComplete="username"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   required
@@ -547,12 +547,12 @@ export default function LoginPage() {
               {forgotStep === "username" && (
                 <form onSubmit={handleRecoveryCheckUsername} noValidate>
                   <label>
-                    Registered Email Address
+                    Registered Email or Username
                     <input
                       name="recoveryEmail"
-                      type="email"
-                      placeholder="Enter your registered email"
-                      autoComplete="email"
+                      type="text"
+                      placeholder="Enter your registered email or username"
+                      autoComplete="username"
                       value={recoveryUsername}
                       onChange={(event) => setRecoveryUsername(event.target.value)}
                       required
