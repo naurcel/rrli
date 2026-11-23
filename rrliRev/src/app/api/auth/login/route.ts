@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { email, password, rememberMe } = parsed.data;
+  const { email, username, password, rememberMe } = parsed.data;
   const identifier = email || parsed.data.username || identifierInput;
   const requestedNext = typeof rawBody?.next === "string" ? rawBody.next : null;
   const normalizedKey = `login:${identifier.toLowerCase()}`;
