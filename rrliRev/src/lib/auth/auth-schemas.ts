@@ -2,15 +2,13 @@ import * as z from "zod";
 import { USER_ROLES } from "./rbac";
 
 export const signInSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .min(1, "Enter your email address.")
-    .email("Enter a valid email address."),
-  password: z
-    .string()
-    .min(1, "Enter your password."),
+  email: z.string().trim().min(1, "Enter your email or username.").optional(),
+  username: z.string().trim().min(1, "Enter your username or email.").optional(),
+  password: z.string().min(1, "Enter your password."),
   rememberMe: z.boolean().optional().default(false),
+}).refine((data) => Boolean(data.email || data.username), {
+  message: "Enter your email or username.",
+  path: ["email"],
 });
 
 export type SignInInput = z.infer<typeof signInSchema>;
