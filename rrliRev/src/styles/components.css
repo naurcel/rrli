@@ -1,0 +1,342 @@
+/* ==========================================================================
+   ROUTEX CENTRALIZED SHARED COMPONENT SYSTEM
+   Modular stylesheet for reusable RouteX controls (Buttons, Badges, Tabs, Inputs).
+   Keep this file scoped, modular, and under 500 lines.
+   ========================================================================== */
+
+/* Buttons & Icon Buttons */
+.routex-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-control, 7px);
+  border: 1px solid transparent;
+  transition: background-color var(--motion-duration-fast, 120ms) ease,
+              border-color var(--motion-duration-fast, 120ms) ease,
+              color var(--motion-duration-fast, 120ms) ease,
+              box-shadow var(--motion-duration-fast, 120ms) ease,
+              transform var(--motion-duration-fast, 120ms) ease;
+}
+
+.routex-btn:focus-visible {
+  outline: 3px solid var(--color-focus, #f59e0b);
+  outline-offset: 2px;
+}
+
+.routex-btn:disabled,
+.routex-btn.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.routex-btn.full-width {
+  width: 100%;
+}
+
+/* Button Sizes */
+.routex-btn.size-xs {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  border-radius: 5px;
+  gap: 4px;
+}
+
+.routex-btn.size-sm {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  gap: 6px;
+}
+
+.routex-btn.size-md {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  border-radius: var(--radius-control, 7px);
+  gap: 8px;
+}
+
+.routex-btn.size-lg {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 14px;
+  border-radius: 8px;
+  gap: 10px;
+}
+
+/* Button Variants */
+.routex-btn.variant-primary {
+  background: linear-gradient(105deg, var(--color-accent-deep, #7c2d12), var(--color-accent, #b45309));
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 3px 12px rgba(180, 83, 9, 0.24), 0 1px 2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.routex-btn.variant-primary:hover:not(:disabled) {
+  background: linear-gradient(105deg, #9a3412, #d97706);
+  box-shadow: 0 4px 16px rgba(180, 83, 9, 0.35), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.routex-btn.variant-secondary {
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text-primary, #15201d);
+  border-color: var(--color-border, #e6e8ec);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.routex-btn.variant-secondary:hover:not(:disabled) {
+  background: var(--color-surface-subtle, #fbfcfb);
+  border-color: #cbd5e1;
+  color: var(--color-text-primary, #15201d);
+}
+
+.routex-btn.variant-outline {
+  background: transparent;
+  color: var(--color-text-primary, #15201d);
+  border-color: var(--color-border, #e6e8ec);
+}
+
+.routex-btn.variant-outline:hover:not(:disabled) {
+  background: var(--color-surface-subtle, #fbfcfb);
+  border-color: var(--color-text-muted);
+}
+
+.routex-btn.variant-ghost {
+  background: transparent;
+  color: var(--color-text-secondary, #586762);
+  border-color: transparent;
+}
+
+.routex-btn.variant-ghost:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-text-primary, #15201d);
+}
+
+.routex-btn.variant-danger {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #b91c1c;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+}
+
+.routex-btn.variant-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.routex-btn.variant-subtle {
+  background: var(--color-surface-subtle, #fbfcfb);
+  color: var(--color-text-secondary, #586762);
+  border-color: var(--color-border, #e6e8ec);
+}
+
+.routex-btn.variant-subtle:hover:not(:disabled) {
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text-primary, #15201d);
+}
+
+/* Icon Button (Square / Circular) */
+.routex-btn.icon-btn {
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.routex-btn.icon-btn.size-xs {
+  width: 24px;
+  min-height: 24px;
+}
+
+.routex-btn.icon-btn.size-sm {
+  width: 30px;
+  min-height: 30px;
+}
+
+.routex-btn.icon-btn.size-md {
+  width: 38px;
+  min-height: 38px;
+}
+
+.routex-btn.icon-btn.size-lg {
+  width: 44px;
+  min-height: 44px;
+}
+
+/* Dark mode for buttons */
+html[data-theme="dark"] .routex-btn.variant-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
+html[data-theme="dark"] .routex-btn.variant-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+html[data-theme="dark"] .routex-btn.variant-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-primary);
+}
+
+/* Spinner */
+.routex-btn-spinner {
+  display: inline-block;
+  animation: routex-spin 1s linear infinite;
+}
+
+@keyframes routex-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Badge dot indicators & variants */
+.routex-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.routex-badge-dot.dot-warning {
+  background: var(--color-status-warning, #f59e0b);
+}
+
+.routex-badge-dot.dot-success {
+  background: var(--color-status-success, #10b981);
+}
+
+.routex-badge-dot.dot-danger {
+  background: #ef4444;
+}
+
+.routex-badge-dot.dot-primary {
+  background: #3b82f6;
+}
+
+.routex-badge.variant-counter {
+  min-height: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+/* RouteX Centralized Tabs */
+.routex-tab-trigger {
+  min-height: 29px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.routex-tab-trigger:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.routex-tab-trigger.active {
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme="dark"] .routex-tab-trigger.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+/* RouteX Centralized Input Wrapper */
+.routex-input-wrapper {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control, 7px);
+  transition: border-color var(--motion-duration-fast) ease, box-shadow var(--motion-duration-fast) ease;
+}
+
+.routex-input-wrapper:focus-within {
+  border-color: var(--color-focus, #f59e0b);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.routex-input-wrapper.size-sm {
+  min-height: 30px;
+}
+
+.routex-input-wrapper.size-md {
+  min-height: 38px;
+}
+
+.routex-input-wrapper.size-lg {
+  min-height: 44px;
+}
+
+.routex-input {
+  border: none;
+  background: transparent;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  width: 100%;
+  outline: none;
+}
+
+.routex-input-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.routex-input-icon.left {
+  padding-left: 10px;
+}
+
+.routex-input-icon.right {
+  padding-right: 10px;
+}
+
+.routex-input-clear-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.routex-input-clear-btn:hover {
+  color: var(--color-text-primary);
+}

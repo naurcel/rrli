@@ -4,6 +4,8 @@ import { GlobalTooltip } from "@/components/global-tooltip";
 import { RouteScrollToTop } from "@/components/route-scroll-to-top";
 import { ToasterProvider } from "@/components/toaster-provider";
 import "./globals.css";
+import "@/styles/components.css";
+import "@/styles/overrides.css";
 
 export const dynamic = "force-dynamic";
 

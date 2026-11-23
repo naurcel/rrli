@@ -164,5 +164,80 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
       assert.match(globalsCssContent, /\.page-intro-actions[^{]*\{[^}]*gap:\s*12px\s*!important/);
       assert.match(globalsCssContent, /\.page-intro-actions\s*>\s*\*[^}]*border-radius:\s*8px\s*!important/);
     });
+
+    it("enforces minimum line count and file size to guard against accidental CSS truncation", () => {
+      const lineCount = globalsCssContent.split("\n").length;
+      assert.ok(
+        lineCount >= 18000,
+        `globals.css line count dropped below baseline of 18,000 lines (actual: ${lineCount}). An automated edit likely truncated the stylesheet.`,
+      );
+      const byteSize = Buffer.byteLength(globalsCssContent, "utf-8");
+      assert.ok(
+        byteSize >= 550000,
+        `globals.css file size dropped below 550KB (actual: ${byteSize} bytes). Check for accidental truncation.`,
+      );
+    });
+
+    it("ensures critical domain selectors across all views are preserved in globals.css", () => {
+      const requiredSelectors = [
+        ".dashboard-attention-card",
+        ".expand-all-text-button",
+        ".revenue-chart-card",
+        ".table-wrap th .sortable-table-header",
+        ".waybill-code",
+        ".cell-truck",
+        ".truck-card-metric",
+        ".settings-security-minimal-list",
+        ".export-package-row",
+        "@media print",
+        ".report-document",
+      ];
+      for (const selector of requiredSelectors) {
+        assert.ok(
+          globalsCssContent.includes(selector),
+          `Missing critical selector "${selector}" in globals.css. This indicates an accidental deletion or regression.`,
+        );
+      }
+    });
+  });
+
+  describe("Modular CSS Architecture Contracts", () => {
+    const componentsCssPath = path.resolve(__dirname, "../../styles/components.css");
+    const overridesCssPath = path.resolve(__dirname, "../../styles/overrides.css");
+
+    it("defines dedicated modular components.css for shared controls under 500 lines", () => {
+      assert.ok(fs.existsSync(componentsCssPath), "src/styles/components.css must exist.");
+      const content = fs.readFileSync(componentsCssPath, "utf-8");
+      assert.ok(content.includes(".routex-btn"));
+      assert.ok(content.includes(".routex-input-wrapper"));
+      assert.ok(content.includes(".routex-tab-trigger"));
+      assert.ok(content.includes(".routex-badge-dot"));
+      const lines = content.split("\n").length;
+      assert.ok(lines <= 500, `components.css must remain a focused, modular file under 500 lines (actual: ${lines}).`);
+    });
+
+    it("defines dedicated overrides.css for isolated feature refinements and neutralizes pill styling", () => {
+      assert.ok(fs.existsSync(overridesCssPath), "src/styles/overrides.css must exist.");
+      const content = fs.readFileSync(overridesCssPath, "utf-8");
+      assert.ok(content.includes(".access-pill"));
+      assert.ok(content.includes(".access-pill::before"));
+      assert.ok(content.includes("display: none !important;"));
+      assert.ok(content.includes("background: transparent !important;"));
+      assert.ok(content.includes("border: none !important;"));
+    });
+
+    it("ensures root layout.tsx imports both globals.css and modular stylesheets in correct cascade order", () => {
+      const layoutPath = path.resolve(__dirname, "../../app/layout.tsx");
+      const layoutContent = fs.readFileSync(layoutPath, "utf-8");
+      assert.ok(layoutContent.includes('import "./globals.css";'));
+      assert.ok(layoutContent.includes('import "@/styles/components.css";'));
+      assert.ok(layoutContent.includes('import "@/styles/overrides.css";'));
+
+      const globalsIndex = layoutContent.indexOf('import "./globals.css";');
+      const componentsIndex = layoutContent.indexOf('import "@/styles/components.css";');
+      const overridesIndex = layoutContent.indexOf('import "@/styles/overrides.css";');
+      assert.ok(globalsIndex < componentsIndex, "globals.css must be imported before modular components.css");
+      assert.ok(componentsIndex < overridesIndex, "components.css must be imported before overrides.css");
+    });
   });
 });

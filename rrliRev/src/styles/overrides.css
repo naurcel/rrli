@@ -1,0 +1,1072 @@
+/* ==========================================================================
+   ROUTEX FEATURE & COMPONENT OVERRIDES
+   Use this modular stylesheet for targeted UI refinements and bug fixes.
+   Do NOT edit the monolithic globals.css baseline directly.
+   Keep rules organized and scoped here.
+   ========================================================================== */
+
+/* ==========================================================================
+   ROLE, ACCESS & METADATA TYPOGRAPHY (NO BADGE / PILL STYLING)
+   Removes capsule borders, background bubbles, and bullet dots from role,
+   access, and user metadata indicators throughout the system.
+   ========================================================================== */
+
+.access-pill,
+.access-pill.admin,
+.access-pill.operations,
+.access-pill.view_only,
+.settings-hero-badges .access-pill,
+.settings-readonly-pill,
+.crew-role-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0 !important;
+  min-height: auto !important;
+  min-width: auto !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  white-space: nowrap;
+}
+
+/* Eliminate bullet dots and glow effects */
+.access-pill::before,
+.access-pill.admin::before,
+.access-pill.operations::before,
+.access-pill.view_only::before,
+.settings-readonly-pill::before,
+.crew-role-pill::before {
+  display: none !important;
+  content: none !important;
+}
+
+/* Plain, elegant typography across light and dark modes */
+.access-pill,
+.access-pill.admin,
+.access-pill.operations,
+.access-pill.view_only {
+  color: var(--color-text-secondary) !important;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+html[data-theme="dark"] .access-pill,
+html[data-theme="dark"] .access-pill.admin,
+html[data-theme="dark"] .access-pill.operations,
+html[data-theme="dark"] .access-pill.view_only {
+  color: var(--color-text-secondary) !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+html[data-theme="dark"] .access-pill::before,
+html[data-theme="dark"] .access-pill.admin::before,
+html[data-theme="dark"] .access-pill.operations::before,
+html[data-theme="dark"] .access-pill.view_only::before {
+  display: none !important;
+  content: none !important;
+}
+
+/* User Management Table Role column */
+td .access-pill {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--color-text-primary) !important;
+}
+
+html[data-theme="dark"] td .access-pill {
+  color: var(--color-text-primary) !important;
+}
+
+/* Settings Hero Profile Badges */
+.settings-hero-badges {
+  gap: 8px !important;
+}
+
+.settings-hero-badges .access-pill {
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: var(--color-text-secondary) !important;
+}
+
+/* POD Documents Page Intro */
+.page-intro .access-pill,
+.page-intro .settings-readonly-pill {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--color-text-secondary) !important;
+}
+
+/* Crew Role Classification (Driver, Helper) */
+.crew-role-pill,
+.crew-role-pill.driver,
+.crew-role-pill.helper,
+.crew-role-pill.helper-2 {
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  color: var(--color-text-secondary) !important;
+}
+
+html[data-theme="dark"] .crew-role-pill,
+html[data-theme="dark"] .crew-role-pill.driver,
+html[data-theme="dark"] .crew-role-pill.helper,
+html[data-theme="dark"] .crew-role-pill.helper-2 {
+  color: var(--color-text-secondary) !important;
+}
+
+/* ==========================================================================
+   TRUCK MANAGEMENT TOOLBAR FILTER ROW (SINGLE-LINE LAYOUT)
+   Prevents dropdown wrapping onto next line across desktop viewports.
+   ========================================================================== */
+.truck-management-toolbar .filters.truck-filters {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.truck-management-toolbar .filters.truck-filters .search-box {
+  flex: 1 1 180px !important;
+  max-width: 260px !important;
+  min-width: 150px !important;
+}
+
+.truck-management-toolbar .filters.truck-filters .filter-select-wrapper {
+  flex: 0 1 auto !important;
+}
+
+.truck-management-toolbar .filters.truck-filters .rounded-select-trigger {
+  white-space: nowrap !important;
+}
+
+/* ==========================================================================
+   DELIVERY FULFILLMENT & SUPPORTING DOCUMENTS PANE SPACING & ALIGNMENT
+   Aligns pane headers, fixes timeline sequence node baseline, and cleans up
+   empty dropzone presentation without redundant stacked boxes.
+   ========================================================================== */
+
+/* Split pane headers symmetry */
+.delivery-fulfillment-pane-header,
+.supporting-docs-header-bar {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  min-height: 42px !important;
+  margin-bottom: 14px !important;
+}
+
+.delivery-fulfillment-pane-titles,
+.supporting-docs-header-titles {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.delivery-fulfillment-pane-title,
+.supporting-docs-pane-title {
+  margin: 0 !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  color: var(--color-text-primary) !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.3 !important;
+}
+
+.delivery-fulfillment-pane-hint,
+.supporting-docs-pane-hint {
+  font-size: 11px !important;
+  color: var(--color-text-muted) !important;
+  line-height: 1.3 !important;
+}
+
+/* Timeline stop item & node vertical alignment with card title */
+.drawer-dropoff-item {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+}
+
+.drawer-dropoff-node {
+  margin-top: 6px !important;
+  width: 26px !important;
+  height: 26px !important;
+  flex-shrink: 0 !important;
+}
+
+.drawer-dropoff-item:not(.is-last)::after {
+  top: 34px !important;
+  bottom: -12px !important;
+  left: 12px !important;
+}
+
+.drawer-dropoff-card {
+  padding: 12px 14px !important;
+  border-radius: 10px !important;
+}
+
+.drawer-dropoff-card-header .secondary-button {
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Linked POD document chip in stop card */
+.drawer-dropoff-linked-doc {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: var(--color-accent-deep, #92400e) !important;
+  background: var(--color-accent-soft, #fffbeb) !important;
+  border: 1px solid rgba(245, 158, 11, 0.25) !important;
+  border-radius: 6px !important;
+  padding: 2px 7px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.drawer-dropoff-linked-doc:hover {
+  background: rgba(245, 158, 11, 0.2) !important;
+  border-color: var(--color-accent, #b45309) !important;
+}
+
+/* Interactive empty dropzone */
+.supporting-docs-empty-card.is-interactive-dropzone {
+  border: 1.5px dashed var(--color-border, #cbd5e1) !important;
+  transition: all 0.15s ease !important;
+}
+
+.supporting-docs-empty-card.is-interactive-dropzone:hover,
+.supporting-docs-empty-card.is-interactive-dropzone.is-drag-over {
+  border-color: var(--color-accent, #d97706) !important;
+  background: var(--color-accent-soft, #fffbeb) !important;
+}
+
+/* ==========================================================================
+   SYSTEM-WIDE OVERFLOW, OVERLAP & WRAPPING DEFENSES
+   Prevents cards, toolbars, legends, headers, and tables from clipping or overflowing.
+   ========================================================================== */
+
+/* 1. Dashboard Financial Chart Card & Toolbar */
+.revenue-chart-card {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.revenue-chart-heading {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+}
+
+.revenue-chart-heading > div:first-child {
+  min-width: 0 !important;
+  flex: 1 1 240px !important;
+}
+
+.revenue-chart-controls {
+  flex-shrink: 0 !important;
+}
+
+.chart-toolbar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  row-gap: 10px !important;
+  column-gap: 14px !important;
+  min-height: auto !important;
+  padding: 0 20px 14px !important;
+  box-sizing: border-box !important;
+}
+
+.chart-toolbar .chart-metric-tabs {
+  flex-shrink: 0 !important;
+}
+
+.chart-toolbar-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex-wrap: wrap !important;
+  gap: 10px 16px !important;
+  margin-left: auto !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.chart-comparison-key {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 6px 14px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.chart-view-mode-toggle {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+  gap: 4px !important;
+}
+
+.revenue-chart-scroll {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  box-sizing: border-box !important;
+}
+
+.revenue-chart {
+  max-width: 100% !important;
+}
+
+/* Dashboard Overview Grid: responsive single-column layout on medium viewports */
+@media (max-width: 1180px) {
+  .dashboard-overview-grid {
+    grid-template-columns: 1fr !important;
+    grid-template-areas: "kpis" "chart" !important;
+  }
+}
+
+/* 2. System-wide Page Intros & Card Headings */
+.page-intro {
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 16px 24px !important;
+}
+
+.records-heading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+}
+
+.records-heading-copy,
+.routex-card-header-main {
+  min-width: 0 !important;
+  flex: 1 1 200px !important;
+}
+
+.records-heading-meta,
+.routex-card-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px 12px !important;
+}
+
+/* 3. System-wide Filter Bars */
+.filters {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* 4. System-wide Tables & Records Cards */
+.records-card {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.table-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-sizing: border-box !important;
+}
+
+/* 5. System-wide Stat & KPI Grids */
+.dashboard-kpi-grid .stat-card,
+.stat-grid .stat-card {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.stat-card strong {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+
+.stat-card .stat-meta {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+
+/* 6. System-wide Badge & Pill Neutralization */
+.access-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: var(--color-text-secondary) !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  min-height: auto !important;
+  min-width: auto !important;
+}
+
+.access-pill::before {
+  display: none !important;
+  content: none !important;
+}
+
+.settings-hero-role {
+  display: inline-flex !important;
+  align-items: center !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--color-primary, #b45309) !important;
+}
+
+/* 7. Truck Filter Toolbar & Dropdown Layout */
+.truck-management-toolbar .filters.truck-filters {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+  padding-bottom: 2px !important;
+}
+
+.truck-management-toolbar .filters.truck-filters::-webkit-scrollbar {
+  display: none !important;
+}
+
+.truck-management-toolbar .filters.truck-filters .search-box {
+  flex: 1 1 180px !important;
+  min-width: 140px !important;
+  max-width: 240px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+}
+
+.truck-management-toolbar .filters.truck-filters .global-date-filter {
+  flex: 0 0 auto !important;
+}
+
+.truck-management-toolbar .filters.truck-filters .filter-select-wrapper {
+  flex: 0 0 auto !important;
+}
+
+.truck-management-toolbar .filters.truck-filters .filter-select-wrapper .rounded-select {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 135px !important;
+}
+
+.truck-management-toolbar .filters.truck-filters .filter-select-wrapper .rounded-select-trigger {
+  min-width: 135px !important;
+  width: auto !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 12px !important;
+}
+
+@media (max-width: 860px) {
+  .truck-management-toolbar .filters.truck-filters {
+    flex-wrap: wrap !important;
+    overflow-x: visible !important;
+  }
+
+  .truck-management-toolbar .filters.truck-filters .search-box {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+  }
+
+  .truck-management-toolbar .filters.truck-filters .filter-select-wrapper {
+    flex: 1 1 auto !important;
+  }
+
+  .truck-management-toolbar .filters.truck-filters .filter-select-wrapper .rounded-select {
+    width: 100% !important;
+    flex: 1 1 auto !important;
+  }
+}
+
+/* 8. Delivery Drop-offs Timeline Alignment & Spacing */
+.drawer-dropoff-node {
+  margin-top: 6px !important;
+}
+
+.drawer-dropoff-item {
+  gap: 14px !important;
+}
+
+/* ==========================================================================
+   9. System-wide Segmented Pill Tabs Architecture
+   Replicates the benchmark Dashboard Financial Tabs design across all
+   similar segmented tabs throughout the system:
+   - Rounded capsule container with subtle borders and inset shadow
+   - Smooth text-only inactive buttons with subtle hover pills
+   - Elevated solid-white active pill button with bold accent color
+   - Refined integrated badge counts
+   ========================================================================== */
+
+/* Containers */
+.chart-metric-tabs,
+.finance-ledger-tabs,
+.user-management-tabs,
+.report-tabs,
+.crew-role-filter-pills,
+.chart-view-tabs,
+.breakdown-tab-controls,
+.supporting-docs-filters,
+.delivery-status-tabs,
+.metric-tabs,
+.truck-ranking-tabs,
+.backdating-view-tabs,
+.backdating-filter-tabs {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 3px !important;
+  padding: 3px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  background: color-mix(in srgb, var(--color-border) 45%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent) !important;
+  border-radius: 999px !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+
+.chart-metric-tabs::-webkit-scrollbar,
+.finance-ledger-tabs::-webkit-scrollbar,
+.user-management-tabs::-webkit-scrollbar,
+.report-tabs::-webkit-scrollbar,
+.crew-role-filter-pills::-webkit-scrollbar,
+.chart-view-tabs::-webkit-scrollbar,
+.breakdown-tab-controls::-webkit-scrollbar,
+.supporting-docs-filters::-webkit-scrollbar,
+.delivery-status-tabs::-webkit-scrollbar,
+.metric-tabs::-webkit-scrollbar,
+.truck-ranking-tabs::-webkit-scrollbar,
+.backdating-view-tabs::-webkit-scrollbar,
+.backdating-filter-tabs::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Adjust layout margins for in-card tab rows */
+.delivery-status-tabs {
+  margin: 0 24px 14px !important;
+  width: fit-content !important;
+}
+
+.supporting-docs-filters {
+  margin-bottom: 12px !important;
+  padding-bottom: 3px !important;
+}
+
+.top-trucks-card .truck-ranking-tabs,
+.top-trucks-card .metric-tabs {
+  margin: 0 20px 14px !important;
+  width: fit-content !important;
+  max-width: calc(100% - 40px) !important;
+}
+
+.top-trucks-card .truck-ranking-tabs button {
+  padding: 0 9px !important;
+  font-size: 11px !important;
+}
+
+@media (max-width: 700px) {
+  .top-trucks-card .truck-ranking-tabs,
+  .top-trucks-card .metric-tabs {
+    margin: 0 14px 14px !important;
+    max-width: calc(100% - 28px) !important;
+  }
+}
+
+/* Tab Buttons */
+.chart-metric-tabs button,
+.finance-ledger-tabs button,
+.finance-ledger-tab,
+.user-management-tabs button,
+.report-tabs button,
+.crew-role-filter-pills button,
+.crew-role-tab,
+.chart-view-tabs button,
+.chart-tab-btn,
+.breakdown-tab-controls button,
+.breakdown-tab-btn,
+.supporting-docs-filters button,
+.supporting-docs-filter-btn,
+.delivery-status-tabs button,
+.delivery-status-tab,
+.metric-tabs button,
+.truck-ranking-tabs button,
+.backdating-view-tabs button,
+.backdating-tab-btn,
+.backdating-filter-tabs button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  line-height: 26px !important;
+  box-sizing: border-box !important;
+  padding: 0 14px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--color-text-secondary) !important;
+  font: inherit !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1) !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Hover State */
+.chart-metric-tabs button:hover,
+.finance-ledger-tabs button:hover,
+.finance-ledger-tab:hover,
+.user-management-tabs button:hover,
+.report-tabs button:hover,
+.crew-role-filter-pills button:hover,
+.crew-role-tab:hover,
+.chart-view-tabs button:hover,
+.chart-tab-btn:hover,
+.breakdown-tab-controls button:hover,
+.breakdown-tab-btn:hover,
+.supporting-docs-filters button:hover,
+.supporting-docs-filter-btn:hover,
+.delivery-status-tabs button:hover,
+.delivery-status-tab:hover,
+.metric-tabs button:hover,
+.truck-ranking-tabs button:hover,
+.backdating-view-tabs button:hover,
+.backdating-tab-btn:hover,
+.backdating-filter-tabs button:hover {
+  color: var(--color-text-primary) !important;
+  background: color-mix(in srgb, var(--color-surface) 50%, transparent) !important;
+}
+
+/* Active State */
+.chart-metric-tabs button.active,
+.finance-ledger-tabs button.active,
+.finance-ledger-tab.active,
+.user-management-tabs button.active,
+.report-tabs button.active,
+.crew-role-filter-pills button.active,
+.crew-role-tab.active,
+.chart-view-tabs button.active,
+.chart-tab-btn.active,
+.breakdown-tab-controls button.active,
+.breakdown-tab-btn.active,
+.supporting-docs-filters button.is-active,
+.supporting-docs-filter-btn.is-active,
+.delivery-status-tabs button.active,
+.delivery-status-tab.active,
+.metric-tabs button.active,
+.truck-ranking-tabs button.active,
+.backdating-view-tabs button.active,
+.backdating-tab-btn.active,
+.backdating-filter-tabs button.active,
+.chart-metric-tabs button[aria-selected="true"],
+.finance-ledger-tabs button[aria-selected="true"],
+.user-management-tabs button[aria-selected="true"],
+.report-tabs button[aria-selected="true"],
+.crew-role-filter-pills button[aria-selected="true"],
+.chart-view-tabs button[aria-selected="true"],
+.breakdown-tab-controls button[aria-selected="true"],
+.supporting-docs-filters button[aria-selected="true"],
+.delivery-status-tabs button[aria-selected="true"],
+.metric-tabs button[aria-selected="true"],
+.truck-ranking-tabs button[aria-selected="true"],
+.backdating-view-tabs button[aria-selected="true"],
+.backdating-filter-tabs button[aria-selected="true"] {
+  background: var(--color-surface) !important;
+  color: var(--color-accent-deep, #8b3a0b) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.04) !important;
+  font-weight: 700 !important;
+}
+
+/* Integrated Count Badges inside Tabs */
+.tab-count-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  padding: 0 5px !important;
+  margin-left: 5px !important;
+  border-radius: 999px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: inherit !important;
+}
+
+.active .tab-count-badge,
+[aria-selected="true"] .tab-count-badge {
+  background: color-mix(in srgb, var(--color-accent-deep) 15%, transparent) !important;
+  color: var(--color-accent-deep, #8b3a0b) !important;
+}
+
+/* Dark Mode Support for Segmented Tabs */
+html[data-theme="dark"] .chart-metric-tabs,
+html[data-theme="dark"] .finance-ledger-tabs,
+html[data-theme="dark"] .user-management-tabs,
+html[data-theme="dark"] .report-tabs,
+html[data-theme="dark"] .crew-role-filter-pills,
+html[data-theme="dark"] .chart-view-tabs,
+html[data-theme="dark"] .breakdown-tab-controls,
+html[data-theme="dark"] .supporting-docs-filters,
+html[data-theme="dark"] .delivery-status-tabs,
+html[data-theme="dark"] .metric-tabs,
+html[data-theme="dark"] .truck-ranking-tabs,
+html[data-theme="dark"] .backdating-view-tabs,
+html[data-theme="dark"] .backdating-filter-tabs {
+  background: color-mix(in srgb, var(--color-border) 25%, transparent) !important;
+  border-color: color-mix(in srgb, var(--color-border) 40%, transparent) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+html[data-theme="dark"] .chart-metric-tabs button.active,
+html[data-theme="dark"] .finance-ledger-tabs button.active,
+html[data-theme="dark"] .finance-ledger-tab.active,
+html[data-theme="dark"] .user-management-tabs button.active,
+html[data-theme="dark"] .report-tabs button.active,
+html[data-theme="dark"] .crew-role-filter-pills button.active,
+html[data-theme="dark"] .crew-role-tab.active,
+html[data-theme="dark"] .chart-view-tabs button.active,
+html[data-theme="dark"] .chart-tab-btn.active,
+html[data-theme="dark"] .breakdown-tab-controls button.active,
+html[data-theme="dark"] .breakdown-tab-btn.active,
+html[data-theme="dark"] .supporting-docs-filters button.is-active,
+html[data-theme="dark"] .supporting-docs-filter-btn.is-active,
+html[data-theme="dark"] .delivery-status-tabs button.active,
+html[data-theme="dark"] .delivery-status-tab.active,
+html[data-theme="dark"] .metric-tabs button.active,
+html[data-theme="dark"] .truck-ranking-tabs button.active,
+html[data-theme="dark"] .backdating-view-tabs button.active,
+html[data-theme="dark"] .backdating-tab-btn.active,
+html[data-theme="dark"] .backdating-filter-tabs button.active,
+html[data-theme="dark"] .chart-metric-tabs button[aria-selected="true"],
+html[data-theme="dark"] .finance-ledger-tabs button[aria-selected="true"],
+html[data-theme="dark"] .user-management-tabs button[aria-selected="true"],
+html[data-theme="dark"] .report-tabs button[aria-selected="true"],
+html[data-theme="dark"] .crew-role-filter-pills button[aria-selected="true"],
+html[data-theme="dark"] .chart-view-tabs button[aria-selected="true"],
+html[data-theme="dark"] .breakdown-tab-controls button[aria-selected="true"],
+html[data-theme="dark"] .supporting-docs-filters button[aria-selected="true"],
+html[data-theme="dark"] .delivery-status-tabs button[aria-selected="true"],
+html[data-theme="dark"] .metric-tabs button[aria-selected="true"],
+html[data-theme="dark"] .truck-ranking-tabs button[aria-selected="true"],
+html[data-theme="dark"] .backdating-view-tabs button[aria-selected="true"],
+html[data-theme="dark"] .backdating-filter-tabs button[aria-selected="true"] {
+  background: var(--color-surface-raised, color-mix(in srgb, var(--color-surface) 90%, #fff 10%)) !important;
+  color: var(--color-accent) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-theme="dark"] .tab-count-badge {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme="dark"] .active .tab-count-badge,
+html[data-theme="dark"] [aria-selected="true"] .tab-count-badge {
+  background: rgba(245, 158, 11, 0.22) !important;
+  color: var(--color-accent) !important;
+}
+
+/* 10. Financial Chart Toolbar Responsiveness & Layout Protection */
+.chart-toolbar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  min-height: 44px !important;
+  padding: 0 20px 12px !important;
+  border-bottom: 1px solid var(--line) !important;
+  gap: 10px 14px !important;
+  flex-wrap: wrap !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+
+.chart-toolbar-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 12px 16px !important;
+  flex-wrap: wrap !important;
+  margin-left: auto !important;
+}
+
+.chart-comparison-key {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px 14px !important;
+  flex-wrap: wrap !important;
+}
+
+.revenue-chart-card {
+  min-width: 0 !important;
+  overflow-x: clip !important;
+}
+
+/* 11. Dashboard Top Trucks - Neumorphic 'View all' Button */
+.dashboard-card-link,
+.top-trucks-card .dashboard-card-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 0 18px !important;
+  margin: 10px 20px 18px !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--glass-border, rgba(220, 229, 239, 0.8)) !important;
+  background: var(--glass-surface-strong, rgba(255, 255, 255, 0.88)) !important;
+  box-shadow: 5px 7px 16px rgba(148, 158, 173, 0.2), -4px -4px 12px rgba(255, 255, 255, 0.88), inset 0 1px 0 rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: var(--color-text-primary, #15201d) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease !important;
+  width: fit-content !important;
+}
+
+.dashboard-card-link:hover,
+.top-trucks-card .dashboard-card-link:hover {
+  transform: translateY(-1.5px) !important;
+  color: var(--color-accent-deep, #92400e) !important;
+  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--glass-border)) !important;
+  background: var(--color-surface, #ffffff) !important;
+  box-shadow: 6px 9px 20px rgba(148, 158, 173, 0.26), -5px -5px 14px rgba(255, 255, 255, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+  text-decoration: none !important;
+}
+
+.dashboard-card-link:active,
+.top-trucks-card .dashboard-card-link:active {
+  transform: translateY(0) !important;
+  box-shadow: inset 2px 2px 5px rgba(148, 158, 173, 0.28), inset -2px -2px 5px rgba(255, 255, 255, 0.8) !important;
+}
+
+@media (max-width: 700px) {
+  .dashboard-card-link,
+  .top-trucks-card .dashboard-card-link {
+    margin: 8px 14px 14px !important;
+  }
+}
+
+html[data-theme="dark"] .dashboard-card-link,
+html[data-theme="dark"] .top-trucks-card .dashboard-card-link {
+  background: var(--glass-surface-strong, rgba(24, 27, 32, 0.85)) !important;
+  border-color: var(--glass-border, rgba(255, 255, 255, 0.1)) !important;
+  color: var(--color-text-secondary, #94a3b8) !important;
+  box-shadow: 4px 6px 14px rgba(0, 0, 0, 0.45), -3px -3px 10px rgba(255, 255, 255, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+}
+
+html[data-theme="dark"] .dashboard-card-link:hover,
+html[data-theme="dark"] .top-trucks-card .dashboard-card-link:hover {
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  background: var(--color-surface, #1e2229) !important;
+  box-shadow: 5px 8px 18px rgba(0, 0, 0, 0.55), -3px -3px 12px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme="dark"] .dashboard-card-link:active,
+html[data-theme="dark"] .top-trucks-card .dashboard-card-link:active {
+  box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.55), inset -1px -1px 4px rgba(255, 255, 255, 0.03) !important;
+}
+
+/* 12. Compact Reports Sheet Refinements */
+.report-document.doc-sheet {
+  max-width: 1040px !important;
+  padding: 22px 28px !important;
+  margin: 0 auto !important;
+  border-radius: 8px !important;
+}
+
+.report-document.doc-sheet table.doc-table th,
+.report-document.doc-sheet table.doc-table td {
+  padding: 5px 8px !important;
+  font-size: 11px !important;
+}
+
+.report-document.doc-sheet thead th {
+  padding: 6px 8px !important;
+  font-size: 10.5px !important;
+}
+
+.report-document.doc-sheet tfoot td,
+.report-document.doc-sheet tfoot th {
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+}
+
+@media (max-width: 768px) {
+  .report-document.doc-sheet {
+    padding: 16px 14px !important;
+  }
+}
+
+/* ==========================================================================
+   13. System-wide Semantic Card Glows
+   Enforces green gradient on Revenue/Income cards,
+   red gradient on Expenses/Outgoing cards,
+   and warm amber gradient on other stat cards.
+   ========================================================================== */
+.stat-card-revenue,
+.stat-card-income,
+.dashboard-kpi-grid > .stat-card:nth-child(1),
+.stat-grid > .stat-card:nth-child(1),
+.truck-performance-kpis > .stat-card:nth-child(1) {
+  background-image: var(--glow-success) !important;
+}
+
+.stat-card-expenses,
+.stat-card-outgoing,
+.dashboard-kpi-grid > .stat-card:nth-child(2),
+.stat-grid > .stat-card:nth-child(2),
+.truck-performance-kpis > .stat-card:nth-child(2) {
+  background-image: var(--glow-danger) !important;
+}
+
+.stat-card-profit,
+.dashboard-kpi-grid > .stat-card:nth-child(3),
+.truck-performance-kpis > .stat-card:nth-child(3) {
+  background-image: var(--glow-amber) !important;
+}
+
+/* ==========================================================================
+   14. Fallback Page Ambient Glow Refinement
+   Weakened opacity and reduced radius for subtle background glow on error pages.
+   ========================================================================== */
+.fallback-ambient-glow {
+  inset: -5% !important;
+  background: 
+    radial-gradient(circle at 45% 42%, rgba(245, 158, 11, 0.06) 0%, transparent 26%),
+    radial-gradient(circle at 55% 54%, rgba(217, 119, 6, 0.04) 0%, transparent 22%),
+    radial-gradient(circle at 50% 48%, rgba(251, 191, 36, 0.03) 0%, transparent 25%) !important;
+  filter: blur(55px) !important;
+}
+
+html[data-theme="dark"] .fallback-ambient-glow {
+  background: 
+    radial-gradient(circle at 45% 42%, rgba(245, 158, 11, 0.07) 0%, transparent 26%),
+    radial-gradient(circle at 55% 54%, rgba(217, 119, 6, 0.05) 0%, transparent 22%),
+    radial-gradient(circle at 50% 48%, rgba(251, 191, 36, 0.03) 0%, transparent 25%) !important;
+}
+
+/* ==========================================================================
+   15. Dashboard Recent Deliveries - Neumorphic 'View all' Button
+   Aligns 'View all' in Recent Deliveries header with RouteX neumorphic button aesthetics.
+   ========================================================================== */
+.dashboard-recent-deliveries .routex-card-actions .routex-btn,
+.dashboard-recent-deliveries .dashboard-view-all-btn,
+.dashboard-view-all-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  min-height: 32px !important;
+  height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--glass-border, rgba(220, 229, 239, 0.8)) !important;
+  background: var(--glass-surface-strong, rgba(255, 255, 255, 0.92)) !important;
+  box-shadow: 5px 7px 16px rgba(148, 158, 173, 0.2), -4px -4px 12px rgba(255, 255, 255, 0.88), inset 0 1px 0 rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: var(--color-text-secondary, #5c6d66) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease !important;
+}
+
+.dashboard-recent-deliveries .routex-card-actions .routex-btn:hover,
+.dashboard-recent-deliveries .dashboard-view-all-btn:hover,
+.dashboard-view-all-btn:hover {
+  transform: translateY(-1.5px) !important;
+  color: var(--color-accent-deep, #92400e) !important;
+  border-color: color-mix(in srgb, var(--color-accent, #b45309) 35%, var(--glass-border, rgba(220, 229, 239, 0.8))) !important;
+  background: var(--color-surface, #ffffff) !important;
+  box-shadow: 6px 9px 20px rgba(148, 158, 173, 0.26), -5px -5px 14px rgba(255, 255, 255, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+}
+
+.dashboard-recent-deliveries .routex-card-actions .routex-btn:active,
+.dashboard-recent-deliveries .dashboard-view-all-btn:active,
+.dashboard-view-all-btn:active {
+  transform: translateY(0) !important;
+  box-shadow: inset 2px 2px 5px rgba(148, 158, 173, 0.28), inset -2px -2px 5px rgba(255, 255, 255, 0.8) !important;
+}
+
+html[data-theme="dark"] .dashboard-recent-deliveries .routex-card-actions .routex-btn,
+html[data-theme="dark"] .dashboard-recent-deliveries .dashboard-view-all-btn,
+html[data-theme="dark"] .dashboard-view-all-btn {
+  background: var(--glass-surface-strong, rgba(24, 27, 32, 0.85)) !important;
+  border-color: var(--glass-border, rgba(255, 255, 255, 0.1)) !important;
+  color: var(--color-text-secondary, #94a3b8) !important;
+  box-shadow: 4px 6px 14px rgba(0, 0, 0, 0.45), -3px -3px 10px rgba(255, 255, 255, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+}
+
+html[data-theme="dark"] .dashboard-recent-deliveries .routex-card-actions .routex-btn:hover,
+html[data-theme="dark"] .dashboard-recent-deliveries .dashboard-view-all-btn:hover,
+html[data-theme="dark"] .dashboard-view-all-btn:hover {
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  background: var(--color-surface, #1e2229) !important;
+  box-shadow: 5px 8px 18px rgba(0, 0, 0, 0.55), -3px -3px 12px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme="dark"] .dashboard-recent-deliveries .routex-card-actions .routex-btn:active,
+html[data-theme="dark"] .dashboard-recent-deliveries .dashboard-view-all-btn:active,
+html[data-theme="dark"] .dashboard-view-all-btn:active {
+  box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.55), inset -1px -1px 4px rgba(255, 255, 255, 0.03) !important;
+}

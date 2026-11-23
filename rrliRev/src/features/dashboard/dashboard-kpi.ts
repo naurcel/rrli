@@ -279,12 +279,20 @@ export function buildFinancialTimeSeries(
     }
   });
 
+  const companyIncomeAggregates = new Map<string, number>();
   const companyExpenseAggregates = new Map<string, number>();
   companyExpenses.forEach((exp) => {
-    companyExpenseAggregates.set(
-      exp.expenseDate,
-      (companyExpenseAggregates.get(exp.expenseDate) ?? 0) + exp.amount,
-    );
+    if (exp.transactionType === "Incoming") {
+      companyIncomeAggregates.set(
+        exp.expenseDate,
+        (companyIncomeAggregates.get(exp.expenseDate) ?? 0) + exp.amount,
+      );
+    } else {
+      companyExpenseAggregates.set(
+        exp.expenseDate,
+        (companyExpenseAggregates.get(exp.expenseDate) ?? 0) + exp.amount,
+      );
+    }
   });
 
   const makePoint = (date: string): FinancialTimeSeriesPoint => {
@@ -293,15 +301,17 @@ export function buildFinancialTimeSeries(
       deliveryExpenses: 0,
       tripCount: 0,
     };
+    const compInc = companyIncomeAggregates.get(date) ?? 0;
     const compExp = companyExpenseAggregates.get(date) ?? 0;
+    const totalRev = deliv.revenue + compInc;
     const totalExp = deliv.deliveryExpenses + compExp;
     return {
       date,
-      revenue: deliv.revenue,
+      revenue: totalRev,
       deliveryExpenses: deliv.deliveryExpenses,
       companyExpenses: compExp,
       expenses: totalExp,
-      profit: deliv.revenue - totalExp,
+      profit: totalRev - totalExp,
       tripCount: deliv.tripCount,
     };
   };

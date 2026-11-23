@@ -29,6 +29,7 @@
   --glass-blur: 12px;
   --glow-amber: radial-gradient(110% 100% at 100% 0%, rgba(180, 83, 9, .09), transparent 62%);
   --glow-success: radial-gradient(110% 100% at 100% 0%, rgba(15, 138, 79, .07), transparent 62%);
+  --glow-danger: radial-gradient(110% 100% at 100% 0%, rgba(220, 38, 38, .07), transparent 62%);
   --ink: var(--color-text-primary); --muted: var(--color-text-muted); --line: var(--color-border); --soft: var(--color-page); --green: var(--color-accent); --deep-green: var(--color-accent-deep); --orange: var(--color-status-warning);
   --surface: var(--color-surface); --border: var(--color-border); --color-bg: var(--color-page); --color-surface-muted: var(--color-surface-subtle); --color-surface-hover: rgba(0, 0, 0, 0.04); --color-brand: var(--color-accent); --line-strong: var(--color-border);
 
@@ -155,6 +156,361 @@ html[data-theme="dark"] .routex-badge.tone-neutral {
   border: none;
 }
 
+/* ==========================================================================
+   ROUTEX CENTRALIZED SHARED COMPONENT SYSTEM
+   ========================================================================== */
+
+/* Buttons & Icon Buttons */
+.routex-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-control, 7px);
+  border: 1px solid transparent;
+  transition: background-color var(--motion-duration-fast, 120ms) ease,
+              border-color var(--motion-duration-fast, 120ms) ease,
+              color var(--motion-duration-fast, 120ms) ease,
+              box-shadow var(--motion-duration-fast, 120ms) ease,
+              transform var(--motion-duration-fast, 120ms) ease;
+}
+
+.routex-btn:focus-visible {
+  outline: 3px solid var(--color-focus, #f59e0b);
+  outline-offset: 2px;
+}
+
+.routex-btn:disabled,
+.routex-btn.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.routex-btn.full-width {
+  width: 100%;
+}
+
+/* Button Sizes */
+.routex-btn.size-xs {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  border-radius: 5px;
+  gap: 4px;
+}
+
+.routex-btn.size-sm {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  gap: 6px;
+}
+
+.routex-btn.size-md {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  border-radius: var(--radius-control, 7px);
+  gap: 8px;
+}
+
+.routex-btn.size-lg {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 14px;
+  border-radius: 8px;
+  gap: 10px;
+}
+
+/* Button Variants */
+.routex-btn.variant-primary {
+  background: linear-gradient(105deg, var(--color-accent-deep, #7c2d12), var(--color-accent, #b45309));
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 3px 12px rgba(180, 83, 9, 0.24), 0 1px 2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.routex-btn.variant-primary:hover:not(:disabled) {
+  background: linear-gradient(105deg, #9a3412, #d97706);
+  box-shadow: 0 4px 16px rgba(180, 83, 9, 0.35), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.routex-btn.variant-secondary {
+  background: var(--glass-surface-strong, var(--color-surface, #ffffff));
+  color: var(--color-text-secondary, #5c6d66);
+  border-color: var(--glass-border, var(--color-border, #e6e8ec));
+  box-shadow: 5px 7px 16px rgba(148, 158, 173, 0.2), -4px -4px 12px rgba(255, 255, 255, 0.88), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.routex-btn.variant-secondary:hover:not(:disabled) {
+  transform: translateY(-1.5px);
+  color: var(--color-accent-deep, #92400e);
+  border-color: color-mix(in srgb, var(--color-accent, #b45309) 35%, var(--glass-border, #e6e8ec));
+  background: var(--color-surface, #ffffff);
+  box-shadow: 6px 9px 20px rgba(148, 158, 173, 0.26), -5px -5px 14px rgba(255, 255, 255, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.routex-btn.variant-secondary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: inset 2px 2px 5px rgba(148, 158, 173, 0.28), inset -2px -2px 5px rgba(255, 255, 255, 0.8);
+}
+
+.routex-btn.variant-outline {
+  background: transparent;
+  color: var(--color-text-primary, #15201d);
+  border-color: var(--color-border, #e6e8ec);
+}
+
+.routex-btn.variant-outline:hover:not(:disabled) {
+  background: var(--color-surface-subtle, #fbfcfb);
+  border-color: var(--color-text-muted);
+}
+
+.routex-btn.variant-ghost {
+  background: transparent;
+  color: var(--color-text-secondary, #586762);
+  border-color: transparent;
+}
+
+.routex-btn.variant-ghost:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-text-primary, #15201d);
+}
+
+.routex-btn.variant-danger {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #b91c1c;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+}
+
+.routex-btn.variant-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.routex-btn.variant-subtle {
+  background: var(--color-surface-subtle, #fbfcfb);
+  color: var(--color-text-secondary, #586762);
+  border-color: var(--color-border, #e6e8ec);
+}
+
+.routex-btn.variant-subtle:hover:not(:disabled) {
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text-primary, #15201d);
+}
+
+/* Icon Button (Square / Circular) */
+.routex-btn.icon-btn {
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.routex-btn.icon-btn.size-xs {
+  width: 24px;
+  min-height: 24px;
+}
+
+.routex-btn.icon-btn.size-sm {
+  width: 30px;
+  min-height: 30px;
+}
+
+.routex-btn.icon-btn.size-md {
+  width: 38px;
+  min-height: 38px;
+}
+
+.routex-btn.icon-btn.size-lg {
+  width: 44px;
+  min-height: 44px;
+}
+
+/* Dark mode for buttons */
+html[data-theme="dark"] .routex-btn.variant-secondary {
+  background: var(--glass-surface-strong, rgba(24, 27, 32, 0.85));
+  color: var(--color-text-secondary, #94a3b8);
+  border-color: var(--glass-border, rgba(255, 255, 255, 0.1));
+  box-shadow: 4px 6px 14px rgba(0, 0, 0, 0.45), -3px -3px 10px rgba(255, 255, 255, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+html[data-theme="dark"] .routex-btn.variant-secondary:hover:not(:disabled) {
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.3);
+  background: var(--color-surface, #1e2229);
+  box-shadow: 5px 8px 18px rgba(0, 0, 0, 0.55), -3px -3px 12px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .routex-btn.variant-secondary:active:not(:disabled) {
+  box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.55), inset -1px -1px 4px rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="dark"] .routex-btn.variant-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-primary);
+}
+
+/* Spinner */
+.routex-btn-spinner {
+  display: inline-block;
+  animation: routex-spin 1s linear infinite;
+}
+
+@keyframes routex-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Badge dot indicators & variants */
+.routex-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.routex-badge-dot.dot-warning {
+  background: var(--color-status-warning, #f59e0b);
+}
+
+.routex-badge-dot.dot-success {
+  background: var(--color-status-success, #10b981);
+}
+
+.routex-badge-dot.dot-danger {
+  background: #ef4444;
+}
+
+.routex-badge-dot.dot-primary {
+  background: #3b82f6;
+}
+
+.routex-badge.variant-counter {
+  min-height: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+/* RouteX Centralized Tabs */
+.routex-tab-trigger {
+  min-height: 29px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.routex-tab-trigger:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.routex-tab-trigger.active {
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme="dark"] .routex-tab-trigger.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+/* RouteX Centralized Input Wrapper */
+.routex-input-wrapper {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control, 7px);
+  transition: border-color var(--motion-duration-fast) ease, box-shadow var(--motion-duration-fast) ease;
+}
+
+.routex-input-wrapper:focus-within {
+  border-color: var(--color-focus, #f59e0b);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.routex-input-wrapper.size-sm {
+  min-height: 30px;
+}
+
+.routex-input-wrapper.size-md {
+  min-height: 38px;
+}
+
+.routex-input-wrapper.size-lg {
+  min-height: 44px;
+}
+
+.routex-input {
+  border: none;
+  background: transparent;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  width: 100%;
+  outline: none;
+}
+
+.routex-input-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.routex-input-icon.left {
+  padding-left: 10px;
+}
+
+.routex-input-icon.right {
+  padding-right: 10px;
+}
+
+.routex-input-clear-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.routex-input-clear-btn:hover {
+  color: var(--color-text-primary);
+}
+
 /* Universal removal of native stepper / spin buttons from all number inputs */
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button,
@@ -213,13 +569,13 @@ input::-ms-clear {
 
 .fallback-ambient-glow {
   position: absolute;
-  inset: -25%;
+  inset: -5%;
   pointer-events: none;
   background: 
-    radial-gradient(circle at 35% 35%, rgba(245, 158, 11, 0.16) 0%, transparent 45%),
-    radial-gradient(circle at 65% 65%, rgba(217, 119, 6, 0.12) 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(251, 191, 36, 0.09) 0%, transparent 45%);
-  filter: blur(75px);
+    radial-gradient(circle at 45% 42%, rgba(245, 158, 11, 0.06) 0%, transparent 26%),
+    radial-gradient(circle at 55% 54%, rgba(217, 119, 6, 0.04) 0%, transparent 22%),
+    radial-gradient(circle at 50% 48%, rgba(251, 191, 36, 0.03) 0%, transparent 25%);
+  filter: blur(55px);
   animation: fallback-ambient-drift 12s ease-in-out infinite alternate;
   will-change: transform;
 }
@@ -1011,7 +1367,12 @@ html[data-reduce-motion="true"] .sidebar-rays-glow {
 .records-card table { background: rgba(255, 255, 255, .82); }
 .nav-item.active { background-image: var(--glow-amber); }
 .stat-card { background-image: var(--glow-amber); }
-.stat-card:nth-child(2) { background-image: var(--glow-success); }
+.stat-card:nth-child(1),
+.stat-card.stat-card-revenue,
+.stat-card.stat-card-income { background-image: var(--glow-success); }
+.stat-card:nth-child(2),
+.stat-card.stat-card-expenses,
+.stat-card.stat-card-outgoing { background-image: var(--glow-danger); }
 .records-card { background-image: var(--glow-amber); }
 .main-content h1, .main-content h2 { background-image: linear-gradient(110deg, var(--color-accent), var(--color-accent-highlight)); background-clip: text; -webkit-background-clip: text; color: transparent; }
 .table-wrap { width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: auto; scrollbar-color: #c7cdd6 transparent; touch-action: pan-x; }
@@ -1915,6 +2276,7 @@ html[data-theme="dark"] {
   --glass-shadow-strong: 10px 14px 32px rgba(0, 0, 0, .65), -5px -5px 18px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .06);
   --glow-amber: radial-gradient(110% 100% at 100% 0%, rgba(245, 158, 11, .12), transparent 62%);
   --glow-success: radial-gradient(110% 100% at 100% 0%, rgba(52, 211, 153, .10), transparent 62%);
+  --glow-danger: radial-gradient(110% 100% at 100% 0%, rgba(244, 63, 94, .10), transparent 62%);
 }
 html[data-theme="dark"], html[data-theme="dark"] body { background: var(--color-page); color: var(--color-text-primary); }
 html[data-theme="dark"] .app-shell { background: radial-gradient(900px 520px at 84% -8%, rgba(245, 158, 11, .06), transparent 68%), radial-gradient(760px 520px at 18% 100%, rgba(20, 21, 25, .15), transparent 70%), var(--color-page); }
@@ -2041,9 +2403,9 @@ html[data-theme="dark"] .fallback-page {
 
 html[data-theme="dark"] .fallback-ambient-glow {
   background: 
-    radial-gradient(circle at 35% 35%, rgba(245, 158, 11, 0.18) 0%, transparent 45%),
-    radial-gradient(circle at 65% 65%, rgba(217, 119, 6, 0.14) 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(251, 191, 36, 0.08) 0%, transparent 45%);
+    radial-gradient(circle at 45% 42%, rgba(245, 158, 11, 0.07) 0%, transparent 26%),
+    radial-gradient(circle at 55% 54%, rgba(217, 119, 6, 0.05) 0%, transparent 22%),
+    radial-gradient(circle at 50% 48%, rgba(251, 191, 36, 0.03) 0%, transparent 25%);
 }
 
 html[data-theme="dark"] .fallback-title,
@@ -4674,83 +5036,60 @@ html[data-theme="dark"] .sidebar-brand-space::after {
   background-image: url("/branding/redeemed-route-emblem.png");
 }
 
-/* Role & Access Badges + Multi-Store Drop-off Pills */
+/* Role & Access Indicators (Neutralized typography, no capsule badges) */
 .access-pill {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 22px;
-  padding: 2px 10px;
-  border-radius: 9999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-subtle);
-  font-size: 11px;
+  justify-content: flex-start;
+  gap: 0;
+  min-height: auto;
+  min-width: auto;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: 0.02em;
+  line-height: 1.3;
+  letter-spacing: normal;
   color: var(--color-text-secondary);
   white-space: nowrap;
-  transition: all 0.15s ease;
+  box-shadow: none;
 }
 
 .access-pill::before {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.9;
-  flex-shrink: 0;
+  display: none !important;
+  content: none !important;
 }
 
 .access-pill.admin,
-.access-pill.operations {
-  background: rgba(16, 185, 129, 0.09);
-  border-color: rgba(16, 185, 129, 0.28);
-  color: #047857;
+.access-pill.operations,
+.access-pill.view_only {
+  background: transparent !important;
+  border: none !important;
+  color: var(--color-text-secondary) !important;
 }
 
 .access-pill.admin::before,
-.access-pill.operations::before {
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
-}
-
-.access-pill.view_only {
-  background: rgba(245, 158, 11, 0.09);
-  border-color: rgba(245, 158, 11, 0.28);
-  color: #b45309;
-}
-
+.access-pill.operations::before,
 .access-pill.view_only::before {
-  background: #f59e0b;
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+  display: none !important;
+  content: none !important;
 }
 
 html[data-theme="dark"] .access-pill.admin,
-html[data-theme="dark"] .access-pill.operations {
-  background: rgba(16, 185, 129, 0.16);
-  border-color: rgba(16, 185, 129, 0.35);
-  color: #34d399;
+html[data-theme="dark"] .access-pill.operations,
+html[data-theme="dark"] .access-pill.view_only {
+  background: transparent !important;
+  border: none !important;
+  color: var(--color-text-secondary) !important;
 }
 
 html[data-theme="dark"] .access-pill.admin::before,
-html[data-theme="dark"] .access-pill.operations::before {
-  background: #34d399;
-  box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
-}
-
-html[data-theme="dark"] .access-pill.view_only {
-  background: rgba(245, 158, 11, 0.16);
-  border-color: rgba(245, 158, 11, 0.35);
-  color: #fbbf24;
-}
-
+html[data-theme="dark"] .access-pill.operations::before,
 html[data-theme="dark"] .access-pill.view_only::before {
-  background: #fbbf24;
-  box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
+  display: none !important;
+  content: none !important;
 }
 
 .dropoff-count-badge {
@@ -13375,7 +13714,9 @@ html[data-theme="dark"] .margin-pill.low {
 .truck-management-toolbar .filters.truck-filters .search-box {
   display: flex;
   align-items: center;
-  flex: 0 1 440px;
+  flex: 1 1 200px;
+  max-width: 260px;
+  min-width: 150px;
   min-height: 42px;
   height: 42px;
   gap: 10px;
