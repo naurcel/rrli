@@ -14,6 +14,7 @@ import {
   type DateRange,
 } from "@/components/global-date-range-picker";
 import { OperationalTopbar } from "@/components/operational-topbar";
+import { SingleDatePicker } from "@/components/single-date-picker";
 import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { useSearchBuffer } from "@/components/search-buffer";
@@ -115,7 +116,7 @@ export default function ReportsPage() {
   useEffect(() => {
     async function fetchExpenses() {
       try {
-        const res = await fetch("/api/finance/expenses?pageSize=100");
+        const res = await fetch("/api/finance/expenses?pageSize=1000");
         if (res.ok) {
           const data = await res.json();
           if (data.ok && Array.isArray(data.items)) {
@@ -405,7 +406,7 @@ export default function ReportsPage() {
             </p>
           </div>
           <div className="report-actions">
-            {canExportReports(actor.role) && (
+            {canExportReports(actor) && (
               <>
                 <button
                   type="button"
@@ -569,19 +570,18 @@ export default function ReportsPage() {
                     </svg>
                     <span>Prev</span>
                   </button>
-                  <input
-                    type="date"
-                    min="2024-01-01"
-                    className="daily-date-input"
-                    aria-label="Select report date"
-                    value={dailyDate}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        setDailyDate(e.target.value < "2024-01-01" ? "2024-01-01" : e.target.value);
-                      }
-                    }}
-                    style={{ padding: "3px 6px", fontSize: "11.5px", height: "30px" }}
-                  />
+                  <div style={{ minWidth: "165px" }}>
+                    <SingleDatePicker
+                      min="2024-01-01"
+                      ariaLabel="Select report date"
+                      value={dailyDate}
+                      onChange={(val) => {
+                        if (val) {
+                          setDailyDate(val < "2024-01-01" ? "2024-01-01" : val);
+                        }
+                      }}
+                    />
+                  </div>
                   <button
                     type="button"
                     className="daily-nav-btn"

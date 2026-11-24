@@ -258,11 +258,14 @@ export function generateReportRows(
         attachedPods: 0,
       };
 
+      const financiallyComplete = isDeliveryFinanciallyComplete(d);
       existing.deliveries += 1;
       existing.dropoffs += getTripTotalDropoffs(d.dropoffs);
-      existing.revenue += d.deliveryRate ?? 0;
-      existing.expenses += d.totalExpenses ?? 0;
-      existing.netIncome += d.netIncome ?? 0;
+      if (financiallyComplete) {
+        existing.revenue += d.deliveryRate ?? 0;
+        existing.expenses += d.totalExpenses ?? 0;
+        existing.netIncome += d.netIncome ?? 0;
+      }
       existing.attachedPods += d.dropoffs.filter((dropoff) => dropoff.podSubmitted).length;
 
       clientMap.set(d.clientName, existing);

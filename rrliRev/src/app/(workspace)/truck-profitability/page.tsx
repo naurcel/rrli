@@ -89,7 +89,10 @@ type SubcontractedTruckSortKey =
 export default function TruckProfitabilityPage() {
   const router = useRouter();
   const actor = useAuthenticatedActor();
-  const canAdd = canManageTrucks(actor.role);
+  const canAdd = canManageTrucks(actor);
+  const canDeleteTruck = Boolean(
+    actor.isSuperadmin || actor.role === "admin" || actor.roles?.includes("admin"),
+  );
 
   const { range, setRange } = useGlobalDateRange();
   const { deliveries: dateFilteredTrips, loading, error } = usePersistedDeliveries(range);
@@ -1815,7 +1818,7 @@ export default function TruckProfitabilityPage() {
                               <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                             </svg>
                           </button>
-                          {actor.role === "admin" && (
+                          {canDeleteTruck && (
                             <button
                               type="button"
                               className="truck-action-icon-btn danger"
@@ -1873,7 +1876,7 @@ export default function TruckProfitabilityPage() {
                         <SortableTableHeader label="Net Profit" sortKey="netProfit" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         <SortableTableHeader label="Margin" sortKey="margin" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         {canAdd && (
-                          <th style={{ width: actor.role === "admin" ? "76px" : "44px", textAlign: "right" }}>
+                          <th style={{ width: canDeleteTruck ? "76px" : "44px", textAlign: "right" }}>
                             <span className="sr-only">Actions</span>
                           </th>
                         )}
@@ -1949,7 +1952,7 @@ export default function TruckProfitabilityPage() {
                                       <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                                     </svg>
                                   </button>
-                                  {actor.role === "admin" && (
+                                  {canDeleteTruck && (
                                     <button
                                       type="button"
                                       className="truck-action-icon-btn danger"
@@ -2050,7 +2053,7 @@ export default function TruckProfitabilityPage() {
                   <SortableTableHeader label="Driver" sortKey="driverName" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Helper/s" sortKey="helperName" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   {canAdd && (
-                    <th style={{ width: actor.role === "admin" ? "76px" : "44px", textAlign: "right" }}>
+                    <th style={{ width: canDeleteTruck ? "76px" : "44px", textAlign: "right" }}>
                       <span className="sr-only">Actions</span>
                     </th>
                   )}
@@ -2116,7 +2119,7 @@ export default function TruckProfitabilityPage() {
                                 <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                               </svg>
                             </button>
-                            {actor.role === "admin" && (
+                            {canDeleteTruck && (
                               <button
                                 type="button"
                                 className="truck-action-icon-btn danger"

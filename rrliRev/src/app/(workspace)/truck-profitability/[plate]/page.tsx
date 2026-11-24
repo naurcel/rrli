@@ -109,7 +109,10 @@ export default function TruckProfilePage({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [localTrucks, setLocalTrucks] = useState<FleetTruck[]>([]);
-  const canManage = canManageTrucks(actor.role);
+  const canManage = canManageTrucks(actor);
+  const canDeleteTruck = Boolean(
+    actor.isSuperadmin || actor.role === "admin" || actor.roles?.includes("admin"),
+  );
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [openRowActionTripId, setOpenRowActionTripId] = useState<string | null>(null);
   const [rowActionOpensAbove, setRowActionOpensAbove] = useState(false);
@@ -569,7 +572,7 @@ export default function TruckProfilePage({
                 </div>
               </div>
 
-              {actor.role === "admin" && (
+              {canManage && (
                 <div className="table-row-actions" style={{ position: "relative", display: "inline-block" }}>
                   <button
                     type="button"
@@ -607,18 +610,22 @@ export default function TruckProfilePage({
                       >
                         Edit Truck
                       </button>
-                      <div className="row-action-menu-divider" role="separator" />
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="row-action-menu-danger"
-                        onClick={() => {
-                          setIsActionMenuOpen(false);
-                          setIsDeleteModalOpen(true);
-                        }}
-                      >
-                        Delete Truck
-                      </button>
+                      {canDeleteTruck && (
+                        <>
+                          <div className="row-action-menu-divider" role="separator" />
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="row-action-menu-danger"
+                            onClick={() => {
+                              setIsActionMenuOpen(false);
+                              setIsDeleteModalOpen(true);
+                            }}
+                          >
+                            Delete Truck
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

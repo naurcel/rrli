@@ -14,7 +14,12 @@ import {
   filterExpensesByDateRange,
   type CompanyExpense,
 } from "../finance/company-expense-domain.ts";
-import type { UserRole } from "../../lib/auth/rbac.ts";
+import {
+  subjectHasPermission,
+  subjectIsAdminOrSuperadmin,
+  type PermissionCheckSubject,
+  type UserRole,
+} from "../../lib/auth/rbac.ts";
 
 export type DataExportPackageType =
   | "datasets_csv"
@@ -182,23 +187,45 @@ const INITIAL_EXPORT_REQUESTS: DataExportRequest[] = [
   },
 ];
 
-export function canAccessDataExportTab(role: UserRole): boolean {
-  return role === "admin" || role === "operations" || role === "finance";
+export function canAccessDataExportTab(subject: PermissionCheckSubject): boolean {
+  if (typeof subject === "string") {
+    return subject === "admin" || subject === "operations" || subject === "finance";
+  }
+  return (
+    subjectIsAdminOrSuperadmin(subject) ||
+    subjectHasPermission(subject, "reports:export") ||
+    subject.role === "operations" ||
+    subject.role === "finance"
+  );
 }
 
-export function canApproveDataExports(role: UserRole): boolean {
-  return role === "admin";
+export function canApproveDataExports(subject: PermissionCheckSubject): boolean {
+  return subjectIsAdminOrSuperadmin(subject);
 }
 
-export function canRequestDataExports(role: UserRole): boolean {
-  return role === "operations" || role === "finance";
+export function canRequestDataExports(subject: PermissionCheckSubject): boolean {
+  if (subjectIsAdminOrSuperadmin(subject)) return false;
+  if (typeof subject === "string") {
+    return subject === "operations" || subject === "finance";
+  }
+  return (
+    subjectHasPermission(subject, "reports:export") ||
+    subject.role === "operations" ||
+    subject.role === "finance"
+  );
 }
 
 export function canDownloadExportRequest(
   request: DataExportRequest,
-  actor: { role: UserRole; username: string },
+  actor: {
+    role: UserRole;
+    roles?: readonly string[];
+    permissions?: readonly string[];
+    isSuperadmin?: boolean;
+    username: string;
+  },
 ): boolean {
-  if (actor.role === "admin") return true;
+  if (actor.isSuperadmin || actor.role === "admin" || actor.roles?.includes("admin")) return true;
   if (request.status !== "approved") return false;
   return (
     request.requestedByRole === actor.role ||
