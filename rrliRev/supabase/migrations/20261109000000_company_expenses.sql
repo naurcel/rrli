@@ -23,22 +23,26 @@ create index if not exists company_expenses_category_idx on public.company_expen
 alter table public.company_expenses enable row level security;
 
 -- RLS Policies
+drop policy if exists "company_expenses_select" on public.company_expenses;
 create policy "company_expenses_select"
   on public.company_expenses
   for select
-  using (public.can_view_workspace());
+  using (public.can_read_operations());
 
+drop policy if exists "company_expenses_insert" on public.company_expenses;
 create policy "company_expenses_insert"
   on public.company_expenses
   for insert
   with check (public.can_write_operations());
 
+drop policy if exists "company_expenses_update" on public.company_expenses;
 create policy "company_expenses_update"
   on public.company_expenses
   for update
   using (public.can_write_operations())
   with check (public.can_write_operations());
 
+drop policy if exists "company_expenses_delete" on public.company_expenses;
 create policy "company_expenses_delete"
   on public.company_expenses
   for delete

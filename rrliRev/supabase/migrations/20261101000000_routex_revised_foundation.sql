@@ -151,10 +151,12 @@ create table if not exists public.clients (
 
 alter table public.clients enable row level security;
 
+drop policy if exists "Authenticated active staff can view clients" on public.clients;
 create policy "Authenticated active staff can view clients"
   on public.clients for select to authenticated
   using (public.can_read_operations());
 
+drop policy if exists "Admin and Operations can manage clients" on public.clients;
 create policy "Admin and Operations can manage clients"
   on public.clients for all to authenticated
   using (public.can_write_operations())
@@ -173,10 +175,12 @@ create table if not exists public.trucks (
 
 alter table public.trucks enable row level security;
 
+drop policy if exists "Authenticated active staff can view trucks" on public.trucks;
 create policy "Authenticated active staff can view trucks"
   on public.trucks for select to authenticated
   using (public.can_read_operations());
 
+drop policy if exists "Admin and Operations can manage trucks" on public.trucks;
 create policy "Admin and Operations can manage trucks"
   on public.trucks for all to authenticated
   using (public.can_write_operations())
@@ -234,10 +238,12 @@ create table if not exists public.deliveries (
 
 alter table public.deliveries enable row level security;
 
+drop policy if exists "Authenticated active staff can view deliveries" on public.deliveries;
 create policy "Authenticated active staff can view deliveries"
   on public.deliveries for select to authenticated
   using (public.can_read_operations());
 
+drop policy if exists "Admin and Operations can create and update deliveries" on public.deliveries;
 create policy "Admin and Operations can create and update deliveries"
   on public.deliveries for all to authenticated
   using (public.can_write_operations())
@@ -260,10 +266,12 @@ create table if not exists public.delivery_dropoffs (
 
 alter table public.delivery_dropoffs enable row level security;
 
+drop policy if exists "Authenticated active staff can view delivery dropoffs" on public.delivery_dropoffs;
 create policy "Authenticated active staff can view delivery dropoffs"
   on public.delivery_dropoffs for select to authenticated
   using (public.can_read_operations());
 
+drop policy if exists "Admin and Operations can manage delivery dropoffs" on public.delivery_dropoffs;
 create policy "Admin and Operations can manage delivery dropoffs"
   on public.delivery_dropoffs for all to authenticated
   using (public.can_write_operations())
@@ -286,10 +294,12 @@ create table if not exists public.excel_import_batches (
 
 alter table public.excel_import_batches enable row level security;
 
+drop policy if exists "Authenticated active staff can view import batches" on public.excel_import_batches;
 create policy "Authenticated active staff can view import batches"
   on public.excel_import_batches for select to authenticated
   using (public.can_read_operations());
 
+drop policy if exists "Admin and Operations can manage import batches" on public.excel_import_batches;
 create policy "Admin and Operations can manage import batches"
   on public.excel_import_batches for all to authenticated
   using (public.can_write_operations())

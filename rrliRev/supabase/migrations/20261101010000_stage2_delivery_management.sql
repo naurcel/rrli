@@ -79,11 +79,43 @@ create index if not exists deliveries_profit_margin_idx
 create index if not exists deliveries_waybill_search_idx
   on public.deliveries (lower(waybill_number) text_pattern_ops);
 
-create or replace view public.delivery_ledger
+drop view if exists public.delivery_ledger cascade;
+
+create view public.delivery_ledger
 with (security_invoker = true)
 as
 select
-  d.*,
+  d.id,
+  d.waybill_number,
+  d.delivery_date,
+  d.client_id,
+  d.truck_id,
+  d.driver_id,
+  d.helper_id,
+  d.truck_type_snapshot,
+  d.truck_temperature_snapshot,
+  d.origin,
+  d.distance_km,
+  d.fuel_rate,
+  d.diesel_expenses,
+  d.toll_gate_expenses,
+  d.toll_gate_breakdown,
+  d.entry_fees,
+  d.driver_allowance,
+  d.driver_daily_rate,
+  d.helper_allowance,
+  d.helper_daily_rate,
+  d.other_expenses,
+  d.total_expenses,
+  d.delivery_rate,
+  d.net_income,
+  d.profit_margin,
+  d.pod_status,
+  d.delivery_status,
+  d.version,
+  d.created_by,
+  d.created_at,
+  d.updated_at,
   c.name as client_name,
   c.is_active as client_is_active,
   t.plate_number,

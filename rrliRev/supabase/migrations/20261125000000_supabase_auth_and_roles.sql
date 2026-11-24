@@ -60,15 +60,17 @@ alter table public.user_profiles
 -- Backfill roles array from single role column if present
 update public.user_profiles
 set roles = array[role::text]::text[]
-where roles is null or cardinality(roles) = 0;
+where role is not null;
 
 -- 3. RLS Policies for custom_roles
+drop policy if exists "Allow authenticated users to read enabled custom roles" on public.custom_roles;
 create policy "Allow authenticated users to read enabled custom roles"
   on public.custom_roles
   for select
   to authenticated
   using (true);
 
+drop policy if exists "Allow admins and superadmin to manage custom roles" on public.custom_roles;
 create policy "Allow admins and superadmin to manage custom roles"
   on public.custom_roles
   for all
@@ -93,6 +95,11 @@ create policy "Allow admins and superadmin to manage custom roles"
   );
 
 -- 4. RLS Policies for user_profiles
+-- Drop legacy single-role policies from earlier foundation migration to avoid conflicts
+drop policy if exists "Users can read own profile or admin reads all" on public.user_profiles;
+drop policy if exists "Only admins can insert user profiles" on public.user_profiles;
+drop policy if exists "Only admins can update user profiles" on public.user_profiles;
+drop policy if exists "Users can view active profiles or own profile" on public.user_profiles;
 create policy "Users can view active profiles or own profile"
   on public.user_profiles
   for select
@@ -111,6 +118,7 @@ create policy "Users can view active profiles or own profile"
     )
   );
 
+drop policy if exists "Admins and superadmin can insert/update user profiles" on public.user_profiles;
 create policy "Admins and superadmin can insert/update user profiles"
   on public.user_profiles
   for all

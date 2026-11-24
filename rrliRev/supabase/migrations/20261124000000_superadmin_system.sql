@@ -63,6 +63,7 @@ as $$
 $$;
 
 -- 6. Row Level Security Policies for Superadmin & Departments
+drop policy if exists "Superadmin full access to departments" on public.departments;
 create policy "Superadmin full access to departments"
   on public.departments
   for all
@@ -70,6 +71,7 @@ create policy "Superadmin full access to departments"
   using (public.is_superadmin() or not is_archived)
   with check (public.is_superadmin());
 
+drop policy if exists "Superadmin full access to user_department_memberships" on public.user_department_memberships;
 create policy "Superadmin full access to user_department_memberships"
   on public.user_department_memberships
   for all
