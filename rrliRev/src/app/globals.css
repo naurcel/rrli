@@ -5306,8 +5306,8 @@ body.has-global-tooltip [data-tooltip]::after {
 
 /* Completed delivery entry */
 .delivery-entry-page {
-  width: min(1080px, calc(100% - 48px)) !important;
-  max-width: 1080px !important;
+  width: min(820px, calc(100% - 48px)) !important;
+  max-width: 820px !important;
   margin-inline: auto !important;
   padding-inline: clamp(16px, 2.5vw, 28px) !important;
 }
@@ -8644,7 +8644,8 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
    ========================================================================== */
 
 /* Modern Segmented Stepper Bar */
-.import-stepper {
+.import-stepper,
+.import-steps-bar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -8660,7 +8661,8 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
   box-shadow: var(--shadow-soft);
 }
 
-.import-stepper-item {
+.import-stepper-item,
+.import-step-item {
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -8673,7 +8675,8 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.import-stepper-num {
+.import-stepper-num,
+.import-step-num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -8688,30 +8691,35 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
   transition: all 0.2s ease;
 }
 
-.import-stepper-item.active {
+.import-stepper-item.active,
+.import-step-item.is-active {
   background: var(--color-accent-soft);
   color: var(--color-accent-deep);
   font-weight: 650;
 }
 
-.import-stepper-item.active .import-stepper-num {
+.import-stepper-item.active .import-stepper-num,
+.import-step-item.is-active .import-step-num {
   background: var(--color-accent);
   color: #ffffff;
   border-color: var(--color-accent);
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
 }
 
-.import-stepper-item.completed {
+.import-stepper-item.completed,
+.import-step-item.is-done {
   color: var(--color-text-primary);
 }
 
-.import-stepper-item.completed .import-stepper-num {
+.import-stepper-item.completed .import-stepper-num,
+.import-step-item.is-done .import-step-num {
   background: rgba(16, 185, 129, 0.15);
   color: #10b981;
   border-color: rgba(16, 185, 129, 0.4);
 }
 
-.import-stepper-arrow {
+.import-stepper-arrow,
+.import-step-sep {
   color: var(--color-border);
   font-size: 14px;
   opacity: 0.6;
@@ -8735,7 +8743,8 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
 }
 
 .import-dropzone:hover,
-.import-dropzone.drag-active {
+.import-dropzone.drag-active,
+.import-dropzone.is-dragging {
   border-color: var(--color-accent);
   background: var(--color-accent-soft);
   transform: translateY(-2px);
@@ -8757,7 +8766,8 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
 }
 
 .import-dropzone:hover .import-dropzone-icon-wrap,
-.import-dropzone.drag-active .import-dropzone-icon-wrap {
+.import-dropzone.drag-active .import-dropzone-icon-wrap,
+.import-dropzone.is-dragging .import-dropzone-icon-wrap {
   background: var(--color-accent);
   color: #ffffff;
   transform: scale(1.08);
@@ -9598,9 +9608,9 @@ html[data-theme="dark"] .pod-action-btn:hover:not(:disabled) {
   inset: 0;
   display: block !important;
   border: 0;
-  background: rgba(15, 23, 21, .48);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 23, 21, .38);
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
   cursor: default;
   animation: detail-backdrop-in 180ms ease both;
 }
@@ -10870,11 +10880,11 @@ body.record-detail-open .main-content {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(21, 32, 29, 0.45);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(21, 32, 29, 0.36);
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
   cursor: default;
-  animation: detail-backdrop-in 0.2s ease both;
+  animation: routex-modal-backdrop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .routex-dialog {
@@ -10891,7 +10901,8 @@ body.record-detail-open .main-content {
   border-radius: 20px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
   overflow: hidden;
-  animation: detail-drawer-in 0.25s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  transform-origin: center center;
+  animation: routex-modal-pop-in 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .routex-dialog-header {
@@ -13026,30 +13037,43 @@ html[data-theme="dark"] .sign-in-button:active:not(:disabled) {
   max-width: 1540px !important;
   margin-inline: auto !important;
   box-sizing: border-box !important;
-  padding-left: 42px !important;
-  padding-right: 42px !important;
+  padding-left: clamp(56px, 5vw, 96px) !important;
+  padding-right: clamp(56px, 5vw, 96px) !important;
   padding-bottom: 32px !important;
+}
+
+.content-wrap.delivery-entry-page,
+.delivery-entry-page {
+  width: min(820px, calc(100% - 48px)) !important;
+  max-width: 820px !important;
+  margin-inline: auto !important;
+  padding-left: clamp(16px, 2.5vw, 28px) !important;
+  padding-right: clamp(16px, 2.5vw, 28px) !important;
+}
+
+.content-wrap.settings-page-wrap:not(.user-management-page-wrap) {
+  max-width: 1200px !important;
 }
 
 @media (max-width: 1024px) {
   .content-wrap {
-    padding-left: 28px !important;
-    padding-right: 28px !important;
+    padding-left: 40px !important;
+    padding-right: 40px !important;
   }
 }
 
 @media (max-width: 768px) {
   .content-wrap {
-    padding-left: 20px !important;
-    padding-right: 20px !important;
+    padding-left: 26px !important;
+    padding-right: 26px !important;
     padding-top: 20px !important;
   }
 }
 
 @media (max-width: 480px) {
   .content-wrap {
-    padding-left: 14px !important;
-    padding-right: 14px !important;
+    padding-left: 18px !important;
+    padding-right: 18px !important;
   }
 }
 
@@ -17877,76 +17901,6 @@ html[data-theme="dark"] .sidebar-profile-dropdown {
   border: 0;
   width: 100%;
   text-align: left;
-  transition: background-color 0.15s ease, transform 0.15s ease !important;
-  box-shadow: none !important;
-}
-
-.profile-dropdown-row:hover {
-  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
-  transform: translateY(-1.5px) !important;
-}
-
-.profile-dropdown-row:active {
-  transform: translateY(0) !important;
-}
-
-.profile-dropdown-item-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.profile-dropdown-icon {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  color: var(--color-text-secondary);
-}
-
-.profile-theme-switch {
-  position: relative;
-  width: 38px;
-  height: 22px;
-  border-radius: 11px;
-  background: var(--line);
-  transition: background-color 0.2s ease;
-  cursor: pointer;
-  border: none;
-  padding: 0;
-  box-shadow: none !important;
-}
-
-.profile-theme-switch.active {
-  background: var(--color-accent);
-}
-
-.profile-theme-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.4, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-.profile-theme-switch.active .profile-theme-knob {
-  transform: translateX(16px);
-}
-
-.profile-dropdown-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  text-decoration: none;
   transition: background-color 0.15s ease, transform 0.15s ease !important;
   box-shadow: none !important;
 }

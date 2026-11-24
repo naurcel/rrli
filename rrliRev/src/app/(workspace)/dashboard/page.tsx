@@ -163,7 +163,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchExpenses() {
       try {
-        const res = await fetch("/api/finance/expenses?pageSize=100");
+        const res = await fetch("/api/finance/expenses?pageSize=1000");
         if (res.ok) {
           const data = await res.json();
           if (data.ok && Array.isArray(data.items)) {
@@ -320,7 +320,7 @@ export default function DashboardPage() {
     [persistedSummary?.trucks, truckRankingMetric],
   );
 
-  const canWrite = canMutateDeliveryRecords(actor.role);
+  const canWrite = canMutateDeliveryRecords(actor);
   const actorName = actor.fullName
     ? actor.fullName.split(" ")[0]
     : (actor.username ?? "there");

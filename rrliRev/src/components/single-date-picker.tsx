@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
   dayKey,
@@ -39,6 +39,8 @@ export function SingleDatePicker({
   placeholder = "Select date",
 }: SingleDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [opensAbove, setOpensAbove] = useState(false);
+  const [alignRight, setAlignRight] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const dialogId = useId();
 
@@ -79,6 +81,17 @@ export function SingleDatePicker({
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
+  }, [isOpen]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const estimatedHeight = 320;
+    const hasSpaceBelow = window.innerHeight - rect.bottom >= estimatedHeight + 12;
+    const hasSpaceAbove = rect.top >= estimatedHeight + 12;
+    setOpensAbove(!hasSpaceBelow && hasSpaceAbove);
+    setAlignRight(rect.right > window.innerWidth - 60 || rect.left > window.innerWidth * 0.65);
   }, [isOpen]);
 
   // Grid computation (42 cells)
@@ -137,7 +150,10 @@ export function SingleDatePicker({
   }, [value, placeholder]);
 
   return (
-    <div className={`single-date-picker-wrap${disabled ? " is-disabled" : ""} ${className}`} ref={containerRef}>
+    <div
+      className={`single-date-picker-wrap${isOpen ? " is-open" : ""}${opensAbove ? " opens-above" : ""}${alignRight ? " align-right" : ""}${disabled ? " is-disabled" : ""}${className ? ` ${className}` : ""}`}
+      ref={containerRef}
+    >
       <button
         id={id}
         type="button"

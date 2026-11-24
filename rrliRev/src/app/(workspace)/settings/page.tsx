@@ -137,7 +137,7 @@ export default function SettingsPage() {
   useEffect(() => {
     async function fetchExpenses() {
       try {
-        const res = await fetch("/api/finance/expenses?pageSize=100");
+        const res = await fetch("/api/finance/expenses?pageSize=1000");
         if (res.ok) {
           const data = await res.json();
           if (data.ok && Array.isArray(data.items)) {
@@ -683,7 +683,7 @@ export default function SettingsPage() {
               >
                 Security
               </button>
-              {canAccessDataExportTab(actor.role) && (
+              {canAccessDataExportTab(actor) && (
                 <button
                   type="button"
                   role="tab"
@@ -695,7 +695,7 @@ export default function SettingsPage() {
                   style={{ display: "inline-flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}
                 >
                   <span>Export Data</span>
-                  {actor.role === "admin" && pendingExportRequestsCount > 0 ? (
+                  {(actor.role === "admin" || actor.isSuperadmin || actor.roles?.includes("admin")) && pendingExportRequestsCount > 0 ? (
                     <span
                       style={{
                         display: "inline-flex",
@@ -1433,7 +1433,7 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {activeTab === "export" && canAccessDataExportTab(actor.role) && (
+            {activeTab === "export" && canAccessDataExportTab(actor) && (
               <div id="panel-export" role="tabpanel" aria-labelledby="tab-export" className="settings-tab-panel">
                 <ReportsDataExportTab
                   actor={actor}

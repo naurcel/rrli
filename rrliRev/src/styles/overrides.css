@@ -1070,3 +1070,600 @@ html[data-theme="dark"] .dashboard-recent-deliveries .dashboard-view-all-btn:act
 html[data-theme="dark"] .dashboard-view-all-btn:active {
   box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.55), inset -1px -1px 4px rgba(255, 255, 255, 0.03) !important;
 }
+
+/* ==========================================================================
+   16. Modal Background Gaussian Blur & Popup Entrance Animation
+   Applies a slight Gaussian backdrop blur and smooth popup animation across all modal overlays.
+   ========================================================================== */
+@keyframes routex-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes routex-modal-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.routex-dialog-backdrop,
+.record-detail-backdrop,
+.image-viewer-backdrop {
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  animation: routex-modal-backdrop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both !important;
+}
+
+.routex-dialog,
+.routex-dialog-panel,
+.record-detail-drawer,
+.image-viewer-dialog,
+[role="dialog"][aria-modal="true"] > .records-card,
+.routex-dialog-backdrop > div {
+  transform-origin: center center;
+  animation: routex-modal-pop-in 0.26s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+}
+
+body > .routex-dialog-layer ~ .app-shell,
+body:has(> .routex-dialog-layer) .app-shell,
+body:has(> .record-detail-layer) .app-shell {
+  filter: blur(2.5px);
+  transition: filter 0.22s ease;
+}
+
+/* ==========================================================================
+   17. Import Wizard & Form Layout Spacing Refinements
+   Consistent spacing and responsive button wrapping across import & form pages.
+   ========================================================================== */
+.import-stepper,
+.import-steps-bar {
+  margin-top: 6px;
+  margin-bottom: 20px;
+}
+
+.records-heading > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   18. Global Dropdown & Popover Stacking Hierarchy (Always On Top)
+   Ensures all dropdown menus, date pickers, filter popovers, row action
+   menus, and account menus render above sibling fields, rows, cards,
+   sticky table headers, and modal sections without being clipped.
+   ========================================================================== */
+
+/* 18.1 Viewport-aware flip & alignment rules for SingleDatePicker */
+.single-date-picker-wrap.opens-above .single-date-picker-popover {
+  top: auto !important;
+  bottom: calc(100% + 6px) !important;
+}
+
+.single-date-picker-wrap.align-right .single-date-picker-popover {
+  left: auto !important;
+  right: 0 !important;
+}
+
+/* 18.2 Prevent horizontal scroll containers from clipping open dropdowns */
+.truck-management-toolbar .filters.truck-filters {
+  overflow: visible !important;
+  flex-wrap: wrap !important;
+}
+
+/* 18.3 Elevate the active dropdown trigger wrapper itself */
+.rounded-select.is-open,
+.single-date-picker-wrap.is-open,
+.single-date-picker-wrap:has(.single-date-picker-popover),
+.global-date-picker:has(.date-picker-popover),
+.delivery-filter-dropdown-container.is-open,
+.delivery-filter-dropdown-container:has(.delivery-filter-popover),
+.table-row-actions:has(.row-action-menu),
+.sidebar-profile-section:has(.sidebar-profile-dropdown),
+.topbar-profile-section:has(.topbar-profile-dropdown),
+.account-control:has([aria-expanded="true"]) {
+  position: relative !important;
+  z-index: 1200 !important;
+}
+
+/* 18.4 Enforce top-most z-index on all floating dropdown and popover menus */
+.rounded-select-menu,
+.single-date-picker-popover,
+.date-picker-popover,
+.delivery-filter-popover,
+.row-action-menu,
+.sidebar-profile-dropdown,
+.topbar-profile-dropdown,
+.account-menu-popover {
+  z-index: 1400 !important;
+}
+
+/* 18.5 Elevate Topbar above main content whenever a topbar dropdown is open */
+.topbar:has(.rounded-select.is-open),
+.topbar:has(.single-date-picker-popover),
+.topbar:has(.date-picker-popover),
+.topbar:has(.sidebar-profile-dropdown),
+.topbar:has(.topbar-profile-dropdown),
+.topbar:has([aria-expanded="true"]) {
+  z-index: 1500 !important;
+  overflow: visible !important;
+}
+
+/* 18.6 Elevate any form field, row, grid, section, card, or modal group
+        containing an open dropdown/popover above its subsequent siblings */
+.delivery-form-section:has(.rounded-select.is-open),
+.delivery-form-section:has(.single-date-picker-popover),
+.delivery-form-section:has(.date-picker-popover),
+.delivery-field-grid:has(.rounded-select.is-open),
+.delivery-field-grid:has(.single-date-picker-popover),
+.delivery-trip-grid:has(.rounded-select.is-open),
+.delivery-trip-grid:has(.single-date-picker-popover),
+.delivery-finance-grid:has(.rounded-select.is-open),
+.delivery-finance-grid:has(.single-date-picker-popover),
+.delivery-field-grid > label:has(.rounded-select.is-open),
+.delivery-field-grid > label:has(.single-date-picker-popover),
+.delivery-field-grid > div:has(.rounded-select.is-open),
+.delivery-field-grid > div:has(.single-date-picker-popover),
+.client-field-group:has(.rounded-select.is-open),
+.dropoff-row:has(.rounded-select.is-open),
+.dropoff-row:has(.single-date-picker-popover),
+.dropoff-fields:has(.rounded-select.is-open),
+.dropoff-field:has(.rounded-select.is-open),
+.crew-expense-groups:has(.rounded-select.is-open),
+.crew-cards-grid:has(.rounded-select.is-open),
+.crew-info-card:has(.rounded-select.is-open),
+.crew-expense-group:has(.rounded-select.is-open),
+.routex-dialog-section:has(.rounded-select.is-open),
+.routex-dialog-section:has(.single-date-picker-popover),
+.routex-dialog-grid-2:has(.rounded-select.is-open),
+.routex-dialog-grid-2:has(.single-date-picker-popover),
+.routex-dialog-field:has(.rounded-select.is-open),
+.routex-dialog-field:has(.single-date-picker-popover),
+.routex-dialog-field-group:has(.rounded-select.is-open),
+.routex-dialog-field-group:has(.single-date-picker-popover),
+.records-card:has(.rounded-select.is-open),
+.records-card:has(.single-date-picker-popover),
+.records-card:has(.date-picker-popover),
+.records-card:has(.delivery-filter-popover),
+.records-card:has(.delivery-filter-dropdown-container.is-open),
+.records-card:has(.row-action-menu),
+.records-heading:has(.rounded-select.is-open),
+.records-heading:has(.single-date-picker-popover),
+.records-heading:has(.date-picker-popover),
+.records-heading:has(.delivery-filter-popover),
+.filters:has(.rounded-select.is-open),
+.filters:has(.single-date-picker-popover),
+.filters:has(.date-picker-popover),
+.filters:has(.delivery-filter-popover),
+.filter-select-wrapper:has(.rounded-select.is-open),
+.filter-select-wrapper:has(.single-date-picker-popover),
+.filter-select-wrapper:has(.date-picker-popover),
+.filter-select-wrapper:has(.delivery-filter-popover),
+.truck-management-toolbar:has(.rounded-select.is-open),
+.truck-management-toolbar:has(.single-date-picker-popover),
+.truck-management-toolbar:has(.date-picker-popover),
+.truck-management-toolbar:has(.delivery-filter-popover),
+.revenue-chart-card:has(.rounded-select.is-open),
+.revenue-chart-card:has(.single-date-picker-popover),
+.revenue-chart-card:has(.date-picker-popover),
+.revenue-chart-heading:has(.rounded-select.is-open),
+.revenue-chart-heading:has(.date-picker-popover),
+.revenue-chart-controls:has(.rounded-select.is-open),
+.revenue-chart-controls:has(.date-picker-popover),
+.dashboard-overview-grid:has(.rounded-select.is-open),
+.dashboard-overview-grid:has(.date-picker-popover),
+.dashboard-insights:has(.rounded-select.is-open),
+.dashboard-insights:has(.date-picker-popover),
+.dashboard-columns:has(.rounded-select.is-open),
+.dashboard-columns:has(.date-picker-popover),
+.report-tabs-bar:has(.rounded-select.is-open),
+.report-tabs-bar:has(.single-date-picker-popover),
+.report-tabs-bar:has(.date-picker-popover),
+.report-tabs-bar-controls:has(.rounded-select.is-open),
+.report-tabs-bar-controls:has(.single-date-picker-popover),
+.report-tabs-bar-controls:has(.date-picker-popover),
+.daily-trip-date-bar:has(.rounded-select.is-open),
+.daily-trip-date-bar:has(.single-date-picker-popover),
+.daily-trip-date-controls:has(.rounded-select.is-open),
+.daily-trip-date-controls:has(.single-date-picker-popover),
+.user-provision-group:has(.rounded-select.is-open),
+.user-provision-group-body:has(.rounded-select.is-open),
+.user-form-field:has(.rounded-select.is-open),
+.user-form-grid:has(.rounded-select.is-open),
+.settings-card-section:has(.rounded-select.is-open),
+.settings-form-field:has(.rounded-select.is-open),
+.appearance-section-item:has(.rounded-select.is-open),
+.discord-permissions-container:has(.rounded-select.is-open),
+.discord-main-panel:has(.rounded-select.is-open),
+.discord-entity-banner:has(.rounded-select.is-open),
+.discord-banner-actions:has(.rounded-select.is-open),
+.discord-copy-tool:has(.rounded-select.is-open),
+.native-setup-field-group:has(.rounded-select.is-open),
+.native-setup-field-group:has(.single-date-picker-popover),
+.fleet-card:has(.rounded-select.is-open),
+.fleet-card:has(.row-action-menu) {
+  position: relative !important;
+  z-index: 900 !important;
+  overflow: visible !important;
+}
+
+/* 18.7 Elevate table rows and cells containing an open dropdown or action menu
+        above sibling animated rows and sticky table headers */
+.table-wrap:has(.rounded-select.is-open),
+.table-wrap:has(.single-date-picker-popover),
+.table-wrap:has(.row-action-menu),
+.table-wrap:has(.role-selection-popover) {
+  overflow: visible !important;
+  z-index: 900 !important;
+}
+
+tbody tr:has(.rounded-select.is-open),
+tbody tr:has(.single-date-picker-popover),
+tbody tr:has(.row-action-menu),
+tbody tr:has(.role-selection-popover),
+tbody tr:has([aria-expanded="true"]) {
+  position: relative !important;
+  z-index: 950 !important;
+}
+
+tbody td:has(.rounded-select.is-open),
+tbody td:has(.single-date-picker-popover),
+tbody td:has(.row-action-menu),
+tbody td:has(.role-selection-popover),
+tbody td:has([aria-expanded="true"]) {
+  position: relative !important;
+  z-index: 960 !important;
+  overflow: visible !important;
+}
+
+/* User Management: Roles & Departments column sizing */
+.col-role-dept,
+td.role-selection-cell {
+  width: 230px !important;
+  max-width: 260px !important;
+  vertical-align: middle !important;
+}
+
+
+
+
+
+/* ==========================================================================
+   19. Required Field Asterisk
+   ========================================================================== */
+.required-asterisk {
+  color: var(--color-danger, #dc2626) !important;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+html[data-theme="dark"] .required-asterisk {
+  color: #f87171 !important;
+}
+
+
+/* ==========================================================================
+   20. Permissions Manager: Category Header & Unsaved Changes Bar
+   ========================================================================== */
+.discord-category-header {
+  flex-wrap: nowrap !important;
+  min-height: 52px;
+}
+
+.discord-category-title-wrap {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-width: 0;
+  flex: 1 1 auto;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 8px;
+}
+
+.discord-category-title-wrap:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.discord-category-title-wrap .discord-category-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discord-collapse-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 auto;
+  width: 24px !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--color-text-muted) !important;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.discord-collapse-btn svg {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.discord-collapse-btn.is-collapsed svg {
+  transform: rotate(-90deg);
+}
+
+.discord-category-title-wrap:hover .discord-collapse-btn {
+  background: var(--color-surface-hover, rgba(148, 163, 184, 0.14)) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.discord-cat-count-chip {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.discord-category-quick-actions {
+  flex: 0 0 auto;
+}
+
+.discord-quick-btn {
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] .discord-cat-count-chip {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Unsaved changes bar: floating rounded pill aligned to the content column */
+.discord-unsaved-bar {
+  margin: 16px 0 12px;
+  border-radius: 12px;
+  padding: 10px 12px 10px 20px !important;
+  gap: 12px;
+}
+
+.discord-unsaved-actions .discord-discard-btn,
+.discord-unsaved-actions .discord-save-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 16px !important;
+  border-radius: 8px !important;
+  font-size: 12.5px !important;
+  font-weight: 650 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.discord-unsaved-actions .discord-discard-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.discord-unsaved-actions .discord-discard-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+.discord-unsaved-actions .discord-save-btn:hover:not(:disabled) {
+  background: #047857 !important;
+}
+
+/* ==========================================================================
+   21. Number Stepper (mini minus / plus control)
+   ========================================================================== */
+.number-stepper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 112px;
+  height: var(--control-height, 40px);
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.number-stepper:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft, rgba(245, 158, 11, 0.18));
+}
+
+.number-stepper.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.number-stepper .number-stepper-input,
+.number-stepper input[type="number"].number-stepper-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  text-align: center;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.number-stepper .number-stepper-input::-webkit-outer-spin-button,
+.number-stepper .number-stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.number-stepper-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 7px !important;
+  background: var(--color-surface-subtle, rgba(148, 163, 184, 0.12)) !important;
+  box-shadow: none !important;
+  color: var(--color-text-secondary) !important;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease, transform 0.08s ease;
+}
+
+.number-stepper-btn:hover:not(:disabled) {
+  background: var(--color-accent-soft, rgba(245, 158, 11, 0.16)) !important;
+  color: var(--color-accent-deep, #92400e) !important;
+}
+
+.number-stepper-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.number-stepper-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+html[data-theme="dark"] .number-stepper-btn {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme="dark"] .number-stepper-btn:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #fbbf24 !important;
+}
+
+/* ==========================================================================
+   22. Login: Viewport-Height-Aware Sizing (no scrolling on short screens)
+   Vertical sizes scale with viewport height so the split layout fits within
+   one screen on laptops (~650–800px usable height), while reaching the
+   original sizes on tall displays.
+   ========================================================================== */
+@media (min-width: 861px) {
+  .login-layout-split {
+    height: 100svh;
+    min-height: 0 !important;
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+
+  .login-layout-split .login-visual,
+  .login-layout-split .login-panel {
+    min-height: 0 !important;
+    height: calc(100svh - 20px);
+    box-sizing: border-box;
+  }
+
+  .login-layout-split .login-panel {
+    padding-block: clamp(16px, 4vh, 54px) !important;
+    overflow-y: auto;
+  }
+}
+
+.login-layout-split .login-logo,
+.login-layout-centered .login-logo {
+  width: auto !important;
+  height: clamp(84px, 22vh, 230px) !important;
+  max-width: min(100%, 230px);
+  max-height: none !important;
+  margin: 0 auto clamp(10px, 2.4vh, 24px) !important;
+}
+
+.login-layout-split .login-form-wrap h2,
+.login-layout-centered .login-form-wrap h2 {
+  font-size: clamp(22px, 3.6vh, 30px) !important;
+  margin-bottom: clamp(12px, 2.4vh, 24px) !important;
+}
+
+.login-form-wrap form {
+  gap: clamp(10px, 1.9vh, 18px) !important;
+}
+
+.login-form-wrap form > label {
+  gap: clamp(5px, 1vh, 8px) !important;
+}
+
+.login-form-wrap input[type="email"],
+.login-form-wrap input[type="password"],
+.login-form-wrap input[type="text"] {
+  min-height: clamp(42px, 5.6vh, 52px) !important;
+}
+
+.login-form-wrap .sign-in-button {
+  min-height: clamp(42px, 5.4vh, 48px) !important;
+  margin-top: clamp(4px, 1.4vh, 14px) !important;
+}
+
+.login-form-wrap .login-forgot-wrap {
+  margin-top: clamp(6px, 2.2vh, 26px) !important;
+}
+
+.login-form-wrap .login-note {
+  margin-top: clamp(6px, 1.2vh, 14px) !important;
+  padding: clamp(8px, 1.3vh, 12px) 14px !important;
+}
+
+.login-layout-centered .login-panel {
+  padding-block: clamp(56px, 9vh, 90px) clamp(20px, 4vh, 44px) !important;
+}
+
+.login-layout-centered .login-form-wrap {
+  padding: clamp(24px, 4.6vh, 46px) clamp(24px, 4vw, 42px) !important;
+}
+
+/* Very short screens (e.g. 1366×600 browser viewport, landscape tablets) */
+@media (min-width: 861px) and (max-height: 620px) {
+  .login-layout-split .login-logo {
+    height: clamp(64px, 16vh, 120px) !important;
+  }
+
+  .login-layout-split .login-visual-copy h1 {
+    font-size: clamp(24px, 5.4vh, 40px) !important;
+  }
+}

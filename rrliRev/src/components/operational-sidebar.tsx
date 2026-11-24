@@ -22,7 +22,11 @@ export function OperationalSidebar() {
   const { width, collapsed, toggleCollapsed } = useSidebarState();
   const [headerHovered, setHeaderHovered] = useState(false);
   const [sidebarReady, setSidebarReady] = useState(false);
-  const navigation = getAuthorizedNavigationForRole(actor.role);
+  const navigation = getAuthorizedNavigationForRole(
+    actor.role,
+    Boolean(actor.isSuperadmin),
+    actor.permissions,
+  );
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setSidebarReady(true));

@@ -156,8 +156,8 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
     });
 
     it("ensures content-wrap enforces generous horizontal padding across all layout modes", () => {
-      assert.match(globalsCssContent, /\.content-wrap\s*\{[^}]*padding-left:\s*42px\s*!important/);
-      assert.match(globalsCssContent, /\.content-wrap\s*\{[^}]*padding-right:\s*42px\s*!important/);
+      assert.match(globalsCssContent, /\.content-wrap\s*\{[^}]*padding-left:\s*clamp\(56px,\s*5vw,\s*96px\)\s*!important/);
+      assert.match(globalsCssContent, /\.content-wrap\s*\{[^}]*padding-right:\s*clamp\(56px,\s*5vw,\s*96px\)\s*!important/);
     });
 
     it("ensures page intro action buttons maintain gap and individual border radius", () => {
