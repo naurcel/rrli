@@ -50,11 +50,6 @@ if (process.argv.includes("build")) {
 const nextConfig: NextConfig = {
   cleanDistDir: false,
   distDir,
-  env: {
-    ROUTEX_SESSION_SECRET:
-      process.env.ROUTEX_SESSION_SECRET ||
-      "routex-production-session-fallback-secret-2026-auth",
-  },
   turbopack: {
     root: turbopackRoot,
   },

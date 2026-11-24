@@ -102,6 +102,52 @@ async function refreshDatabases(): Promise<void> {
       console.log(`✓ Inserted ${expenseInserts.length} company expenses into Supabase.`);
     }
 
+    // Populate foundational entities: Clients, Trucks, and Crew
+    const clientInserts = SMALL_MOCK_DATABASE.clients.map((c) => ({
+      id: c.id,
+      client_code: c.code,
+      name: c.name,
+      is_active: true,
+    }));
+    const { error: clientError } = await supabase.from("clients").upsert(clientInserts, { onConflict: "id" });
+    if (clientError) console.warn("Notice: clients upsert returned:", clientError.message);
+    else console.log(`✓ Upserted ${clientInserts.length} clients into Supabase.`);
+
+    const truckInserts = SMALL_MOCK_DATABASE.trucks.map((t) => ({
+      id: t.id,
+      plate_number: t.plateNumber,
+      truck_type: t.truckType,
+      storage_capability: t.storageCapability,
+      ownership_type: t.ownershipType,
+      rate_basis: t.rateBasis,
+      provider: t.provider,
+      contact_person: t.contactPerson,
+      is_active: true,
+    }));
+    const { error: truckError } = await supabase.from("trucks").upsert(truckInserts, { onConflict: "id" });
+    if (truckError) console.warn("Notice: trucks upsert returned:", truckError.message);
+    else console.log(`✓ Upserted ${truckInserts.length} fleet trucks into Supabase.`);
+
+    const employeeInserts = [
+      ...SMALL_MOCK_DATABASE.drivers.map((d) => ({
+        id: d.id,
+        employee_code: d.employeeCode,
+        full_name: d.fullName,
+        assignment_type: "Driver",
+        is_active: true,
+      })),
+      ...SMALL_MOCK_DATABASE.helpers.map((h) => ({
+        id: h.id,
+        employee_code: h.employeeCode,
+        full_name: h.fullName,
+        assignment_type: "Helper",
+        is_active: true,
+      })),
+    ];
+    const { error: empError } = await supabase.from("employees").upsert(employeeInserts, { onConflict: "id" });
+    if (empError) console.warn("Notice: employees upsert returned:", empError.message);
+    else console.log(`✓ Upserted ${employeeInserts.length} crew employees into Supabase.`);
+
     // Populate deliveries & dropoffs
     const deliveryInserts = SMALL_MOCK_DATABASE.deliveries.map(({ record, clientId, truckId, driverId, helperId }) => ({
       id: record.id,
@@ -111,6 +157,8 @@ async function refreshDatabases(): Promise<void> {
       truck_id: truckId,
       truck_type_snapshot: record.truckType,
       truck_temperature_snapshot: record.truckTemperature,
+      truck_ownership_snapshot: record.truckOwnership || "Owned",
+      rate_basis: record.rateBasis || "Redeemed Rate",
       origin: record.origin,
       distance_km: record.distanceKm,
       fuel_rate: record.fuelRate,
@@ -121,9 +169,30 @@ async function refreshDatabases(): Promise<void> {
       delivery_status: "Completed",
       version: 1,
       financial_state: record.financialState,
+      notes: record.notes || null,
     }));
-    await supabase.from("deliveries").insert(deliveryInserts);
-    console.log(`✓ Inserted ${deliveryInserts.length} deliveries into Supabase.`);
+    const { error: delError } = await supabase.from("deliveries").insert(deliveryInserts);
+    if (delError) console.warn("Notice: deliveries insert returned:", delError.message);
+    else console.log(`✓ Inserted ${deliveryInserts.length} deliveries into Supabase.`);
+
+    const dropoffInserts = SMALL_MOCK_DATABASE.deliveries.flatMap(({ record }) =>
+      record.dropoffs.map((d) => ({
+        id: d.id,
+        delivery_id: record.id,
+        sequence_number: d.sequence,
+        store_name: d.storeName,
+        destination_area: d.destinationArea,
+        dropoff_count: d.dropoffCount ?? 1,
+        entry_fee: d.entryFee,
+        entry_fee_status: d.entryFeeStatus,
+        pod_submitted: d.podSubmitted,
+        supporting_docs_complete: d.supportingDocsComplete,
+        document_ref: d.documentRef,
+      })),
+    );
+    const { error: dropError } = await supabase.from("delivery_dropoffs").insert(dropoffInserts);
+    if (dropError) console.warn("Notice: delivery_dropoffs insert returned:", dropError.message);
+    else console.log(`✓ Inserted ${dropoffInserts.length} delivery drop-offs into Supabase.`);
   } else {
     console.log("\n[3/3] Supabase remote database is not configured. Local mock repository is the active data source.");
   }
