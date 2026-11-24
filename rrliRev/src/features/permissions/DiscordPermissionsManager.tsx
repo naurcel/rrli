@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { getUserInitials } from "@/components/profile-photo";
+import { RoundedSelect } from "@/components/rounded-select";
 import { resolveEffectivePermissions } from "@/lib/auth/permission-engine";
 import {
   PERMISSIONS,
@@ -96,6 +97,7 @@ export type ManagedUserSummary = {
 
 type DepartmentRecord = {
   id: string;
+  code?: string;
   name: string;
   description: string;
   defaultPermissions: Permission[];
@@ -198,8 +200,13 @@ export function DiscordPermissionsManager({
           setStagedRolePerms((prev) => {
             const next = { ...prev };
             for (const d of deptData.departments) {
-              if (USER_ROLES.includes(d.id as UserRole) && Array.isArray(d.defaultPermissions)) {
-                next[d.id as UserRole] = [...d.defaultPermissions];
+              const roleMatch = USER_ROLES.includes(d.code as UserRole)
+                ? (d.code as UserRole)
+                : USER_ROLES.includes(d.id as UserRole)
+                  ? (d.id as UserRole)
+                  : null;
+              if (roleMatch && Array.isArray(d.defaultPermissions)) {
+                next[roleMatch] = [...d.defaultPermissions];
               }
             }
             return next;
@@ -728,7 +735,7 @@ export function DiscordPermissionsManager({
         }
 
         const roleKey = selectedEntity.roleKey as UserRole;
-        const matchingDept = departments.find((d) => d.id === roleKey);
+        const matchingDept = departments.find((d) => d.code === roleKey || d.id === roleKey);
 
         if (matchingDept) {
           const deptRes = await fetch("/api/departments", {
@@ -744,6 +751,11 @@ export function DiscordPermissionsManager({
           if (!deptRes.ok || !deptPayload.ok) {
             throw new Error(deptPayload.message || "Failed to update role permissions.");
           }
+          setDepartments((prev) =>
+            prev.map((d) =>
+              d.id === matchingDept.id ? { ...d, defaultPermissions: currentRolePerms } : d,
+            ),
+          );
         }
 
         toast.success(`Permissions saved for ${BUILT_IN_ROLE_CONFIG[roleKey].label}.`);
@@ -909,7 +921,17 @@ export function DiscordPermissionsManager({
                   const memberCount =
                     roleKey === "superadmin"
                       ? users.filter((u) => u.isSuperadmin).length
-                      : users.filter((u) => u.role === roleKey && !u.isSuperadmin).length;
+                      : users.filter(
+                          (u) =>
+                            !u.isSuperadmin &&
+                            (u.role === roleKey ||
+                              u.departments?.includes(roleKey) ||
+                              departments.some(
+                                (d) =>
+                                  (d.code === roleKey || d.id === roleKey) &&
+                                  u.departments?.includes(d.id),
+                              )),
+                        ).length;
 
                   return (
                     <button
@@ -1082,21 +1104,22 @@ export function DiscordPermissionsManager({
                   <div className="discord-banner-actions">
                     <div className="discord-copy-tool">
                       <span className="discord-copy-label">Copy from:</span>
-                      <select
-                        value={duplicateSourceId}
-                        onChange={(e) => setDuplicateSourceId(e.target.value)}
-                        className="discord-copy-select"
-                        aria-label="Select source employee to copy from"
-                      >
-                        <option value="">Select staff...</option>
-                        {users
-                          .filter((u) => u.id !== selectedUser.id)
-                          .map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.fullName || u.username} (@{u.username})
-                            </option>
-                          ))}
-                      </select>
+                      <div style={{ minWidth: "210px" }}>
+                        <RoundedSelect
+                          value={duplicateSourceId}
+                          onChange={(val) => setDuplicateSourceId(val)}
+                          ariaLabel="Select source employee to copy from"
+                          options={[
+                            { value: "", label: "Select staff..." },
+                            ...users
+                              .filter((u) => u.id !== selectedUser.id)
+                              .map((u) => ({
+                                value: u.id,
+                                label: `${u.fullName || u.username} (@${u.username})`,
+                              })),
+                          ]}
+                        />
+                      </div>
                       <button
                         type="button"
                         className="secondary-button"
@@ -1454,7 +1477,7 @@ export function DiscordPermissionsManager({
                   >
                     <div className="routex-dialog-field">
                       <label htmlFor="create-role-name">
-                        Role Name <span className="field-required-tag">*</span>
+                        Role Name <span className="required-asterisk" aria-hidden="true">*</span>
                       </label>
                       <input
                         id="create-role-name"

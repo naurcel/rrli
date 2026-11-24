@@ -38,6 +38,7 @@ type ManagedUserRecord = {
   phoneNumber?: string;
   fullName: string;
   role: UserRole;
+  roles?: readonly string[];
   roleLabel: string;
   accessLevel: AccessLevel;
   accessLevelLabel: string;
@@ -110,7 +111,6 @@ export default function UserManagementPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [temporaryPassword, setTemporaryPassword] = useState(() => generateRandomTemporaryPassword());
   const [newRole, setNewRole] = useState<UserRole>("operations");
 
   const availableRoleOptions = useMemo(() => {
@@ -210,18 +210,163 @@ export default function UserManagementPage() {
   } | null>(null);
   const [openActionMenuUserId, setOpenActionMenuUserId] = useState<string | null>(null);
   const [actionMenuOpensAbove, setActionMenuOpensAbove] = useState(false);
+  const [openRoleMenuUserId, setOpenRoleMenuUserId] = useState<string | null>(null);
+  const [roleMenuOpensAbove, setRoleMenuOpensAbove] = useState(false);
+
+  type DeptSimpleRecord = {
+    id: string;
+    code: string;
+    name: string;
+    isArchived: boolean;
+  };
+  const [departmentsList, setDepartmentsList] = useState<DeptSimpleRecord[]>([]);
 
   useEffect(() => {
-    if (!openActionMenuUserId) return;
+    fetch("/api/departments")
+      .then((res) => res.json())
+      .then((data: { ok?: boolean; departments?: DeptSimpleRecord[] }) => {
+        if (data?.ok && Array.isArray(data.departments)) {
+          setDepartmentsList(data.departments);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  function getUserAssignedRoles(user: ManagedUserRecord): string[] {
+    if (user.isSuperadmin) return ["superadmin"];
+    if (Array.isArray(user.roles) && user.roles.length > 0) return [...user.roles];
+    if (Array.isArray(user.departments) && user.departments.length > 0) return [...user.departments];
+    return [user.role];
+  }
+
+  function getRoleOrDeptName(key: string): string {
+    const roleMeta = ROLE_METADATA[key as UserRole];
+    if (roleMeta) return roleMeta.label;
+    const dept = departmentsList.find((d) => d.id === key || d.code === key);
+    if (dept) return dept.name;
+    if (key === "superadmin") return "Superadmin";
+    return key.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  function getRoleToneClass(key: string): string {
+    if (key === "admin" || key === "dept-admin") return "tone-purple";
+    if (key === "operations" || key === "dept-ops") return "tone-success";
+    if (key === "finance" || key === "dept-fin") return "tone-primary";
+    if (key === "hr" || key === "dept-hr") return "tone-warning";
+    if (key === "secretary" || key === "customer_representative") return "tone-neutral";
+    return "tone-primary";
+  }
+
+  const assignableRoles = useMemo(() => {
+    const list: { value: string; label: string }[] = [];
+    for (const r of USER_ROLES) {
+      if (r === "admin" && !actor.isSuperadmin) continue;
+      list.push({ value: r, label: ROLE_METADATA[r].label });
+    }
+    for (const d of departmentsList) {
+      if (!d.isArchived && !USER_ROLES.includes(d.code as UserRole) && !list.some((item) => item.value === d.id || item.value === d.code)) {
+        list.push({ value: d.id, label: d.name });
+      }
+    }
+    return list;
+  }, [actor.isSuperadmin, departmentsList]);
+
+  async function handleToggleUserRole(user: ManagedUserRecord, toggledRole: string) {
+    const currentRoles = getUserAssignedRoles(user);
+    let nextRoles: string[];
+    if (currentRoles.includes(toggledRole)) {
+      if (currentRoles.length === 1) {
+        setFeedback({
+          tone: "error",
+          text: "A user must retain at least one assigned role.",
+        });
+        return;
+      }
+      nextRoles = currentRoles.filter((r) => r !== toggledRole);
+    } else {
+      nextRoles = [...currentRoles, toggledRole];
+    }
+
+    try {
+      const response = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "assign-departments",
+          userId: user.id,
+          departmentIds: nextRoles,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setFeedback({
+          tone: "error",
+          text: payload?.message ?? "Could not update user roles.",
+        });
+        return;
+      }
+
+      const firstValidRole = nextRoles.find((r) => USER_ROLES.includes(r as UserRole)) as UserRole | undefined;
+      const primaryRole = firstValidRole || user.role;
+      if (primaryRole !== user.role) {
+        await fetch("/api/users", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            role: primaryRole,
+          }),
+        }).catch(() => {});
+      }
+
+      const updatedLabel = nextRoles.map((r) => getRoleOrDeptName(r)).join(" + ");
+      setUsers((current) =>
+        current.map((item) =>
+          item.id === user.id
+            ? {
+                ...item,
+                role: primaryRole,
+                roles: nextRoles,
+                departments: nextRoles,
+                roleLabel: updatedLabel,
+              }
+            : item,
+        ),
+      );
+
+      setFeedback({
+        tone: "success",
+        text: `Updated roles for ${user.fullName}: ${updatedLabel}.`,
+      });
+      void loadAuditEntries(true);
+    } catch {
+      setFeedback({
+        tone: "error",
+        text: "Could not update user roles.",
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (!openActionMenuUserId && !openRoleMenuUserId) return;
     function handleGlobalClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (!target.closest(".table-row-actions")) {
         setOpenActionMenuUserId(null);
       }
+      if (!target.closest(".role-selection-cell")) {
+        setOpenRoleMenuUserId(null);
+      }
     }
     function handleGlobalKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setOpenActionMenuUserId(null);
+        setOpenRoleMenuUserId(null);
       }
     }
     document.addEventListener("mousedown", handleGlobalClick);
@@ -230,7 +375,7 @@ export default function UserManagementPage() {
       document.removeEventListener("mousedown", handleGlobalClick);
       document.removeEventListener("keydown", handleGlobalKeyDown);
     };
-  }, [openActionMenuUserId]);
+  }, [openActionMenuUserId, openRoleMenuUserId]);
 
   useEffect(() => {
     if (!userToDelete) return;
@@ -354,15 +499,26 @@ export default function UserManagementPage() {
   }, [activeTab]);
 
   useEffect(() => {
-    if (!selectedAuditEntry) return;
+    if (!selectedAuditEntry && !authorizingUser && !editingUser && !editingContactUser) return;
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        setSelectedAuditEntry(null);
+        if (selectedAuditEntry) setSelectedAuditEntry(null);
+        if (authorizingUser && !isAuthorizing) setAuthorizingUser(null);
+        if (editingUser && !isUpdatingUsername) setEditingUser(null);
+        if (editingContactUser && !isUpdatingContact) setEditingContactUser(null);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedAuditEntry]);
+  }, [
+    selectedAuditEntry,
+    authorizingUser,
+    isAuthorizing,
+    editingUser,
+    isUpdatingUsername,
+    editingContactUser,
+    isUpdatingContact,
+  ]);
 
   const filteredAuditEntries = useMemo(() => {
     const q = debouncedAuditSearch.trim().toLowerCase();
@@ -453,7 +609,6 @@ export default function UserManagementPage() {
         name: [left.fullName, right.fullName],
         username: [left.username ?? "", right.username ?? ""],
         email: [left.email, right.email],
-        access: [left.accessLevelLabel, right.accessLevelLabel],
         role: [left.roleLabel, right.roleLabel],
         status: [Number(left.isActive), Number(right.isActive)],
       };
@@ -514,7 +669,7 @@ export default function UserManagementPage() {
       return;
     }
 
-    const assignedTempPassword = temporaryPassword || generateRandomTemporaryPassword();
+    const assignedTempPassword = generateRandomTemporaryPassword();
 
     try {
       const response = await fetch("/api/users", {
@@ -551,8 +706,6 @@ export default function UserManagementPage() {
       setUsername("");
       setEmail("");
       setPhoneNumber("");
-      const nextTempPwd = generateRandomTemporaryPassword();
-      setTemporaryPassword(nextTempPwd);
       setFeedback({
         tone: "success",
         text: `Provisioned @${payload.user.username} (${payload.user.fullName}) with role ${payload.user.roleLabel}.`,
@@ -607,7 +760,7 @@ export default function UserManagementPage() {
       );
       setFeedback({
         tone: "success",
-        text: `Updated ${payload.user.fullName}'s role to ${payload.user.roleLabel} (${payload.user.accessLevelLabel}).`,
+        text: `Updated ${payload.user.fullName}'s role to ${payload.user.roleLabel}.`,
       });
       void loadAuditEntries(true);
     } catch {
@@ -1081,33 +1234,25 @@ export default function UserManagementPage() {
                           One-Time Access Password
                         </span>
                         <span style={{ fontSize: "11.5px", color: "var(--color-text-secondary)" }}>
-                          A cryptographically random temporary password is generated as a secure popup dialog upon provisioning.
+                          A cryptographically random temporary password is generated and displayed once upon successful account provisioning.
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        style={{ fontSize: "12.5px", padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                        onClick={() => {
-                          const pwd = temporaryPassword || generateRandomTemporaryPassword();
-                          if (!temporaryPassword) setTemporaryPassword(pwd);
-                          setTempPasswordPopup({
-                            fullName: fullName.trim() || "New Account",
-                            username: username.trim().toLowerCase().replace(/^@+/, "") || "new.user",
-                            roleLabel: ROLE_METADATA[newRole]?.label,
-                            password: pwd,
-                            isNewlyProvisioned: false,
-                          });
-                          setTempPasswordCopied(false);
+                      <span
+                        className="status-badge neutral"
+                        style={{
+                          fontSize: "11.5px",
+                          padding: "6px 12px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
                         }}
-                        title="Generate or preview temporary password in a secure popup modal"
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
                           <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                         </svg>
-                        Generate / View Password Popup
-                      </button>
+                        Issued on Account Creation
+                      </span>
                     </div>
 
                     <div className="user-provision-note" style={{ marginTop: "10px" }}>
@@ -1427,18 +1572,12 @@ export default function UserManagementPage() {
                           onSort={(key, direction) => setUserSort({ key, direction })}
                         />
                         <SortableTableHeader
-                          label="Role"
+                          label="Roles & Departments"
                           sortKey="role"
                           activeSortKey={userSort.key}
                           direction={userSort.direction}
                           onSort={(key, direction) => setUserSort({ key, direction })}
-                        />
-                        <SortableTableHeader
-                          label="Access"
-                          sortKey="access"
-                          activeSortKey={userSort.key}
-                          direction={userSort.direction}
-                          onSort={(key, direction) => setUserSort({ key, direction })}
+                          className="col-role-dept"
                         />
                         <SortableTableHeader
                           label="Status"
@@ -1454,7 +1593,7 @@ export default function UserManagementPage() {
                     <tbody>
                       {sortedUsers.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="table-empty-cell">
+                          <td colSpan={5} className="table-empty-cell">
                             <div className="empty-state minimal">
                               <strong className="empty-state-title">
                                 {debouncedUserSearch.trim()
@@ -1508,35 +1647,209 @@ export default function UserManagementPage() {
                                   fontFamily: "monospace",
                                   fontWeight: 600,
                                   color: "var(--color-text-primary)",
+                                  fontSize: "12px",
                                 }}
                               >
                                 @{user.username}
                               </span>
                             </td>
-                            <td>
+                            <td
+                              className="role-selection-cell"
+                              style={{
+                                verticalAlign: "middle",
+                                padding: "10px 14px",
+                                width: "230px",
+                                maxWidth: "260px",
+                              }}
+                            >
                               {user.isSuperadmin ? (
-                                <span className="access-pill admin">
+                                <span
+                                  className="access-pill admin"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    fontWeight: 650,
+                                    fontSize: "12px",
+                                    padding: "3px 9px",
+                                    borderRadius: "6px",
+                                  }}
+                                  title="Permanent Executive: Unrestricted system authority across all modules"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                  </svg>
                                   Superadmin
                                 </span>
-                              ) : user.role === "admin" && !actor.isSuperadmin ? (
-                                <span className="access-pill admin" title="Protected role: Only the Superadmin (President) can modify Admin accounts">
-                                  Admin
-                                </span>
                               ) : (
-                                <RoundedSelect
-                                  value={user.role}
-                                  options={availableRoleOptions}
-                                  onChange={(nextRole) =>
-                                    handleRoleChange(user.id, nextRole as UserRole)
-                                  }
-                                  ariaLabel={`Change role for ${user.fullName}`}
-                                />
+                                <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
+                                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "5px" }}>
+                                    {getUserAssignedRoles(user).map((roleKey) => {
+                                      const isProtectedAdmin = roleKey === "admin" && !actor.isSuperadmin;
+                                      return (
+                                        <span
+                                          key={roleKey}
+                                          className={`routex-badge ${getRoleToneClass(roleKey)}`}
+                                          style={{
+                                            fontSize: "11px",
+                                            fontWeight: 600,
+                                            padding: "2px 7px",
+                                            borderRadius: "5px",
+                                            lineHeight: "16px",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                          title={isProtectedAdmin ? "Protected role: Only the Superadmin can modify Admin accounts" : getRoleOrDeptName(roleKey)}
+                                        >
+                                          {getRoleOrDeptName(roleKey)}
+                                        </span>
+                                      );
+                                    })}
+
+                                    {(Boolean(user.customGrants?.length) || Boolean(user.customRestrictions?.length)) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPermissionFocusUserId(user.id);
+                                          handleSelectTab("permissions");
+                                        }}
+                                        className="routex-badge tone-primary"
+                                        style={{
+                                          fontSize: "10px",
+                                          fontWeight: 650,
+                                          padding: "1px 5px",
+                                          borderRadius: "4px",
+                                          cursor: "pointer",
+                                          border: "1px solid rgba(2, 132, 199, 0.3)",
+                                          background: "rgba(2, 132, 199, 0.08)",
+                                        }}
+                                        title="Custom permission overrides active in Matrix. Click to inspect."
+                                      >
+                                        Matrix ({(user.customGrants?.length ?? 0) > 0 ? `+${user.customGrants?.length}` : ""}{(user.customRestrictions?.length ?? 0) > 0 ? ` -${user.customRestrictions?.length}` : ""})
+                                      </button>
+                                    )}
+
+                                    {(!user.isSuperadmin && (user.role !== "admin" || actor.isSuperadmin)) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          const spaceBelow = window.innerHeight - rect.bottom;
+                                          setRoleMenuOpensAbove(spaceBelow < 220 || userIndex >= paginatedUsers.length - 2);
+                                          setOpenRoleMenuUserId((curr) => curr === user.id ? null : user.id);
+                                        }}
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          width: "20px",
+                                          height: "20px",
+                                          borderRadius: "4px",
+                                          border: "1px dashed var(--color-border)",
+                                          background: "transparent",
+                                          color: "var(--color-text-secondary)",
+                                          fontSize: "12px",
+                                          cursor: "pointer",
+                                          padding: 0,
+                                          lineHeight: 1,
+                                        }}
+                                        title={`Assign or change roles/departments for ${user.fullName}`}
+                                        aria-label={`Assign or change roles for ${user.fullName}`}
+                                      >
+                                        +
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {openRoleMenuUserId === user.id && (
+                                    <div
+                                      className="role-selection-popover"
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{
+                                        position: "absolute",
+                                        ...(roleMenuOpensAbove ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }),
+                                        left: 0,
+                                        zIndex: 1000,
+                                        background: "var(--color-surface, #ffffff)",
+                                        border: "1px solid var(--color-border)",
+                                        borderRadius: "8px",
+                                        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.15)",
+                                        padding: "10px",
+                                        minWidth: "210px",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "6px",
+                                      }}
+                                    >
+                                      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-text-secondary)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span>Assign Roles &amp; Departments</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setOpenRoleMenuUserId(null)}
+                                          style={{ background: "none", border: "none", fontSize: "14px", cursor: "pointer", color: "var(--color-text-muted)", padding: 0 }}
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+
+                                      <div style={{ display: "flex", flexDirection: "column", gap: "2px", maxHeight: "180px", overflowY: "auto" }}>
+                                        {assignableRoles.map((roleOpt) => {
+                                          const currentRoles = getUserAssignedRoles(user);
+                                          const isChecked = currentRoles.includes(roleOpt.value);
+                                          return (
+                                            <label
+                                              key={roleOpt.value}
+                                              style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                                fontSize: "12px",
+                                                cursor: "pointer",
+                                                padding: "4px 6px",
+                                                borderRadius: "4px",
+                                                background: isChecked ? "var(--color-surface-subtle)" : "transparent",
+                                              }}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => handleToggleUserRole(user, roleOpt.value)}
+                                                style={{ accentColor: "var(--color-primary, #0284c7)" }}
+                                              />
+                                              <span style={{ fontWeight: isChecked ? 600 : 400 }}>{roleOpt.label}</span>
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+
+                                      <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "6px", marginTop: "2px" }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setOpenRoleMenuUserId(null);
+                                            setPermissionFocusUserId(user.id);
+                                            handleSelectTab("permissions");
+                                          }}
+                                          style={{
+                                            background: "none",
+                                            border: "none",
+                                            padding: 0,
+                                            fontSize: "11px",
+                                            color: "var(--color-accent, #0284c7)",
+                                            cursor: "pointer",
+                                            textAlign: "left",
+                                            textDecoration: "underline",
+                                            fontWeight: 500,
+                                          }}
+                                        >
+                                          Configure in Permission Matrix →
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               )}
-                            </td>
-                            <td>
-                              <span style={{ fontSize: "12px", color: "var(--color-text-secondary)", fontWeight: 500 }}>
-                                {user.accessLevelLabel}
-                              </span>
                             </td>
                             <td>
                               <span
@@ -2059,39 +2372,34 @@ export default function UserManagementPage() {
       </div>
 
       {/* Audit Event Details Popup Modal */}
-      {selectedAuditEntry ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            background: "rgba(15, 23, 21, 0.72)",
-            backdropFilter: "blur(6px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "20px",
-          }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="audit-detail-dialog-title"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedAuditEntry(null);
-          }}
-        >
-          <div
-            className="records-card"
-            style={{
-              width: "min(100%, 640px)",
-              maxHeight: "85vh",
-              display: "flex",
-              flexDirection: "column",
-              background: "var(--color-surface)",
-              boxShadow: "0 24px 64px rgba(15, 23, 21, 0.35)",
-              borderRadius: "16px",
-              overflow: "hidden",
-            }}
-          >
+      {selectedAuditEntry && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="audit-detail-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => setSelectedAuditEntry(null)}
+              />
+              <div
+                className="routex-dialog records-card"
+                style={{
+                  width: "min(100%, 640px)",
+                  maxWidth: "640px",
+                  maxHeight: "85vh",
+                  display: "flex",
+                  flexDirection: "column",
+                  background: "var(--color-surface)",
+                  boxShadow: "0 24px 64px rgba(15, 23, 21, 0.35)",
+                  borderRadius: "16px",
+                  overflow: "hidden",
+                  padding: 0,
+                }}
+              >
             {/* Modal Header */}
             <div
               style={{
@@ -2318,38 +2626,37 @@ export default function UserManagementPage() {
                 Close
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {/* Authorize Reset Modal */}
-      {authorizingUser ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            background: "rgba(15, 23, 21, 0.72)",
-            backdropFilter: "blur(6px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "20px",
-          }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="authorize-dialog-title"
-        >
-          <div
-            className="records-card"
-            style={{
-              width: "min(100%, 500px)",
-              padding: "26px",
-              background: "var(--color-surface)",
-              boxShadow: "0 24px 64px rgba(15, 23, 21, 0.3)",
-              borderRadius: "16px",
-            }}
-          >
+      {authorizingUser && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="authorize-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => !isAuthorizing && setAuthorizingUser(null)}
+              />
+              <div
+                className="routex-dialog records-card"
+                style={{
+                  width: "min(100%, 500px)",
+                  maxWidth: "500px",
+                  padding: "26px",
+                  background: "var(--color-surface)",
+                  boxShadow: "0 24px 64px rgba(15, 23, 21, 0.3)",
+                  borderRadius: "16px",
+                }}
+              >
             <h2 id="authorize-dialog-title" style={{ margin: "0 0 10px", fontSize: "18px" }}>
               Authorize Password Reset
             </h2>
@@ -2407,39 +2714,38 @@ export default function UserManagementPage() {
                 {isAuthorizing ? "Authorizing…" : "Confirm Authorization"}
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {/* Admin Edit Username Modal */}
-      {editingUser ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            background: "rgba(15, 23, 21, 0.72)",
-            backdropFilter: "blur(6px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "20px",
-          }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-username-dialog-title"
-        >
-          <form
-            onSubmit={handleConfirmUpdateUsername}
-            className="records-card"
-            style={{
-              width: "min(100%, 460px)",
-              padding: "26px",
-              background: "var(--color-surface)",
-              boxShadow: "0 24px 64px rgba(15, 23, 21, 0.3)",
-              borderRadius: "16px",
-            }}
-          >
+      {editingUser && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-username-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => !isUpdatingUsername && setEditingUser(null)}
+              />
+              <form
+                onSubmit={handleConfirmUpdateUsername}
+                className="routex-dialog records-card"
+                style={{
+                  width: "min(100%, 460px)",
+                  maxWidth: "460px",
+                  padding: "26px",
+                  background: "var(--color-surface)",
+                  boxShadow: "0 24px 64px rgba(15, 23, 21, 0.3)",
+                  borderRadius: "16px",
+                }}
+              >
             <h2 id="edit-username-dialog-title" style={{ margin: "0 0 8px", fontSize: "18px" }}>
               Edit Username
             </h2>
@@ -2513,39 +2819,38 @@ export default function UserManagementPage() {
                 {isUpdatingUsername ? "Updating…" : "Save Username"}
               </button>
             </div>
-          </form>
-        </div>
-      ) : null}
+              </form>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {/* Edit Contact Info Modal */}
-      {editingContactUser ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            background: "rgba(15, 23, 21, 0.72)",
-            backdropFilter: "blur(6px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "20px",
-          }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-contact-dialog-title"
-        >
-          <form
-            onSubmit={handleConfirmUpdateContact}
-            className="records-card"
-            style={{
-              width: "min(100%, 460px)",
-              padding: "26px",
-              background: "var(--color-surface)",
-              boxShadow: "0 24px 64px rgba(15, 23, 21, 0.3)",
-              borderRadius: "16px",
-            }}
-          >
+      {editingContactUser && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="routex-dialog-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-contact-dialog-title"
+              style={{ zIndex: 1000 }}
+            >
+              <div
+                className="routex-dialog-backdrop"
+                onClick={() => !isUpdatingContact && setEditingContactUser(null)}
+              />
+              <form
+                onSubmit={handleConfirmUpdateContact}
+                className="routex-dialog records-card"
+                style={{
+                  width: "min(100%, 460px)",
+                  maxWidth: "460px",
+                  padding: "26px",
+                  background: "var(--color-surface)",
+                  boxShadow: "0 24px 64px rgba(15, 23, 21, 0.3)",
+                  borderRadius: "16px",
+                }}
+              >
             <h2 id="edit-contact-dialog-title" style={{ margin: "0 0 8px", fontSize: "18px" }}>
               Edit Contact Details
             </h2>
@@ -2618,9 +2923,11 @@ export default function UserManagementPage() {
                 {isUpdatingContact ? "Updating…" : "Save Contact Info"}
               </button>
             </div>
-          </form>
-        </div>
-      ) : null}
+              </form>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {/* Delete User Confirmation Screen */}
       {userToDelete && typeof document !== "undefined"
@@ -2998,25 +3305,6 @@ export default function UserManagementPage() {
                           </>
                         )}
                       </button>
-                      {!tempPasswordPopup.isNewlyProvisioned && (
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          style={{ fontSize: "12px", padding: "7px 14px" }}
-                          onClick={() => {
-                            const newPwd = generateRandomTemporaryPassword();
-                            setTemporaryPassword(newPwd);
-                            setTempPasswordPopup((curr) =>
-                              curr ? { ...curr, password: newPwd } : null,
-                            );
-                            setTempPasswordCopied(false);
-                            toast.info("Generated new random password");
-                          }}
-                          title="Generate a new random temporary password"
-                        >
-                          ↻ Regenerate
-                        </button>
-                      )}
                     </div>
                   </div>
 

@@ -458,6 +458,22 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: false, message: updateRes.message }, { status: 400 });
     }
 
+    if (isSupabaseAdminConfigured()) {
+      try {
+        const adminSupabase = createAdminSupabaseClient();
+        await adminSupabase
+          .from("user_profiles")
+          .update({
+            username: updateRes.profile.username,
+            normalized_username: updateRes.profile.username.toLowerCase(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", targetUser.id);
+      } catch {
+        // Fallback gracefully
+      }
+    }
+
     recordAuditEntry({
       actorId: auth.actor.id,
       actorEmail: auth.actor.email,
@@ -505,6 +521,25 @@ export async function PATCH(request: Request) {
     const updateRes = updateServerAccountContact(targetUser.id, parsed.data.email, parsed.data.phoneNumber);
     if (!updateRes.ok) {
       return NextResponse.json({ ok: false, message: updateRes.message }, { status: 400 });
+    }
+
+    if (isSupabaseAdminConfigured()) {
+      try {
+        const adminSupabase = createAdminSupabaseClient();
+        await adminSupabase
+          .from("user_profiles")
+          .update({
+            email: updateRes.profile.email,
+            phone_number: updateRes.profile.phoneNumber,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", targetUser.id);
+        await adminSupabase.auth.admin.updateUserById(targetUser.id, {
+          email: updateRes.profile.email,
+        });
+      } catch {
+        // Fallback gracefully
+      }
     }
 
     recordAuditEntry({
@@ -556,6 +591,22 @@ export async function PATCH(request: Request) {
     const res = updateUserCustomPermissions(userId, customGrants, customRestrictions);
     if (!res.ok) {
       return NextResponse.json({ ok: false, message: res.message }, { status: 400 });
+    }
+
+    if (isSupabaseAdminConfigured()) {
+      try {
+        const adminSupabase = createAdminSupabaseClient();
+        await adminSupabase
+          .from("user_profiles")
+          .update({
+            custom_grants: customGrants,
+            custom_restrictions: customRestrictions,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", userId);
+      } catch {
+        // Fallback gracefully
+      }
     }
 
     recordAuditEntry({
@@ -634,6 +685,21 @@ export async function PATCH(request: Request) {
     const res = assignUserDepartments(userId, departmentIds);
     if (!res.ok) {
       return NextResponse.json({ ok: false, message: res.message }, { status: 400 });
+    }
+
+    if (isSupabaseAdminConfigured()) {
+      try {
+        const adminSupabase = createAdminSupabaseClient();
+        await adminSupabase
+          .from("user_profiles")
+          .update({
+            roles: departmentIds,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", userId);
+      } catch {
+        // Fallback gracefully
+      }
     }
 
     recordAuditEntry({
@@ -731,7 +797,10 @@ export async function PATCH(request: Request) {
     }
   }
 
-  const updated = updateServerAccountProfile(parsed.data);
+  const updated = updateServerAccountProfile({
+    ...parsed.data,
+    actorIsSuperadmin: auth.actor.isSuperadmin,
+  });
   if (!updated.ok) {
     return NextResponse.json({ ok: false, message: updated.message }, { status: 400 });
   }

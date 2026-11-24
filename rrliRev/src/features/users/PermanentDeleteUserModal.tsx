@@ -224,7 +224,7 @@ export function PermanentDeleteUserModal({ user, onClose, onSuccess }: Props) {
               htmlFor="deletion-reason"
               style={{ display: "block", fontSize: "12.5px", fontWeight: 650, marginBottom: "6px" }}
             >
-              Permanent Deletion Reason <span style={{ color: "#dc2626" }}>*</span>
+              Permanent Deletion Reason <span className="required-asterisk" aria-hidden="true">*</span>
             </label>
             <textarea
               id="deletion-reason"
