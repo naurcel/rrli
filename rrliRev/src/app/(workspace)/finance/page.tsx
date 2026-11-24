@@ -10,6 +10,7 @@ import { ConfirmExpenseDeletionDialog } from "@/components/confirm-expense-delet
 import { EditCompanyExpenseModal } from "@/components/edit-company-expense-modal";
 import { ViewCompanyExpenseModal } from "@/components/view-company-expense-modal";
 import { RoundedSelect } from "@/components/rounded-select";
+import { SingleDatePicker } from "@/components/single-date-picker";
 import {
   formatDateRange,
   GlobalDateRangePicker,
@@ -49,7 +50,7 @@ const PAGE_SIZE = 10;
 
 export default function FinancePage() {
   const actor = useAuthenticatedActor();
-  const canManage = canManageCompanyExpenses(actor.role);
+  const canManage = canManageCompanyExpenses(actor);
   const { range, setRange } = useGlobalDateRange();
 
   // Company expenses state
@@ -117,7 +118,7 @@ export default function FinancePage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/finance/expenses?pageSize=100");
+      const res = await fetch("/api/finance/expenses?pageSize=1000");
       if (res.ok) {
         const data = await res.json();
         if (data.ok && Array.isArray(data.items)) {
@@ -381,27 +382,34 @@ export default function FinancePage() {
         body: JSON.stringify(validation.data),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.ok && data.expense) {
-          upsertBrowserPreviewExpense(data.expense);
-          setExpenses((prev) => [
-            data.expense,
-            ...prev.filter((item) => item.id !== data.expense.id),
-          ]);
-          setNewDescription("");
-          setNewAmount("");
-          setNewNotes("");
-          setIsRecordModalOpen(false);
-          const msg = `Recorded ${formatPeso(validation.data.amount)} company ${isIncome ? "income" : "expense"}.`;
-          setFormSuccess(msg);
-          toast.success(isIncome ? "Income recorded" : "Expense recorded", { description: msg });
-          setSubmitting(false);
-          return;
-        }
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok || !data.expense) {
+        const errMsg =
+          data?.message ||
+          (Array.isArray(data?.errors) ? data.errors[0] : null) ||
+          "Failed to record transaction.";
+        setFormError(errMsg);
+        toast.error("Failed to record transaction", { description: errMsg });
+        setSubmitting(false);
+        return;
       }
+
+      upsertBrowserPreviewExpense(data.expense);
+      setExpenses((prev) => [
+        data.expense,
+        ...prev.filter((item) => item.id !== data.expense.id),
+      ]);
+      setNewDescription("");
+      setNewAmount("");
+      setNewNotes("");
+      setIsRecordModalOpen(false);
+      const msg = `Recorded ${formatPeso(validation.data.amount)} company ${isIncome ? "income" : "expense"}.`;
+      setFormSuccess(msg);
+      toast.success(isIncome ? "Income recorded" : "Expense recorded", { description: msg });
+      setSubmitting(false);
+      return;
     } catch {
-      // Fallback
+      // Network/offline preview mode fallback
     }
 
     // Preview mode fallback
@@ -440,23 +448,31 @@ export default function FinancePage() {
         body: JSON.stringify(data),
       });
 
-      if (res.ok) {
-        const resData = await res.json();
-        if (resData.ok && resData.expense) {
-          upsertBrowserPreviewExpense(resData.expense);
-          setExpenses((prev) =>
-            prev.map((e) => (e.id === id ? resData.expense : e)),
-          );
-          setEditingExpense(null);
-          const updateMsg = `Updated ${formatPeso(data.amount)} company expense.`;
-          setFormSuccess(updateMsg);
-          toast.success("Expense updated", { description: updateMsg });
+      const resData = await res.json().catch(() => null);
+      if (!res.ok || !resData?.ok || !resData.expense) {
+        if (res.status !== 404) {
+          const errMsg =
+            resData?.message ||
+            (Array.isArray(resData?.errors) ? resData.errors[0] : null) ||
+            "Failed to update transaction.";
+          toast.error("Failed to update transaction", { description: errMsg });
           setIsSavingEdit(false);
           return;
         }
+      } else {
+        upsertBrowserPreviewExpense(resData.expense);
+        setExpenses((prev) =>
+          prev.map((e) => (e.id === id ? resData.expense : e)),
+        );
+        setEditingExpense(null);
+        const updateMsg = `Updated ${formatPeso(data.amount)} company expense.`;
+        setFormSuccess(updateMsg);
+        toast.success("Expense updated", { description: updateMsg });
+        setIsSavingEdit(false);
+        return;
       }
     } catch {
-      // Fallback
+      // Network/offline fallback
     }
 
     // Preview mode fallback
@@ -492,7 +508,16 @@ export default function FinancePage() {
         body: JSON.stringify({ reason }),
       });
 
-      if (res.ok) {
+      const resData = await res.json().catch(() => null);
+      if (!res.ok || (resData && resData.ok === false)) {
+        if (res.status !== 404) {
+          const errMsg = resData?.message || "Failed to delete company expense record.";
+          setDeleteError(errMsg);
+          toast.error("Failed to delete transaction", { description: errMsg });
+          setIsDeleting(false);
+          return;
+        }
+      } else {
         deleteBrowserPreviewExpense(id);
         setExpenses((prev) => prev.filter((e) => e.id !== id));
         setDeletingExpense(null);
@@ -502,7 +527,7 @@ export default function FinancePage() {
         return;
       }
     } catch {
-      // Fallback
+      // Network/offline fallback
     }
 
     // Preview mode fallback
@@ -1056,7 +1081,7 @@ export default function FinancePage() {
                     <div className="routex-dialog-grid-2">
                       <div className="routex-dialog-field">
                         <label htmlFor="finance-expense-amount">
-                          Amount (₱) <span className="field-required-tag">*</span>
+                          Amount (₱) <span className="required-asterisk" aria-hidden="true">*</span>
                         </label>
                         <div className="peso-input-wrap">
                           <span className="peso-prefix" aria-hidden="true">
@@ -1084,16 +1109,14 @@ export default function FinancePage() {
 
                       <div className="routex-dialog-field">
                         <label htmlFor="finance-expense-date">
-                          Date <span className="field-required-tag">*</span>
+                          Date <span className="required-asterisk" aria-hidden="true">*</span>
                         </label>
-                        <input
+                        <SingleDatePicker
                           id="finance-expense-date"
-                          type="date"
                           min="2024-01-01"
                           value={newDate}
-                          onChange={(e) => setNewDate(e.target.value)}
-                          disabled={submitting}
-                          required
+                          onChange={(val) => setNewDate(val)}
+                          ariaLabel="Select transaction date"
                         />
                       </div>
                     </div>

@@ -13,6 +13,7 @@ import {
   handlePositiveDecimalKeyDown,
   sanitizePositiveDecimalInput,
 } from "@/features/deliveries/delivery-input-utils";
+import { SingleDatePicker } from "@/components/single-date-picker";
 
 export function EditCompanyExpenseModal({
   expense,
@@ -154,7 +155,7 @@ export function EditCompanyExpenseModal({
             <div className="routex-dialog-grid-2">
               <div className="routex-dialog-field">
                 <label htmlFor="edit-expense-amount">
-                  Amount (₱) <span className="field-required-tag">*</span>
+                  Amount (₱) <span className="required-asterisk" aria-hidden="true">*</span>
                 </label>
                 <div className="peso-input-wrap">
                   <span className="peso-prefix" aria-hidden="true">
@@ -177,16 +178,14 @@ export function EditCompanyExpenseModal({
 
               <div className="routex-dialog-field">
                 <label htmlFor="edit-expense-date">
-                  Date <span className="field-required-tag">*</span>
+                  Date <span className="required-asterisk" aria-hidden="true">*</span>
                 </label>
-                <input
+                <SingleDatePicker
                   id="edit-expense-date"
-                  type="date"
                   min="2024-01-01"
                   value={expenseDate}
-                  onChange={(e) => setExpenseDate(e.target.value)}
-                  disabled={pending}
-                  required
+                  onChange={(val) => setExpenseDate(val)}
+                  ariaLabel="Select transaction date"
                 />
               </div>
             </div>

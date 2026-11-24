@@ -18,6 +18,7 @@ import {
   upsertBrowserPreviewExpense,
 } from "@/features/finance/browser-preview-expenses";
 import type { CompanyExpense } from "@/features/finance/company-expense-domain";
+import { RoundedSelect } from "@/components/rounded-select";
 import { formatPeso } from "@/lib/format";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -651,21 +652,26 @@ export function CompanyExpenseImportClient({
           {/* Excel Sheet Selector */}
           {sheetNames.length > 1 && (
             <div style={{ padding: "10px 22px", background: "var(--color-surface-subtle)", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-              <label htmlFor="sheet-select" style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-primary)" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--color-text-primary)" }}>
                 Selected Sheet:
-              </label>
-              <select
-                id="sheet-select"
-                className="import-table-select"
-                value={selectedSheet}
-                onChange={(e) => handleSheetChange(e.target.value)}
-                style={{ fontSize: "12px", padding: "5px 10px", minWidth: "240px", borderRadius: "6px" }}
-              >
-                <option value="all">★ All Sheets (Consolidated) — {sheetNames.length} Sheets</option>
-                {sheetNames.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              </span>
+              <div style={{ minWidth: "260px" }}>
+                <RoundedSelect
+                  value={selectedSheet}
+                  onChange={(val) => handleSheetChange(val)}
+                  ariaLabel="Select spreadsheet sheet"
+                  options={[
+                    {
+                      value: "all",
+                      label: `★ All Sheets (Consolidated) — ${sheetNames.length} Sheets`,
+                    },
+                    ...sheetNames.map((s) => ({
+                      value: s,
+                      label: s,
+                    })),
+                  ]}
+                />
+              </div>
 
               {duplicateCount > 0 && (
                 <button

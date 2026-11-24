@@ -67,7 +67,7 @@ export function resetCompanyExpensesStore(): CompanyExpense[] {
 
 export async function listCompanyExpenses(query: CompanyExpenseQuery = {}): Promise<CompanyExpenseListResult> {
   const page = Math.max(1, query.page ?? 1);
-  const pageSize = Math.max(1, Math.min(100, query.pageSize ?? 10));
+  const pageSize = Math.max(1, Math.min(5000, query.pageSize ?? 10));
   const sort = query.sort ?? "expense_date";
   const direction = query.direction ?? "desc";
 
@@ -200,9 +200,10 @@ export async function listCompanyExpenses(query: CompanyExpenseQuery = {}): Prom
   const startIndex = (page - 1) * pageSize;
   const items = store.slice(startIndex, startIndex + pageSize);
 
-  const totalAmount = store.reduce((sum, e) => sum + e.amount, 0);
-  const categoryTotals = aggregateExpensesByCategory(store);
-  const monthly = aggregateMonthlyExpenses(store);
+  const outgoingStore = store.filter((e) => e.transactionType !== "Incoming");
+  const totalAmount = outgoingStore.reduce((sum, e) => sum + e.amount, 0);
+  const categoryTotals = aggregateExpensesByCategory(outgoingStore);
+  const monthly = aggregateMonthlyExpenses(outgoingStore);
   const monthlyAverage = monthly.length > 0 ? totalAmount / monthly.length : totalAmount;
 
   return {
@@ -414,6 +415,7 @@ export async function updateCompanyExpense(
     expenseDate: validated.expenseDate,
     category: validated.category,
     notes: validated.notes,
+    transactionType: validated.transactionType ?? existing.transactionType ?? "Outgoing",
     updatedAt: now,
   };
 
@@ -530,16 +532,53 @@ export async function getCompanyExpensesSummary(
   categoryTotals: Array<{ category: string; total: number; count: number; percentage: number }>;
   monthlyTotals: Array<{ monthKey: string; label: string; total: number; count: number }>;
 }> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = await getSupabaseClient();
+      if (supabase) {
+        let query = supabase
+          .from("company_expenses")
+          .select("id, description, amount, category, expense_date, created_at, updated_at");
+        if (dateFrom) query = query.gte("expense_date", dateFrom);
+        if (dateTo) query = query.lte("expense_date", dateTo);
+        const { data, error } = await query;
+        if (!error && data) {
+          const items: CompanyExpense[] = data.map((r) => ({
+            id: r.id,
+            description: r.description,
+            amount: Number(r.amount),
+            expenseDate: r.expense_date,
+            category: r.category,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+          }));
+          const totalAmount = items.reduce((sum, e) => sum + e.amount, 0);
+          const categoryTotals = aggregateExpensesByCategory(items);
+          const monthlyTotals = aggregateMonthlyExpenses(items);
+          return {
+            totalAmount,
+            count: items.length,
+            categoryTotals,
+            monthlyTotals,
+          };
+        }
+      }
+    } catch {
+      // Fallback to in-memory store
+    }
+  }
+
   const store = getMockExpensesStore();
   const filtered = filterExpensesByDateRange(store, dateFrom ?? null, dateTo ?? null);
+  const outgoingFiltered = filtered.filter((e) => e.transactionType !== "Incoming");
 
-  const totalAmount = filtered.reduce((sum, e) => sum + e.amount, 0);
-  const categoryTotals = aggregateExpensesByCategory(filtered);
-  const monthlyTotals = aggregateMonthlyExpenses(filtered);
+  const totalAmount = outgoingFiltered.reduce((sum, e) => sum + e.amount, 0);
+  const categoryTotals = aggregateExpensesByCategory(outgoingFiltered);
+  const monthlyTotals = aggregateMonthlyExpenses(outgoingFiltered);
 
   return {
     totalAmount,
-    count: filtered.length,
+    count: outgoingFiltered.length,
     categoryTotals,
     monthlyTotals,
   };
