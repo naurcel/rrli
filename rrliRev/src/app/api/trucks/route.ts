@@ -260,6 +260,28 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+      if (
+        insertError.message.includes("schema cache") ||
+        insertError.message.includes("does not exist") ||
+        insertError.message.includes("relation")
+      ) {
+        const registerResult = registerFleetTruck(newTruck);
+        if (!registerResult.ok) {
+          return NextResponse.json(
+            { ok: false, code: "DUPLICATE_PLATE", message: registerResult.error },
+            { status: 409 },
+          );
+        }
+        recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "truck.created", entityType: "truck", entityId: registerResult.truck.id, summary: `Registered truck ${registerResult.truck.plateNumber}.`, changes: { truckType: registerResult.truck.truckType, ownershipType: registerResult.truck.ownershipType } });
+        return NextResponse.json(
+          {
+            ok: true,
+            truck: registerResult.truck,
+            recordedBy: { id: auth.actor.id, email: auth.actor.email, role: auth.actor.role },
+          },
+          { status: 201 },
+        );
+      }
       throw insertError;
     }
 
@@ -298,8 +320,12 @@ export async function DELETE(request: Request) {
     );
   }
 
-  // Deletion decisions strictly restricted to Admin role
-  if (auth.actor.role !== "admin") {
+  // Deletion decisions strictly restricted to Admin or Superadmin role
+  if (
+    !auth.actor.isSuperadmin &&
+    auth.actor.role !== "admin" &&
+    !auth.actor.roles.includes("admin")
+  ) {
     return NextResponse.json(
       {
         ok: false,
@@ -345,15 +371,54 @@ export async function DELETE(request: Request) {
 
   try {
     const supabase = await createServerSupabaseClient();
-    const { data: deactivatedTruck, error } = await supabase
-      .from("trucks")
-      .update({ is_active: false })
-      .or(`id.eq.${identifier},plate_number.eq.${identifier.toUpperCase()}`)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      identifier,
+    );
+    const updateQuery = supabase.from("trucks").update({ is_active: false });
+    const filteredQuery = isUuid
+      ? updateQuery.or(`id.eq.${identifier},plate_number.eq.${identifier.toUpperCase()}`)
+      : updateQuery.eq("plate_number", identifier.toUpperCase());
+    const { data: deactivatedTruck, error } = await filteredQuery
       .select("id")
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      if (
+        error.message.includes("schema cache") ||
+        error.message.includes("does not exist") ||
+        error.message.includes("relation")
+      ) {
+        const deleteResult = deleteFleetTruck(identifier);
+        if (!deleteResult.ok && !isBrowserLocal) {
+          return NextResponse.json({ ok: false, message: "Truck not found." }, { status: 404 });
+        }
+        recordAuditEntry({
+          actorId: auth.actor.id,
+          actorEmail: auth.actor.email,
+          action: "truck.deleted",
+          entityType: "truck",
+          entityId: identifier,
+          summary: `Admin deleted truck ${identifier}.`,
+          changes: { isDeleted: true },
+        });
+        return NextResponse.json({ ok: true, source: "bundled-mock" });
+      }
+      throw error;
+    }
     if (!deactivatedTruck && !isBrowserLocal) {
+      const deleteResult = deleteFleetTruck(identifier);
+      if (deleteResult.ok) {
+        recordAuditEntry({
+          actorId: auth.actor.id,
+          actorEmail: auth.actor.email,
+          action: "truck.deleted",
+          entityType: "truck",
+          entityId: identifier,
+          summary: `Admin deleted truck ${identifier}.`,
+          changes: { isDeleted: true, storage: "bundled-mock" },
+        });
+        return NextResponse.json({ ok: true, source: "bundled-mock" });
+      }
       return NextResponse.json({ ok: false, code: "TRUCK_NOT_FOUND", message: "Truck not found." }, { status: 404 });
     }
 
@@ -385,8 +450,13 @@ export async function PATCH(request: Request) {
     );
   }
 
-  // Editing trucks strictly restricted to Admin and Operations roles
-  if (auth.actor.role !== "admin" && auth.actor.role !== "operations") {
+  // Editing trucks strictly restricted to users with profitability:manage (already verified above)
+  if (
+    !auth.actor.isSuperadmin &&
+    !auth.actor.permissions.includes("profitability:manage") &&
+    auth.actor.role !== "admin" &&
+    auth.actor.role !== "operations"
+  ) {
     return NextResponse.json(
       {
         ok: false,
@@ -541,8 +611,72 @@ export async function PATCH(request: Request) {
       .select("id, plate_number, truck_type, storage_capability, ownership_type, rate_basis, provider, contact_person")
       .maybeSingle();
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      if (
+        updateError.message.includes("schema cache") ||
+        updateError.message.includes("does not exist") ||
+        updateError.message.includes("relation")
+      ) {
+        const updateResult = updateFleetTruck(normalizedOriginal, {
+          plateNumber: normalizedPlate,
+          truckType: parsed.data.truckType,
+          storageCapability: parsed.data.storageCapability,
+          ownershipType: parsed.data.ownershipType,
+          rateBasis,
+          provider: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.provider?.trim() ?? null) : null,
+          contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? resolvedDriver ?? null) : null,
+          driverName: resolvedDriver,
+          helperName: resolvedHelper,
+        });
+        if (updateResult.ok) {
+          recordAuditEntry({
+            actorId: auth.actor.id,
+            actorEmail: auth.actor.email,
+            action: "truck.updated",
+            entityType: "truck",
+            entityId: updateResult.truck.id,
+            summary: `Updated truck ${updateResult.truck.plateNumber}.`,
+            changes: {
+              plateNumber: updateResult.truck.plateNumber,
+              truckType: updateResult.truck.truckType,
+              storageCapability: updateResult.truck.storageCapability,
+              ownershipType: updateResult.truck.ownershipType,
+            },
+          });
+          return NextResponse.json({ ok: true, truck: updateResult.truck });
+        }
+      }
+      throw updateError;
+    }
     if (!updatedRow && !parsed.data.browserLocal) {
+      const updateResult = updateFleetTruck(normalizedOriginal, {
+        plateNumber: normalizedPlate,
+        truckType: parsed.data.truckType,
+        storageCapability: parsed.data.storageCapability,
+        ownershipType: parsed.data.ownershipType,
+        rateBasis,
+        provider: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.provider?.trim() ?? null) : null,
+        contactPerson: parsed.data.ownershipType === "Subcontracted" ? (parsed.data.contactPerson?.trim() ?? resolvedDriver ?? null) : null,
+        driverName: resolvedDriver,
+        helperName: resolvedHelper,
+      });
+      if (updateResult.ok) {
+        recordAuditEntry({
+          actorId: auth.actor.id,
+          actorEmail: auth.actor.email,
+          action: "truck.updated",
+          entityType: "truck",
+          entityId: updateResult.truck.id,
+          summary: `Updated truck ${updateResult.truck.plateNumber}.`,
+          changes: {
+            plateNumber: updateResult.truck.plateNumber,
+            truckType: updateResult.truck.truckType,
+            storageCapability: updateResult.truck.storageCapability,
+            ownershipType: updateResult.truck.ownershipType,
+          },
+        });
+        return NextResponse.json({ ok: true, truck: updateResult.truck });
+      }
       return NextResponse.json(
         { ok: false, code: "NOT_FOUND", message: "Truck not found." },
         { status: 404 },
