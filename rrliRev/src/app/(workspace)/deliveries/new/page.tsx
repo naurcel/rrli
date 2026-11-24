@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { RoundedSelect, type SelectOption } from "@/components/rounded-select";
 import { SingleDatePicker } from "@/components/single-date-picker";
+import { NumberStepper } from "@/components/number-stepper";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import type { DeliveryFilterOption } from "@/features/deliveries/server/delivery-repository";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
@@ -122,7 +123,10 @@ function todayKey(): string {
 export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliveryId }: { editDeliveryId?: string } = {}) {
   const router = useRouter();
   const actor = useAuthenticatedActor();
-  const isAdmin = actor.role === "admin" || Boolean(actor.isSuperadmin);
+  const isAdmin =
+    actor.role === "admin" ||
+    Boolean(actor.isSuperadmin) ||
+    Boolean(actor.roles?.includes("admin"));
   const deliveryDateWindow = useMemo(() => getDeliveryDateWindow(), []);
   const [references, setReferences] = useState<ReferenceData>({ clients: [], trucks: [], drivers: [], helpers: [] });
   const [referencesLoading, setReferencesLoading] = useState(true);
@@ -973,6 +977,21 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         triggerSubmitError("Daily rate for Helper 2 must have a valid value.");
         return;
       }
+    }
+    const cleanDriver = driverName.trim().toLowerCase();
+    const cleanHelper1 = helper1Name.trim().toLowerCase();
+    const cleanHelper2 = hasSecondHelper ? helper2Name.trim().toLowerCase() : "";
+    if (cleanDriver && cleanHelper1 && cleanDriver === cleanHelper1) {
+      triggerSubmitError("The same employee cannot be assigned as both Driver and Helper on the same trip.");
+      return;
+    }
+    if (cleanDriver && cleanHelper2 && cleanDriver === cleanHelper2) {
+      triggerSubmitError("The same employee cannot be assigned as both Driver and Helper 2 on the same trip.");
+      return;
+    }
+    if (cleanHelper1 && cleanHelper2 && cleanHelper1 === cleanHelper2) {
+      triggerSubmitError("Helper 1 and Helper 2 must be different employees.");
+      return;
     }
     if (!isEditMode && (!values.deliveryRate || Number(values.deliveryRate) <= 0)) {
       triggerSubmitError("Rate must have a valid value.");
@@ -1988,16 +2007,17 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       placeholder="e.g. Quezon City, Metro Manila"
                     />
                   </label>
-                  <label className="dropoff-field" style={{ maxWidth: "130px" }}>
+                  <label className="dropoff-field" style={{ maxWidth: "140px" }} htmlFor={`dropoff-count-${dropoff.id}`}>
                     <span className="field-label-text">Stops / Drop-offs</span>
-                    <input
-                      type="number"
+                    <NumberStepper
+                      id={`dropoff-count-${dropoff.id}`}
                       min={1}
-                      step={1}
+                      max={99}
                       required
                       value={dropoff.dropoffCount}
-                      onChange={(event) => updateDropoff(dropoff.id, "dropoffCount", event.target.value)}
+                      onChange={(next) => updateDropoff(dropoff.id, "dropoffCount", next)}
                       placeholder="1"
+                      ariaLabel="Stops / Drop-offs"
                     />
                   </label>
                   <div className="dropoff-field dropoff-entry-fee-wrap">
@@ -2836,7 +2856,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             <div className="delivery-field-grid">
               <label style={{ gridColumn: "1 / -1" }}>
                 <span className="field-label-text">
-                  Reason <span style={{ color: "var(--color-danger, #dc2626)" }}>*</span>
+                  Reason <span className="required-asterisk" aria-hidden="true">*</span>
                 </span>
                 <input
                   type="text"

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { RoundedSelect } from "@/components/rounded-select";
+import { NumberStepper } from "@/components/number-stepper";
 import type {
   DeliveryStoreDropoff,
   ExpenseResolutionStatus,
@@ -358,6 +359,21 @@ export function EditDeliveryModal({
         setError("Unknown helper is not permitted when editing deliveries. Please assign a real helper name.");
         return;
       }
+    }
+    const cleanDriver = driverName.trim().toLowerCase();
+    const cleanHelper1 = helperName.trim().toLowerCase();
+    const cleanHelper2 = hasSecondHelper ? helper2Name.trim().toLowerCase() : "";
+    if (cleanDriver && cleanHelper1 && cleanDriver === cleanHelper1) {
+      setError("The same employee cannot be assigned as both Driver and Helper on the same trip.");
+      return;
+    }
+    if (cleanDriver && cleanHelper2 && cleanDriver === cleanHelper2) {
+      setError("The same employee cannot be assigned as both Driver and Helper 2 on the same trip.");
+      return;
+    }
+    if (cleanHelper1 && cleanHelper2 && cleanHelper1 === cleanHelper2) {
+      setError("Helper 1 and Helper 2 must be different employees.");
+      return;
     }
 
     const numRate = Number(rate);
@@ -811,18 +827,17 @@ export function EditDeliveryModal({
                           onChange={(e) => updateDropoff(index, "destinationArea", e.target.value)}
                         />
                       </div>
-                      <div className="dropoff-field" style={{ maxWidth: "120px" }}>
+                      <div className="dropoff-field" style={{ maxWidth: "140px" }}>
                         <label htmlFor={`corr-dropoff-count-${index}`} className="field-label-text">
                           Drop-offs
                         </label>
-                        <input
+                        <NumberStepper
                           id={`corr-dropoff-count-${index}`}
-                          type="number"
                           min={1}
-                          step={1}
+                          max={99}
                           required
                           value={dropoff.dropoffCount}
-                          onChange={(e) => updateDropoff(index, "dropoffCount", e.target.value)}
+                          onChange={(next) => updateDropoff(index, "dropoffCount", next)}
                         />
                       </div>
                       <div className="dropoff-field dropoff-entry-fee-wrap">

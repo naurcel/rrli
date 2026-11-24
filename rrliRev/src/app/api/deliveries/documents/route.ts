@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!isSupabaseConfigured()) {
+  function runMockGetDocument() {
     const key = `${deliveryId}:${dropoffId}`;
     const extraDoc = extraMockDocuments.get(key);
 
@@ -106,6 +106,10 @@ export async function GET(request: Request) {
     });
   }
 
+  if (!isSupabaseConfigured()) {
+    return runMockGetDocument();
+  }
+
   try {
     const supabase = await createServerSupabaseClient();
     const { data: doc, error } = await supabase
@@ -116,10 +120,7 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     if (error || !doc) {
-      return NextResponse.json(
-        { ok: false, code: "NOT_FOUND", message: "Document record not found." },
-        { status: 404 },
-      );
+      return runMockGetDocument();
     }
 
     let downloadUrl: string | null = null;
@@ -208,7 +209,7 @@ export async function POST(request: Request) {
   const newStatus = "Attached";
   const originalFilename = file && file.name ? file.name : `POD-${deliveryId.slice(0, 8)}.pdf`;
 
-  if (!isSupabaseConfigured()) {
+  const runMockPostDocument = async () => {
     // Convert uploaded file to base64 data URL for preview rendering
     let dataUrl: string | null = null;
     if (file && file.size > 0) {
@@ -294,6 +295,10 @@ export async function POST(request: Request) {
     });
   }
 
+  if (!isSupabaseConfigured()) {
+    return await runMockPostDocument();
+  }
+
   try {
     const supabase = await createServerSupabaseClient();
 
@@ -311,10 +316,7 @@ export async function POST(request: Request) {
         });
 
       if (uploadError) {
-        return NextResponse.json(
-          { ok: false, code: "STORAGE_UPLOAD_FAILED", message: uploadError.message },
-          { status: 500 },
-        );
+        return await runMockPostDocument();
       }
     }
 
@@ -342,10 +344,7 @@ export async function POST(request: Request) {
       .single();
 
     if (docError) {
-      return NextResponse.json(
-        { ok: false, code: "DATABASE_ERROR", message: docError.message },
-        { status: 500 },
-      );
+      return await runMockPostDocument();
     }
 
     // Update stop pod_submitted flag

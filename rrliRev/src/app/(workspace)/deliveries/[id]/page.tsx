@@ -68,8 +68,8 @@ function DeliveryDetailsPageContent({
   const router = useRouter();
   const searchParams = useSearchParams();
   const actor = useAuthenticatedActor();
-  const canWrite = canMutateDeliveryRecords(actor.role);
-  const canManageDocs = canManageDocuments(actor.role);
+  const canWrite = canMutateDeliveryRecords(actor);
+  const canManageDocs = canManageDocuments(actor);
 
   const { id } = use(params);
   let decodedId = id;
@@ -652,6 +652,13 @@ function DeliveryDetailsPageContent({
         dropoff?: Partial<DeliveryStoreDropoff>;
       } | null;
 
+      if (!response.ok || (payload && payload.ok === false)) {
+        toast.error("Failed to attach POD", {
+          description: payload?.message ?? "Please verify the file format (PDF, PNG, JPG, WebP under 10MB).",
+        });
+        return;
+      }
+
       const newFilename = payload?.dropoff?.documentRef ?? payload?.document?.filename ?? file.name;
 
       const nextDropoffs = delivery.dropoffs.map((s) => {
@@ -901,34 +908,34 @@ function DeliveryDetailsPageContent({
             <div className="delivery-header-actions" style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
               <button
                 type="button"
-                className="secondary-button"
-                style={{ fontSize: "12px", padding: "5px 11px", display: "inline-flex", alignItems: "center", gap: "5px" }}
-                onClick={() => setIsFlagsModalOpen(true)}
+                className="truck-action-icon-btn"
+                style={{ position: "relative" }}
+                aria-label="Flag item for this delivery"
                 title="Flag missing document or attention item for this delivery"
+                onClick={() => setIsFlagsModalOpen(true)}
               >
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                    <line x1="4" y1="22" x2="4" y2="15" />
-                  </svg>
-                  Flag Item
-                  {unresolvedFlagCount > 0 ? (
-                    <span
-                      style={{
-                        background: "var(--color-accent-deep, #b45309)",
-                        color: "#ffffff",
-                        borderRadius: "10px",
-                        padding: "0 6px",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        marginLeft: "3px",
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {unresolvedFlagCount}
-                    </span>
-                  ) : null}
-                </span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                  <line x1="4" y1="22" x2="4" y2="15" />
+                </svg>
+                {unresolvedFlagCount > 0 ? (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "-4px",
+                      right: "-4px",
+                      background: "var(--color-accent-deep, #b45309)",
+                      color: "#ffffff",
+                      borderRadius: "10px",
+                      padding: "0 5px",
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {unresolvedFlagCount}
+                  </span>
+                ) : null}
               </button>
               <button
                 type="button"

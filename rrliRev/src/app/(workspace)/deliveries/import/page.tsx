@@ -31,7 +31,7 @@ export default async function DeliveryExcelImportPage({
     <>
       <OperationalTopbar contextLabel="Excel Import & Post-Import Review" showDateFilter={false} />
 
-      <div className="content-wrap delivery-entry-page">
+      <div className="content-wrap">
         <header className="page-intro">
           <div>
             <Link className="back-link" href={backTarget.href}>

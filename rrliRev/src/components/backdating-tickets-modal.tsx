@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
+import { SingleDatePicker } from "@/components/single-date-picker";
 import type { BackdatingApprovalTicket, BackdatingTicketStatus } from "@/features/deliveries/delivery-backdating-ticket-store";
 
 export function BackdatingTicketsModal({
@@ -41,7 +42,7 @@ export function BackdatingTicketsModal({
   const [decisionNotes, setDecisionNotes] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const isAdmin = currentUserRole === "admin";
+  const isAdmin = currentUserRole === "admin" || currentUserRole === "superadmin";
 
   useEffect(() => {
     if (initialWaybill) setWaybillNumber(initialWaybill);
@@ -589,7 +590,7 @@ export function BackdatingTicketsModal({
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                 <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
-                  Waybill Number <span style={{ color: "var(--color-accent)" }}>*</span>
+                  Waybill Number <span className="required-asterisk" aria-hidden="true">*</span>
                   <input
                     type="text"
                     required
@@ -610,27 +611,18 @@ export function BackdatingTicketsModal({
                   />
                 </label>
 
-                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
-                  Delivery Date <span style={{ color: "var(--color-accent)" }}>*</span>
-                  <input
-                    type="date"
-                    required
+                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
+                  <label htmlFor="backdating-delivery-date" style={{ display: "block", marginBottom: "5px" }}>
+                    Delivery Date <span className="required-asterisk" aria-hidden="true">*</span>
+                  </label>
+                  <SingleDatePicker
+                    id="backdating-delivery-date"
                     min="2024-01-01"
                     value={deliveryDate}
-                    onChange={(e) => setDeliveryDate(e.target.value)}
-                    style={{
-                      width: "100%",
-                      marginTop: "5px",
-                      padding: "8px 11px",
-                      fontSize: "13px",
-                      borderRadius: "6px",
-                      border: "1px solid var(--color-border)",
-                      backgroundColor: "var(--color-surface)",
-                      color: "var(--color-text-primary)",
-                      outline: "none",
-                    }}
+                    onChange={(val) => setDeliveryDate(val)}
+                    ariaLabel="Select backdated delivery date"
                   />
-                </label>
+                </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
@@ -678,7 +670,7 @@ export function BackdatingTicketsModal({
               </div>
 
               <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
-                Business Justification / Reason <span style={{ color: "var(--color-accent)" }}>*</span> (min 5 characters)
+                Business Justification / Reason <span className="required-asterisk" aria-hidden="true">*</span> (min 5 characters)
                 <textarea
                   required
                   rows={3}

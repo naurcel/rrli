@@ -478,7 +478,6 @@ export function DeliveryExcelImportClient({
           <div className="records-heading">
             <div>
               <h2>Select Daily Trip Report File</h2>
-              <p>Upload a CSV, TSV, or spreadsheet export containing completed delivery trips.</p>
               <p>Upload an Excel (.xlsx), CSV, or TSV spreadsheet containing completed delivery trips.</p>
             </div>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -551,7 +550,6 @@ export function DeliveryExcelImportClient({
                 Click to browse or drag and drop your spreadsheet
               </strong>
               <span className="import-dropzone-desc">
-                Supports standard CSV, TSV, and delimited text files up to 10MB.
                 Supports Microsoft Excel (.xlsx), CSV, and TSV spreadsheet files up to 10MB.
               </span>
               <div className="import-dropzone-badges">

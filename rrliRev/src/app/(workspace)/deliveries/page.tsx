@@ -605,8 +605,11 @@ export default function DeliveriesPage() {
 
 
 
-  const canWrite = canMutateDeliveryRecords(actor.role);
-  const canImport = canImportAndReviewExcel(actor.role);
+  const canWrite = canMutateDeliveryRecords(actor);
+  const canImport = canImportAndReviewExcel(actor);
+  const canDeleteDelivery = Boolean(
+    actor.isSuperadmin || actor.role === "admin" || actor.roles?.includes("admin"),
+  );
   const [activeSortKey, activeSortDirection] = sort.split(":") as [string, TableSortDirection];
   const updateTableSort = (key: string, direction: TableSortDirection) => setSort(`${key}:${direction}`);
   const resetTableSort = () => setSort("delivery_date:desc");
@@ -1233,7 +1236,7 @@ export default function DeliveriesPage() {
                                   <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                                 </svg>
                               </button>
-                              {actor.role === "admin" && (
+                              {canDeleteDelivery && (
                                 <button
                                   type="button"
                                   className="truck-action-icon-btn danger"
@@ -1323,7 +1326,7 @@ export default function DeliveriesPage() {
       <BackdatingTicketsModal
         isOpen={backdatingModalOpen}
         onClose={() => setBackdatingModalOpen(false)}
-        currentUserRole={actor.role}
+        currentUserRole={canDeleteDelivery ? "admin" : actor.role}
         currentUsername={actor.username}
       />
     </>
