@@ -170,7 +170,7 @@ export default function LoginPage() {
 
       const payload = (await response.json().catch(() => null)) as {
         ok?: boolean;
-        mode?: "admin_authorized" | "security_question";
+        mode?: "admin_authorized" | "security_question" | "backup_key";
         question?: string;
         hasBackupKey?: boolean;
         hasSecurityQuestion?: boolean;
@@ -194,6 +194,10 @@ export default function LoginPage() {
         setResetToken(payload.recoveryToken || "");
         setForgotStep("reset_password");
         setMessage("Administrator-authorized password reset ready. Please set your new password below.");
+      } else if (payload.mode === "backup_key" && payload.hasBackupKey) {
+        setRecoveryMode("backup_key");
+        setSecurityQuestion(payload.question || "");
+        setForgotStep("backup_key");
       } else if (payload.hasSecurityQuestion && payload.question) {
         setRecoveryMode("security_question");
         setSecurityQuestion(payload.question || "");
@@ -227,6 +231,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "verify-backup-key",
+          email: recoveryUsername.trim(),
           username: recoveryUsername.trim(),
           backupKey: trimmedKey,
         }),
@@ -274,6 +279,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "verify-answer",
+          email: recoveryUsername.trim(),
           username: recoveryUsername.trim(),
           answer: trimmedAnswer,
         }),
@@ -326,6 +332,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "reset",
+          email: recoveryUsername.trim(),
           username: recoveryUsername.trim(),
           token: resetToken,
           mode: recoveryMode,
@@ -446,12 +453,12 @@ export default function LoginPage() {
           {viewMode === "login" ? (
             <form onSubmit={handleLoginSubmit} noValidate>
               <label>
-                Email or Username
+                Email Address
                 <input
                   name="email"
-                  type="text"
-                  placeholder="Enter your email or username"
-                  autoComplete="username"
+                  type="email"
+                  placeholder="Enter your registered email address"
+                  autoComplete="email"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   required
@@ -547,12 +554,12 @@ export default function LoginPage() {
               {forgotStep === "username" && (
                 <form onSubmit={handleRecoveryCheckUsername} noValidate>
                   <label>
-                    Registered Email or Username
+                    Registered Email Address
                     <input
                       name="recoveryEmail"
-                      type="text"
-                      placeholder="Enter your registered email or username"
-                      autoComplete="username"
+                      type="email"
+                      placeholder="Enter your registered email address"
+                      autoComplete="email"
                       value={recoveryUsername}
                       onChange={(event) => setRecoveryUsername(event.target.value)}
                       required
@@ -608,7 +615,7 @@ export default function LoginPage() {
                   </div>
 
                   <label>
-                    Your Answer (Case-sensitive)
+                    Your Answer (Case-insensitive)
                     <input
                       name="securityAnswer"
                       type="text"

@@ -9,6 +9,7 @@ import {
   normalizeSecurityAnswer,
 } from "@/lib/auth/password-policy";
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
+import { RoundedSelect } from "@/components/rounded-select";
 import {
   getUserInitials,
   resizeProfilePhotoFile,
@@ -501,27 +502,29 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
               ) : null}
 
               <div className="native-setup-field-group">
-                <label htmlFor="sec-question-select">Select Security Question</label>
-                <select
-                  id="sec-question-select"
-                  className="native-setup-select"
+                <label>Select Security Question</label>
+                <RoundedSelect
                   value={isCustomQuestion ? "custom" : question}
-                  onChange={(e) => {
-                    if (e.target.value === "custom") {
+                  ariaLabel="Select security question"
+                  options={[
+                    ...PREDEFINED_SECURITY_QUESTIONS.map((q) => ({
+                      value: q,
+                      label: q,
+                    })),
+                    {
+                      value: "custom",
+                      label: "Write my own custom question...",
+                    },
+                  ]}
+                  onChange={(val) => {
+                    if (val === "custom") {
                       setIsCustomQuestion(true);
                     } else {
                       setIsCustomQuestion(false);
-                      setQuestion(e.target.value);
+                      setQuestion(val);
                     }
                   }}
-                >
-                  {PREDEFINED_SECURITY_QUESTIONS.map((q) => (
-                    <option key={q} value={q}>
-                      {q}
-                    </option>
-                  ))}
-                  <option value="custom">Write my own custom question...</option>
-                </select>
+                />
               </div>
 
               {isCustomQuestion ? (

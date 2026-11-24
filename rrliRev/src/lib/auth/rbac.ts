@@ -189,51 +189,98 @@ export function getPermissionsForRole(role: UserRole): readonly Permission[] {
   return ROLE_PERMISSIONS[role];
 }
 
+export type PermissionCheckSubject =
+  | UserRole
+  | {
+      role: UserRole;
+      roles?: readonly string[];
+      permissions?: readonly Permission[];
+      isSuperadmin?: boolean;
+    };
+
+export function subjectHasPermission(
+  subject: PermissionCheckSubject,
+  permission: Permission,
+): boolean {
+  if (typeof subject === "string") {
+    return ROLE_PERMISSIONS[subject].includes(permission);
+  }
+  if (subject.isSuperadmin) {
+    return true;
+  }
+  if (Array.isArray(subject.permissions)) {
+    return subject.permissions.includes(permission);
+  }
+  if (Array.isArray(subject.roles) && subject.roles.length > 0) {
+    return subject.roles.some(
+      (r) => isValidUserRole(r) && ROLE_PERMISSIONS[r].includes(permission),
+    );
+  }
+  return ROLE_PERMISSIONS[subject.role].includes(permission);
+}
+
+export function subjectIsAdminOrSuperadmin(subject: PermissionCheckSubject): boolean {
+  if (typeof subject === "string") {
+    return subject === "admin";
+  }
+  return (
+    Boolean(subject.isSuperadmin) ||
+    subject.role === "admin" ||
+    Boolean(subject.roles?.includes("admin"))
+  );
+}
+
 export function hasPermission(role: UserRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].includes(permission);
 }
 
-export function canMutateDeliveryRecords(role: UserRole): boolean {
-  return hasPermission(role, "deliveries:create") && hasPermission(role, "deliveries:edit");
+export function canMutateDeliveryRecords(subject: PermissionCheckSubject): boolean {
+  return (
+    subjectHasPermission(subject, "deliveries:create") &&
+    subjectHasPermission(subject, "deliveries:edit")
+  );
 }
 
-export function canImportAndReviewExcel(role: UserRole): boolean {
-  return hasPermission(role, "imports:upload") && hasPermission(role, "imports:review_confirm");
+export function canImportAndReviewExcel(subject: PermissionCheckSubject): boolean {
+  return (
+    subjectHasPermission(subject, "imports:upload") &&
+    subjectHasPermission(subject, "imports:review_confirm")
+  );
 }
 
-export function canManageDocuments(role: UserRole): boolean {
-  return canMutateDeliveryRecords(role);
+export function canManageDocuments(subject: PermissionCheckSubject): boolean {
+  return canMutateDeliveryRecords(subject);
 }
 
 /**
  * @deprecated Verification workflow removed. Retained as permission check alias for document write access.
  */
-export function canVerifyPodDocuments(role: UserRole): boolean {
-  return canManageDocuments(role);
+export function canVerifyPodDocuments(subject: PermissionCheckSubject): boolean {
+  return canManageDocuments(subject);
 }
 
-export function canManageUsers(role: UserRole): boolean {
-  return hasPermission(role, "users:manage");
+export function canManageUsers(subject: PermissionCheckSubject): boolean {
+  return subjectHasPermission(subject, "users:manage");
 }
 
-export function canManageTrucks(role: UserRole): boolean {
-  return hasPermission(role, "profitability:manage");
+export function canManageTrucks(subject: PermissionCheckSubject): boolean {
+  return subjectHasPermission(subject, "profitability:manage");
 }
 
-export function canManageDrivers(role: UserRole): boolean {
-  return canMutateDeliveryRecords(role);
+export function canManageDrivers(subject: PermissionCheckSubject): boolean {
+  return canMutateDeliveryRecords(subject);
 }
 
-export function canManageReportTemplates(role: UserRole): boolean {
-  return hasPermission(role, "reports:manage_templates");
+export function canManageReportTemplates(subject: PermissionCheckSubject): boolean {
+  return subjectHasPermission(subject, "reports:manage_templates");
 }
 
-export function canExportReports(role: UserRole): boolean {
-  return hasPermission(role, "reports:export");
+export function canExportReports(subject: PermissionCheckSubject): boolean {
+  return subjectHasPermission(subject, "reports:export");
 }
 
-export function canManageCompanyExpenses(role: UserRole): boolean {
-  return hasPermission(role, "finance:manage");
+export function canManageCompanyExpenses(subject: PermissionCheckSubject): boolean {
+  return subjectHasPermission(subject, "finance:manage");
 }
 
 export type NavigationSection = "primary" | "management";
@@ -294,15 +341,20 @@ export const WORKSPACE_NAVIGATION_ITEMS: readonly NavigationItem[] = [
 export function getAuthorizedNavigationForRole(
   role: UserRole,
   isSuperadmin = false,
+  effectivePermissions?: readonly Permission[],
 ): {
   primary: readonly NavigationItem[];
   management: readonly NavigationItem[];
 } {
   const allowed = isSuperadmin
     ? [...WORKSPACE_NAVIGATION_ITEMS]
-    : WORKSPACE_NAVIGATION_ITEMS.filter((item) =>
-        hasPermission(role, item.requiredPermission),
-      );
+    : Array.isArray(effectivePermissions)
+      ? WORKSPACE_NAVIGATION_ITEMS.filter((item) =>
+          effectivePermissions.includes(item.requiredPermission),
+        )
+      : WORKSPACE_NAVIGATION_ITEMS.filter((item) =>
+          hasPermission(role, item.requiredPermission),
+        );
 
   return {
     primary: allowed.filter((item) => item.section === "primary"),

@@ -61,6 +61,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
     }
 
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = await createServerSupabaseClient();
+        await supabase
+          .from("user_profiles")
+          .update({ username: result.profile.username })
+          .eq("id", actor.id);
+      } catch {
+        // Fallback gracefully if Supabase table is unavailable
+      }
+    }
+
     recordAuditEntry({
       actorId: actor.id,
       actorEmail: actor.email,
@@ -107,6 +119,21 @@ export async function POST(request: Request) {
     const result = updateServerAccountContact(actor.id, email, phoneNumber);
     if (!result.ok) {
       return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = await createServerSupabaseClient();
+        await supabase
+          .from("user_profiles")
+          .update({
+            email: result.profile.email,
+            phone_number: result.profile.phoneNumber,
+          })
+          .eq("id", actor.id);
+      } catch {
+        // Fallback gracefully if Supabase table is unavailable
+      }
     }
 
     recordAuditEntry({
@@ -241,6 +268,22 @@ export async function POST(request: Request) {
     const result = updateServerAccountSecurityQuestion(actor.id, question, answer);
     if (!result.ok) {
       return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = await createServerSupabaseClient();
+        const answerHash = hashWithArgon2id(normalizeSecurityAnswer(answer));
+        await supabase
+          .from("user_profiles")
+          .update({
+            security_question: question.trim(),
+            security_answer_hash: answerHash,
+          })
+          .eq("id", actor.id);
+      } catch {
+        // Fallback gracefully if Supabase table is unavailable
+      }
     }
 
     recordAuditEntry({
