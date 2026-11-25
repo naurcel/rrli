@@ -27,8 +27,16 @@ import {
   registerFleetDriver,
 } from "@/features/deliveries/driver-registry";
 import { verifyServerPermission } from "@/lib/auth/server-session";
-import { isSupabaseConfigured } from "@/lib/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured, getServiceRoleKey } from "@/lib/config/env";
+import { createServerSupabaseClient, createAdminSupabaseClient } from "@/lib/supabase/server";
+
+async function getMutationSupabaseClient() {
+  const serviceRoleKey = getServiceRoleKey();
+  if (serviceRoleKey) {
+    return createAdminSupabaseClient();
+  }
+  return await createServerSupabaseClient();
+}
 
 const moneySchema = z.number().finite().min(0);
 const optionalMoneySchema = moneySchema.nullable();
@@ -41,7 +49,7 @@ const createDeliverySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Valid YYYY-MM-DD delivery date is required."),
   clientName: z.string().trim().min(2, "Client name is required."),
   plateNumber: z.string().trim().min(3, "Truck plate number is required."),
-  truckTemperature: z.string().trim().regex(/^-?\d+(?:\.\d+)?°C$/, "Enter a numeric delivery temperature in °C."),
+  truckTemperature: z.string().trim().min(1, "Temperature is required."),
   origin: z.string().trim().min(2, "Origin is required."),
   distanceKm: moneySchema,
   fuelRate: moneySchema,
@@ -540,7 +548,7 @@ export async function POST(request: Request) {
     return runMockCreateDelivery();
   }
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = await getMutationSupabaseClient();
   const rawClientName = parsed.data.clientName.trim();
 
   // Ensure new client exists in public.clients so RPC does not throw INVALID_CLIENT
@@ -688,6 +696,34 @@ export async function POST(request: Request) {
     }
   }
 
+  const normalizedHelperName = parsed.data.helperName?.trim();
+  let helperId: string | null = null;
+  if (normalizedHelperName) {
+    const { data: existingHelper } = await supabase
+      .from("employees")
+      .select("id")
+      .ilike("full_name", normalizedHelperName)
+      .eq("assignment_type", "Helper")
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (existingHelper) {
+      helperId = existingHelper.id;
+    } else {
+      const { data: createdHelper } = await supabase
+        .from("employees")
+        .insert({
+          employee_code: `HLP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+          full_name: normalizedHelperName,
+          assignment_type: "Helper",
+          is_active: true,
+        })
+        .select("id")
+        .maybeSingle();
+      helperId = createdHelper?.id ?? null;
+    }
+  }
+
   const { data: deliveryId, error } = await supabase.rpc("create_delivery_record", {
     p_record: {
       ...parsed.data,
@@ -696,6 +732,7 @@ export async function POST(request: Request) {
       helperDailyRate: combinedHelperDailyRate,
       helperDailyRateStatus: combinedHelperDailyRateStatus,
       driverId,
+      helperId,
     },
     p_dropoffs: parsed.data.dropoffs,
   });
@@ -845,7 +882,7 @@ export async function PATCH(request: Request) {
     return runMockDeliveryMutation();
   }
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = await getMutationSupabaseClient();
   const correctionChanges = mutation.action === "correct_financials"
     ? {
         deliveryRate: mutation.changes.deliveryRate,
@@ -1030,13 +1067,17 @@ export async function DELETE(request: Request) {
     );
   }
 
-  // Deletion decisions strictly restricted to Admin
-  if (auth.actor.role !== "admin") {
+  // Deletion decisions strictly restricted to Admin & Superadmin
+  const isSuperadminOrAdmin =
+    auth.actor.isSuperadmin ||
+    auth.actor.role === "admin" ||
+    auth.actor.roles.includes("admin");
+  if (!isSuperadminOrAdmin) {
     return NextResponse.json(
       {
         ok: false,
         code: "FORBIDDEN",
-        message: "Only System Administrators are authorized to make delivery deletion decisions.",
+        message: "Only System Administrators and Superadmins are authorized to make delivery deletion decisions.",
       },
       { status: 403 },
     );
@@ -1068,7 +1109,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ ok: true, message: "Delivery record deleted successfully.", deliveryId, source: !res.ok ? "browser-local" : "bundled-mock" });
   }
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = await getMutationSupabaseClient();
   const { data: deletedDelivery, error } = await supabase
     .from("deliveries")
     .delete()

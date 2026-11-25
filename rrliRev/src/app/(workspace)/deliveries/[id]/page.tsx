@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, use, useEffect, useMemo, useState } from "react";
+import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
@@ -118,6 +118,13 @@ function DeliveryDetailsPageContent({
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (isEditingNotes && noteTextareaRef.current) {
+      noteTextareaRef.current.focus({ preventScroll: true });
+    }
+  }, [isEditingNotes]);
   const [viewingImage, setViewingImage] = useState<{
     url: string;
     title: string;
@@ -1026,21 +1033,8 @@ function DeliveryDetailsPageContent({
           {/* Right Column: Trip Information & Notes */}
           <div className="delivery-detail-column">
             <section className="records-card delivery-section-card delivery-equal-card">
-              <div className="section-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="section-card-header">
                 <h2 className="section-card-title">Trip Information</h2>
-                {canWrite && !isEditingNotes && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ fontSize: "11.5px", padding: "3px 10px", display: "inline-flex", alignItems: "center", gap: "5px" }}
-                    onClick={() => {
-                      setNoteDraft(delivery.notes ?? "");
-                      setIsEditingNotes(true);
-                    }}
-                  >
-                    <span>{delivery.notes ? "Edit Note" : "+ Add Note"}</span>
-                  </button>
-                )}
               </div>
               <div className="detail-meta-grid detail-meta-grid-2">
                 <div className="detail-meta-item">
@@ -1121,9 +1115,9 @@ function DeliveryDetailsPageContent({
                   }}
                   title={canWrite && !isEditingNotes ? (delivery.notes ? "Click to edit notes" : "Click to add notes") : undefined}
                   style={{
-                    flex: 1,
-                    minHeight: "72px",
-                    maxHeight: "155px",
+                    height: "116px",
+                    minHeight: "116px",
+                    maxHeight: "116px",
                     overflowY: "auto",
                     borderRadius: "8px",
                     background: "var(--color-surface-subtle, rgba(0, 0, 0, 0.02))",
@@ -1132,12 +1126,14 @@ function DeliveryDetailsPageContent({
                     fontSize: "13px",
                     lineHeight: "1.5",
                     cursor: canWrite && !isEditingNotes ? "pointer" : "default",
+                    boxSizing: "border-box",
                   }}
                 >
                   {isEditingNotes ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", height: "100%", boxSizing: "border-box" }}>
                       <textarea
-                        rows={3}
+                        ref={noteTextareaRef}
+                        rows={2}
                         className="correction-reason-textarea"
                         style={{
                           width: "100%",
@@ -1145,6 +1141,9 @@ function DeliveryDetailsPageContent({
                           fontSize: "12.5px",
                           lineHeight: "1.45",
                           padding: "6px 8px",
+                          flex: 1,
+                          minHeight: "54px",
+                          boxSizing: "border-box",
                         }}
                         placeholder="Enter operational notes, special handling, or dispatch instructions for this delivery..."
                         value={noteDraft}
@@ -1158,15 +1157,17 @@ function DeliveryDetailsPageContent({
                             setIsEditingNotes(false);
                           }
                         }}
-                        autoFocus
                       />
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px", flexShrink: 0 }}>
                         <button
                           type="button"
                           className="secondary-button"
                           disabled={savingNotes}
-                          onClick={() => setIsEditingNotes(false)}
-                          style={{ fontSize: "11px", padding: "3px 8px" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsEditingNotes(false);
+                          }}
+                          style={{ fontSize: "11px", padding: "2px 8px" }}
                         >
                           Cancel
                         </button>
@@ -1174,8 +1175,11 @@ function DeliveryDetailsPageContent({
                           type="button"
                           className="primary-action-button"
                           disabled={savingNotes}
-                          onClick={handleSaveNotes}
-                          style={{ fontSize: "11px", padding: "3px 10px" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleSaveNotes();
+                          }}
+                          style={{ fontSize: "11px", padding: "2px 10px" }}
                         >
                           {savingNotes ? "Saving…" : "Save Note"}
                         </button>

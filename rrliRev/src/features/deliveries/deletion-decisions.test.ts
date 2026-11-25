@@ -43,7 +43,7 @@ test("admin deletion decisions for deliveries and accounts with governance const
 
   await t.test("deleteServerAccount allows deleting staff users but strictly protects primary admin", async () => {
     const accounts = listServerAccountProfiles();
-    const primaryAdmin = accounts.find((acc) => acc.username === "admin" || acc.email === "admin@routex.local");
+    const primaryAdmin = accounts.find((acc) => acc.username === "mori_mochi" || acc.username === "admin" || acc.email === "adrianmangampat@gmail.com" || acc.email === "admin@routex.local");
     assert.ok(primaryAdmin, "primary admin must exist in server account store");
 
     const adminDeleteAttempt = deleteServerAccount(primaryAdmin.id);

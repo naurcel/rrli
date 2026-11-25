@@ -170,6 +170,10 @@ export function ImageViewerModal({
                   </svg>
                   <span>Saved</span>
                 </span>
+              ) : isSavingNotes ? (
+                <span className="image-viewer-notes-saved-hint" style={{ opacity: 0.7 }}>
+                  <span>Saving...</span>
+                </span>
               ) : null}
             </div>
 
@@ -179,33 +183,17 @@ export function ImageViewerModal({
                   className="image-viewer-notes-textarea"
                   value={draftNotes}
                   onChange={(e) => setDraftNotes(e.target.value)}
+                  onBlur={() => {
+                    if (draftNotes !== (notes ?? "")) {
+                      void handleSaveNotes();
+                    }
+                  }}
                   placeholder={
                     notesPlaceholder ||
                     "Add drop-off POD remarks (e.g. store receiver signature, stamp verification, condition upon arrival)..."
                   }
                   rows={2}
                 />
-                <div className="image-viewer-notes-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ padding: "4px 12px", fontSize: "11.5px", fontWeight: 600 }}
-                    onClick={() => void handleSaveNotes()}
-                    disabled={isSavingNotes || (!isDirty && Boolean(savedFeedback))}
-                  >
-                    {isSavingNotes ? "Saving..." : isDirty ? "Save Note" : "Save Note"}
-                  </button>
-                  {isDirty ? (
-                    <button
-                      type="button"
-                      className="image-viewer-notes-discard-btn"
-                      onClick={() => setDraftNotes(notes ?? "")}
-                      disabled={isSavingNotes}
-                    >
-                      Discard
-                    </button>
-                  ) : null}
-                </div>
               </div>
             ) : (
               <p className="image-viewer-notes-readonly">

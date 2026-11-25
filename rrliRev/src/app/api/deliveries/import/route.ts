@@ -3,8 +3,16 @@ import * as z from "zod";
 
 import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 import { verifyServerPermission } from "@/lib/auth/server-session";
-import { isSupabaseConfigured } from "@/lib/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured, getServiceRoleKey } from "@/lib/config/env";
+import { createServerSupabaseClient, createAdminSupabaseClient } from "@/lib/supabase/server";
+
+async function getMutationSupabaseClient() {
+  const serviceRoleKey = getServiceRoleKey();
+  if (serviceRoleKey) {
+    return createAdminSupabaseClient();
+  }
+  return await createServerSupabaseClient();
+}
 import {
   getMockClients,
   registerMockClient,
@@ -34,10 +42,7 @@ const importRowSchema = z.object({
   plateNumber: z.string().trim().min(3, "Truck plate number is required."),
   truckType: z.string().trim().default("6-Wheeler"),
   truckOwnership: z.enum(["Owned", "Subcontracted"]).default("Owned"),
-  truckTemperature: z
-    .string()
-    .trim()
-    .regex(/^-?\d+(?:\.\d+)?°C$/, "Enter a fixed numeric temperature in °C."),
+  truckTemperature: z.string().trim().min(1, "Temperature is required."),
   origin: z.string().trim().default("Central Depot"),
   distanceKm: z.number().min(0).default(50),
   fuelRate: z.number().min(0).default(85),
@@ -358,7 +363,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await getMutationSupabaseClient();
 
     // Check existing waybills in database to avoid duplicate key conflicts
     const waybills = rows.map((r) => r.waybillNumber);
@@ -379,33 +384,268 @@ export async function POST(request: Request) {
 
     const existingSet = new Set((existingRows ?? []).map((r) => r.waybill_number));
 
+    // Entity caches to minimize database queries during batch import
+    const clientCache = new Map<string, string>();
+    const truckCache = new Map<string, string>();
+    const driverCache = new Map<string, string>();
+    const helperCache = new Map<string, string>();
+
+    async function resolveClientId(name: string): Promise<string> {
+      const clean = name.trim();
+      const lower = clean.toLowerCase();
+      if (clientCache.has(lower)) return clientCache.get(lower)!;
+
+      const { data: existing } = await supabase
+        .from("clients")
+        .select("id")
+        .ilike("name", clean)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (existing?.id) {
+        clientCache.set(lower, existing.id);
+        return existing.id;
+      }
+
+      const clientCode =
+        clean
+          .split(/\s+/)
+          .map((w) => w[0])
+          .join("")
+          .replace(/[^A-Za-z0-9]/g, "")
+          .toUpperCase()
+          .slice(0, 6) || "CLI";
+
+      const { data: created, error } = await supabase
+        .from("clients")
+        .insert({
+          name: clean,
+          code: clientCode,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+
+      if (created?.id) {
+        clientCache.set(lower, created.id);
+        return created.id;
+      }
+      if (error?.code === "23505") {
+        const { data: retry } = await supabase
+          .from("clients")
+          .select("id")
+          .ilike("name", clean)
+          .maybeSingle();
+        if (retry?.id) {
+          clientCache.set(lower, retry.id);
+          return retry.id;
+        }
+      }
+      throw new Error(`Failed to resolve client ${clean}: ${error?.message}`);
+    }
+
+    async function resolveTruckId(plate: string, truckType = "6-Wheeler", ownership = "Owned"): Promise<string> {
+      const clean = plate.trim().toUpperCase();
+      const lower = clean.toLowerCase();
+      if (truckCache.has(lower)) return truckCache.get(lower)!;
+
+      const { data: existing } = await supabase
+        .from("trucks")
+        .select("id")
+        .ilike("plate_number", clean)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (existing?.id) {
+        truckCache.set(lower, existing.id);
+        return existing.id;
+      }
+
+      const { data: created, error } = await supabase
+        .from("trucks")
+        .insert({
+          plate_number: clean,
+          truck_type: truckType,
+          ownership_type: ownership,
+          rate_basis: "Redeemed Rate",
+          is_active: true,
+        })
+        .select("id")
+        .single();
+
+      if (created?.id) {
+        truckCache.set(lower, created.id);
+        return created.id;
+      }
+      if (error?.code === "23505") {
+        const { data: retry } = await supabase
+          .from("trucks")
+          .select("id")
+          .ilike("plate_number", clean)
+          .maybeSingle();
+        if (retry?.id) {
+          truckCache.set(lower, retry.id);
+          return retry.id;
+        }
+      }
+      throw new Error(`Failed to resolve truck ${clean}: ${error?.message}`);
+    }
+
+    async function resolveDriverId(name?: string | null): Promise<string> {
+      const clean = (name && name.trim()) || "Fleet Driver";
+      const lower = clean.toLowerCase();
+      if (driverCache.has(lower)) return driverCache.get(lower)!;
+
+      const { data: existing } = await supabase
+        .from("employees")
+        .select("id")
+        .ilike("full_name", clean)
+        .eq("assignment_type", "Driver")
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (existing?.id) {
+        driverCache.set(lower, existing.id);
+        return existing.id;
+      }
+
+      if (clean === "Fleet Driver" || clean === "Unknown Driver") {
+        const { data: anyDriver } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("assignment_type", "Driver")
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+        if (anyDriver?.id) {
+          driverCache.set(lower, anyDriver.id);
+          return anyDriver.id;
+        }
+      }
+
+      const { data: created, error } = await supabase
+        .from("employees")
+        .insert({
+          employee_code: `DRV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+          full_name: clean,
+          assignment_type: "Driver",
+          is_active: true,
+        })
+        .select("id")
+        .single();
+
+      if (created?.id) {
+        driverCache.set(lower, created.id);
+        return created.id;
+      }
+      if (error?.code === "23505") {
+        const { data: retry } = await supabase
+          .from("employees")
+          .select("id")
+          .ilike("full_name", clean)
+          .eq("assignment_type", "Driver")
+          .maybeSingle();
+        if (retry?.id) {
+          driverCache.set(lower, retry.id);
+          return retry.id;
+        }
+      }
+      throw new Error(`Failed to resolve driver ${clean}: ${error?.message}`);
+    }
+
+    async function resolveHelperId(name?: string | null): Promise<string | null> {
+      if (!name || !name.trim() || name.trim().toLowerCase().includes("unknown")) return null;
+      const clean = name.trim();
+      const lower = clean.toLowerCase();
+      if (helperCache.has(lower)) return helperCache.get(lower)!;
+
+      const { data: existing } = await supabase
+        .from("employees")
+        .select("id")
+        .ilike("full_name", clean)
+        .eq("assignment_type", "Helper")
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (existing?.id) {
+        helperCache.set(lower, existing.id);
+        return existing.id;
+      }
+
+      const { data: created, error } = await supabase
+        .from("employees")
+        .insert({
+          employee_code: `HLP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+          full_name: clean,
+          assignment_type: "Helper",
+          is_active: true,
+        })
+        .select("id")
+        .single();
+
+      if (created?.id) {
+        helperCache.set(lower, created.id);
+        return created.id;
+      }
+      if (error?.code === "23505") {
+        const { data: retry } = await supabase
+          .from("employees")
+          .select("id")
+          .ilike("full_name", clean)
+          .eq("assignment_type", "Helper")
+          .maybeSingle();
+        if (retry?.id) {
+          helperCache.set(lower, retry.id);
+          return retry.id;
+        }
+      }
+      return null;
+    }
+
     for (const row of rows) {
       if (existingSet.has(row.waybillNumber)) {
         duplicates.push(row.waybillNumber);
         continue;
       }
 
-      const { error } = await supabase.rpc("create_delivery_record", {
-        p_record: row,
-        p_dropoffs: row.dropoffs,
-      });
+      try {
+        await resolveClientId(row.clientName);
+        await resolveTruckId(row.plateNumber, row.truckType, row.truckOwnership);
+        const driverId = await resolveDriverId(row.driverName);
+        const helperId = await resolveHelperId(row.helperName);
 
-      if (error) {
-        if (
-          error.message.includes("schema cache") ||
-          error.message.includes("does not exist") ||
-          error.message.includes("create_delivery_record")
-        ) {
-          return runMockImportBatch();
-        }
-        if (error.code === "23505" || error.message.includes("waybill_number")) {
-          duplicates.push(row.waybillNumber);
+        const rpcPayload = {
+          ...row,
+          driverId,
+          helperId,
+          idempotencyKey: crypto.randomUUID(),
+        };
+
+        const { error } = await supabase.rpc("create_delivery_record", {
+          p_record: rpcPayload,
+          p_dropoffs: row.dropoffs,
+        });
+
+        if (error) {
+          if (
+            error.message.includes("schema cache") ||
+            error.message.includes("does not exist") ||
+            error.message.includes("create_delivery_record")
+          ) {
+            return runMockImportBatch();
+          }
+          if (error.code === "23505" || error.message.includes("waybill_number")) {
+            duplicates.push(row.waybillNumber);
+          } else {
+            errors.push({ waybill: row.waybillNumber, reason: error.message });
+          }
         } else {
-          errors.push({ waybill: row.waybillNumber, reason: error.message });
+          committed.push(row.waybillNumber);
+          existingSet.add(row.waybillNumber);
         }
-      } else {
-        committed.push(row.waybillNumber);
-        existingSet.add(row.waybillNumber);
+      } catch (rowErr) {
+        const reason = rowErr instanceof Error ? rowErr.message : "Entity resolution failed";
+        errors.push({ waybill: row.waybillNumber, reason });
       }
     }
 

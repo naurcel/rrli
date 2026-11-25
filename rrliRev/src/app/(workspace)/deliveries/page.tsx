@@ -392,7 +392,8 @@ export default function DeliveriesPage() {
     const params = new URLSearchParams(window.location.search);
     const requestedId = params.get("edit");
     const createdId = params.get("created");
-    const searchParam = params.get("search") || params.get("q");
+    const clientParam = params.get("client");
+    const searchParam = params.get("search") || params.get("q") || clientParam;
 
     if (!isInitialParamsParsed.current) {
       isInitialParamsParsed.current = true;

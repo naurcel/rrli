@@ -190,13 +190,18 @@ function normalizeDate(raw: string): string {
   return str;
 }
 
-function normalizeTemperature(raw: string): TruckTemperature {
+export function normalizeTemperature(raw: string): TruckTemperature {
   const str = raw.trim();
-  const match = str.match(/^(-?\d+(?:\.\d+)?)/);
-  if (match) {
-    return `${match[1]}°C` as TruckTemperature;
+  if (!str) return "-18°C";
+  if (/^[+-]?\d+(?:\.\d+)?\s*°?[Cc]?$/i.test(str)) {
+    const numPart = str.replace(/[°Cc\s]/g, "");
+    return `${numPart}°C`;
   }
-  return "-18°C";
+  const match = str.match(/^([+-]?\d+(?:\.\d+)?)/);
+  if (match) {
+    return `${match[1]}°C`;
+  }
+  return str;
 }
 
 /**
@@ -636,6 +641,31 @@ export function parseDeliveryImport(
   existingWaybills?: Set<string>,
 ): ImportParseResult {
   const table = parseDelimitedText(text);
+  if (table.length === 0) {
+    return {
+      rows: [],
+      totalRawRows: 0,
+      totalGroupedDeliveries: 0,
+      readyCount: 0,
+      attentionCount: 0,
+      duplicateCount: 0,
+      ownedCount: 0,
+      subconCount: 0,
+      existingTrucksMatched: 0,
+      newTrucksToCreate: 0,
+      existingCrewMatched: 0,
+      newCrewToCreate: 0,
+      autoCompletedCount: 0,
+      incompleteCount: 0,
+      errors: ["File contains no data rows."],
+    };
+  }
+
+  const dtrResult = parseDailyTripReportTable(table, existingWaybills);
+  if (dtrResult && dtrResult.rows.length > 0) {
+    return dtrResult;
+  }
+
   return parseDeliveryImportFromTable(table, existingWaybills);
 }
 
@@ -679,6 +709,280 @@ export function parseDateFromTitle(title: string): string {
 }
 
 /**
+ * Parses a 2D array of rows formatted as a Daily Trip Report (or multiple daily blocks).
+ * Handles multi-day reports, client carry-down, sub-headers, store drop-off splitting,
+ * toll plaza breakdowns, auto-generated waybills when empty, and numeric conversions.
+ */
+export function parseDailyTripReportTable(
+  rawRows: unknown[][],
+  existingWaybills?: Set<string>,
+  seenWaybillsInBatch = new Set<string>(),
+  baseRowOffset = 0,
+): ImportParseResult | null {
+  if (rawRows.length < 3) return null;
+
+  // Check if this sheet/table has DTR markers
+  let hasDtrMarker = false;
+  for (let r = 0; r < Math.min(25, rawRows.length); r++) {
+    const row = rawRows[r];
+    if (!Array.isArray(row)) continue;
+    const str = row.map((c) => String(c ?? "")).join(" ").toUpperCase();
+    if (
+      str.includes("DAILY TRIP REPORT") ||
+      str.includes("REDEEMED ROUTE") ||
+      (str.includes("TOTAL EXPENSE") && str.includes("NET INCOME"))
+    ) {
+      hasDtrMarker = true;
+      break;
+    }
+  }
+
+  if (!hasDtrMarker) return null;
+
+  const stagedRows: StagedDeliveryRow[] = [];
+  let totalRawRows = baseRowOffset;
+  let sectionDate = "";
+  let clientCarry = "";
+
+  let wbCol = -1;
+  let clientCol = -1;
+  let plateCol = -1;
+  let dateCol = -1;
+  let tempCol = -1;
+  let originCol = -1;
+  let storeCol = -1;
+  let tollCol = -1;
+  let otherCol = -1;
+  let feeCol = -1;
+  let dieselCol = -1;
+  let totalExpCol = -1;
+  let truckTypeCol = -1;
+  let rateCol = -1;
+  let fuelRateCol = -1;
+  let kmCol = -1;
+  let driverAllowCol = 13;
+  let driverRateCol = 14;
+  let helperAllowCol = 15;
+  let helperRateCol = 16;
+
+  function updateHeaderIndices(header: string[], nextRow?: unknown[]) {
+    wbCol = header.findIndex((h) => h.includes("WAYBILL"));
+    clientCol = header.findIndex((h) => h.includes("CLIENT"));
+    plateCol = header.findIndex((h) => h.includes("PLATE"));
+    dateCol = header.findIndex((h) => h === "DATE" || h.includes("DATE"));
+    tempCol = header.findIndex((h) => h.includes("TEMP"));
+    originCol = header.findIndex((h) => h.includes("ORIGIN"));
+    storeCol = header.findIndex((h) => h.includes("STORE"));
+    tollCol = header.findIndex((h) => h.includes("TOLL GATE") || h === "TOLLS");
+    otherCol = header.findIndex((h) => h.includes("OTHER"));
+    feeCol = header.findIndex((h) => h.includes("ENTRY"));
+    dieselCol = header.findIndex((h) => h.includes("DIESEL"));
+    totalExpCol = header.findIndex((h) => h.includes("TOTAL EXPENSE"));
+    truckTypeCol = header.findIndex((h) => h.includes("TRUCK TYPE") || h === "TYPE");
+    rateCol = header.findIndex(
+      (h) =>
+        h === "RATE" ||
+        h === "DELIVERY RATE" ||
+        (h.includes("RATE") && !h.includes("FUEL") && !h.includes("DRIVER") && !h.includes("HELPER") && !h.includes("DAILY")),
+    );
+    fuelRateCol = header.findIndex((h) => h.includes("FUEL"));
+    kmCol = header.findIndex((h) => h.includes("KM"));
+
+    if (nextRow && Array.isArray(nextRow)) {
+      const subHeader = nextRow.map((c) => String(c ?? "").toUpperCase().trim());
+      const dAllow = subHeader.findIndex((c, i) => c === "ALLOWANCE" && i < 15);
+      const dRate = subHeader.findIndex((c, i) => c.includes("RATE") && i < 16);
+      const hAllow = subHeader.findIndex((c, i) => c === "ALLOWANCE" && i >= 15);
+      const hRate = subHeader.findIndex((c, i) => c.includes("RATE") && i >= 16);
+      if (dAllow >= 0) driverAllowCol = dAllow;
+      if (dRate >= 0) driverRateCol = dRate;
+      if (hAllow >= 0) helperAllowCol = hAllow;
+      if (hRate >= 0) helperRateCol = hRate;
+    }
+  }
+
+  const fleetTrucks = getFleetTrucks();
+
+  for (let r = 0; r < rawRows.length; r++) {
+    const row = rawRows[r];
+    if (!Array.isArray(row) || row.every((c) => String(c ?? "").trim().length === 0)) continue;
+
+    const rowText = row.map((c) => String(c ?? "")).join(" ").toUpperCase().replace(/\s+/g, " ");
+
+    if (rowText.includes("DAILY TRIP REPORT")) {
+      const parsedDate = parseDateFromTitle(rowText);
+      if (parsedDate) sectionDate = parsedDate;
+      clientCarry = ""; // reset client carry across sections
+      continue;
+    }
+
+    if (rowText.includes("WAYBILL") && (rowText.includes("PLATE") || rowText.includes("CLIENT") || rowText.includes("TRUCK"))) {
+      const header = row.map((c) => String(c ?? "").toUpperCase().replace(/\s+/g, " ").trim());
+      updateHeaderIndices(header, rawRows[r + 1]);
+      continue;
+    }
+
+    if (rowText.includes("ALLOWANCE") && rowText.includes("DAILY RATE")) {
+      continue; // skip sub-header row
+    }
+
+    if (rowText.includes("TOTAL") || rowText.includes("REDEEMED ROUTE LOGSITICS") || rowText.includes("TOLL GATES")) {
+      continue; // skip summary and header rows
+    }
+
+    const rawWb = wbCol >= 0 ? String(row[wbCol] ?? "").trim() : "";
+    const plate = plateCol >= 0 ? String(row[plateCol] ?? "").trim().toUpperCase() : "";
+
+    // Data rows must have at least a plate or a waybill
+    if (!plate && !rawWb) continue;
+    if (plate.includes("ODOMETER") || plate.includes("ODOMITER") || rowText.includes("ODOMETER") || rowText.includes("ODOMITER")) {
+      continue;
+    }
+
+    const rawClient = clientCol >= 0 ? String(row[clientCol] ?? "").trim() : "";
+    if (rawClient) clientCarry = rawClient;
+
+    const rawDate = dateCol >= 0 ? row[dateCol] : "";
+    let parsedDate = parseExcelSerialDate(rawDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(parsedDate)) {
+      parsedDate = normalizeDate(String(rawDate ?? ""));
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(parsedDate)) {
+      parsedDate = sectionDate || new Date().toISOString().slice(0, 10);
+    }
+
+    const effectiveWb = rawWb;
+
+    const temp = tempCol >= 0 ? normalizeTemperature(String(row[tempCol] ?? "")) : "-18°C";
+    const origin = originCol >= 0 ? String(row[originCol] ?? "").trim() || "Central Depot" : "Central Depot";
+    const distance = kmCol >= 0 ? cleanNumeric(row[kmCol]) ?? 50 : 50;
+    const fuelRate = fuelRateCol >= 0 ? cleanNumeric(row[fuelRateCol]) ?? 85.0 : 85.0;
+
+    const revenue = rateCol >= 0 ? cleanNumeric(row[rateCol]) ?? 0 : 0;
+    const diesel = dieselCol >= 0 ? cleanNumeric(row[dieselCol]) : null;
+    const tolls = tollCol >= 0 ? cleanNumeric(row[tollCol]) : null;
+    const other = otherCol >= 0 ? cleanNumeric(row[otherCol]) : null;
+    const overallEntryFee = feeCol >= 0 ? cleanNumeric(row[feeCol]) : null;
+
+    const drvAllow = driverAllowCol >= 0 ? cleanNumeric(row[driverAllowCol]) : null;
+    const drvRate = driverRateCol >= 0 ? cleanNumeric(row[driverRateCol]) : null;
+    const hlpAllow = helperAllowCol >= 0 ? cleanNumeric(row[helperAllowCol]) : null;
+    const hlpRate = helperRateCol >= 0 ? cleanNumeric(row[helperRateCol]) : null;
+
+    // Toll Plaza Breakdown notes from columns after KM
+    const tollStartCol = Math.max(kmCol + 1, 23);
+    const tollPlazaNotes: string[] = [];
+    for (let c = tollStartCol; c < row.length; c++) {
+      const val = String(row[c] ?? "").trim();
+      if (val) {
+        tollPlazaNotes.push(val.replace(/\n+/g, " "));
+      }
+    }
+    const tollGateBreakdown = tollPlazaNotes.join(", ");
+
+    // Split store drop-offs by newline or slash
+    const rawStores = storeCol >= 0 ? String(row[storeCol] ?? "").trim() : "";
+    const storeNames = rawStores
+      ? rawStores.split(/[\n/]/).map((s) => s.trim()).filter(Boolean)
+      : [];
+    const dropoffs: StagedDropoff[] = (storeNames.length > 0 ? storeNames : ["Main Store"]).map((storeName) => ({
+      storeName,
+      destinationArea: "Metro Manila",
+      dropoffCount: 1,
+      entryFee: null,
+    }));
+
+    const totalExpVal = totalExpCol >= 0 ? cleanNumeric(row[totalExpCol]) : null;
+    const truckType = normalizeTruckType(truckTypeCol >= 0 ? String(row[truckTypeCol] ?? "") : undefined);
+
+    let truckOwnership: "Owned" | "Subcontracted" = "Owned";
+    const regTruck = fleetTrucks.find((t) => t.plateNumber.replace(/\s+/g, "").toUpperCase() === plate.replace(/\s+/g, "").toUpperCase());
+    if (regTruck) {
+      truckOwnership = regTruck.ownershipType;
+    } else if (totalExpVal != null && totalExpVal > 0 && diesel == null && drvRate == null && hlpRate == null) {
+      truckOwnership = "Subcontracted";
+    }
+
+    const totalExpenses = truckOwnership === "Subcontracted"
+      ? (totalExpVal ?? other ?? 0)
+      : (totalExpVal ?? ((diesel ?? 0) + (tolls ?? 0) + (drvRate ?? 0) + (drvAllow ?? 0) + (hlpRate ?? 0) + (hlpAllow ?? 0) + (other ?? 0) + (overallEntryFee ?? 0)));
+
+    totalRawRows++;
+
+    const stagedRow: StagedDeliveryRow = {
+      id: `dtr-${totalRawRows}-${Date.now().toString(36)}`,
+      rowNumber: totalRawRows,
+      waybillNumber: effectiveWb,
+      deliveryDate: parsedDate,
+      clientName: clientCarry || "Unknown Client",
+      plateNumber: plate,
+      truckType,
+      truckOwnership,
+      truckTemperature: temp,
+      origin,
+      distanceKm: distance,
+      fuelRate,
+      deliveryRate: revenue,
+      totalExpenses,
+      dieselExpenses: truckOwnership === "Subcontracted" ? null : diesel,
+      tollGateExpenses: truckOwnership === "Subcontracted" ? null : tolls,
+      tollGateBreakdown,
+      driverDailyRate: truckOwnership === "Subcontracted" ? null : drvRate,
+      driverAllowance: truckOwnership === "Subcontracted" ? null : drvAllow,
+      driverName: regTruck?.driverName || "Unknown Driver",
+      helperDailyRate: truckOwnership === "Subcontracted" ? null : hlpRate,
+      helperAllowance: truckOwnership === "Subcontracted" ? null : hlpAllow,
+      helperName: regTruck?.helperName || "Unknown Helper",
+      otherExpenses: other,
+      entryFees: overallEntryFee,
+      dropoffs,
+      status: "ready",
+      issues: [],
+    };
+
+    const validation = validateStagedRow(stagedRow, existingWaybills, seenWaybillsInBatch);
+    stagedRow.status = validation.status;
+    stagedRow.issues = validation.issues;
+    stagedRow.expectedCompletionStatus = validation.expectedCompletionStatus;
+
+    if (effectiveWb) seenWaybillsInBatch.add(effectiveWb);
+    stagedRows.push(stagedRow);
+  }
+
+  if (stagedRows.length === 0) return null;
+
+  const readyCount = stagedRows.filter((r) => r.status === "ready").length;
+  const duplicateCount = stagedRows.filter((r) => r.status === "duplicate").length;
+  const attentionCount = stagedRows.filter((r) => r.status === "needs_attention").length;
+  const ownedCount = stagedRows.filter((r) => r.truckOwnership === "Owned").length;
+  const subconCount = stagedRows.filter((r) => r.truckOwnership === "Subcontracted").length;
+  const newTrucksToCreate = stagedRows.filter((r) => r.isNewTruck).length;
+  const existingTrucksMatched = stagedRows.length - newTrucksToCreate;
+  const newCrewToCreate = stagedRows.filter((r) => r.isNewDriver || r.isNewHelper).length;
+  const existingCrewMatched = stagedRows.length - newCrewToCreate;
+  const autoCompletedCount = stagedRows.filter((r) => r.status === "ready" && r.expectedCompletionStatus === "Completed").length;
+  const incompleteCount = stagedRows.filter((r) => r.expectedCompletionStatus === "Incomplete").length;
+
+  return {
+    rows: stagedRows,
+    totalRawRows,
+    totalGroupedDeliveries: stagedRows.length,
+    readyCount,
+    attentionCount,
+    duplicateCount,
+    ownedCount,
+    subconCount,
+    existingTrucksMatched,
+    newTrucksToCreate,
+    existingCrewMatched,
+    newCrewToCreate,
+    autoCompletedCount,
+    incompleteCount,
+    errors: [],
+  };
+}
+
+/**
  * Parses a Daily Trip Report formatted Excel workbook.
  * Supports multi-sheet daily blocks, client carry-over, store splitting on \n or /,
  * overall trip entry fees (Col M/13), toll plaza breakdowns, and flagging missing waybills.
@@ -702,199 +1006,22 @@ export function parseDailyTripReportWorkbook(
       defval: "",
       raw: false,
     });
-    if (rawRows.length < 4) continue;
+    if (rawRows.length < 3) continue;
 
-    // Detect header row & section date
-    let headerIdx = -1;
-    let sectionDate = "";
-    for (let r = 0; r < Math.min(12, rawRows.length); r++) {
-      const row = rawRows[r];
-      if (!Array.isArray(row)) continue;
-      const rowStr = row.map((c) => String(c ?? "")).join(" ").toUpperCase();
-      if (rowStr.includes("DAILY TRIP REPORT")) {
-        sectionDate = parseDateFromTitle(rowStr);
-      }
-      if (
-        rowStr.includes("WAYBILL") &&
-        (rowStr.includes("PLATE") || rowStr.includes("CLIENT") || rowStr.includes("STORE") || rowStr.includes("TRUCK"))
-      ) {
-        headerIdx = r;
-        break;
-      }
-    }
-
-    if (headerIdx === -1) continue;
-
-    const header = (rawRows[headerIdx] as unknown[]).map((c) =>
-      String(c ?? "").toUpperCase().replace(/\s+/g, " ").trim(),
+    const sheetResult = parseDailyTripReportTable(
+      rawRows,
+      existingWaybills,
+      seenWaybillsInBatch,
+      totalRawRows,
     );
 
-    // Ensure this is a Daily Trip Report layout (has DTR title, NET INCOME, or TOTAL EXPENSE)
-    const isDtrHeader =
-      header.some((h) => h.includes("TOTAL EXPENSE") || h.includes("NET INCOME")) ||
-      sectionDate.length > 0;
-    if (!isDtrHeader) continue;
-
-    isDtrLayout = true;
-    const wbCol = header.findIndex((h) => h.includes("WAYBILL"));
-    const clientCol = header.findIndex((h) => h.includes("CLIENT"));
-    const plateCol = header.findIndex((h) => h.includes("PLATE"));
-    const dateCol = header.findIndex((h) => h === "DATE" || h.includes("DATE"));
-    const tempCol = header.findIndex((h) => h.includes("TEMP"));
-    const originCol = header.findIndex((h) => h.includes("ORIGIN"));
-    const storeCol = header.findIndex((h) => h.includes("STORE"));
-    const tollCol = header.findIndex((h) => h.includes("TOLL GATE") || h === "TOLLS");
-    const otherCol = header.findIndex((h) => h.includes("OTHER"));
-    const feeCol = header.findIndex((h) => h.includes("ENTRY"));
-    const dieselCol = header.findIndex((h) => h.includes("DIESEL"));
-    const totalExpCol = header.findIndex((h) => h.includes("TOTAL EXPENSE"));
-    const truckTypeCol = header.findIndex((h) => h.includes("TRUCK TYPE") || h === "TYPE");
-    const rateCol = header.findIndex(
-      (h) =>
-        h === "RATE" ||
-        h === "DELIVERY RATE" ||
-        (h.includes("RATE") && !h.includes("FUEL") && !h.includes("DRIVER") && !h.includes("HELPER") && !h.includes("DAILY")),
-    );
-    const fuelRateCol = header.findIndex((h) => h.includes("FUEL"));
-    const kmCol = header.findIndex((h) => h.includes("KM"));
-
-    // Sub-headers for Driver & Helper (ALLOWANCE / DAILY RATE)
-    let driverAllowCol = 13;
-    let driverRateCol = 14;
-    let helperAllowCol = 15;
-    let helperRateCol = 16;
-    if (rawRows.length > headerIdx + 1 && Array.isArray(rawRows[headerIdx + 1])) {
-      const subHeader = (rawRows[headerIdx + 1] as unknown[]).map((c) =>
-        String(c ?? "").toUpperCase().trim(),
-      );
-      const dAllow = subHeader.findIndex((c, i) => c === "ALLOWANCE" && i < 15);
-      const dRate = subHeader.findIndex((c, i) => c.includes("RATE") && i < 16);
-      const hAllow = subHeader.findIndex((c, i) => c === "ALLOWANCE" && i >= 15);
-      const hRate = subHeader.findIndex((c, i) => c.includes("RATE") && i >= 16);
-      if (dAllow >= 0) driverAllowCol = dAllow;
-      if (dRate >= 0) driverRateCol = dRate;
-      if (hAllow >= 0) helperAllowCol = hAllow;
-      if (hRate >= 0) helperRateCol = hRate;
-    }
-
-    let clientCarry = "";
-
-    for (let r = headerIdx + 1; r < rawRows.length; r++) {
-      const row = rawRows[r];
-      if (!Array.isArray(row) || row.every((c) => String(c ?? "").trim().length === 0)) continue;
-
-      const rowText = row.map((c) => String(c ?? "")).join(" ").toUpperCase();
-      if (rowText.includes("ALLOWANCE") && rowText.includes("DAILY RATE")) continue;
-      if (rowText.includes("TOTAL") || rowText.includes("DAILY TRIP REPORT")) {
-        if (rowText.includes("DAILY TRIP REPORT")) sectionDate = parseDateFromTitle(rowText);
-        continue;
+    if (sheetResult && sheetResult.rows.length > 0) {
+      isDtrLayout = true;
+      totalRawRows += sheetResult.rows.length;
+      for (const r of sheetResult.rows) {
+        stagedRows.push(r);
+        seenWaybillsInBatch.add(r.waybillNumber);
       }
-
-      const rawWb = wbCol >= 0 ? String(row[wbCol] ?? "").trim() : "";
-      const plate = plateCol >= 0 ? String(row[plateCol] ?? "").trim().toUpperCase() : "";
-      if (!plate && !rawWb) continue;
-
-      const rawClient = clientCol >= 0 ? String(row[clientCol] ?? "").trim() : "";
-      if (rawClient) clientCarry = rawClient;
-
-      const rawDate = dateCol >= 0 ? row[dateCol] : "";
-      let parsedDate = parseExcelSerialDate(rawDate);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(parsedDate)) parsedDate = sectionDate;
-
-      const temp = tempCol >= 0 ? normalizeTemperature(String(row[tempCol] ?? "")) : "-18°C";
-      const origin = originCol >= 0 ? String(row[originCol] ?? "").trim() || "Central Depot" : "Central Depot";
-      const distance = kmCol >= 0 ? cleanNumeric(row[kmCol]) ?? 50 : 50;
-      const fuelRate = fuelRateCol >= 0 ? cleanNumeric(row[fuelRateCol]) ?? 85.0 : 85.0;
-
-      const revenue = rateCol >= 0 ? cleanNumeric(row[rateCol]) ?? 0 : 0;
-      const diesel = dieselCol >= 0 ? cleanNumeric(row[dieselCol]) : null;
-      const tolls = tollCol >= 0 ? cleanNumeric(row[tollCol]) : null;
-      const other = otherCol >= 0 ? cleanNumeric(row[otherCol]) : null;
-      const overallEntryFee = feeCol >= 0 ? cleanNumeric(row[feeCol]) : null;
-
-      const drvAllow = driverAllowCol >= 0 ? cleanNumeric(row[driverAllowCol]) : null;
-      const drvRate = driverRateCol >= 0 ? cleanNumeric(row[driverRateCol]) : null;
-      const hlpAllow = helperAllowCol >= 0 ? cleanNumeric(row[helperAllowCol]) : null;
-      const hlpRate = helperRateCol >= 0 ? cleanNumeric(row[helperRateCol]) : null;
-
-      // Toll Plaza Breakdown notes from columns after KM
-      const tollStartCol = Math.max(kmCol + 1, 23);
-      const tollPlazaNotes: string[] = [];
-      for (let c = tollStartCol; c < row.length; c++) {
-        const val = String(row[c] ?? "").trim();
-        if (val) {
-          tollPlazaNotes.push(val.replace(/\n+/g, " "));
-        }
-      }
-      const tollGateBreakdown = tollPlazaNotes.join(", ");
-
-      // Split store drop-offs by newline or slash
-      const rawStores = storeCol >= 0 ? String(row[storeCol] ?? "").trim() : "";
-      const storeNames = rawStores
-        ? rawStores.split(/[\n/]/).map((s) => s.trim()).filter(Boolean)
-        : [];
-      const dropoffs: StagedDropoff[] = (storeNames.length > 0 ? storeNames : ["Main Store"]).map((storeName) => ({
-        storeName,
-        destinationArea: "Metro Manila",
-        dropoffCount: 1,
-        entryFee: null, // individual stop fee (overall fee is mapped to entryFees)
-      }));
-
-      const totalExpVal = totalExpCol >= 0 ? cleanNumeric(row[totalExpCol]) : null;
-      const truckType = normalizeTruckType(truckTypeCol >= 0 ? String(row[truckTypeCol] ?? "") : undefined);
-
-      let truckOwnership: "Owned" | "Subcontracted" = "Owned";
-      const regTruck = getFleetTrucks().find((t) => t.plateNumber.replace(/\s+/g, "").toUpperCase() === plate.replace(/\s+/g, "").toUpperCase());
-      if (regTruck) {
-        truckOwnership = regTruck.ownershipType;
-      } else if (totalExpVal != null && totalExpVal > 0 && diesel == null && drvRate == null && hlpRate == null) {
-        truckOwnership = "Subcontracted";
-      }
-
-      const totalExpenses = truckOwnership === "Subcontracted"
-        ? (totalExpVal ?? other ?? 0)
-        : (totalExpVal ?? ((diesel ?? 0) + (tolls ?? 0) + (drvRate ?? 0) + (drvAllow ?? 0) + (hlpRate ?? 0) + (hlpAllow ?? 0) + (other ?? 0) + (overallEntryFee ?? 0)));
-
-      totalRawRows++;
-
-      const stagedRow: StagedDeliveryRow = {
-        id: `dtr-${totalRawRows}-${Date.now().toString(36)}`,
-        rowNumber: totalRawRows,
-        waybillNumber: rawWb,
-        deliveryDate: parsedDate,
-        clientName: clientCarry || "Unknown Client",
-        plateNumber: plate,
-        truckType,
-        truckOwnership,
-        truckTemperature: temp,
-        origin,
-        distanceKm: distance,
-        fuelRate,
-        deliveryRate: revenue,
-        totalExpenses,
-        dieselExpenses: truckOwnership === "Subcontracted" ? null : diesel,
-        tollGateExpenses: truckOwnership === "Subcontracted" ? null : tolls,
-        tollGateBreakdown,
-        driverDailyRate: truckOwnership === "Subcontracted" ? null : drvRate,
-        driverAllowance: truckOwnership === "Subcontracted" ? null : drvAllow,
-        driverName: "Unknown Driver",
-        helperDailyRate: truckOwnership === "Subcontracted" ? null : hlpRate,
-        helperAllowance: truckOwnership === "Subcontracted" ? null : hlpAllow,
-        helperName: "Unknown Helper",
-        otherExpenses: other,
-        entryFees: overallEntryFee,
-        dropoffs,
-        status: "ready",
-        issues: [],
-      };
-
-      const validation = validateStagedRow(stagedRow, existingWaybills, seenWaybillsInBatch);
-      stagedRow.status = validation.status;
-      stagedRow.issues = validation.issues;
-      stagedRow.expectedCompletionStatus = validation.expectedCompletionStatus;
-
-      if (rawWb) seenWaybillsInBatch.add(rawWb);
-      stagedRows.push(stagedRow);
     }
   }
 

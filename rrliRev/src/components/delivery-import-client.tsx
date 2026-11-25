@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { TruckTemperature } from "@/features/deliveries/delivery-domain";
 import {
   generateImportErrorReport,
   generateSampleCsv,
@@ -14,26 +12,24 @@ import {
   type StagedDeliveryRow,
 } from "@/features/deliveries/delivery-import-parser";
 import {
+  deleteBrowserPreviewDeliveriesByWaybills,
   readBrowserPreviewDeliveries,
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
-import { getFleetTrucks } from "@/features/deliveries/truck-registry";
-import { getFleetCrew } from "@/features/deliveries/driver-registry";
+import { getFleetTrucks, type FleetTruck } from "@/features/deliveries/truck-registry";
+import { getFleetCrew, type FleetCrewMember } from "@/features/deliveries/driver-registry";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 
-const DELIVERY_TEMPERATURES: readonly TruckTemperature[] = [
-  "-20°C",
-  "-18°C",
-  "0°C",
-  "2°C",
-  "4°C",
-  "20°C",
-];
+import { ImportStepper } from "./delivery-import/import-stepper";
+import { ImportStep1Select } from "./delivery-import/import-step1-select";
+import { ImportStep2Review } from "./delivery-import/import-step2-review";
+import { ImportStep3Confirm } from "./delivery-import/import-step3-confirm";
+import { ImportStep4Results } from "./delivery-import/import-step4-results";
+import { ImportUndoModal } from "./delivery-import/import-undo-modal";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 type ImportStep = 1 | 2 | 3 | 4;
-
 type FilterTab = "all" | "ready" | "attention" | "duplicate";
 
 export function DeliveryExcelImportClient({
@@ -64,9 +60,22 @@ export function DeliveryExcelImportClient({
     errors: { waybill: string; reason: string }[];
   } | null>(null);
 
-  const searchInputId = useId();
+  const [liveTrucks, setLiveTrucks] = useState<FleetTruck[]>(() => [...getFleetTrucks()]);
+  const [liveCrew, setLiveCrew] = useState<FleetCrewMember[]>(() => [...getFleetCrew()]);
+  const [liveClients, setLiveClients] = useState<string[]>([]);
 
-  // Load existing waybills from browser preview and server
+  // Step 3 Preview Table state
+  const [previewSearch, setPreviewSearch] = useState("");
+  const [previewPage, setPreviewPage] = useState(1);
+  const [previewPageSize, setPreviewPageSize] = useState<number>(10);
+
+  // Step 4 Undo state
+  const [undoing, setUndoing] = useState(false);
+  const [showUndoConfirm, setShowUndoConfirm] = useState(false);
+  const [isUndone, setIsUndone] = useState(false);
+  const [undoneCount, setUndoneCount] = useState(0);
+
+  // Load existing waybills and live registries from server
   useEffect(() => {
     const waybills = new Set<string>();
     try {
@@ -82,15 +91,41 @@ export function DeliveryExcelImportClient({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && Array.isArray(data.items)) {
+          const clientNames = new Set<string>();
           for (const item of data.items) {
             if (item.waybillNumber) waybills.add(item.waybillNumber.trim().toUpperCase());
+            if (item.clientName) clientNames.add(item.clientName.trim());
           }
+          setExistingWaybills(waybills);
+          if (clientNames.size > 0) {
+            setLiveClients(Array.from(clientNames).sort());
+          }
+        } else {
+          setExistingWaybills(waybills);
         }
-        setExistingWaybills(waybills);
       })
       .catch(() => {
         setExistingWaybills(waybills);
       });
+
+    fetch("/api/trucks")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.trucks) && data.trucks.length > 0) {
+          setLiveTrucks(data.trucks);
+        }
+      })
+      .catch(() => {});
+
+    fetch("/api/drivers")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const crewList = data?.crew || data?.drivers;
+        if (Array.isArray(crewList) && crewList.length > 0) {
+          setLiveCrew(crewList);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Process text into parsed rows
@@ -254,20 +289,40 @@ export function DeliveryExcelImportClient({
       const updated = current.map((row) => {
         if (row.id !== id) return row;
         const modified = { ...row, [field]: value };
-        // Recalculate status and issues
         const { status, issues } = validateStagedRow(modified, existingWaybills);
         return { ...modified, status, issues };
       });
-
       return updated;
     });
   }
 
   function removeStagedRow(id: string) {
+    setStagedRows((current) => current.filter((r) => r.id !== id));
+  }
+
+  function autoGenerateMissingWaybills() {
     setStagedRows((current) => {
-      const next = current.filter((r) => r.id !== id);
-      return next;
+      const seen = new Set<string>();
+      for (const r of current) {
+        if (r.waybillNumber.trim()) seen.add(r.waybillNumber.trim().toUpperCase());
+      }
+      return current.map((row) => {
+        if (row.waybillNumber.trim()) return row;
+        const cleanPlate = (row.plateNumber || "TRIP").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+        const yymmdd = (row.deliveryDate || new Date().toISOString().slice(0, 10)).replace(/-/g, "").slice(2);
+        const base = `WB-${yymmdd}-${cleanPlate || `ROW${row.rowNumber}`}`;
+        let candidate = base;
+        let counter = 2;
+        while (seen.has(candidate.toUpperCase()) || existingWaybills.has(candidate.toUpperCase())) {
+          candidate = `${base}-${counter++}`;
+        }
+        seen.add(candidate.toUpperCase());
+        const modified = { ...row, waybillNumber: candidate };
+        const { status, issues, expectedCompletionStatus } = validateStagedRow(modified, existingWaybills);
+        return { ...modified, status, issues, expectedCompletionStatus };
+      });
     });
+    toast.success("Generated waybills for trips missing waybills.");
   }
 
   // Filtered rows for Step 2
@@ -290,20 +345,41 @@ export function DeliveryExcelImportClient({
     });
   }, [stagedRows, activeTab, searchQuery]);
 
-  const registeredTrucks = useMemo(() => getFleetTrucks(), []);
-  const registeredCrew = useMemo(() => getFleetCrew(), []);
-
-  const readyCount = stagedRows.filter((r) => r.status === "ready").length;
+  const readyRows = useMemo(() => stagedRows.filter((r) => r.status === "ready"), [stagedRows]);
+  const readyCount = readyRows.length;
   const attentionCount = stagedRows.filter((r) => r.status === "needs_attention").length;
   const duplicateCount = stagedRows.filter((r) => r.status === "duplicate").length;
-  const readyOwnedCount = stagedRows.filter((r) => r.status === "ready" && r.truckOwnership === "Owned").length;
-  const readySubconCount = stagedRows.filter((r) => r.status === "ready" && r.truckOwnership === "Subcontracted").length;
-  const readyNewTrucksCount = stagedRows.filter((r) => r.status === "ready" && r.isNewTruck).length;
-  const readyMatchedTrucksCount = stagedRows.filter((r) => r.status === "ready" && !r.isNewTruck).length;
-  const readyAutoCompletedCount = stagedRows.filter((r) => r.status === "ready" && r.expectedCompletionStatus === "Completed").length;
+  const readyOwnedCount = readyRows.filter((r) => r.truckOwnership === "Owned").length;
+  const readySubconCount = readyRows.filter((r) => r.truckOwnership === "Subcontracted").length;
+  const readyNewTrucksCount = readyRows.filter((r) => r.isNewTruck).length;
+  const readyMatchedTrucksCount = readyRows.filter((r) => !r.isNewTruck).length;
+  const readyAutoCompletedCount = readyRows.filter((r) => r.expectedCompletionStatus === "Completed").length;
+  const missingWaybillCount = stagedRows.filter((r) => !r.waybillNumber.trim()).length;
+
+  // Step 3 preview table filtering and pagination
+  const filteredReadyRows = useMemo(() => {
+    const q = previewSearch.trim().toLowerCase();
+    if (!q) return readyRows;
+    return readyRows.filter((r) => {
+      const stops = r.dropoffs.map((d) => d.storeName).join(" ").toLowerCase();
+      return (
+        r.waybillNumber.toLowerCase().includes(q) ||
+        r.clientName.toLowerCase().includes(q) ||
+        r.plateNumber.toLowerCase().includes(q) ||
+        (r.driverName ?? "").toLowerCase().includes(q) ||
+        (r.helperName ?? "").toLowerCase().includes(q) ||
+        stops.includes(q)
+      );
+    });
+  }, [readyRows, previewSearch]);
+
+  const totalPreviewPages = Math.ceil(filteredReadyRows.length / previewPageSize) || 1;
+  const paginatedReadyRows = useMemo(() => {
+    const start = (previewPage - 1) * previewPageSize;
+    return filteredReadyRows.slice(start, start + previewPageSize);
+  }, [filteredReadyRows, previewPage, previewPageSize]);
 
   async function executeCommit() {
-    const readyRows = stagedRows.filter((r) => r.status === "ready");
     if (readyRows.length === 0) {
       setErrorMessage("No ready rows are available for import.");
       return;
@@ -364,39 +440,94 @@ export function DeliveryExcelImportClient({
         }),
       };
 
-      const response = await fetch("/api/deliveries/import", {
+      const res = await fetch("/api/deliveries/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const data = (await response.json()) as {
-        ok?: boolean;
-        message?: string;
-        batchName?: string;
-        committedCount?: number;
-        committedWaybills?: string[];
-        committedRecords?: DeliveryLedgerItem[];
-        duplicateCount?: number;
-        duplicateWaybills?: string[];
-        errors?: { waybill: string; reason: string }[];
-      };
-
-      if (!response.ok || !data.ok) {
-        throw new Error(data.message ?? "Batch import failed.");
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message ?? "Server rejected the import payload.");
       }
 
-      // Synchronize client preview cache so /deliveries immediately reflects new records
-      if (Array.isArray(data.committedRecords)) {
-        for (const record of data.committedRecords) {
-          upsertBrowserPreviewDelivery(record);
-        }
+      // Mirror to browser-preview so local view stays responsive
+      for (const row of readyRows) {
+        const isSubcon = row.truckOwnership === "Subcontracted";
+        const expenses = {
+          dieselExpenses: isSubcon ? null : row.dieselExpenses,
+          tollGateExpenses: isSubcon ? null : row.tollGateExpenses,
+          tollGateBreakdown: isSubcon ? "" : (row.tollGateBreakdown || ""),
+          entryFees: row.entryFees ?? null,
+          driverAllowance: isSubcon ? null : row.driverAllowance,
+          driverDailyRate: isSubcon ? null : row.driverDailyRate,
+          helperAllowance: isSubcon ? null : row.helperAllowance,
+          helperDailyRate: isSubcon ? null : row.helperDailyRate,
+          otherExpenses: isSubcon ? (row.totalExpenses ?? row.otherExpenses ?? 0) : row.otherExpenses,
+        };
+        const expenseStates = {
+          dieselExpenses: isSubcon ? ("not_applicable" as const) : (row.dieselExpenses != null ? ("confirmed" as const) : ("unknown" as const)),
+          tollGateExpenses: isSubcon ? ("not_applicable" as const) : (row.tollGateExpenses != null ? ("confirmed" as const) : ("not_applicable" as const)),
+          entryFees: row.entryFees != null ? ("confirmed" as const) : ("not_applicable" as const),
+          driverAllowance: isSubcon ? ("not_applicable" as const) : (row.driverAllowance != null ? ("confirmed" as const) : ("unknown" as const)),
+          driverDailyRate: isSubcon ? ("not_applicable" as const) : (row.driverDailyRate != null ? ("confirmed" as const) : ("unknown" as const)),
+          helperAllowance: isSubcon ? ("not_applicable" as const) : (row.helperAllowance != null ? ("confirmed" as const) : ("unknown" as const)),
+          helperDailyRate: isSubcon ? ("not_applicable" as const) : (row.helperDailyRate != null ? ("confirmed" as const) : ("unknown" as const)),
+          otherExpenses: isSubcon ? ("confirmed" as const) : (row.otherExpenses != null ? ("confirmed" as const) : ("not_applicable" as const)),
+        };
+        const totalExpenses = row.totalExpenses ?? 0;
+        const netIncome = row.deliveryRate - totalExpenses;
+        const marginPercent = row.deliveryRate > 0 ? (netIncome / row.deliveryRate) * 100 : null;
+
+        const item: DeliveryLedgerItem = {
+          id: `preview-dtr-${row.waybillNumber}`,
+          clientId: row.clientName,
+          truckId: row.plateNumber,
+          deliveryDate: row.deliveryDate,
+          clientName: row.clientName,
+          plateNumber: row.plateNumber,
+          driverName: row.driverName ?? "Assigned Fleet Driver",
+          helperName: row.helperName,
+          truckType: (row.truckType as any) || "6-Wheeler",
+          truckOwnership: (row.truckOwnership as any) || "Owned",
+          truckTemperature: row.truckTemperature,
+          waybillNumber: row.waybillNumber,
+          deliveryStatus: row.expectedCompletionStatus || "In Transit",
+          dropoffs: row.dropoffs.map((d, idx) => ({
+            id: `dtr-drop-${row.waybillNumber}-${idx}`,
+            sequence: idx + 1,
+            storeName: d.storeName,
+            destinationArea: d.destinationArea,
+            dropoffCount: d.dropoffCount || 1,
+            entryFee: d.entryFee,
+            entryFeeStatus: d.entryFee != null ? "confirmed" : "not_applicable",
+            podSubmitted: true,
+            supportingDocsComplete: true,
+            documentRef: "Imported from spreadsheet",
+          })),
+          rateBasis: "Redeemed Rate",
+          origin: row.origin || "Central Depot",
+          distanceKm: row.distanceKm || 50,
+          fuelRate: row.fuelRate || 85,
+          deliveryRate: row.deliveryRate,
+          expenses,
+          expenseStates,
+          totalExpenses,
+          netIncome,
+          marginPercent,
+          financialState: row.totalExpenses != null && row.deliveryRate > 0 ? "finalized" : "incomplete",
+          financialIntegrityIssues: [],
+          version: 1,
+          podStatus: "Verified",
+          notes: `Batch Reference: ${batchName}`,
+        };
+        upsertBrowserPreviewDelivery(item);
       }
 
       setImportResult({
-        batchName: data.batchName ?? batchName,
-        committedCount: data.committedCount ?? 0,
-        committedWaybills: data.committedWaybills ?? [],
+        batchName,
+        committedCount: data.committedCount ?? readyRows.length,
+        committedWaybills: data.committedWaybills ?? readyRows.map((r) => r.waybillNumber),
         duplicateCount: data.duplicateCount ?? 0,
         duplicateWaybills: data.duplicateWaybills ?? [],
         errors: data.errors ?? [],
@@ -416,6 +547,41 @@ export function DeliveryExcelImportClient({
     }
   }
 
+  async function handleUndoImport() {
+    if (!importResult || importResult.committedWaybills.length === 0) return;
+    setUndoing(true);
+    try {
+      const res = await fetch("/api/deliveries/import/undo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchName: importResult.batchName,
+          waybillNumbers: importResult.committedWaybills,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message ?? "Failed to undo import batch.");
+      }
+
+      deleteBrowserPreviewDeliveriesByWaybills(importResult.committedWaybills);
+
+      setIsUndone(true);
+      setUndoneCount(data.removedCount ?? importResult.committedWaybills.length);
+      setShowUndoConfirm(false);
+
+      toast.success("Import batch undone!", {
+        description: `Successfully removed ${data.removedCount ?? importResult.committedWaybills.length} deliveries from RouteX ledger.`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to undo import batch.";
+      toast.error(msg);
+    } finally {
+      setUndoing(false);
+    }
+  }
+
   function resetImportFlow() {
     setStep(1);
     setFileName(null);
@@ -424,32 +590,17 @@ export function DeliveryExcelImportClient({
     setImportResult(null);
     setActiveTab("all");
     setSearchQuery("");
+    setPreviewSearch("");
+    setPreviewPage(1);
+    setIsUndone(false);
+    setUndoneCount(0);
+    setShowUndoConfirm(false);
   }
 
   return (
     <>
       {/* Workflow Step Indicator */}
-      <nav className="import-stepper" aria-label="Import Workflow Steps">
-        <div className={`import-stepper-item${step === 1 ? " active" : step > 1 ? " completed" : ""}`}>
-          <span className="import-stepper-num">1</span>
-          <span>Select File</span>
-        </div>
-        <span className="import-stepper-arrow" aria-hidden="true">›</span>
-        <div className={`import-stepper-item${step === 2 ? " active" : step > 2 ? " completed" : ""}`}>
-          <span className="import-stepper-num">2</span>
-          <span>Preview &amp; Validate</span>
-        </div>
-        <span className="import-stepper-arrow" aria-hidden="true">›</span>
-        <div className={`import-stepper-item${step === 3 ? " active" : step > 3 ? " completed" : ""}`}>
-          <span className="import-stepper-num">3</span>
-          <span>Confirm Batch</span>
-        </div>
-        <span className="import-stepper-arrow" aria-hidden="true">›</span>
-        <div className={`import-stepper-item${step === 4 ? " active" : ""}`}>
-          <span className="import-stepper-num">4</span>
-          <span>Import Results</span>
-        </div>
-      </nav>
+      <ImportStepper step={step} />
 
       {/* Global Error Banner */}
       {errorMessage ? (
@@ -474,695 +625,101 @@ export function DeliveryExcelImportClient({
 
       {/* STEP 1: Select File */}
       {step === 1 ? (
-        <section className="records-card" aria-label="Select Import File">
-          <div className="records-heading">
-            <div>
-              <h2>Select Daily Trip Report File</h2>
-              <p>Upload an Excel (.xlsx), CSV, or TSV spreadsheet containing completed delivery trips.</p>
-            </div>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <button type="button" className="secondary-button" onClick={downloadXlsxTemplate}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Download Excel (.xlsx) Template
-              </button>
-              <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Download CSV Template
-              </button>
-              <button type="button" className="secondary-button" onClick={loadSampleData}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="1 4 1 10 7 10" />
-                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                </svg>
-                Load Sample DTR Rows
-              </button>
-            </div>
-          </div>
-
-          <div style={{ padding: "20px 22px", borderTop: "1px solid var(--line)" }}>
-            <div className="import-batch-field">
-              <label htmlFor="import-batch-name">
-                Batch Reference Name
-              </label>
-              <input
-                id="import-batch-name"
-                type="text"
-                value={batchName}
-                onChange={(e) => setBatchName(e.target.value)}
-                placeholder="e.g. DTR-Batch-2026-11-01"
-              />
-            </div>
-
-            <label
-              className={`import-dropzone${isDragging ? " is-dragging" : ""}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={(e) => {
-                setIsDragging(false);
-                handleDrop(e);
-              }}
-            >
-              <div className="import-dropzone-icon-wrap" aria-hidden="true">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="12" y1="18" x2="12" y2="12" />
-                  <line x1="9" y1="15" x2="12" y2="12" />
-                  <line x1="15" y1="15" x2="12" y2="12" />
-                </svg>
-              </div>
-              <strong className="import-dropzone-title">
-                Click to browse or drag and drop your spreadsheet
-              </strong>
-              <span className="import-dropzone-desc">
-                Supports Microsoft Excel (.xlsx), CSV, and TSV spreadsheet files up to 10MB.
-              </span>
-              <div className="import-dropzone-badges">
-                <span className="import-badge">.XLSX</span>
-                <span className="import-badge">.CSV</span>
-                <span className="import-badge">.TSV</span>
-                <span className="import-badge">.TXT</span>
-                <span className="import-badge">MAX 10MB</span>
-              </div>
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv,.tsv,.txt"
-                onChange={handleFileInputChange}
-                style={{ display: "none" }}
-              />
-            </label>
-
-            <div className="import-guide-card">
-              <strong className="import-guide-title">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--color-accent)" }}>
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="16" x2="12" y2="12" />
-                  <line x1="12" y1="8" x2="12.01" y2="8" />
-                </svg>
-                Import Requirements &amp; Multi-Stop Grouping:
-              </strong>
-              <ul className="import-guide-list">
-                <li><strong>Mandatory Columns:</strong> Waybill Number, Delivery Date (2024 or later), Client Name, Truck Plate, Temperature, Delivery Rate/Revenue, and at least one Store Stop.</li>
-                <li><strong>Multi-Stop Aggregation:</strong> Deliveries with multiple drop-offs repeat the same Waybill Number across consecutive rows and are automatically combined into a single trip record.</li>
-                <li><strong>Duplicate Protection:</strong> Existing waybills in RouteX are detected before commit, preventing accidental historical record overwrites.</li>
-                <li><strong>Strict Financial Integrity:</strong> Rates and allowances are strictly validated; incomplete or missing rates remain unresolved until verified.</li>
-              </ul>
-            </div>
-          </div>
-        </section>
+        <ImportStep1Select
+          batchName={batchName}
+          isDragging={isDragging}
+          onBatchNameChange={setBatchName}
+          setIsDragging={setIsDragging}
+          onDrop={handleDrop}
+          onFileInputChange={handleFileInputChange}
+          onDownloadXlsxTemplate={downloadXlsxTemplate}
+          onDownloadCsvTemplate={downloadCsvTemplate}
+          onLoadSampleData={loadSampleData}
+        />
       ) : null}
 
       {/* STEP 2: Preview & Validate */}
       {step === 2 ? (
-        <section className="records-card" aria-label="Review and Validate Staged Deliveries">
-          <div className="records-heading">
-            <div>
-              <h2>2. Staged Deliveries ({stagedRows.length} trips parsed)</h2>
-              <p>
-                File: <strong>{fileName}</strong> — Correct any highlighted errors before proceeding.
-              </p>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setStep(1)}
-              >
-                Replace File
-              </button>
-              <button
-                type="button"
-                className="primary-action-button"
-                disabled={readyCount === 0}
-                onClick={() => setStep(3)}
-              >
-                Proceed to Confirmation ({readyCount} Ready)
-              </button>
-            </div>
-          </div>
-
-          {/* Filter Tabs */}
-          <div className="delivery-status-tabs" role="tablist" aria-label="Filter staged rows by validation status">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "all"}
-              className={`delivery-status-tab${activeTab === "all" ? " active" : ""}`}
-              onClick={() => setActiveTab("all")}
-            >
-              All Deliveries
-              <span className="tab-count-badge">{stagedRows.length}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "ready"}
-              className={`delivery-status-tab${activeTab === "ready" ? " active" : ""}`}
-              onClick={() => setActiveTab("ready")}
-            >
-              Ready to Import
-              <span className="tab-count-badge">{readyCount}</span>
-            </button>
-            {attentionCount > 0 ? (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === "attention"}
-                className={`delivery-status-tab is-incomplete-tab${activeTab === "attention" ? " active" : ""}`}
-                onClick={() => setActiveTab("attention")}
-              >
-                Needs Attention
-                <span className="tab-count-badge">{attentionCount}</span>
-              </button>
-            ) : null}
-            {duplicateCount > 0 ? (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === "duplicate"}
-                className={`delivery-status-tab${activeTab === "duplicate" ? " active" : ""}`}
-                onClick={() => setActiveTab("duplicate")}
-              >
-                Duplicates (Skip)
-                <span className="tab-count-badge">{duplicateCount}</span>
-              </button>
-            ) : null}
-          </div>
-
-          {/* Quick Search inside staged table */}
-          <div className="filters">
-            <div className="search-box">
-              <input
-                id={searchInputId}
-                type="search"
-                placeholder="Search waybill, client, plate, or stop…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            {searchQuery ? (
-              <button
-                type="button"
-                className="secondary-button"
-                style={{ fontSize: "12px", padding: "6px 12px" }}
-                onClick={() => setSearchQuery("")}
-              >
-                Clear Search
-              </button>
-            ) : null}
-          </div>
-
-          {/* Staged Deliveries Table */}
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Date</th>
-                  <th>Waybill</th>
-                  <th>Client</th>
-                  <th>Plate</th>
-                  <th>Temp</th>
-                  <th>Revenue</th>
-                  <th>Diesel</th>
-                  <th>Tolls</th>
-                  <th>Crew (Driver / Helper)</th>
-                  <th>Stops</th>
-                  <th style={{ width: "40px" }} aria-label="Row Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={12} style={{ textAlign: "center", padding: "36px 16px", color: "var(--color-text-muted)" }}>
-                      No deliveries matching current filter.
-                    </td>
-                  </tr>
-                ) : (
-                  visibleRows.map((row) => (
-                    <tr
-                      key={row.id}
-                      style={{
-                        background:
-                          row.status === "needs_attention"
-                            ? "rgba(239, 68, 68, 0.04)"
-                            : row.status === "duplicate"
-                              ? "rgba(255, 255, 255, 0.02)"
-                              : undefined,
-                      }}
-                    >
-                      <td>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                          <span
-                            className={`pod-status ${
-                              row.status === "ready"
-                                ? "attached"
-                                : row.status === "duplicate"
-                                  ? "missing"
-                                  : "pending"
-                            }`}
-                            style={{ width: "fit-content" }}
-                          >
-                            {row.status === "ready"
-                              ? "Ready"
-                              : row.status === "duplicate"
-                                ? "Duplicate"
-                                : "Needs Attention"}
-                          </span>
-                          {row.issues.length > 0 ? (
-                            <span className="import-row-error-badge">
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="12" y1="8" x2="12" y2="12" />
-                                <line x1="12" y1="16" x2="12.01" y2="16" />
-                              </svg>
-                              {row.issues.map((i) => i.message).join(", ")}
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td>
-                        <input
-                          type="date"
-                          min="2024-01-01"
-                          className="import-table-input"
-                          value={row.deliveryDate}
-                          onChange={(e) => updateRowField(row.id, "deliveryDate", e.target.value)}
-                          style={{ width: "125px" }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className={`import-table-input${!row.waybillNumber.trim() ? " has-error" : ""}`}
-                          value={row.waybillNumber}
-                          onChange={(e) => updateRowField(row.id, "waybillNumber", e.target.value)}
-                          style={{
-                            width: "115px",
-                            fontFamily: "var(--font-mono, monospace)",
-                            fontWeight: 600,
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className={`import-table-input${!row.clientName.trim() ? " has-error" : ""}`}
-                          value={row.clientName}
-                          onChange={(e) => updateRowField(row.id, "clientName", e.target.value)}
-                          style={{ width: "135px" }}
-                        />
-                      </td>
-                      <td>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                          <input
-                            type="text"
-                            list="registered-trucks-datalist"
-                            className={`import-table-input${!row.plateNumber.trim() ? " has-error" : ""}`}
-                            value={row.plateNumber}
-                            onChange={(e) => updateRowField(row.id, "plateNumber", e.target.value)}
-                            style={{ width: "95px", textTransform: "uppercase", fontWeight: 600 }}
-                          />
-                          <span
-                            className="routex-badge"
-                            style={{
-                              fontSize: "9px",
-                              width: "fit-content",
-                              color: row.truckOwnership === "Owned" ? "#059669" : "#d97706",
-                            }}
-                          >
-                            {row.truckOwnership === "Owned" ? "Owned" : "Subcon"}
-                            {row.isNewTruck ? " (New)" : ""}
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <select
-                          className="import-table-select"
-                          value={row.truckTemperature}
-                          onChange={(e) =>
-                            updateRowField(row.id, "truckTemperature", e.target.value as TruckTemperature)
-                          }
-                          style={{ width: "75px" }}
-                        >
-                          {DELIVERY_TEMPERATURES.map((t) => (
-                            <option key={t} value={t}>
-                              {t}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className={`import-table-input${row.deliveryRate <= 0 ? " has-error" : ""}`}
-                          min="0"
-                          value={row.deliveryRate || ""}
-                          placeholder="0"
-                          onChange={(e) => updateRowField(row.id, "deliveryRate", Number(e.target.value) || 0)}
-                          style={{ width: "90px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="import-table-input"
-                          min="0"
-                          value={row.dieselExpenses ?? ""}
-                          placeholder="Optional"
-                          onChange={(e) =>
-                            updateRowField(
-                              row.id,
-                              "dieselExpenses",
-                              e.target.value !== "" ? Number(e.target.value) : null,
-                            )
-                          }
-                          style={{ width: "80px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="import-table-input"
-                          min="0"
-                          value={row.tollGateExpenses ?? ""}
-                          placeholder="Optional"
-                          onChange={(e) =>
-                            updateRowField(
-                              row.id,
-                              "tollGateExpenses",
-                              e.target.value !== "" ? Number(e.target.value) : null,
-                            )
-                          }
-                          style={{ width: "80px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                        />
-                      </td>
-                      <td>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                          <input
-                            type="text"
-                            list="registered-drivers-datalist"
-                            className="import-table-input"
-                            value={row.driverName ?? ""}
-                            placeholder="Driver"
-                            onChange={(e) =>
-                              updateRowField(row.id, "driverName", e.target.value.trim() ? e.target.value : null)
-                            }
-                            style={{ width: "110px", fontSize: "11px", padding: "3px 6px" }}
-                          />
-                          <input
-                            type="text"
-                            list="registered-helpers-datalist"
-                            className="import-table-input"
-                            value={row.helperName ?? ""}
-                            placeholder="Helper"
-                            onChange={(e) =>
-                              updateRowField(row.id, "helperName", e.target.value.trim() ? e.target.value : null)
-                            }
-                            style={{ width: "110px", fontSize: "11px", padding: "3px 6px" }}
-                          />
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ maxWidth: "200px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span className="routex-badge" style={{ fontSize: "10px" }}>
-                              {(() => {
-                                const totalDrops = row.dropoffs.reduce((sum, d) => sum + Math.max(1, d.dropoffCount || 1), 0);
-                                return totalDrops === row.dropoffs.length
-                                  ? `${totalDrops} ${totalDrops === 1 ? "Drop-off" : "Drop-offs"}`
-                                  : `${totalDrops} Drops (${row.dropoffs.length} locs)`;
-                              })()}
-                            </span>
-                          </div>
-                          <span
-                            style={{
-                              display: "block",
-                              color: "var(--color-text-muted)",
-                              fontSize: "11px",
-                              marginTop: "3px",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                            title={row.dropoffs.map((d) => d.storeName).join(", ")}
-                          >
-                            {row.dropoffs.map((d) => d.storeName).join(", ")}
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <button
-                          type="button"
-                          className="truck-action-icon-btn danger"
-                          aria-label={`Remove row for waybill ${row.waybillNumber}`}
-                          title="Remove staged row"
-                          onClick={() => removeStagedRow(row.id)}
-                        >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            <line x1="10" y1="11" x2="10" y2="17" />
-                            <line x1="14" y1="11" x2="14" y2="17" />
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-
-            <datalist id="registered-trucks-datalist">
-              {registeredTrucks.map((t) => (
-                <option key={t.id} value={t.plateNumber}>
-                  {t.plateNumber} ({t.ownershipType} - {t.truckType})
-                </option>
-              ))}
-            </datalist>
-            <datalist id="registered-drivers-datalist">
-              {registeredCrew
-                .filter((c) => c.assignmentType === "Driver")
-                .map((c) => (
-                  <option key={c.id} value={c.fullName} />
-                ))}
-            </datalist>
-            <datalist id="registered-helpers-datalist">
-              {registeredCrew
-                .filter((c) => c.assignmentType === "Helper")
-                .map((c) => (
-                  <option key={c.id} value={c.fullName} />
-                ))}
-            </datalist>
-          </div>
-        </section>
+        <ImportStep2Review
+          stagedRows={stagedRows}
+          fileName={fileName}
+          missingWaybillCount={missingWaybillCount}
+          readyCount={readyCount}
+          attentionCount={attentionCount}
+          duplicateCount={duplicateCount}
+          activeTab={activeTab}
+          onActiveTabChange={setActiveTab}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          onAutoGenerateMissingWaybills={autoGenerateMissingWaybills}
+          onReplaceFile={() => setStep(1)}
+          onProceed={() => setStep(3)}
+          visibleRows={visibleRows}
+          updateRowField={updateRowField}
+          removeStagedRow={removeStagedRow}
+          liveClients={liveClients}
+          liveTrucks={liveTrucks}
+          liveCrew={liveCrew}
+        />
       ) : null}
 
       {/* STEP 3: Confirm Batch */}
       {step === 3 ? (
-        <section className="records-card" aria-label="Confirm Delivery Batch">
-          <div className="records-heading">
-            <div>
-              <h2>3. Confirm Batch Import</h2>
-              <p>Review the import summary before committing to RouteX records.</p>
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setStep(2)}
-                disabled={importing}
-              >
-                Back to Review
-              </button>
-              <button
-                type="button"
-                className="primary-action-button"
-                disabled={importing || readyCount === 0}
-                onClick={executeCommit}
-              >
-                {importing ? "Committing Batch…" : `Confirm & Commit ${readyCount} Deliveries`}
-              </button>
-            </div>
-          </div>
-
-          <div style={{ padding: "20px 22px", borderTop: "1px solid var(--line)" }}>
-            <div className="import-metric-grid">
-              <div className="import-metric-card">
-                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Batch Reference</span>
-                <strong style={{ fontSize: "16px", color: "var(--color-text-primary)", marginTop: "4px" }}>
-                  {batchName}
-                </strong>
-              </div>
-
-              <div className="import-metric-card tone-ready">
-                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Ready to Commit</span>
-                <strong style={{ fontSize: "22px", color: "#10b981", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                  {readyCount} trips
-                </strong>
-                <span style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: "2px" }}>
-                  {readyOwnedCount} Owned · {readySubconCount} Subcon
-                </span>
-              </div>
-
-              <div className="import-metric-card">
-                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Trucks Breakdown</span>
-                <strong style={{ fontSize: "16px", color: "var(--color-text-primary)", marginTop: "4px" }}>
-                  {readyMatchedTrucksCount} matched · {readyNewTrucksCount} new
-                </strong>
-                <span style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: "2px" }}>
-                  {readyAutoCompletedCount} will auto-complete
-                </span>
-              </div>
-
-              {duplicateCount > 0 ? (
-                <div className="import-metric-card tone-duplicate">
-                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Duplicates (Will be Skipped)</span>
-                  <strong style={{ fontSize: "22px", color: "var(--color-text-muted)", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                    {duplicateCount} trips
-                  </strong>
-                </div>
-              ) : null}
-
-              {attentionCount > 0 ? (
-                <div className="import-metric-card tone-attention">
-                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Needs Attention (Excluded)</span>
-                  <strong style={{ fontSize: "22px", color: "#ef4444", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                    {attentionCount} trips
-                  </strong>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="import-guide-card">
-              <strong className="import-guide-title">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--color-accent)" }}>
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
-                Import Safety Guarantees:
-              </strong>
-              <ul className="import-guide-list">
-                <li>Only rows marked as <strong>Ready</strong> will be committed to the database.</li>
-                <li>Duplicate waybills are never overwritten, protecting existing historical delivery trips.</li>
-                <li>All import events are written to the audit log under entity ID for this batch.</li>
-                <li>Created delivery records are immediately reflected across RouteX dashboards, ledgers, and profitability summaries.</li>
-              </ul>
-            </div>
-          </div>
-        </section>
+        <ImportStep3Confirm
+          batchName={batchName}
+          readyCount={readyCount}
+          readyOwnedCount={readyOwnedCount}
+          readySubconCount={readySubconCount}
+          readyMatchedTrucksCount={readyMatchedTrucksCount}
+          readyNewTrucksCount={readyNewTrucksCount}
+          readyAutoCompletedCount={readyAutoCompletedCount}
+          duplicateCount={duplicateCount}
+          attentionCount={attentionCount}
+          importing={importing}
+          onBack={() => setStep(2)}
+          onCommit={executeCommit}
+          filteredReadyRows={filteredReadyRows}
+          paginatedReadyRows={paginatedReadyRows}
+          previewSearch={previewSearch}
+          onPreviewSearchChange={(q) => {
+            setPreviewSearch(q);
+            setPreviewPage(1);
+          }}
+          previewPage={previewPage}
+          onPreviewPageChange={setPreviewPage}
+          previewPageSize={previewPageSize}
+          onPreviewPageSizeChange={(sz) => {
+            setPreviewPageSize(sz);
+            setPreviewPage(1);
+          }}
+          totalPreviewPages={totalPreviewPages}
+        />
       ) : null}
 
       {/* STEP 4: Import Results */}
       {step === 4 && importResult ? (
-        <section className="records-card" aria-label="Import Batch Results">
-          <div className="records-heading">
-            <div>
-              <h2>Import Batch Completed</h2>
-              <p>Batch Reference: {importResult.batchName}</p>
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button type="button" className="secondary-button" onClick={resetImportFlow}>
-                Import Another Batch
-              </button>
-              <Link
-                className="primary-action-button"
-                href={returnHref && returnHref.startsWith("/deliveries") ? returnHref : "/deliveries"}
-              >
-                View in Deliveries →
-              </Link>
-            </div>
-          </div>
+        <ImportStep4Results
+          importResult={importResult}
+          isUndone={isUndone}
+          undoneCount={undoneCount}
+          undoing={undoing}
+          returnHref={returnHref}
+          onUndoClick={() => setShowUndoConfirm(true)}
+          onReset={resetImportFlow}
+          onDownloadErrorReport={downloadErrorReport}
+        />
+      ) : null}
 
-          <div style={{ padding: "20px 22px", borderTop: "1px solid var(--line)" }}>
-            <div className="import-metric-grid">
-              <div className="import-metric-card tone-ready">
-                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Successfully Committed</span>
-                <strong style={{ fontSize: "24px", color: "#10b981", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                  {importResult.committedCount} Deliveries
-                </strong>
-              </div>
-
-              {importResult.duplicateCount > 0 ? (
-                <div className="import-metric-card tone-duplicate">
-                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Duplicate Waybills Skipped</span>
-                  <strong style={{ fontSize: "24px", color: "var(--color-text-muted)", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                    {importResult.duplicateCount}
-                  </strong>
-                </div>
-              ) : null}
-
-              {importResult.errors.length > 0 ? (
-                <div className="import-metric-card tone-attention">
-                  <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Failed Records</span>
-                  <strong style={{ fontSize: "24px", color: "#ef4444", marginTop: "4px", fontVariantNumeric: "tabular-nums" }}>
-                    {importResult.errors.length}
-                  </strong>
-                </div>
-              ) : null}
-            </div>
-
-            {/* Committed Waybill Chips */}
-            {importResult.committedWaybills.length > 0 ? (
-              <div style={{ marginBottom: "24px" }}>
-                <strong style={{ display: "block", fontSize: "13px", marginBottom: "10px", color: "var(--color-text-primary)" }}>
-                  Committed Waybill Records ({importResult.committedWaybills.length}):
-                </strong>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                  {importResult.committedWaybills.map((wb) => (
-                    <span key={wb} className="import-waybill-pill">
-                      {wb}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {/* Skipped / Duplicates */}
-            {importResult.duplicateWaybills.length > 0 ? (
-              <div style={{ marginBottom: "24px" }}>
-                <strong style={{ display: "block", fontSize: "13px", marginBottom: "10px", color: "var(--color-text-muted)" }}>
-                  Skipped Duplicates ({importResult.duplicateWaybills.length}):
-                </strong>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                  {importResult.duplicateWaybills.map((wb) => (
-                    <span key={wb} className="import-waybill-pill" style={{ opacity: 0.75 }}>
-                      {wb}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {/* Error Report Download */}
-            {(importResult.duplicateCount > 0 || importResult.errors.length > 0) ? (
-              <div style={{ marginTop: "20px", paddingTop: "18px", borderTop: "1px solid var(--line)" }}>
-                <button type="button" className="secondary-button" onClick={downloadErrorReport}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Download Audit / Error Report (CSV)
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </section>
+      {/* Undo Confirmation Modal */}
+      {importResult ? (
+        <ImportUndoModal
+          isOpen={showUndoConfirm}
+          batchName={importResult.batchName}
+          committedCount={importResult.committedCount}
+          undoing={undoing}
+          onCancel={() => setShowUndoConfirm(false)}
+          onConfirm={handleUndoImport}
+        />
       ) : null}
     </>
   );

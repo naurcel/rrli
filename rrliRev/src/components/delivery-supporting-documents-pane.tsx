@@ -11,6 +11,7 @@ import {
 } from "@/features/deliveries/delivery-domain";
 import { generateMockPodSvgReceipt } from "@/features/deliveries/pod-utils";
 import { ImageViewerModal } from "@/components/image-viewer-modal";
+import { RoundedSelect, type SelectOption } from "@/components/rounded-select";
 
 interface DeliverySupportingDocumentsPaneProps {
   trip: DeliveryLedgerItem;
@@ -84,6 +85,17 @@ export function DeliverySupportingDocumentsPane({
     }
     return normalizedDocs;
   }, [normalizedDocs, filter]);
+
+  const dropoffOptions: SelectOption[] = useMemo(
+    () => [
+      { value: "trip", label: "Entire Trip (General)" },
+      ...trip.dropoffs.map((stop, i) => ({
+        value: stop.id,
+        label: `Stop #${stop.sequence || i + 1}: ${stop.storeName}`,
+      })),
+    ],
+    [trip.dropoffs],
+  );
 
   async function persistSupportingDocs(nextDocs: SupportingDocumentItem[], reason: string) {
     const updatedTrip: DeliveryLedgerItem = {
@@ -275,32 +287,6 @@ export function DeliverySupportingDocumentsPane({
             Receipts, gate passes, fuel invoices &amp; store attachments
           </span>
         </div>
-
-        {canManage ? (
-          <button
-            type="button"
-            className="secondary-button supporting-docs-attach-btn"
-            onClick={() => fileInputRef.current?.click()}
-            title="Browse and attach files"
-            style={{ fontSize: "11.5px", padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: "5px" }}
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <span>Attach File</span>
-          </button>
-        ) : null}
       </div>
 
       {/* Sleek Upload & Drop Target (shown when documents already exist) */}
@@ -358,22 +344,18 @@ export function DeliverySupportingDocumentsPane({
           </div>
 
           {trip.dropoffs.length > 0 ? (
-            <div className="supporting-docs-target-select-wrap">
+            <div
+              className="supporting-docs-target-select-wrap"
+              onClick={(e) => e.stopPropagation()}
+            >
               <span className="supporting-docs-target-select-label">Link to:</span>
-              <select
-                className="supporting-docs-store-select"
+              <RoundedSelect
                 value={targetDropoffId}
-                onChange={(e) => setTargetDropoffId(e.target.value)}
-                aria-label="Select default store link for new uploads"
-                title="Newly attached files will link to this location"
-              >
-                <option value="trip">Entire Trip (General)</option>
-                {trip.dropoffs.map((stop, i) => (
-                  <option key={stop.id} value={stop.id}>
-                    Stop #{stop.sequence || i + 1}: {stop.storeName}
-                  </option>
-                ))}
-              </select>
+                options={dropoffOptions}
+                onChange={setTargetDropoffId}
+                ariaLabel="Select default store link for new uploads"
+                className="supporting-docs-rounded-select"
+              />
             </div>
           ) : null}
         </div>
@@ -473,20 +455,13 @@ export function DeliverySupportingDocumentsPane({
                   onClick={(e) => e.stopPropagation()}
                 >
                   <span className="supporting-docs-target-select-label">Attach to:</span>
-                  <select
-                    className="supporting-docs-store-select"
+                  <RoundedSelect
                     value={targetDropoffId}
-                    onChange={(e) => setTargetDropoffId(e.target.value)}
-                    aria-label="Select default store link for new uploads"
-                    title="Newly attached files will link to this location"
-                  >
-                    <option value="trip">Entire Trip (General)</option>
-                    {trip.dropoffs.map((stop, i) => (
-                      <option key={stop.id} value={stop.id}>
-                        Stop #{stop.sequence || i + 1}: {stop.storeName}
-                      </option>
-                    ))}
-                  </select>
+                    options={dropoffOptions}
+                    onChange={setTargetDropoffId}
+                    ariaLabel="Select default store link for new uploads"
+                    className="supporting-docs-rounded-select"
+                  />
                 </div>
               ) : null}
             </div>
@@ -608,21 +583,18 @@ export function DeliverySupportingDocumentsPane({
                     {/* Linked Location Dropdown or Badge */}
                     <div className="supporting-doc-location-row">
                       {canManage && trip.dropoffs.length > 0 ? (
-                        <select
-                          className="supporting-docs-store-select"
-                          value={doc.dropoffId ?? "trip"}
-                          onChange={(e) => handleLinkChange(originalIndex, e.target.value)}
-                          title="Change linked store or trip location"
-                          aria-label={`Change linked location for ${doc.name}`}
+                        <div
+                          className="supporting-docs-item-select-wrap"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <option value="trip">Entire Trip (General)</option>
-                          {trip.dropoffs.map((stop, sIdx) => (
-                            <option key={stop.id} value={stop.id}>
-                              Stop #{stop.sequence || sIdx + 1}: {stop.storeName}
-                            </option>
-                          ))}
-                        </select>
+                          <RoundedSelect
+                            value={doc.dropoffId ?? "trip"}
+                            options={dropoffOptions}
+                            onChange={(val) => handleLinkChange(originalIndex, val)}
+                            ariaLabel={`Change linked location for ${doc.name}`}
+                            className="supporting-docs-rounded-select is-item-select"
+                          />
+                        </div>
                       ) : (
                         <span
                           className={`supporting-doc-location-tag ${doc.dropoffId ? "is-store" : ""}`}

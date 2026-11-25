@@ -106,6 +106,23 @@ export function deleteBrowserPreviewDelivery(deliveryId: string): void {
   window.dispatchEvent(new Event(BROWSER_PREVIEW_DELIVERIES_CHANGED));
 }
 
+export function deleteBrowserPreviewDeliveriesByWaybills(waybillNumbers: string[]): void {
+  if (typeof window === "undefined" || !Array.isArray(waybillNumbers) || waybillNumbers.length === 0) return;
+  const waybillSet = new Set(waybillNumbers.map((w) => w.trim()));
+  const current = readBrowserPreviewDeliveries();
+  const next = current.filter((item) => !waybillSet.has(item.waybillNumber.trim()));
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event(BROWSER_PREVIEW_DELIVERIES_CHANGED));
+}
+
+export function clearBrowserPreviewDeliveries(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new Event(BROWSER_PREVIEW_DELIVERIES_CHANGED));
+  } catch {}
+}
+
 export function selectBrowserPreviewDeliveries(
   filters: BrowserDeliveryFilters = {},
 ): DeliveryLedgerItem[] {
