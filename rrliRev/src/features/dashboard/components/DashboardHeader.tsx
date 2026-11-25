@@ -2,7 +2,12 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { withReturnContext } from "@/lib/navigation/return-context";
+import {
+  getRoleDashboardActions,
+  type DashboardRoleAction,
+} from "../dashboard-header-actions";
+
+export type { DashboardRoleAction };
 
 export type DashboardHeaderProps = {
   greeting: string;
@@ -15,6 +20,8 @@ export type DashboardHeaderProps = {
   accessLevel?: string;
   accessNoticeDismissed?: boolean;
   onDismissAccessNotice?: () => void;
+  role?: string;
+  isSuperadmin?: boolean;
 };
 
 export function DashboardHeader({
@@ -28,7 +35,16 @@ export function DashboardHeader({
   accessLevel,
   accessNoticeDismissed,
   onDismissAccessNotice,
+  role,
+  isSuperadmin,
 }: DashboardHeaderProps) {
+  const actions = getRoleDashboardActions(
+    role,
+    isSuperadmin,
+    canWrite,
+    currentDashboardUrl,
+  );
+
   return (
     <>
       <header className="page-intro dashboard-welcome">
@@ -40,30 +56,24 @@ export function DashboardHeader({
             Overview of delivery operations and profitability.
           </p>
         </div>
-        {canWrite ? (
-          <div className="fleet-intro-actions">
-            <Button
-              variant="secondary"
-              href={withReturnContext("/deliveries/import", currentDashboardUrl, "Dashboard")}
-              aria-label="Import an Excel trip report"
-              className="page-intro-action"
-            >
-              Import
-            </Button>
-            <Button
-              variant="primary"
-              href={withReturnContext("/deliveries/new", currentDashboardUrl, "Dashboard")}
-              aria-label="Record a completed delivery and its trip details"
-              className="page-intro-action"
-            >
-              Record delivery
-            </Button>
-          </div>
-        ) : (
-          <span className="settings-readonly-pill">
-            View-Only ({roleLabel})
-          </span>
-        )}
+        <div className="fleet-intro-actions">
+          <Button
+            variant={actions.secondary.variant}
+            href={actions.secondary.href}
+            aria-label={actions.secondary.ariaLabel}
+            className="page-intro-action"
+          >
+            {actions.secondary.label}
+          </Button>
+          <Button
+            variant={actions.primary.variant}
+            href={actions.primary.href}
+            aria-label={actions.primary.ariaLabel}
+            className="page-intro-action"
+          >
+            {actions.primary.label}
+          </Button>
+        </div>
       </header>
 
       {error ? (
@@ -87,7 +97,7 @@ export function DashboardHeader({
         </section>
       ) : null}
 
-      {!accessNoticeDismissed && accessLevel === "view_only" ? (
+      {!accessNoticeDismissed && accessLevel === "view_only" && role !== "finance" ? (
         <section className="notice" role="status">
           <span className="notice-icon" aria-hidden="true">
             i

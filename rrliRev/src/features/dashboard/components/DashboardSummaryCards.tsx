@@ -123,7 +123,11 @@ export function DashboardSummaryCards({
       {/* 4. Top Client */}
       <Link
         className="stat-card stat-card-link stat-card-top-client"
-        href="/reports"
+        href={
+          topClientData.name && topClientData.name.trim() !== "None"
+            ? `/deliveries?client=${encodeURIComponent(topClientData.name.trim())}`
+            : "/deliveries"
+        }
       >
         <span className="stat-label">TOP CLIENT</span>
         <div className="stat-client-body">

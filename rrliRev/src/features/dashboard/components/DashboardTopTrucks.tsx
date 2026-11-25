@@ -63,7 +63,24 @@ export function DashboardTopTrucks({
       <ol className="top-truck-list">
         {truckRankings.length === 0 ? (
           <li className="top-truck-empty">
-            No finalized truck records in this range.
+            <span className="top-truck-empty-icon" aria-hidden="true">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="1" y="3" width="15" height="13" rx="2" />
+                <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
+                <circle cx="5.5" cy="18.5" r="2.5" />
+                <circle cx="18.5" cy="18.5" r="2.5" />
+              </svg>
+            </span>
+            <span className="top-truck-empty-text">No finalized truck records in this range.</span>
           </li>
         ) : null}
         {truckRankings.map((truck, idx) => (

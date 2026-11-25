@@ -336,8 +336,10 @@ export default function DashboardPage() {
         <DashboardHeader
           greeting={greeting}
           actorName={actorName}
+          role={actor.role}
           roleLabel={actor.roleLabel}
           canWrite={canWrite}
+          isSuperadmin={actor.isSuperadmin}
           currentDashboardUrl={buildCurrentDashboardUrl()}
           error={error}
           loading={loading}
