@@ -374,6 +374,56 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
   gap: 8px 12px !important;
 }
 
+@media (max-width: 768px) {
+  .page-intro {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .page-intro h1 {
+    font-size: clamp(24px, 5vw, 32px) !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+  }
+
+  .page-intro .subtitle {
+    font-size: 12.5px !important;
+    margin-top: 4px !important;
+  }
+
+  .page-intro > div:has(.page-intro-action),
+  .page-intro > div:last-child {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 8px 10px !important;
+    width: 100% !important;
+  }
+
+  .records-heading {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .records-heading-copy,
+  .routex-card-header-main {
+    width: 100% !important;
+    flex: 0 0 auto !important;
+  }
+
+  .records-heading-meta,
+  .routex-card-actions {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+}
+
 /* 3. System-wide Filter Bars */
 .filters {
   display: flex !important;
@@ -385,11 +435,49 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
   box-sizing: border-box !important;
 }
 
+@media (max-width: 768px) {
+  .filters .search-box {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .filters .global-date-filter,
+  .filters .filter-select-wrapper,
+  .filters .delivery-filter-dropdown-container {
+    flex: 1 1 calc(50% - 5px) !important;
+    width: calc(50% - 5px) !important;
+    max-width: calc(50% - 5px) !important;
+    min-width: 130px !important;
+    box-sizing: border-box !important;
+  }
+
+  .filters .global-date-filter .date-filter-btn,
+  .filters .rounded-select,
+  .filters .rounded-select-trigger,
+  .filters .filter-button {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media (max-width: 440px) {
+  .filters .global-date-filter,
+  .filters .filter-select-wrapper,
+  .filters .delivery-filter-dropdown-container {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
 /* 4. System-wide Tables & Records Cards */
 .records-card {
   min-width: 0 !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
+  border-radius: 12px !important;
 }
 
 .table-wrap {
@@ -400,7 +488,18 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
   box-sizing: border-box !important;
 }
 
+.table-wrap table {
+  min-width: 680px;
+}
+
 /* 5. System-wide Stat & KPI Grids */
+.dashboard-kpi-grid,
+.stat-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)) !important;
+  gap: 14px !important;
+}
+
 .dashboard-kpi-grid .stat-card,
 .stat-grid .stat-card {
   min-width: 0 !important;
@@ -419,6 +518,24 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
   max-width: 100% !important;
+}
+
+/* Auto-fill Fleet Card Grid across all screen sizes */
+.fleet-card-grid,
+.truck-profitability-card-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)) !important;
+  gap: 18px !important;
+}
+
+/* Fluid responsive padding on main content wrap */
+.content-wrap {
+  width: 100% !important;
+  max-width: 1540px !important;
+  margin-inline: auto !important;
+  box-sizing: border-box !important;
+  padding-inline: clamp(14px, 3vw, 40px) !important;
+  padding-block: clamp(18px, 3vh, 36px) !important;
 }
 
 /* 6. System-wide Badge & Pill Neutralization */
@@ -460,20 +577,16 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
   display: flex !important;
   align-items: center !important;
   gap: 10px !important;
-  flex-wrap: nowrap !important;
-  overflow-x: auto !important;
-  scrollbar-width: none !important;
-  padding-bottom: 2px !important;
-}
-
-.truck-management-toolbar .filters.truck-filters::-webkit-scrollbar {
-  display: none !important;
+  flex-wrap: wrap !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  border-bottom: none !important;
 }
 
 .truck-management-toolbar .filters.truck-filters .search-box {
-  flex: 1 1 180px !important;
-  min-width: 140px !important;
-  max-width: 240px !important;
+  flex: 1 1 200px !important;
+  min-width: 160px !important;
+  max-width: 280px !important;
   height: 40px !important;
   min-height: 40px !important;
 }
@@ -489,35 +602,50 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
 .truck-management-toolbar .filters.truck-filters .filter-select-wrapper .rounded-select {
   flex: 0 0 auto !important;
   width: auto !important;
-  min-width: 135px !important;
+  min-width: 140px !important;
 }
 
 .truck-management-toolbar .filters.truck-filters .filter-select-wrapper .rounded-select-trigger {
-  min-width: 135px !important;
+  min-width: 140px !important;
   width: auto !important;
   height: 40px !important;
   min-height: 40px !important;
   padding: 0 12px !important;
 }
 
-@media (max-width: 860px) {
-  .truck-management-toolbar .filters.truck-filters {
-    flex-wrap: wrap !important;
-    overflow-x: visible !important;
-  }
-
+/* Medium & Narrow Viewports: Clean 2x2 Filter Matrix */
+@media (max-width: 1024px) {
   .truck-management-toolbar .filters.truck-filters .search-box {
     flex: 1 1 100% !important;
+    width: 100% !important;
     max-width: 100% !important;
   }
 
+  .truck-management-toolbar .filters.truck-filters .global-date-filter,
   .truck-management-toolbar .filters.truck-filters .filter-select-wrapper {
-    flex: 1 1 auto !important;
+    flex: 1 1 calc(50% - 5px) !important;
+    width: calc(50% - 5px) !important;
+    min-width: 0 !important;
+    max-width: calc(50% - 5px) !important;
+    box-sizing: border-box !important;
   }
 
-  .truck-management-toolbar .filters.truck-filters .filter-select-wrapper .rounded-select {
+  .truck-management-toolbar .filters.truck-filters .global-date-filter .date-filter-btn,
+  .truck-management-toolbar .filters.truck-filters .filter-select-wrapper .rounded-select,
+  .truck-management-toolbar .filters.truck-filters .filter-select-wrapper .rounded-select-trigger {
     width: 100% !important;
-    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* Extra-narrow screens (< 440px): 1-column stack */
+@media (max-width: 440px) {
+  .truck-management-toolbar .filters.truck-filters .global-date-filter,
+  .truck-management-toolbar .filters.truck-filters .filter-select-wrapper {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 }
 
@@ -609,6 +737,58 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
 .top-trucks-card .truck-ranking-tabs button {
   padding: 0 9px !important;
   font-size: 11px !important;
+}
+
+/* Top Trucks Empty State Fix */
+.top-truck-list .top-truck-empty {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  width: 100% !important;
+  min-height: 140px !important;
+  padding: 24px 20px !important;
+  margin: 0 !important;
+  border: none !important;
+  border-bottom: none !important;
+  grid-column: 1 / -1 !important;
+  grid-template-columns: none !important;
+  color: var(--color-text-muted, #64748b) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
+  white-space: normal !important;
+  box-sizing: border-box !important;
+}
+
+.top-truck-list .top-truck-empty-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background: var(--color-surface-subtle, rgba(0, 0, 0, 0.04)) !important;
+  color: var(--color-text-muted, #94a3b8) !important;
+  margin-bottom: 10px !important;
+}
+
+.top-truck-list .top-truck-empty-text {
+  max-width: 260px !important;
+  color: var(--color-text-muted, #64748b) !important;
+  font-size: 12.5px !important;
+  line-height: 1.5 !important;
+}
+
+html[data-theme="dark"] .top-truck-list .top-truck-empty-icon {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] .top-truck-list .top-truck-empty,
+html[data-theme="dark"] .top-truck-list .top-truck-empty-text {
+  color: #94a3b8 !important;
 }
 
 @media (max-width: 700px) {
@@ -1667,3 +1847,241 @@ html[data-theme="dark"] .number-stepper-btn:hover:not(:disabled) {
     font-size: clamp(24px, 5.4vh, 40px) !important;
   }
 }
+
+/* 11. Supporting Documents Dropdown Styling */
+.supporting-docs-target-select-wrap {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  position: relative !important;
+}
+
+.supporting-docs-rounded-select {
+  flex: 0 0 auto !important;
+  min-width: 190px !important;
+  max-width: 290px !important;
+  position: relative !important;
+}
+
+.supporting-docs-rounded-select .rounded-select-trigger {
+  min-height: 32px !important;
+  height: 32px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  gap: 8px !important;
+  background: var(--color-surface, #ffffff) !important;
+  border: 1px solid var(--color-border, #cbd5e1) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  color: var(--color-text-primary, #0f172a) !important;
+}
+
+.supporting-docs-rounded-select .rounded-select-trigger:hover {
+  border-color: var(--color-accent, #d97706) !important;
+}
+
+.supporting-docs-rounded-select .rounded-select-trigger:focus-visible {
+  outline: none !important;
+  border-color: var(--color-accent, #d97706) !important;
+  box-shadow: 0 0 0 3px var(--color-accent-soft, rgba(217, 119, 6, 0.15)) !important;
+}
+
+.supporting-docs-rounded-select .rounded-select-menu {
+  border-radius: 10px !important;
+  padding: 4px !important;
+  background: var(--color-surface, #ffffff) !important;
+  border: 1px solid var(--color-border, #e2e8f0) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.06) !important;
+  z-index: 1000 !important;
+}
+
+.supporting-docs-rounded-select .rounded-select-menu button {
+  padding: 7px 10px !important;
+  font-size: 11.5px !important;
+  border-radius: 6px !important;
+  color: var(--color-text-secondary, #334155) !important;
+}
+
+.supporting-docs-rounded-select .rounded-select-menu button:hover {
+  background: var(--color-accent-soft, rgba(217, 119, 6, 0.08)) !important;
+  color: var(--color-accent-deep, #b45309) !important;
+}
+
+.supporting-docs-rounded-select .rounded-select-menu button.selected {
+  background: var(--color-accent-soft, rgba(217, 119, 6, 0.14)) !important;
+  color: var(--color-accent-deep, #b45309) !important;
+  font-weight: 650 !important;
+}
+
+/* Item level compact dropdown */
+.supporting-docs-item-select-wrap {
+  display: inline-flex !important;
+  position: relative !important;
+}
+
+.supporting-docs-rounded-select.is-item-select {
+  min-width: 160px !important;
+  max-width: 250px !important;
+}
+
+.supporting-docs-rounded-select.is-item-select .rounded-select-trigger {
+  min-height: 28px !important;
+  height: 28px !important;
+  padding: 0 8px !important;
+  font-size: 11px !important;
+  border-radius: 6px !important;
+}
+
+/* Ensure containers don't clip the dropdown menu */
+.supporting-docs-empty-card:has(.rounded-select.is-open),
+.supporting-docs-upload-bar:has(.rounded-select.is-open),
+.supporting-docs-target-select-wrap:has(.rounded-select.is-open),
+.supporting-docs-item-select-wrap:has(.rounded-select.is-open),
+.supporting-doc-location-row:has(.rounded-select.is-open),
+.supporting-docs-item:has(.rounded-select.is-open) {
+  overflow: visible !important;
+  z-index: 60 !important;
+  position: relative !important;
+}
+
+/* Dark mode theme support */
+html[data-theme="dark"] .supporting-docs-rounded-select .rounded-select-trigger {
+  background: rgba(18, 24, 31, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .supporting-docs-rounded-select .rounded-select-trigger:hover {
+  border-color: rgba(245, 158, 11, 0.5) !important;
+}
+
+html[data-theme="dark"] .supporting-docs-rounded-select .rounded-select-menu {
+  background: #18222f !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+html[data-theme="dark"] .supporting-docs-rounded-select .rounded-select-menu button {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .supporting-docs-rounded-select .rounded-select-menu button:hover {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #fbbf24 !important;
+}
+
+html[data-theme="dark"] .supporting-docs-rounded-select .rounded-select-menu button.selected {
+  background: rgba(245, 158, 11, 0.24) !important;
+  color: #fbbf24 !important;
+}
+
+/* ==========================================================================
+   DISCORD-STYLE ROLE PILLS
+   Clean, modern rounded capsule badge with a solid colored dot on the left
+   and neutral title-case text (no colored text, no all-caps). Fits RouteX design.
+   ========================================================================== */
+
+.discord-role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2.5px 8.5px 2.5px 6.5px;
+  border-radius: 9999px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-text-secondary, #475569);
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.15s ease-in-out;
+}
+
+.discord-role-pill:hover {
+  background: var(--color-surface-subtle, #f8fafc);
+  border-color: rgba(0, 0, 0, 0.18);
+  color: var(--color-text-primary, #0f172a);
+}
+
+.discord-role-pill.is-superadmin {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: var(--color-text-primary, #0f172a);
+  font-weight: 600;
+}
+
+.discord-role-pill.is-superadmin:hover {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.discord-role-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.discord-role-text {
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+.discord-role-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 1px dashed var(--color-border, #cbd5e1);
+  background: transparent;
+  color: var(--color-text-muted, #94a3b8);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.15s ease-in-out;
+}
+
+.discord-role-add-btn:hover {
+  border-color: var(--color-primary, #0284c7);
+  color: var(--color-primary, #0284c7);
+  background: rgba(2, 132, 199, 0.06);
+}
+
+/* Dark mode adjustments */
+html[data-theme="dark"] .discord-role-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-secondary, #94a3b8);
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .discord-role-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--color-text-primary, #f1f5f9);
+}
+
+html[data-theme="dark"] .discord-role-pill.is-superadmin {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fcd34d;
+}
+
+html[data-theme="dark"] .discord-role-add-btn {
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+html[data-theme="dark"] .discord-role-add-btn:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+}
+

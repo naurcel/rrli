@@ -26,7 +26,7 @@ export function resetAllScrollPositions(behavior: ScrollBehavior = "instant") {
 
   // 3. Any nested content scroll containers
   const scrollables = document.querySelectorAll<HTMLElement>(
-    ".content-wrap, .route-template, .delivery-entry-page, .record-detail-content"
+    ".content-wrap, .route-template, .delivery-entry-page, .record-detail-content, .settings-tab-content-area, .settings-tab-panel, .discord-perms-body"
   );
   scrollables.forEach((el) => {
     el.scrollTo({ top: 0, left: 0, behavior });

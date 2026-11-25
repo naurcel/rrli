@@ -3,16 +3,21 @@ import assert from "node:assert/strict";
 
 import {
   applyDesignPreferences,
+  applyTheme,
   DEFAULT_DESIGN_PREFERENCES,
   DESIGN_PREFERENCES_EVENT,
   DESIGN_PREFERENCES_STORAGE_PREFIX,
   getDefaultDesignPreferences,
   getDesignPreferencesStorageKey,
+  getThemeStorageKey,
   loadDesignPreferences,
+  loadTheme,
   resetDesignPreferences,
+  ROUTEX_THEME_CHANGED_EVENT,
+  THEME_STORAGE_PREFIX,
 } from "./design-preferences.ts";
 
-test("RouteX: Design Preferences System", async (t) => {
+test("RouteX: Preferences System (User-Scoped Isolation)", async (t) => {
   // Mock localStorage and DOM environment for node test runner
   const storageMap = new Map<string, string>();
   const dataset: Record<string, string> = {};
@@ -48,7 +53,7 @@ test("RouteX: Design Preferences System", async (t) => {
     },
     removeEventListener: (type: string, fn: (e: any) => void) => {
       if (!eventListeners[type]) return;
-      eventListeners[type] = eventListeners[type].filter((cb) => cb !== fn);
+      eventListeners[type].push(fn);
     },
   };
 
@@ -99,6 +104,15 @@ test("RouteX: Design Preferences System", async (t) => {
     );
   });
 
+  await t.test("getThemeStorageKey generates isolated user keys", () => {
+    assert.equal(
+      getThemeStorageKey("usr_admin_1"),
+      `${THEME_STORAGE_PREFIX}usr_admin_1`
+    );
+    assert.equal(getThemeStorageKey(""), "routex-theme");
+    assert.equal(getThemeStorageKey(undefined), "routex-theme");
+  });
+
   await t.test("getDefaultDesignPreferences provides standard RouteX baseline", () => {
     const defaults = getDefaultDesignPreferences();
     assert.equal(defaults.fontSize, "default");
@@ -127,7 +141,7 @@ test("RouteX: Design Preferences System", async (t) => {
     assert.equal(prefs.reduceMotion, false);
   });
 
-  await t.test("applyDesignPreferences updates DOM dataset, saves to storage, and dispatches event", () => {
+  await t.test("applyDesignPreferences strictly isolates user preferences and does not pollute global default", () => {
     let capturedEvent: any = null;
     mockWindow.addEventListener(DESIGN_PREFERENCES_EVENT, (e) => {
       capturedEvent = e;
@@ -147,17 +161,20 @@ test("RouteX: Design Preferences System", async (t) => {
     assert.equal(dataset.compactness, "compact");
     assert.equal(dataset.reduceMotion, "true");
 
-    // Verify Storage
+    // Verify Storage for usr_admin
     const stored = JSON.parse(storageMap.get(getDesignPreferencesStorageKey("usr_admin"))!);
     assert.equal(stored.fontSize, "large");
     assert.equal(stored.compactness, "compact");
     assert.equal(stored.reduceMotion, true);
 
-    // Verify fallback default key was also populated
-    const defaultStored = JSON.parse(
-      storageMap.get(getDesignPreferencesStorageKey(null))!
-    );
-    assert.equal(defaultStored.fontSize, "large");
+    // Verify that global default key was NOT overwritten
+    assert.equal(mockWindow.localStorage.getItem(getDesignPreferencesStorageKey(null)), null);
+
+    // Verify another user loading preferences gets clean defaults, NOT usr_admin's preferences
+    const otherUserPrefs = loadDesignPreferences("usr_other");
+    assert.equal(otherUserPrefs.fontSize, "default");
+    assert.equal(otherUserPrefs.compactness, "comfortable");
+    assert.equal(otherUserPrefs.reduceMotion, false);
 
     // Verify custom event
     assert.ok(capturedEvent);
@@ -165,7 +182,28 @@ test("RouteX: Design Preferences System", async (t) => {
     assert.equal(capturedEvent.detail.fontSize, "large");
   });
 
-  await t.test("resetDesignPreferences restores defaults and clears overrides", () => {
+  await t.test("theme is strictly isolated per user and does not bleed into other users", () => {
+    let capturedThemeEvent: any = null;
+    mockWindow.addEventListener(ROUTEX_THEME_CHANGED_EVENT, (e) => {
+      capturedThemeEvent = e;
+    });
+
+    // Admin sets dark theme
+    applyTheme("dark", "usr_admin");
+    assert.equal(dataset.theme, "dark");
+    assert.equal(storageMap.get(getThemeStorageKey("usr_admin")), "dark");
+    assert.equal(loadTheme("usr_admin"), "dark");
+    assert.equal(mockWindow.localStorage.getItem("routex-theme"), null); // global key untouched
+
+    // Another user (usr_other) loads theme and gets default "light"
+    assert.equal(loadTheme("usr_other"), "light");
+
+    // Event fired
+    assert.ok(capturedThemeEvent);
+    assert.equal(capturedThemeEvent.detail, "dark");
+  });
+
+  await t.test("resetDesignPreferences restores defaults and clears overrides for that user", () => {
     // First apply customized settings
     applyDesignPreferences(
       {

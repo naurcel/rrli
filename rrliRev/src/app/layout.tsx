@@ -5,6 +5,10 @@ import { RouteScrollToTop } from "@/components/route-scroll-to-top";
 import { ToasterProvider } from "@/components/toaster-provider";
 import "./globals.css";
 import "@/styles/components.css";
+import "@/styles/login.css";
+import "@/styles/delivery-import.css";
+import "@/styles/permissions.css";
+import "@/styles/print.css";
 import "@/styles/overrides.css";
 
 export const dynamic = "force-dynamic";
@@ -23,15 +27,6 @@ const themeInitScript = `
       document.documentElement.dataset.theme = storedTheme;
     }
     var prefRaw = window.localStorage.getItem("routex.design-preferences.default");
-    if (!prefRaw) {
-      for (var i = 0; i < window.localStorage.length; i++) {
-        var k = window.localStorage.key(i);
-        if (k && k.indexOf("routex.design-preferences.") === 0) {
-          prefRaw = window.localStorage.getItem(k);
-          if (prefRaw) break;
-        }
-      }
-    }
     if (prefRaw) {
       var p = JSON.parse(prefRaw);
       if (p.fontSize) document.documentElement.dataset.fontSize = p.fontSize;

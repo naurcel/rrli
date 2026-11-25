@@ -116,39 +116,57 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
     });
   });
 
+  const printCssPath = path.resolve(__dirname, "../../styles/print.css");
+  const printCssContent = fs.existsSync(printCssPath) ? fs.readFileSync(printCssPath, "utf-8") : "";
+
   describe("Reports Print Architecture & Multi-Page Containment Contracts", () => {
+    const combinedPrintCss = globalsCssContent + "\n" + printCssContent;
+
     it("hides print-only rows in normal screen mode", () => {
-      assert.match(globalsCssContent, /\.report-print-only-row\s*\{[^}]*display:\s*none\s*!important/);
+      assert.match(combinedPrintCss, /\.report-print-only-row\s*\{[^}]*display:\s*none\s*!important/);
     });
 
     it("defines authoritative @media print with viewport & scroll releases", () => {
-      assert.ok(globalsCssContent.includes("@media print"));
-      assert.match(globalsCssContent, /@media print\s*\{[\s\S]*html,\s*body\s*\{[^}]*overflow:\s*visible\s*!important/);
-      assert.match(globalsCssContent, /@media print\s*\{[\s\S]*\.app-shell[\s\S]*overflow:\s*visible\s*!important/);
+      assert.ok(combinedPrintCss.includes("@media print"));
+      assert.match(combinedPrintCss, /@media print\s*\{[\s\S]*html,\s*body\s*\{[^}]*overflow:\s*visible\s*!important/);
+      assert.match(combinedPrintCss, /@media print\s*\{[\s\S]*\.app-shell[\s\S]*overflow:\s*visible\s*!important/);
     });
 
     it("hides navigation, toolbars, and web chrome during print", () => {
-      assert.match(globalsCssContent, /@media print\s*\{[\s\S]*aside\.sidebar[\s\S]*display:\s*none\s*!important/);
-      assert.match(globalsCssContent, /@media print\s*\{[\s\S]*header\.topbar[\s\S]*display:\s*none\s*!important/);
-      assert.match(globalsCssContent, /@media print\s*\{[\s\S]*\.report-actions[\s\S]*display:\s*none\s*!important/);
-      assert.match(globalsCssContent, /@media print\s*\{[\s\S]*\.report-tabs-bar[\s\S]*display:\s*none\s*!important/);
+      assert.match(combinedPrintCss, /@media print\s*\{[\s\S]*aside\.sidebar[\s\S]*display:\s*none\s*!important/);
+      assert.match(combinedPrintCss, /@media print\s*\{[\s\S]*header\.topbar[\s\S]*display:\s*none\s*!important/);
+      assert.match(combinedPrintCss, /@media print\s*\{[\s\S]*\.report-actions[\s\S]*display:\s*none\s*!important/);
+      assert.match(combinedPrintCss, /@media print\s*\{[\s\S]*\.report-tabs-bar[\s\S]*display:\s*none\s*!important/);
     });
 
     it("displays complete print rows while hiding paginated screen rows during print", () => {
-      assert.match(globalsCssContent, /@media print\s*\{[\s\S]*\.report-screen-only-row[\s\S]*display:\s*none\s*!important/);
-      assert.match(globalsCssContent, /@media print\s*\{[\s\S]*\.report-print-only-row\s*\{[^}]*display:\s*table-row\s*!important/);
+      assert.match(combinedPrintCss, /@media print\s*\{[\s\S]*\.report-screen-only-row[\s\S]*display:\s*none\s*!important/);
+      assert.match(combinedPrintCss, /@media print\s*\{[\s\S]*\.report-print-only-row\s*\{[^}]*display:\s*table-row\s*!important/);
     });
   });
 
   describe("CSS Structural Integrity & Layout Edge Protection Contracts", () => {
-    it("ensures balanced opening and closing curly braces across globals.css", () => {
-      let openBraces = 0;
-      let closeBraces = 0;
-      for (const char of globalsCssContent) {
-        if (char === "{") openBraces++;
-        if (char === "}") closeBraces++;
+    it("ensures balanced opening and closing curly braces across globals.css and modular stylesheets", () => {
+      function checkBraces(css: string, name: string) {
+        let openBraces = 0;
+        let closeBraces = 0;
+        for (const char of css) {
+          if (char === "{") openBraces++;
+          if (char === "}") closeBraces++;
+        }
+        assert.strictEqual(openBraces, closeBraces, `Unbalanced braces in ${name}: ${openBraces} open vs ${closeBraces} close`);
       }
-      assert.strictEqual(openBraces, closeBraces, `Unbalanced braces in globals.css: ${openBraces} open vs ${closeBraces} close`);
+
+      checkBraces(globalsCssContent, "globals.css");
+      checkBraces(printCssContent, "print.css");
+
+      const modularFiles = ["login.css", "delivery-import.css", "permissions.css", "components.css", "overrides.css"];
+      for (const file of modularFiles) {
+        const filePath = path.resolve(__dirname, "../../styles", file);
+        if (fs.existsSync(filePath)) {
+          checkBraces(fs.readFileSync(filePath, "utf-8"), file);
+        }
+      }
     });
 
     it("does not contain truncated diff markers or diff artifact strings", () => {
@@ -165,20 +183,20 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
       assert.match(globalsCssContent, /\.page-intro-actions\s*>\s*\*[^}]*border-radius:\s*8px\s*!important/);
     });
 
-    it("enforces minimum line count and file size to guard against accidental CSS truncation", () => {
+    it("enforces modular stylesheet architecture and size hygiene across globals and modules", () => {
       const lineCount = globalsCssContent.split("\n").length;
       assert.ok(
-        lineCount >= 18000,
-        `globals.css line count dropped below baseline of 18,000 lines (actual: ${lineCount}). An automated edit likely truncated the stylesheet.`,
+        lineCount >= 15000 && lineCount <= 18000,
+        `globals.css line count out of expected modular baseline range (actual: ${lineCount}).`,
       );
       const byteSize = Buffer.byteLength(globalsCssContent, "utf-8");
       assert.ok(
-        byteSize >= 550000,
-        `globals.css file size dropped below 550KB (actual: ${byteSize} bytes). Check for accidental truncation.`,
+        byteSize >= 450000,
+        `globals.css file size dropped unexpectedly below 450KB (actual: ${byteSize} bytes). Check for accidental truncation.`,
       );
     });
 
-    it("ensures critical domain selectors across all views are preserved in globals.css", () => {
+    it("ensures critical domain selectors across all views are preserved across styling architecture", () => {
       const requiredSelectors = [
         ".dashboard-attention-card",
         ".expand-all-text-button",
@@ -192,10 +210,11 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
         "@media print",
         ".report-document",
       ];
+      const allCss = globalsCssContent + "\n" + printCssContent;
       for (const selector of requiredSelectors) {
         assert.ok(
-          globalsCssContent.includes(selector),
-          `Missing critical selector "${selector}" in globals.css. This indicates an accidental deletion or regression.`,
+          allCss.includes(selector),
+          `Missing critical selector "${selector}" across styling architecture. This indicates an accidental deletion or regression.`,
         );
       }
     });
@@ -203,6 +222,10 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
 
   describe("Modular CSS Architecture Contracts", () => {
     const componentsCssPath = path.resolve(__dirname, "../../styles/components.css");
+    const loginCssPath = path.resolve(__dirname, "../../styles/login.css");
+    const deliveryImportCssPath = path.resolve(__dirname, "../../styles/delivery-import.css");
+    const permissionsCssPath = path.resolve(__dirname, "../../styles/permissions.css");
+    const printCssFilePath = path.resolve(__dirname, "../../styles/print.css");
     const overridesCssPath = path.resolve(__dirname, "../../styles/overrides.css");
 
     it("defines dedicated modular components.css for shared controls under 500 lines", () => {
@@ -214,6 +237,18 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
       assert.ok(content.includes(".routex-badge-dot"));
       const lines = content.split("\n").length;
       assert.ok(lines <= 500, `components.css must remain a focused, modular file under 500 lines (actual: ${lines}).`);
+    });
+
+    it("defines dedicated modular stylesheets for isolated domains (login, delivery import, permissions, print)", () => {
+      assert.ok(fs.existsSync(loginCssPath), "src/styles/login.css must exist.");
+      assert.ok(fs.existsSync(deliveryImportCssPath), "src/styles/delivery-import.css must exist.");
+      assert.ok(fs.existsSync(permissionsCssPath), "src/styles/permissions.css must exist.");
+      assert.ok(fs.existsSync(printCssFilePath), "src/styles/print.css must exist.");
+
+      assert.ok(fs.readFileSync(loginCssPath, "utf-8").includes(".login-page"));
+      assert.ok(fs.readFileSync(deliveryImportCssPath, "utf-8").includes(".import-stepper"));
+      assert.ok(fs.readFileSync(permissionsCssPath, "utf-8").includes(".discord-permissions-container"));
+      assert.ok(fs.readFileSync(printCssFilePath, "utf-8").includes("@media print"));
     });
 
     it("defines dedicated overrides.css for isolated feature refinements and neutralizes pill styling", () => {
@@ -231,13 +266,26 @@ describe("RouteX UI Styling and Layout Architectural Contracts", () => {
       const layoutContent = fs.readFileSync(layoutPath, "utf-8");
       assert.ok(layoutContent.includes('import "./globals.css";'));
       assert.ok(layoutContent.includes('import "@/styles/components.css";'));
+      assert.ok(layoutContent.includes('import "@/styles/login.css";'));
+      assert.ok(layoutContent.includes('import "@/styles/delivery-import.css";'));
+      assert.ok(layoutContent.includes('import "@/styles/permissions.css";'));
+      assert.ok(layoutContent.includes('import "@/styles/print.css";'));
       assert.ok(layoutContent.includes('import "@/styles/overrides.css";'));
 
       const globalsIndex = layoutContent.indexOf('import "./globals.css";');
       const componentsIndex = layoutContent.indexOf('import "@/styles/components.css";');
+      const loginIndex = layoutContent.indexOf('import "@/styles/login.css";');
+      const importIndex = layoutContent.indexOf('import "@/styles/delivery-import.css";');
+      const permissionsIndex = layoutContent.indexOf('import "@/styles/permissions.css";');
+      const printIndex = layoutContent.indexOf('import "@/styles/print.css";');
       const overridesIndex = layoutContent.indexOf('import "@/styles/overrides.css";');
-      assert.ok(globalsIndex < componentsIndex, "globals.css must be imported before modular components.css");
-      assert.ok(componentsIndex < overridesIndex, "components.css must be imported before overrides.css");
+
+      assert.ok(globalsIndex < componentsIndex, "globals.css before components.css");
+      assert.ok(componentsIndex < loginIndex, "components.css before login.css");
+      assert.ok(loginIndex < importIndex, "login.css before delivery-import.css");
+      assert.ok(importIndex < permissionsIndex, "delivery-import.css before permissions.css");
+      assert.ok(permissionsIndex < printIndex, "permissions.css before print.css");
+      assert.ok(printIndex < overridesIndex, "print.css before overrides.css");
     });
   });
 });

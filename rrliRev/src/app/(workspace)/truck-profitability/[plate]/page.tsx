@@ -690,11 +690,9 @@ export default function TruckProfilePage({
             </section>
 
             <section className="records-card truck-profile-deliveries" id="truck-delivery-history" aria-label="Truck delivery history">
-              <div className="records-heading">
-                <div>
+              <div className="records-heading" style={{ gap: "16px", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: "240px", flexWrap: "wrap" }}>
                   <h2>Delivery History</h2>
-                </div>
-                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
                   <label className={`search-box${isHistorySearchBuffering ? " is-buffering" : ""}`} style={{ maxWidth: "340px", flex: 1, minWidth: "220px" }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle cx="11" cy="11" r="8" />
@@ -718,6 +716,8 @@ export default function TruckProfilePage({
                       </button>
                     ) : null}
                   </label>
+                </div>
+                <div style={{ display: "flex", alignItems: "center" }}>
                   <GlobalDateRangePicker />
                 </div>
               </div>

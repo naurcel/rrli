@@ -86,3 +86,35 @@ export function formatPercent(value: number | null | undefined): string {
   return `${value.toFixed(1)}%`;
 }
 
+/**
+ * Normalizes and formats Philippine phone numbers into standard 09XXXXXXXXX (11-digit) format.
+ * Strips country code (+63 or 63), non-digits, dashes, spaces, and adds leading 0 to 10-digit 9XXXXXXXXX numbers.
+ *
+ * Examples:
+ * - "+63 917 123 4567" -> "09171234567"
+ * - "+639204567890"    -> "09204567890"
+ * - "639182345678"     -> "09182345678"
+ * - "9193456789"       -> "09193456789"
+ * - "0921-567-8901"    -> "09215678901"
+ * - "09948795127"      -> "09948795127"
+ */
+export function formatPhoneNumber(phone: string | null | undefined): string {
+  if (!phone) return "";
+  const cleaned = phone.replace(/[^\d+]/g, "").trim();
+  if (cleaned.startsWith("+63")) {
+    return "0" + cleaned.slice(3);
+  }
+  if (cleaned.startsWith("63") && cleaned.length === 12) {
+    return "0" + cleaned.slice(2);
+  }
+  const digitsOnly = phone.replace(/\D/g, "");
+  if (digitsOnly.length === 10 && digitsOnly.startsWith("9")) {
+    return "0" + digitsOnly;
+  }
+  if (digitsOnly.length === 11 && digitsOnly.startsWith("09")) {
+    return digitsOnly;
+  }
+  return digitsOnly || phone.trim();
+}
+
+

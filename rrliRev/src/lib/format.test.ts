@@ -4,6 +4,7 @@ import {
   formatCompactNumber,
   formatCompactPeso,
   formatPesoCompact,
+  formatPhoneNumber,
 } from "./format.ts";
 
 describe("formatCompactNumber", () => {
@@ -90,5 +91,33 @@ describe("formatCompactPeso", () => {
     assert.equal(formatPesoCompact(12500000), "₱12.5M");
     assert.equal(formatPesoCompact(87500), "₱87,500");
     assert.equal(formatPesoCompact(null), "N/A");
+  });
+});
+
+describe("formatPhoneNumber", () => {
+  it("formats international +63 numbers to 09XXXXXXXXX", () => {
+    assert.equal(formatPhoneNumber("+63 917 123 4567"), "09171234567");
+    assert.equal(formatPhoneNumber("+639204567890"), "09204567890");
+    assert.equal(formatPhoneNumber("+63 918 234 5678"), "09182345678");
+  });
+
+  it("formats 63 prefixed numbers without + to 09XXXXXXXXX", () => {
+    assert.equal(formatPhoneNumber("639193456789"), "09193456789");
+  });
+
+  it("adds leading 0 to 10-digit 9XXXXXXXXX numbers", () => {
+    assert.equal(formatPhoneNumber("9215678901"), "09215678901");
+    assert.equal(formatPhoneNumber("922 678 9012"), "09226789012");
+  });
+
+  it("preserves already valid 11-digit 09XXXXXXXXX numbers", () => {
+    assert.equal(formatPhoneNumber("09948795127"), "09948795127");
+    assert.equal(formatPhoneNumber("0917-123-4567"), "09171234567");
+  });
+
+  it("handles empty or null values gracefully", () => {
+    assert.equal(formatPhoneNumber(""), "");
+    assert.equal(formatPhoneNumber(null), "");
+    assert.equal(formatPhoneNumber(undefined), "");
   });
 });
