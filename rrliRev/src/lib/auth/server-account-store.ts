@@ -10,11 +10,13 @@ import {
 } from "./password-policy.ts";
 import type { Permission, UserRole } from "./rbac.ts";
 import { recordAuditEntry } from "../audit/server-audit-store.ts";
+import { formatPhoneNumber } from "../format.ts";
 
 export type ServerUserProfileRecord = {
   id: string;
   username: string;
   normalizedUsername: string;
+  legacyAliases?: readonly string[];
   email: string;
   phoneNumber?: string;
   fullName: string;
@@ -49,6 +51,7 @@ export type ServerAccountEntry = ServerUserProfileRecord & {
   altSeedPassword?: string;
   securityAnswerHash?: string;
   securityAnswerChangedAt?: string;
+  usernameChangedAt?: string;
   backupKeyHash?: string;
   backupKeyGeneratedAt?: string;
   backupKeyUsedAt?: string;
@@ -92,7 +95,7 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
     fullName: "Shinryu",
     role: "admin",
     isSuperadmin: true,
-    designation: "Superadmin",
+    designation: "President",
     departments: ["admin"],
     customGrants: [],
     customRestrictions: [],
@@ -111,11 +114,12 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
   },
   {
     id: "usr-admin-001",
-    username: "admin",
-    normalizedUsername: "admin",
-    email: "admin@routex.local",
-    phoneNumber: "+63 917 123 4567",
-    fullName: "System Administrator",
+    username: "mori_mochi",
+    normalizedUsername: "mori_mochi",
+    legacyAliases: ["admin", "admin@routex.local"],
+    email: "adrianmangampat@gmail.com",
+    phoneNumber: "09171234567",
+    fullName: "Adrian Mangampat",
     role: "admin",
     isSuperadmin: false,
     designation: "System Administrator",
@@ -137,11 +141,12 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
   },
   {
     id: "usr-ops-002",
-    username: "operations",
-    normalizedUsername: "operations",
-    email: "operations@routex.local",
-    phoneNumber: "+63 918 234 5678",
-    fullName: "Marc Rancel (Delivery Operations)",
+    username: "narcel",
+    normalizedUsername: "narcel",
+    legacyAliases: ["operations", "operations@routex.local"],
+    email: "marcrancel@gmail.com",
+    phoneNumber: "09182345678",
+    fullName: "Marc Rancel",
     role: "operations",
     isSuperadmin: false,
     designation: "Operations Lead",
@@ -162,11 +167,12 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
   },
   {
     id: "usr-fin-003",
-    username: "finance",
-    normalizedUsername: "finance",
-    email: "finance@routex.local",
-    phoneNumber: "+63 919 345 6789",
-    fullName: "Louiza Joy (Finance)",
+    username: "azula",
+    normalizedUsername: "azula",
+    legacyAliases: ["finance", "finance@routex.local"],
+    email: "louizajoy@gmail.com",
+    phoneNumber: "09193456789",
+    fullName: "Louiza Joy",
     role: "finance",
     isSuperadmin: false,
     designation: "Finance Officer",
@@ -187,11 +193,12 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
   },
   {
     id: "usr-hr-004",
-    username: "hr",
-    normalizedUsername: "hr",
-    email: "hr@routex.local",
-    phoneNumber: "+63 920 456 7890",
-    fullName: "Jelene Punongbayan (HR)",
+    username: "jxleners",
+    normalizedUsername: "jxleners",
+    legacyAliases: ["hr", "hr@routex.local"],
+    email: "jelenepunongbayan@gmail.com",
+    phoneNumber: "09204567890",
+    fullName: "Jelene Punongbayan",
     role: "hr",
     isSuperadmin: false,
     designation: "HR Specialist",
@@ -212,11 +219,12 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
   },
   {
     id: "usr-sec-005",
-    username: "secretary",
-    normalizedUsername: "secretary",
-    email: "secretary@routex.local",
-    phoneNumber: "+63 921 567 8901",
-    fullName: "Zean Kurt (Secretary)",
+    username: "ze.ku",
+    normalizedUsername: "ze.ku",
+    legacyAliases: ["secretary", "secretary@routex.local"],
+    email: "zeankurt@gmail.com",
+    phoneNumber: "09215678901",
+    fullName: "Zean Kurt",
     role: "secretary",
     isSuperadmin: false,
     designation: "Corporate Secretary",
@@ -237,11 +245,12 @@ const INITIAL_SERVER_ACCOUNTS: readonly ServerAccountEntry[] = [
   },
   {
     id: "usr-csr-006",
-    username: "customerrep",
-    normalizedUsername: "customerrep",
-    email: "csrep@routex.local",
-    phoneNumber: "+63 922 678 9012",
-    fullName: "Rain Ibasco (Customer Representative)",
+    username: "ravicci",
+    normalizedUsername: "ravicci",
+    legacyAliases: ["customerrep", "csrep@routex.local"],
+    email: "rainibasco@gmail.com",
+    phoneNumber: "09226789012",
+    fullName: "Rain Ibasco",
     role: "customer_representative",
     isSuperadmin: false,
     designation: "Customer Representative",
@@ -277,16 +286,16 @@ function getStore(): Map<string, ServerAccountEntry> {
     if (!existing) {
       map.set(account.id, { ...account });
     } else {
-      if (!existing.username) {
+      if (!existing.usernameChangedAt) {
         existing.username = account.username;
         existing.normalizedUsername = account.normalizedUsername;
       }
+      existing.legacyAliases = account.legacyAliases;
       existing.fullName = account.fullName;
-      if (!existing.phoneNumber) {
-        existing.phoneNumber = account.phoneNumber;
-      }
+      existing.email = account.email;
+      existing.phoneNumber = account.phoneNumber;
       existing.isSuperadmin = Boolean(account.isSuperadmin);
-      existing.designation = existing.designation ?? account.designation;
+      existing.designation = account.designation;
       existing.departments = existing.departments ?? account.departments ?? [account.role];
       existing.customGrants = existing.customGrants ?? account.customGrants ?? [];
       existing.customRestrictions = existing.customRestrictions ?? account.customRestrictions ?? [];
@@ -328,12 +337,13 @@ function stripSensitiveFields(entry: ServerAccountEntry): ServerUserProfileRecor
     id: entry.id,
     username: entry.username,
     normalizedUsername: entry.normalizedUsername,
+    legacyAliases: entry.legacyAliases,
     email: entry.email,
     phoneNumber: entry.phoneNumber,
     fullName: entry.fullName,
     role: entry.role,
     isSuperadmin: Boolean(entry.isSuperadmin),
-    designation: entry.designation ?? (entry.isSuperadmin ? "Superadmin" : "Staff"),
+    designation: entry.designation ?? (entry.isSuperadmin ? "President" : "Staff"),
     departments: entry.departments ?? [entry.role],
     customGrants: entry.customGrants ?? [],
     customRestrictions: entry.customRestrictions ?? [],
@@ -372,8 +382,12 @@ export function verifyServerAccountCredentials(
   const store = getStore();
 
   for (const entry of store.values()) {
-    const isUsernameMatch = entry.normalizedUsername === normalized;
-    const isEmailMatch = entry.email.toLowerCase() === normalized;
+    const isUsernameMatch =
+      entry.normalizedUsername === normalized ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalized));
+    const isEmailMatch =
+      entry.email.toLowerCase() === normalized ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalized));
 
     if (isUsernameMatch || isEmailMatch) {
       if (entry.isPermanentlyDeleted || !entry.isActive) {
@@ -416,7 +430,10 @@ export function findServerAccountByUsername(
 ): ServerUserProfileRecord | null {
   const normalized = username.trim().toLowerCase();
   for (const entry of getStore().values()) {
-    if (entry.normalizedUsername === normalized) {
+    if (
+      entry.normalizedUsername === normalized ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalized))
+    ) {
       if (entry.isPermanentlyDeleted && !options?.includeDeleted) {
         return null;
       }
@@ -432,7 +449,30 @@ export function findServerAccountByEmail(
 ): ServerUserProfileRecord | null {
   const normalizedEmail = email.trim().toLowerCase();
   for (const entry of getStore().values()) {
-    if (entry.email.toLowerCase() === normalizedEmail) {
+    if (
+      entry.email.toLowerCase() === normalizedEmail ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalizedEmail))
+    ) {
+      if (entry.isPermanentlyDeleted && !options?.includeDeleted) {
+        return null;
+      }
+      return stripSensitiveFields(entry);
+    }
+  }
+  return null;
+}
+
+export function findServerAccountByUsernameOrEmail(
+  identifier: string,
+  options?: { includeDeleted?: boolean },
+): ServerUserProfileRecord | null {
+  const normalized = identifier.trim().toLowerCase();
+  for (const entry of getStore().values()) {
+    if (
+      entry.normalizedUsername === normalized ||
+      entry.email.toLowerCase() === normalized ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalized))
+    ) {
       if (entry.isPermanentlyDeleted && !options?.includeDeleted) {
         return null;
       }
@@ -517,7 +557,7 @@ export function createServerAccountProfile(input: {
   }
 
   const normalizedEmail = (input.email || `${usernameCheck.normalized}@routex.local`).trim().toLowerCase();
-  const normalizedPhone = input.phoneNumber?.trim() || "+63 900 000 0000";
+  const normalizedPhone = formatPhoneNumber(input.phoneNumber) || "09000000000";
   const nowIso = new Date().toISOString();
   const id = `usr-${input.role.slice(0, 3)}-${Date.now().toString(36)}`;
 
@@ -564,7 +604,7 @@ export function updateServerAccountContact(
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const normalizedPhone = phoneNumber.trim();
+  const normalizedPhone = formatPhoneNumber(phoneNumber);
 
   if (!normalizedEmail || !normalizedEmail.includes("@")) {
     return { ok: false, message: "A valid email address is required." };
@@ -610,6 +650,7 @@ export function updateServerAccountUsername(
 
   existing.username = newUsername.trim();
   existing.normalizedUsername = usernameCheck.normalized;
+  existing.usernameChangedAt = new Date().toISOString();
   existing.updatedAt = new Date().toISOString();
 
   return { ok: true, profile: stripSensitiveFields(existing) };
@@ -762,7 +803,10 @@ export function getServerAccountRecoveryState(username: string): {
 } {
   const normalized = username.trim().toLowerCase();
   for (const entry of getStore().values()) {
-    if (entry.normalizedUsername === normalized) {
+    if (
+      entry.normalizedUsername === normalized ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalized))
+    ) {
       if (!entry.isActive || entry.isPermanentlyDeleted) {
         return { status: "not_found" };
       }
@@ -825,7 +869,10 @@ export function generateServerAccountBackupKey(
   const store = getStore();
 
   for (const entry of store.values()) {
-    if (entry.normalizedUsername === normalized) {
+    if (
+      entry.normalizedUsername === normalized ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalized))
+    ) {
       if (!entry.isActive || entry.isPermanentlyDeleted) {
         return { ok: false, message: "Account is inactive or not found." };
       }
@@ -876,7 +923,10 @@ export function verifyServerAccountBackupKey(
   const store = getStore();
 
   for (const entry of store.values()) {
-    if (entry.normalizedUsername === normalized) {
+    if (
+      entry.normalizedUsername === normalized ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalized))
+    ) {
       if (!entry.isActive || entry.isPermanentlyDeleted) {
         return { ok: false, message: "Account is inactive or not found." };
       }
@@ -934,7 +984,10 @@ export function verifyServerAccountSecurityAnswer(
   const store = getStore();
 
   for (const entry of store.values()) {
-    if (entry.normalizedUsername === normalized) {
+    if (
+      entry.normalizedUsername === normalized ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalized))
+    ) {
       if (!entry.isActive || entry.isPermanentlyDeleted) {
         return { ok: false, message: "Account not found." };
       }
@@ -1013,7 +1066,10 @@ export function resetServerAccountPasswordWithToken(
   const store = getStore();
 
   for (const entry of store.values()) {
-    if (entry.normalizedUsername === normalized) {
+    if (
+      entry.normalizedUsername === normalized ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(normalized))
+    ) {
       if (!entry.isActive || entry.isPermanentlyDeleted) {
         return { ok: false, message: "Account is inactive or not found." };
       }
@@ -1300,7 +1356,10 @@ export function deleteServerAccount(
     return { ok: false, message: "The Superadmin (President) account cannot be deleted." };
   }
 
-  if (existing.role === "admin" && existing.username === "admin") {
+  if (
+    existing.id === "usr-admin-001" ||
+    (existing.role === "admin" && (existing.username === "admin" || existing.username === "mori_mochi"))
+  ) {
     return { ok: false, message: "The primary System Admin account cannot be deleted." };
   }
 

@@ -1,7 +1,13 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 
+import {
+  applyDesignPreferences,
+  applyTheme,
+  loadDesignPreferences,
+  loadTheme,
+} from "@/components/design-preferences";
 import type { AuthenticatedActor } from "@/lib/auth/server-session";
 
 const AuthActorContext = createContext<AuthenticatedActor | null>(null);
@@ -13,6 +19,14 @@ export function AuthActorProvider({
   actor: AuthenticatedActor;
   children: ReactNode;
 }) {
+  useEffect(() => {
+    if (typeof window === "undefined" || !actor?.id) return;
+    const userPrefs = loadDesignPreferences(actor.id);
+    applyDesignPreferences(userPrefs, actor.id);
+    const userTheme = loadTheme(actor.id);
+    applyTheme(userTheme, actor.id);
+  }, [actor?.id]);
+
   return (
     <AuthActorContext.Provider value={actor}>
       {children}

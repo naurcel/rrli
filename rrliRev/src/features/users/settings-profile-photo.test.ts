@@ -81,7 +81,7 @@ describe("RouteX: Settings Page and Profile Photo", () => {
       const admin = findServerAccountById("usr-admin-001");
       assert.ok(admin);
       assert.equal(admin.role, "admin");
-      assert.equal(admin.username, "admin");
+      assert.equal(admin.username, "mori_mochi");
       assert.ok(admin.avatarUrl?.includes("shinryu.png"));
     });
 

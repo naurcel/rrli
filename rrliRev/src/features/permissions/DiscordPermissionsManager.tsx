@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
@@ -23,6 +22,9 @@ import {
   type FriendlyPermissionDefinition,
   type PermissionCategory,
 } from "./permission-ui-model";
+import { DiscordRosterSidebar } from "./components/DiscordRosterSidebar";
+import { DiscordCategorySection } from "./components/DiscordCategorySection";
+import { DiscordCreateRoleModal } from "./components/DiscordCreateRoleModal";
 
 export type BuiltInRoleKey = "superadmin" | UserRole;
 
@@ -41,7 +43,7 @@ const BUILT_IN_ROLE_CONFIG: Record<
   { label: string; description: string; defaultPermissions: readonly Permission[] }
 > = {
   superadmin: {
-    label: "Superadmin",
+    label: "President",
     description: "President and executive leadership. Holds permanent, unrestricted system permissions across all modules.",
     defaultPermissions: PERMISSIONS,
   },
@@ -142,8 +144,6 @@ export function DiscordPermissionsManager({
 
   // Search & Filtering
   const [searchQuery, setSearchQuery] = useState("");
-  const [permSearchQuery, setPermSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<PermissionCategory | "all">("all");
 
   // Collapsed module categories
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
@@ -414,36 +414,20 @@ export function DiscordPermissionsManager({
     });
   }, [searchQuery, users]);
 
-  // Filtered Permissions for right pane
-  const visiblePermissions = useMemo(() => {
-    const q = permSearchQuery.toLowerCase().trim();
-    return FRIENDLY_PERMISSIONS.filter((def) => {
-      if (selectedCategory !== "all" && def.category !== selectedCategory) {
-        return false;
-      }
-      if (!q) return true;
-      return (
-        def.title.toLowerCase().includes(q) ||
-        def.description.toLowerCase().includes(q) ||
-        def.key.toLowerCase().includes(q)
-      );
-    });
-  }, [permSearchQuery, selectedCategory]);
-
   // Permissions grouped by category
   const permissionsByCategory = useMemo(() => {
     const map = new Map<PermissionCategory, FriendlyPermissionDefinition[]>();
     for (const cat of PERMISSION_CATEGORIES) {
       map.set(cat.id, []);
     }
-    for (const def of visiblePermissions) {
+    for (const def of FRIENDLY_PERMISSIONS) {
       const list = map.get(def.category);
       if (list) {
         list.push(def);
       }
     }
     return map;
-  }, [visiblePermissions]);
+  }, []);
 
   // Toggle user permission
   function handleToggleUserPermission(perm: Permission) {
@@ -871,158 +855,21 @@ export function DiscordPermissionsManager({
         {/* ========================================================= */}
         {/* LEFT COLUMN: ROLES & EMPLOYEES ROSTER                     */}
         {/* ========================================================= */}
-        <aside className="discord-roster-sidebar" aria-label="Roles and Employees list">
-          <div className="discord-roster-search-wrap">
-            <input
-              type="text"
-              placeholder="Filter roles or staff..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="discord-roster-search-input"
-              aria-label="Filter roles or staff"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="discord-search-clear-btn"
-                aria-label="Clear search"
-              >
-                ×
-              </button>
-            )}
-          </div>
-
-          <div className="discord-roster-scroll-area">
-            {/* SECTION 1: BUILT-IN ROLES */}
-            <div className="discord-roster-group">
-              <div className="discord-roster-group-title">
-                <span>Roles</span>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span className="discord-roster-count">{filteredBuiltInRoles.length + filteredCustomRoles.length}</span>
-                  {(actor.role === "admin" || actor.isSuperadmin) && (
-                    <button
-                      type="button"
-                      className="discord-add-role-btn"
-                      onClick={() => setIsCreateRoleModalOpen(true)}
-                      title="Create custom role"
-                    >
-                      + New
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="discord-roster-list" role="list">
-                {filteredBuiltInRoles.map((roleKey) => {
-                  const cfg = BUILT_IN_ROLE_CONFIG[roleKey];
-                  const isSelected =
-                    selectedEntity.kind === "role" && selectedEntity.roleKey === roleKey;
-                  const memberCount =
-                    roleKey === "superadmin"
-                      ? users.filter((u) => u.isSuperadmin).length
-                      : users.filter(
-                          (u) =>
-                            !u.isSuperadmin &&
-                            (u.role === roleKey ||
-                              u.departments?.includes(roleKey) ||
-                              departments.some(
-                                (d) =>
-                                  (d.code === roleKey || d.id === roleKey) &&
-                                  u.departments?.includes(d.id),
-                              )),
-                        ).length;
-
-                  return (
-                    <button
-                      key={roleKey}
-                      type="button"
-                      className={`discord-roster-item${isSelected ? " active" : ""}`}
-                      onClick={() => setSelectedEntity({ kind: "role", roleKey })}
-                      aria-selected={isSelected}
-                    >
-                      <div className="discord-roster-item-info">
-                        <div className="discord-roster-item-name">{cfg.label}</div>
-                        <div className="discord-roster-item-sub">
-                          {memberCount} {memberCount === 1 ? "member" : "members"}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-
-                {filteredCustomRoles.length > 0 && (
-                  <div className="discord-roster-subheading">Custom Roles</div>
-                )}
-                {filteredCustomRoles.map((role) => {
-                  const isSelected =
-                    selectedEntity.kind === "custom_role" && selectedEntity.customRoleId === role.id;
-                  const memberCount = users.filter((u) => u.departments?.includes(role.id)).length;
-
-                  return (
-                    <button
-                      key={role.id}
-                      type="button"
-                      className={`discord-roster-item${isSelected ? " active" : ""}${!role.isEnabled ? " is-disabled-role" : ""}`}
-                      onClick={() => setSelectedEntity({ kind: "custom_role", customRoleId: role.id })}
-                      aria-selected={isSelected}
-                    >
-                      <div className="discord-roster-item-info">
-                        <div className="discord-roster-item-name">{role.name}</div>
-                        <div className="discord-roster-item-sub">
-                          {role.isEnabled
-                            ? `${memberCount} ${memberCount === 1 ? "member" : "members"}`
-                            : "Disabled"}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* SECTION 2: STAFF MEMBERS (SUPERADMIN PINNED ON TOP) */}
-            <div className="discord-roster-group">
-              <div className="discord-roster-group-title">
-                <span>Staff</span>
-                <span className="discord-roster-count">{filteredUsers.length}</span>
-              </div>
-
-              <div className="discord-roster-list" role="list">
-                {filteredUsers.map((user) => {
-                  const isSelected =
-                    selectedEntity.kind === "user" && selectedEntity.userId === user.id;
-                  const isMe = actor.id === user.id;
-
-                  return (
-                    <button
-                      key={user.id}
-                      type="button"
-                      className={`discord-roster-item${isSelected ? " active" : ""}${
-                        user.isSuperadmin ? " is-superadmin-pinned" : ""
-                      }`}
-                      onClick={() => setSelectedEntity({ kind: "user", userId: user.id })}
-                      aria-selected={isSelected}
-                    >
-                      <div className="discord-member-avatar-circle">
-                        <span>{getUserInitials(user.fullName || user.username)}</span>
-                      </div>
-                      <div className="discord-roster-item-info">
-                        <div className="discord-roster-item-name">
-                          {user.fullName || user.username}
-                          {isMe && <span className="discord-you-tag">(You)</span>}
-                        </div>
-                        <div className="discord-roster-item-sub">
-                          @{user.username} · {user.isSuperadmin ? "Superadmin" : user.roleLabel}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </aside>
+        <DiscordRosterSidebar
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          filteredBuiltInRoles={filteredBuiltInRoles}
+          filteredCustomRoles={filteredCustomRoles}
+          filteredUsers={filteredUsers}
+          selectedEntity={selectedEntity}
+          onSelectEntity={setSelectedEntity}
+          canCreateRole={actor.role === "admin" || Boolean(actor.isSuperadmin)}
+          onOpenCreateRoleModal={() => setIsCreateRoleModalOpen(true)}
+          actorId={actor.id}
+          builtInRoleConfig={BUILT_IN_ROLE_CONFIG}
+          users={users}
+          departments={departments}
+        />
 
         {/* ========================================================= */}
         {/* RIGHT COLUMN: PERMISSIONS CONFIGURATION CANVAS            */}
@@ -1209,197 +1056,30 @@ export function DiscordPermissionsManager({
                 </div>
               )}
 
-              {/* Permissions Search & Category Filter Bar */}
-              <div className="discord-filter-bar">
-                <div className="discord-filter-search-wrap">
-                  <input
-                    type="text"
-                    placeholder="Search permissions..."
-                    value={permSearchQuery}
-                    onChange={(e) => setPermSearchQuery(e.target.value)}
-                    className="discord-filter-search-input"
-                    aria-label="Search permissions"
-                  />
-                  {permSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setPermSearchQuery("")}
-                      className="discord-search-clear-btn"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-
-                <div className="discord-category-pills">
-                  <button
-                    type="button"
-                    className={`discord-cat-pill${selectedCategory === "all" ? " active" : ""}`}
-                    onClick={() => setSelectedCategory("all")}
-                  >
-                    All
-                  </button>
-                  {PERMISSION_CATEGORIES.map((cat) => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      className={`discord-cat-pill${selectedCategory === cat.id ? " active" : ""}`}
-                      onClick={() => setSelectedCategory(cat.id)}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Clean separator between search/filters and permission sections */}
-              <div className="discord-section-divider" aria-hidden="true" />
-
               {/* PERMISSION CATEGORIES (MODULE-BASED) */}
               <div className="discord-categories-container">
                 {PERMISSION_CATEGORIES.map((cat) => {
                   const perms = permissionsByCategory.get(cat.id) || [];
-                  if (perms.length === 0) return null;
-
-                  const isCollapsed = Boolean(collapsedCategories[cat.id]);
-
-                  // Count enabled permissions in this module
-                  const enabledCount = perms.filter((def) => {
-                    if (selectedEntity.kind === "role") {
-                      return currentRolePerms.includes(def.key);
-                    }
-                    if (selectedEntity.kind === "custom_role") {
-                      return currentRolePerms.includes(def.key);
-                    }
-                    return effectiveUserPerms.has(def.key);
-                  }).length;
-
                   return (
-                    <section key={cat.id} className="discord-category-card" aria-labelledby={`cat-${cat.id}`}>
-                      {/* Module Category Header */}
-                      <div className="discord-category-header">
-                        <div
-                          className="discord-category-title-wrap"
-                          onClick={() => toggleCategoryCollapse(cat.id)}
-                          role="button"
-                          tabIndex={0}
-                          aria-expanded={!isCollapsed}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              toggleCategoryCollapse(cat.id);
-                            }
-                          }}
-                        >
-                          <button
-                            type="button"
-                            className={`discord-collapse-btn${isCollapsed ? " is-collapsed" : ""}`}
-                            aria-label={isCollapsed ? `Expand ${cat.label}` : `Collapse ${cat.label}`}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                              <path
-                                fillRule="evenodd"
-                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </button>
-                          <h3 id={`cat-${cat.id}`} className="discord-category-title">
-                            {cat.label}
-                          </h3>
-                          <span className="discord-cat-count-chip">
-                            {enabledCount} / {perms.length}
-                          </span>
-                        </div>
-
-                        {/* Module-level Selection Controls: Select All / Clear All */}
-                        {canModifySelected && (
-                          <div className="discord-category-quick-actions">
-                            <button
-                              type="button"
-                              className="discord-quick-btn"
-                              onClick={() => handleSelectAllInCategory(cat.id)}
-                              title={`Select all permissions in ${cat.label}`}
-                            >
-                              Select All
-                            </button>
-                            <button
-                              type="button"
-                              className="discord-quick-btn reset"
-                              onClick={() => handleClearAllInCategory(cat.id)}
-                              title={`Clear all permissions in ${cat.label}`}
-                            >
-                              Clear All
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Permission Rows (Collapsible) */}
-                      {!isCollapsed && (
-                        <div className="discord-permissions-list">
-                          {perms.map((def) => {
-                            const isRole = selectedEntity.kind === "role" || selectedEntity.kind === "custom_role";
-                            const isSuperRole = selectedEntity.kind === "role" && selectedEntity.roleKey === "superadmin";
-                            const isSuperUser = selectedEntity.kind === "user" && selectedUser?.isSuperadmin;
-                            const isLocked = isSuperRole || isSuperUser || !canModifySelected;
-
-                            // Active state
-                            const roleAllowed = currentRolePerms.includes(def.key);
-                            const userAllowed = effectiveUserPerms.has(def.key);
-                            const isSwitchOn = isSuperRole || isSuperUser ? true : isRole ? roleAllowed : userAllowed;
-
-                            // Overrides
-                            const isCustomGrant = currentUserGrants.includes(def.key);
-                            const isCustomRestricted = currentUserRestrictions.includes(def.key);
-                            const isOverridden = isCustomGrant || isCustomRestricted;
-
-                            return (
-                              <div
-                                key={def.key}
-                                className={`discord-perm-row${isSwitchOn ? " enabled" : ""}`}
-                              >
-                                <div className="discord-perm-info">
-                                  <div className="discord-perm-title">{def.title}</div>
-                                  <p className="discord-perm-description">{def.description}</p>
-                                </div>
-
-                                <div className="discord-perm-actions">
-                                  {!isRole && !isLocked && isOverridden && (
-                                    <button
-                                      type="button"
-                                      className="discord-perm-reset-link"
-                                      onClick={() => handleResetUserPermission(def.key)}
-                                      title="Reset to role default"
-                                    >
-                                      Reset
-                                    </button>
-                                  )}
-
-                                  <button
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={isSwitchOn}
-                                    aria-label={`Toggle ${def.title}`}
-                                    disabled={isLocked}
-                                    className={`discord-switch${isSwitchOn ? " active" : ""}`}
-                                    onClick={() => {
-                                      if (isRole) {
-                                        handleToggleRolePermission(def.key);
-                                      } else {
-                                        handleToggleUserPermission(def.key);
-                                      }
-                                    }}
-                                  >
-                                    <span className="discord-switch-knob" />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </section>
+                    <DiscordCategorySection
+                      key={cat.id}
+                      cat={cat}
+                      perms={perms}
+                      isCollapsed={Boolean(collapsedCategories[cat.id])}
+                      onToggleCollapse={toggleCategoryCollapse}
+                      canModifySelected={canModifySelected}
+                      onSelectAll={handleSelectAllInCategory}
+                      onClearAll={handleClearAllInCategory}
+                      selectedEntity={selectedEntity}
+                      selectedUser={selectedUser}
+                      currentRolePerms={currentRolePerms}
+                      currentUserGrants={currentUserGrants}
+                      currentUserRestrictions={currentUserRestrictions}
+                      effectiveUserPerms={effectiveUserPerms}
+                      onToggleRolePermission={handleToggleRolePermission}
+                      onToggleUserPermission={handleToggleUserPermission}
+                      onResetUserPermission={handleResetUserPermission}
+                    />
                   );
                 })}
               </div>
@@ -1436,99 +1116,16 @@ export function DiscordPermissionsManager({
       </div>
 
       {/* Create Custom Role Modal */}
-      {isCreateRoleModalOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className="routex-dialog-layer"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="create-role-modal-title"
-              style={{ zIndex: 1000 }}
-            >
-              <div
-                className="routex-dialog-backdrop"
-                onClick={() => !isCreatingRole && setIsCreateRoleModalOpen(false)}
-              />
-              <div
-                className="routex-dialog"
-                style={{ maxWidth: "440px", width: "92vw" }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <header className="routex-dialog-header">
-                  <h3 id="create-role-modal-title" className="routex-dialog-title">
-                    Create Custom Role
-                  </h3>
-                  <button
-                    type="button"
-                    className="routex-dialog-close"
-                    aria-label="Close create role modal"
-                    title="Close (Esc)"
-                    disabled={isCreatingRole}
-                    onClick={() => setIsCreateRoleModalOpen(false)}
-                  >
-                    ×
-                  </button>
-                </header>
-
-                <form onSubmit={handleCreateCustomRole}>
-                  <div
-                    className="routex-dialog-body"
-                    style={{ padding: "18px 24px", display: "flex", flexDirection: "column", gap: "14px" }}
-                  >
-                    <div className="routex-dialog-field">
-                      <label htmlFor="create-role-name">
-                        Role Name <span className="required-asterisk" aria-hidden="true">*</span>
-                      </label>
-                      <input
-                        id="create-role-name"
-                        type="text"
-                        placeholder="e.g. Fleet Supervisor, Logistics Dispatcher"
-                        value={newRoleName}
-                        onChange={(e) => setNewRoleName(e.target.value)}
-                        disabled={isCreatingRole}
-                        required
-                        autoFocus
-                      />
-                    </div>
-
-                    <div className="routex-dialog-field">
-                      <label htmlFor="create-role-desc">
-                        Description <span className="field-required-tag">(Optional)</span>
-                      </label>
-                      <input
-                        id="create-role-desc"
-                        type="text"
-                        placeholder="e.g. Oversees truck maintenance and driver dispatch"
-                        value={newRoleDesc}
-                        onChange={(e) => setNewRoleDesc(e.target.value)}
-                        disabled={isCreatingRole}
-                      />
-                    </div>
-                  </div>
-
-                  <footer className="routex-dialog-footer">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={isCreatingRole}
-                      onClick={() => setIsCreateRoleModalOpen(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="primary-action-button"
-                      disabled={isCreatingRole}
-                    >
-                      {isCreatingRole ? "Creating…" : "Create Role"}
-                    </button>
-                  </footer>
-                </form>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      <DiscordCreateRoleModal
+        isOpen={isCreateRoleModalOpen}
+        isCreatingRole={isCreatingRole}
+        newRoleName={newRoleName}
+        newRoleDesc={newRoleDesc}
+        onRoleNameChange={setNewRoleName}
+        onRoleDescChange={setNewRoleDesc}
+        onSubmit={handleCreateCustomRole}
+        onClose={() => setIsCreateRoleModalOpen(false)}
+      />
     </div>
   );
 }

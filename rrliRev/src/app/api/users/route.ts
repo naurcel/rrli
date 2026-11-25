@@ -27,6 +27,7 @@ import {
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured, isSupabaseAdminConfigured } from "@/lib/config/env";
 import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
+import { formatPhoneNumber } from "@/lib/format";
 
 export async function GET(request: Request) {
   const auth = await verifyServerPermission("users:manage");
@@ -253,7 +254,7 @@ export async function POST(request: Request) {
           must_change_password: true,
           is_superadmin: false,
           designation: parsed.data.designation?.trim() || undefined,
-          phone_number: parsed.data.phoneNumber?.trim() || undefined,
+          phone_number: parsed.data.phoneNumber ? formatPhoneNumber(parsed.data.phoneNumber) : undefined,
           created_at: now,
           updated_at: now,
         })
@@ -335,7 +336,7 @@ export async function POST(request: Request) {
     role: primaryRole,
     temporaryPassword,
     email,
-    phoneNumber: parsed.data.phoneNumber,
+    phoneNumber: parsed.data.phoneNumber ? formatPhoneNumber(parsed.data.phoneNumber) : undefined,
   });
 
   if (!created.ok) {

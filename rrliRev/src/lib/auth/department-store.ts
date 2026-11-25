@@ -41,6 +41,7 @@ const INITIAL_DEPARTMENTS: readonly DepartmentRecord[] = [
       "pod:view",
       "profitability:view",
       "profitability:manage",
+      "finance:view",
       "reports:view",
       "reports:export",
       "settings:view",

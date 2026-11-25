@@ -87,7 +87,7 @@ function buildAuthenticatedActor(params: {
     role: params.role,
     roles: userRoles,
     roleLabel: params.isSuperadmin
-      ? "Superadmin"
+      ? "President"
       : userRoles.length > 1
         ? userRoles.map((r) => (isValidUserRole(r) ? getRoleMetadata(r).label : r)).join(" + ")
         : meta.label,

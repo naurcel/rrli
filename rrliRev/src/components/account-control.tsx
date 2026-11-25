@@ -7,10 +7,15 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
   applyDesignPreferences,
+  applyTheme,
   DESIGN_PREFERENCES_EVENT,
   DesignPreferences,
+  getDesignPreferencesStorageKey,
+  getThemeStorageKey,
   loadDesignPreferences,
+  loadTheme,
   resetDesignPreferences,
+  ROUTEX_THEME_CHANGED_EVENT,
 } from "@/components/design-preferences";
 import {
   getDefaultAvatarUrl,
@@ -38,25 +43,30 @@ export function AccountControl({ className = "" }: { className?: string; collaps
   const triggerButtonRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
 
-  // Initialize theme state from DOM / localStorage
+  // Initialize user-scoped theme state
   useEffect(() => {
-    try {
-      const current =
-        document.documentElement.dataset.theme ??
-        window.localStorage.getItem("routex-theme");
-      setIsDark(current === "dark");
-    } catch {
-      // Ignore storage restrictions
+    setIsDark(loadTheme(actor.id) === "dark");
+
+    function handleThemeChange(e: Event) {
+      const ce = e as CustomEvent<"light" | "dark">;
+      if (ce.detail) {
+        setIsDark(ce.detail === "dark");
+      }
     }
 
     function handleStorage(e: StorageEvent) {
-      if (e.key === "routex-theme" && e.newValue) {
+      if (e.key === getThemeStorageKey(actor.id) && e.newValue) {
         setIsDark(e.newValue === "dark");
       }
     }
+
+    window.addEventListener(ROUTEX_THEME_CHANGED_EVENT, handleThemeChange);
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
+    return () => {
+      window.removeEventListener(ROUTEX_THEME_CHANGED_EVENT, handleThemeChange);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [actor.id]);
 
   // Update avatar and listen for profile photo events
   useEffect(() => {
@@ -99,7 +109,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
     }
 
     function handleStorage(e: StorageEvent) {
-      if (e.key && e.key.startsWith("routex.design-preferences")) {
+      if (e.key === getDesignPreferencesStorageKey(actor.id)) {
         const next = loadDesignPreferences(actor.id);
         setPreferences(next);
         applyDesignPreferences(next, actor.id);
@@ -157,12 +167,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
     setIsDark((prev) => {
       const next = !prev;
       const nextTheme = next ? "dark" : "light";
-      document.documentElement.dataset.theme = nextTheme;
-      try {
-        window.localStorage.setItem("routex-theme", nextTheme);
-      } catch {
-        // Ignore storage restrictions
-      }
+      applyTheme(nextTheme, actor.id);
       return next;
     });
   }
@@ -180,6 +185,8 @@ export function AccountControl({ className = "" }: { className?: string; collaps
     e?.stopPropagation();
     const defaults = resetDesignPreferences(actor.id);
     setPreferences(defaults);
+    applyTheme("light", actor.id);
+    setIsDark(false);
   }
 
   async function handleSignOut() {
@@ -268,7 +275,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
           id={menuId}
           className={`topbar-profile-dropdown${activeView === "preferences" ? " is-preferences-view" : ""}`}
           role="menu"
-          aria-label={activeView === "preferences" ? "Design Preferences" : "Profile options"}
+          aria-label={activeView === "preferences" ? "Preferences" : "Profile options"}
         >
           {activeView === "preferences" ? (
             <div className="profile-dropdown-prefs-panel">
@@ -293,7 +300,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
                   </svg>
                   <span>Back</span>
                 </button>
-                <span className="profile-prefs-title">Design Preferences</span>
+                <span className="profile-prefs-title">Preferences</span>
                 <button
                   type="button"
                   className="profile-prefs-reset-btn"
@@ -466,7 +473,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
                 </button>
               </div>
 
-              {/* Design Preferences trigger item */}
+              {/* Preferences trigger item */}
               <button
                 type="button"
                 role="menuitem"
@@ -496,7 +503,7 @@ export function AccountControl({ className = "" }: { className?: string; collaps
                       <line x1="17" y1="16" x2="23" y2="16" />
                     </svg>
                   </span>
-                  <span>Design Preferences</span>
+                  <span>Preferences</span>
                 </div>
                 <span className="profile-dropdown-arrow" aria-hidden="true">
                   <svg

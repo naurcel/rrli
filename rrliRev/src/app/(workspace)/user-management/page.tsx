@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
@@ -11,6 +11,7 @@ import { useSearchBuffer } from "@/components/search-buffer";
 import { SimpleLoading } from "@/components/simple-loading";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { AuditStateChanges } from "@/components/audit-state-changes";
+import { resetAllScrollPositions } from "@/components/route-scroll-to-top";
 import {
   formatAuditActor,
   formatAuditEntityLabel,
@@ -30,6 +31,7 @@ import {
   type Permission,
   type UserRole,
 } from "@/lib/auth/rbac";
+import { formatPhoneNumber } from "@/lib/format";
 
 type ManagedUserRecord = {
   id: string;
@@ -104,6 +106,55 @@ const ROLE_OPTIONS = USER_ROLES.map((role) => ({
   label: ROLE_METADATA[role].label,
 }));
 
+export function normalizeManagedStaffRecord(u: ManagedUserRecord): ManagedUserRecord {
+  const usernameMap: Record<string, string> = {
+    admin: "mori_mochi",
+    hr: "jxleners",
+    finance: "azula",
+    operations: "narcel",
+    customerrep: "ravicci",
+    secretary: "ze.ku",
+    shinryu: "shinr6u",
+  };
+
+  const emailMap: Record<string, string> = {
+    "admin@routex.local": "adrianmangampat@gmail.com",
+    "hr@routex.local": "jelenepunongbayan@gmail.com",
+    "finance@routex.local": "louizajoy@gmail.com",
+    "operations@routex.local": "marcrancel@gmail.com",
+    "csrep@routex.local": "rainibasco@gmail.com",
+    "secretary@routex.local": "zeankurt@gmail.com",
+  };
+
+  const normalizedUsername = usernameMap[u.username.toLowerCase()] || u.username;
+  let cleanName = u.fullName;
+  if (cleanName === "System Administrator") {
+    cleanName = "Adrian Mangampat";
+  } else {
+    cleanName = cleanName.replace(/\s*\([^)]*\)/g, "").trim();
+  }
+
+  let cleanEmail = u.email;
+  if (emailMap[cleanEmail.toLowerCase()]) {
+    cleanEmail = emailMap[cleanEmail.toLowerCase()];
+  } else if (cleanEmail.toLowerCase().endsWith("@routex.local")) {
+    cleanEmail = `${normalizedUsername.replace(/\./g, "")}@gmail.com`;
+  }
+
+  const cleanPhone = u.phoneNumber ? formatPhoneNumber(u.phoneNumber) : u.phoneNumber;
+  const isSuperadmin = Boolean(u.isSuperadmin);
+
+  return {
+    ...u,
+    fullName: cleanName,
+    username: normalizedUsername,
+    email: cleanEmail,
+    phoneNumber: cleanPhone,
+    isSuperadmin,
+    roleLabel: isSuperadmin ? "President" : u.roleLabel === "Superadmin" ? "President" : u.roleLabel,
+  };
+}
+
 export default function UserManagementPage() {
   const actor = useAuthenticatedActor();
   const [users, setUsers] = useState<ManagedUserRecord[]>([]);
@@ -143,7 +194,18 @@ export default function UserManagementPage() {
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", '#' + tab);
     }
+    resetAllScrollPositions("instant");
   }
+
+  useEffect(() => {
+    resetAllScrollPositions("instant");
+    const frameId = requestAnimationFrame(() => resetAllScrollPositions("instant"));
+    const timerId = setTimeout(() => resetAllScrollPositions("instant"), 30);
+    return () => {
+      cancelAnimationFrame(frameId);
+      clearTimeout(timerId);
+    };
+  }, [activeTab]);
 
   // Permanent delete modal state (Superadmin only)
   const [permanentDeleteModalUser, setPermanentDeleteModalUser] = useState<ManagedUserRecord | null>(null);
@@ -244,17 +306,23 @@ export default function UserManagementPage() {
     if (roleMeta) return roleMeta.label;
     const dept = departmentsList.find((d) => d.id === key || d.code === key);
     if (dept) return dept.name;
-    if (key === "superadmin") return "Superadmin";
+    if (key === "superadmin") return "President";
     return key.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
-  function getRoleToneClass(key: string): string {
-    if (key === "admin" || key === "dept-admin") return "tone-purple";
-    if (key === "operations" || key === "dept-ops") return "tone-success";
-    if (key === "finance" || key === "dept-fin") return "tone-primary";
-    if (key === "hr" || key === "dept-hr") return "tone-warning";
-    if (key === "secretary" || key === "customer_representative") return "tone-neutral";
-    return "tone-primary";
+  function getRoleDotColor(key: string): string {
+    const k = key.toLowerCase();
+    if (k === "superadmin") return "#f59e0b"; // Gold / Amber
+    if (k === "admin" || k === "dept-admin") return "#8b5cf6"; // Purple
+    if (k === "operations" || k === "dept-ops") return "#10b981"; // Emerald Green
+    if (k === "finance" || k === "dept-fin") return "#0284c7"; // Blue
+    if (k === "hr" || k === "dept-hr") return "#f59e0b"; // Amber / Orange
+    if (k === "customer_representative" || k === "customer representative" || k === "dept-cs") return "#ec4899"; // Pink
+    if (k === "secretary" || k === "dept-sec") return "#6366f1"; // Indigo
+    const colors = ["#8b5cf6", "#0284c7", "#10b981", "#ec4899", "#f59e0b", "#06b6d4", "#6366f1"];
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = key.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
   }
 
   const assignableRoles = useMemo(() => {
@@ -422,7 +490,7 @@ export default function UserManagementPage() {
       .then((res) => res.json())
       .then((data: { ok?: boolean; users?: ManagedUserRecord[] }) => {
         if (data?.ok && Array.isArray(data.users)) {
-          setUsers(data.users);
+          setUsers(data.users.map(normalizeManagedStaffRecord));
         }
       })
       .catch(() => {
@@ -436,7 +504,7 @@ export default function UserManagementPage() {
         .then((res) => res.json())
         .then((data: { ok?: boolean; users?: ManagedUserRecord[] }) => {
           if (data?.ok && Array.isArray(data.users)) {
-            setDeletedUsers(data.users.filter((u) => u.isPermanentlyDeleted));
+            setDeletedUsers(data.users.filter((u) => u.isPermanentlyDeleted).map(normalizeManagedStaffRecord));
           }
         })
         .catch(() => {});
@@ -659,7 +727,7 @@ export default function UserManagementPage() {
       return;
     }
 
-    const cleanPhone = phoneNumber.trim();
+    const cleanPhone = formatPhoneNumber(phoneNumber);
     if (!cleanPhone || cleanPhone.length < 7) {
       setFeedback({
         tone: "error",
@@ -927,7 +995,7 @@ export default function UserManagementPage() {
     setEditContactError(null);
 
     const cleanEmail = editEmailInput.trim().toLowerCase();
-    const cleanPhone = editPhoneInput.trim();
+    const cleanPhone = formatPhoneNumber(editPhoneInput);
 
     if (!cleanEmail || !cleanEmail.includes("@")) {
       setEditContactError("Please enter a valid email address.");
@@ -1104,14 +1172,14 @@ export default function UserManagementPage() {
 
             {/* Provision Account Form */}
             <section
+              id="add-user"
               className="records-card user-provision-card"
               aria-label="Provision new staff account"
             >
               <div className="records-heading">
                 <div>
                   <h2>Add User</h2>
-                  <p>Create staff account with a temporary password.</p>
-                  <p>Provision staff account credentials and role assignments.</p>
+                  <p>Provision new staff account credentials and role assignments.</p>
                 </div>
               </div>
 
@@ -1200,7 +1268,7 @@ export default function UserManagementPage() {
                           id="provision-phone"
                           className="user-management-input"
                           type="tel"
-                          placeholder="e.g. +63 917 123 4567"
+                          placeholder="e.g. 09171234567"
                           value={phoneNumber}
                           onChange={(event) => setPhoneNumber(event.target.value)}
                           required
@@ -1636,7 +1704,7 @@ export default function UserManagementPage() {
                                 {user.phoneNumber ? (
                                   <>
                                     <span aria-hidden="true" style={{ opacity: 0.5 }}>·</span>
-                                    <span>{user.phoneNumber}</span>
+                                    <span>{formatPhoneNumber(user.phoneNumber)}</span>
                                   </>
                                 ) : null}
                               </small>
@@ -1664,43 +1732,34 @@ export default function UserManagementPage() {
                             >
                               {user.isSuperadmin ? (
                                 <span
-                                  className="access-pill admin"
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "5px",
-                                    fontWeight: 650,
-                                    fontSize: "12px",
-                                    padding: "3px 9px",
-                                    borderRadius: "6px",
-                                  }}
+                                  className="discord-role-pill is-superadmin"
                                   title="Permanent Executive: Unrestricted system authority across all modules"
                                 >
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                                   </svg>
-                                  Superadmin
+                                  <span className="discord-role-text">President</span>
                                 </span>
                               ) : (
                                 <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
                                   <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "5px" }}>
                                     {getUserAssignedRoles(user).map((roleKey) => {
                                       const isProtectedAdmin = roleKey === "admin" && !actor.isSuperadmin;
+                                      const dotColor = getRoleDotColor(roleKey);
                                       return (
                                         <span
                                           key={roleKey}
-                                          className={`routex-badge ${getRoleToneClass(roleKey)}`}
-                                          style={{
-                                            fontSize: "11px",
-                                            fontWeight: 600,
-                                            padding: "2px 7px",
-                                            borderRadius: "5px",
-                                            lineHeight: "16px",
-                                            whiteSpace: "nowrap",
-                                          }}
-                                          title={isProtectedAdmin ? "Protected role: Only the Superadmin can modify Admin accounts" : getRoleOrDeptName(roleKey)}
+                                          className="discord-role-pill"
+                                          title={isProtectedAdmin ? "Protected role: Only the President can modify Admin accounts" : getRoleOrDeptName(roleKey)}
                                         >
-                                          {getRoleOrDeptName(roleKey)}
+                                          <span
+                                            className="discord-role-dot"
+                                            style={{ backgroundColor: dotColor }}
+                                            aria-hidden="true"
+                                          />
+                                          <span className="discord-role-text">
+                                            {getRoleOrDeptName(roleKey)}
+                                          </span>
                                         </span>
                                       );
                                     })}
@@ -1713,46 +1772,30 @@ export default function UserManagementPage() {
                                           setPermissionFocusUserId(user.id);
                                           handleSelectTab("permissions");
                                         }}
-                                        className="routex-badge tone-primary"
+                                        className="discord-role-pill"
                                         style={{
-                                          fontSize: "10px",
-                                          fontWeight: 650,
-                                          padding: "1px 5px",
-                                          borderRadius: "4px",
                                           cursor: "pointer",
-                                          border: "1px solid rgba(2, 132, 199, 0.3)",
-                                          background: "rgba(2, 132, 199, 0.08)",
+                                          borderStyle: "dashed",
                                         }}
                                         title="Custom permission overrides active in Matrix. Click to inspect."
                                       >
-                                        Matrix ({(user.customGrants?.length ?? 0) > 0 ? `+${user.customGrants?.length}` : ""}{(user.customRestrictions?.length ?? 0) > 0 ? ` -${user.customRestrictions?.length}` : ""})
+                                        <span className="discord-role-dot" style={{ backgroundColor: "#0284c7" }} aria-hidden="true" />
+                                        <span className="discord-role-text">
+                                          Matrix ({(user.customGrants?.length ?? 0) > 0 ? `+${user.customGrants?.length}` : ""}{(user.customRestrictions?.length ?? 0) > 0 ? ` -${user.customRestrictions?.length}` : ""})
+                                        </span>
                                       </button>
                                     )}
 
                                     {(!user.isSuperadmin && (user.role !== "admin" || actor.isSuperadmin)) && (
                                       <button
                                         type="button"
+                                        className="discord-role-add-btn"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           const rect = e.currentTarget.getBoundingClientRect();
                                           const spaceBelow = window.innerHeight - rect.bottom;
                                           setRoleMenuOpensAbove(spaceBelow < 220 || userIndex >= paginatedUsers.length - 2);
                                           setOpenRoleMenuUserId((curr) => curr === user.id ? null : user.id);
-                                        }}
-                                        style={{
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          justifyContent: "center",
-                                          width: "20px",
-                                          height: "20px",
-                                          borderRadius: "4px",
-                                          border: "1px dashed var(--color-border)",
-                                          background: "transparent",
-                                          color: "var(--color-text-secondary)",
-                                          fontSize: "12px",
-                                          cursor: "pointer",
-                                          padding: 0,
-                                          lineHeight: 1,
                                         }}
                                         title={`Assign or change roles/departments for ${user.fullName}`}
                                         aria-label={`Assign or change roles for ${user.fullName}`}
@@ -1797,6 +1840,7 @@ export default function UserManagementPage() {
                                         {assignableRoles.map((roleOpt) => {
                                           const currentRoles = getUserAssignedRoles(user);
                                           const isChecked = currentRoles.includes(roleOpt.value);
+                                          const dotColor = getRoleDotColor(roleOpt.value);
                                           return (
                                             <label
                                               key={roleOpt.value}
@@ -1806,9 +1850,9 @@ export default function UserManagementPage() {
                                                 gap: "8px",
                                                 fontSize: "12px",
                                                 cursor: "pointer",
-                                                padding: "4px 6px",
-                                                borderRadius: "4px",
-                                                background: isChecked ? "var(--color-surface-subtle)" : "transparent",
+                                                padding: "4px 8px",
+                                                borderRadius: "6px",
+                                                background: isChecked ? "var(--color-surface-subtle, rgba(0, 0, 0, 0.04))" : "transparent",
                                               }}
                                             >
                                               <input
@@ -1817,7 +1861,17 @@ export default function UserManagementPage() {
                                                 onChange={() => handleToggleUserRole(user, roleOpt.value)}
                                                 style={{ accentColor: "var(--color-primary, #0284c7)" }}
                                               />
-                                              <span style={{ fontWeight: isChecked ? 600 : 400 }}>{roleOpt.label}</span>
+                                              <span
+                                                style={{
+                                                  width: "7px",
+                                                  height: "7px",
+                                                  borderRadius: "50%",
+                                                  backgroundColor: dotColor,
+                                                  flexShrink: 0,
+                                                }}
+                                                aria-hidden="true"
+                                              />
+                                              <span style={{ fontWeight: isChecked ? 600 : 400, color: "var(--color-text-primary)" }}>{roleOpt.label}</span>
                                             </label>
                                           );
                                         })}
@@ -1935,7 +1989,7 @@ export default function UserManagementPage() {
                                         >
                                           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                                         </svg>
-                                        <span><strong>Executive Account:</strong> Regular Admins cannot modify, deactivate, or delete the Superadmin account.</span>
+                                        <span><strong>Executive Account:</strong> Regular Admins cannot modify, deactivate, or delete the President account.</span>
                                       </div>
                                     ) : (
                                       <>
@@ -2006,9 +2060,9 @@ export default function UserManagementPage() {
                                             isSelf
                                               ? "Cannot deactivate your own active Admin account"
                                               : user.isSuperadmin
-                                              ? "Superadmin account cannot be deactivated"
+                                              ? "President account cannot be deactivated"
                                               : user.role === "admin" && !actor.isSuperadmin
-                                              ? "Only Superadmin can deactivate Admin accounts"
+                                              ? "Only the President can deactivate Admin accounts"
                                               : undefined
                                           }
                                         >
@@ -2027,9 +2081,9 @@ export default function UserManagementPage() {
                                             }}
                                             title={
                                               isSelf
-                                                ? "Cannot delete your own active Superadmin account"
+                                                ? "Cannot delete your own active President account"
                                                 : user.isSuperadmin
-                                                ? "Superadmin account cannot be permanently deleted"
+                                                ? "President account cannot be permanently deleted"
                                                 : undefined
                                             }
                                           >
@@ -2041,7 +2095,7 @@ export default function UserManagementPage() {
                                             role="menuitem"
                                             className="row-action-menu-danger"
                                             disabled
-                                            title="Permanent deletion strictly requires Superadmin (President) authority"
+                                            title="Permanent deletion strictly requires President authority"
                                             style={{ opacity: 0.5, cursor: "not-allowed" }}
                                           >
                                             Permanently Delete
@@ -2880,7 +2934,7 @@ export default function UserManagementPage() {
                   type="tel"
                   value={editPhoneInput}
                   onChange={(e) => setEditPhoneInput(e.target.value)}
-                  placeholder="e.g. +63 917 123 4567"
+                  placeholder="e.g. 09171234567"
                   required
                 />
                 <small style={{ fontSize: "10px", color: "var(--color-text-muted)" }}>

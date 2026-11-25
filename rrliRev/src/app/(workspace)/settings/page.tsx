@@ -1,18 +1,24 @@
 "use client";
 
-import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import { OperationalTopbar } from "@/components/operational-topbar";
 import { PasswordCriteriaList } from "@/components/password-criteria-list";
 import { RoundedSelect, type SelectOption } from "@/components/rounded-select";
+import { resetAllScrollPositions } from "@/components/route-scroll-to-top";
 import {
   applyDesignPreferences,
+  applyTheme,
   DESIGN_PREFERENCES_EVENT,
   type DesignPreferences,
+  getDesignPreferencesStorageKey,
+  getThemeStorageKey,
   loadDesignPreferences,
+  loadTheme,
   resetDesignPreferences,
+  ROUTEX_THEME_CHANGED_EVENT,
 } from "@/components/design-preferences";
 import {
   getDefaultAvatarUrl,
@@ -21,6 +27,7 @@ import {
   PROFILE_PHOTO_EVENT,
   resizeProfilePhotoFile,
 } from "@/components/profile-photo";
+import { formatPhoneNumber } from "@/lib/format";
 import {
   evaluatePasswordCriteria,
   normalizeSecurityAnswer,
@@ -62,7 +69,7 @@ export default function SettingsPage() {
   const actor = useAuthenticatedActor();
   const [currentUsername, setCurrentUsername] = useState(actor.username);
   const [currentEmail, setCurrentEmail] = useState(actor.email);
-  const [currentPhone, setCurrentPhone] = useState(actor.phoneNumber ?? "+63 917 123 4567");
+  const [currentPhone, setCurrentPhone] = useState(formatPhoneNumber(actor.phoneNumber) || "09171234567");
 
   // Profile Photo state
   const [currentAvatar, setCurrentAvatar] = useState<string | null>(() => {
@@ -74,7 +81,7 @@ export default function SettingsPage() {
 
   // Change Contact Details form (Email & Phone Number)
   const [contactEmail, setContactEmail] = useState(actor.email);
-  const [contactPhone, setContactPhone] = useState(actor.phoneNumber ?? "+63 917 123 4567");
+  const [contactPhone, setContactPhone] = useState(formatPhoneNumber(actor.phoneNumber) || "09171234567");
   const [contactPassword, setContactPassword] = useState("");
   const [contactFeedback, setContactFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [contactSubmitting, setContactSubmitting] = useState(false);
@@ -165,7 +172,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "").toLowerCase();
-      if (hash === "appearance" || hash === "design") setActiveTab("appearance");
+      if (hash === "appearance" || hash === "design" || hash === "preferences") setActiveTab("appearance");
       else if (hash === "security") setActiveTab("security");
       else if (hash === "export" || hash === "data-export") setActiveTab("export");
       else if (hash === "account") setActiveTab("account");
@@ -177,23 +184,27 @@ export default function SettingsPage() {
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", '#' + tab);
     }
+    resetAllScrollPositions("instant");
   }
 
-  // Design Preferences state & Dark mode sync
+  useEffect(() => {
+    resetAllScrollPositions("instant");
+    const frameId = requestAnimationFrame(() => resetAllScrollPositions("instant"));
+    const timerId = setTimeout(() => resetAllScrollPositions("instant"), 30);
+    return () => {
+      cancelAnimationFrame(frameId);
+      clearTimeout(timerId);
+    };
+  }, [activeTab]);
+
+  // Preferences state & Dark mode sync (strictly scoped to actor.id)
   const [preferences, setPreferences] = useState<DesignPreferences>(() =>
     loadDesignPreferences(actor.id)
   );
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    try {
-      const current =
-        document.documentElement.dataset.theme ??
-        window.localStorage.getItem("routex-theme");
-      setIsDark(current === "dark");
-    } catch {
-      // Ignore
-    }
+    setIsDark(loadTheme(actor.id) === "dark");
 
     const currentPrefs = loadDesignPreferences(actor.id);
     setPreferences(currentPrefs);
@@ -206,11 +217,18 @@ export default function SettingsPage() {
       }
     }
 
+    function handleThemeChange(e: Event) {
+      const ce = e as CustomEvent<"light" | "dark">;
+      if (ce.detail) {
+        setIsDark(ce.detail === "dark");
+      }
+    }
+
     function handleStorage(e: StorageEvent) {
-      if (e.key === "routex-theme" && e.newValue) {
+      if (e.key === getThemeStorageKey(actor.id) && e.newValue) {
         setIsDark(e.newValue === "dark");
       }
-      if (e.key && e.key.startsWith("routex.design-preferences")) {
+      if (e.key === getDesignPreferencesStorageKey(actor.id)) {
         const next = loadDesignPreferences(actor.id);
         setPreferences(next);
         applyDesignPreferences(next, actor.id);
@@ -218,9 +236,11 @@ export default function SettingsPage() {
     }
 
     window.addEventListener(DESIGN_PREFERENCES_EVENT, handlePrefsChange);
+    window.addEventListener(ROUTEX_THEME_CHANGED_EVENT, handleThemeChange);
     window.addEventListener("storage", handleStorage);
     return () => {
       window.removeEventListener(DESIGN_PREFERENCES_EVENT, handlePrefsChange);
+      window.removeEventListener(ROUTEX_THEME_CHANGED_EVENT, handleThemeChange);
       window.removeEventListener("storage", handleStorage);
     };
   }, [actor.id]);
@@ -237,18 +257,15 @@ export default function SettingsPage() {
   function handleResetPreferences() {
     const defaults = resetDesignPreferences(actor.id);
     setPreferences(defaults);
+    applyTheme("light", actor.id);
+    setIsDark(false);
   }
 
   function handleToggleTheme() {
     setIsDark((prev) => {
       const next = !prev;
       const nextTheme = next ? "dark" : "light";
-      document.documentElement.dataset.theme = nextTheme;
-      try {
-        window.localStorage.setItem("routex-theme", nextTheme);
-      } catch {
-        // Ignore
-      }
+      applyTheme(nextTheme, actor.id);
       return next;
     });
   }
@@ -274,8 +291,9 @@ export default function SettingsPage() {
             setContactEmail(data.actor.email);
           }
           if (data.actor.phoneNumber) {
-            setCurrentPhone(data.actor.phoneNumber);
-            setContactPhone(data.actor.phoneNumber);
+            const formatted = formatPhoneNumber(data.actor.phoneNumber);
+            setCurrentPhone(formatted);
+            setContactPhone(formatted);
           }
           if (data.actor.securityQuestion) setCurrentQuestion(data.actor.securityQuestion);
           if (data.actor.hasBackupKey) setHasExistingBackupKey(Boolean(data.actor.hasBackupKey));
@@ -442,7 +460,7 @@ export default function SettingsPage() {
     setContactFeedback(null);
 
     const cleanEmail = contactEmail.trim().toLowerCase();
-    const cleanPhone = contactPhone.trim();
+    const cleanPhone = formatPhoneNumber(contactPhone);
 
     if (!cleanEmail || !cleanEmail.includes("@")) {
       setContactFeedback({ tone: "error", text: "Please enter a valid email address." });
@@ -479,7 +497,7 @@ export default function SettingsPage() {
 
       setCurrentEmail(data.profile?.email ?? cleanEmail);
       if (data.profile?.phoneNumber) {
-        setCurrentPhone(data.profile.phoneNumber);
+        setCurrentPhone(formatPhoneNumber(data.profile.phoneNumber));
       }
       setContactPassword("");
       setContactFeedback({ tone: "success", text: data.message ?? "Contact information updated successfully." });
@@ -670,7 +688,7 @@ export default function SettingsPage() {
                 className={`settings-tab-btn${activeTab === "appearance" ? " active" : ""}`}
                 onClick={() => handleSelectTab("appearance")}
               >
-                Appearance
+                Preferences
               </button>
               <button
                 type="button"
@@ -767,7 +785,7 @@ export default function SettingsPage() {
               <span className="settings-hero-dot" aria-hidden="true">·</span>
               <span className="settings-hero-email">{currentEmail}</span>
               <span className="settings-hero-dot" aria-hidden="true">·</span>
-              <span className="settings-hero-phone">{currentPhone}</span>
+              <span className="settings-hero-phone">{formatPhoneNumber(currentPhone)}</span>
             </div>
           </div>
 
@@ -904,7 +922,7 @@ export default function SettingsPage() {
                   <input
                     type="tel"
                     required
-                    placeholder="e.g. +63 917 123 4567"
+                    placeholder="e.g. 09171234567"
                     value={contactPhone}
                     onChange={(e) => setContactPhone(e.target.value)}
                     className="settings-input"
@@ -942,17 +960,17 @@ export default function SettingsPage() {
 
             {activeTab === "appearance" && (
               <div id="panel-appearance" role="tabpanel" aria-labelledby="tab-appearance" className="settings-tab-panel">
-                          <section className="records-card settings-card-section appearance-card" aria-label="Appearance and Design Preferences">
+                          <section className="records-card settings-card-section appearance-card" aria-label="Preferences">
             <div className="settings-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
               <div>
-                <h2>Appearance &amp; Design</h2>
+                <h2>Preferences</h2>
                 <p>Customize typography scaling, visual density, animations, and color mode across RouteX.</p>
               </div>
               <button
                 type="button"
                 className="profile-prefs-reset-btn"
                 onClick={handleResetPreferences}
-                title="Reset design preferences to system defaults"
+                title="Reset preferences to system defaults"
               >
                 Reset to Defaults
               </button>
@@ -1243,121 +1261,108 @@ export default function SettingsPage() {
               <p>Generate a single-use emergency backup key for offline account recovery.</p>
             </div>
 
-            <p className="settings-explanation-text">
-              Emergency backup keys allow you to recover account access if you forget your password or cannot answer your security question.
-              Each key is strictly <strong>single-use</strong>. Generating a new key invalidates any prior key immediately.
-              Plaintext backup keys are never stored on RouteX servers (Argon2id cryptographic hash only).
-            </p>
+            <form onSubmit={handleGenerateBackupKey} className="settings-form-body" noValidate>
+              <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.6", color: "var(--color-text-secondary, var(--color-text-muted))" }}>
+                Emergency backup keys allow you to recover account access if you forget your password or cannot answer your security question.
+                Each key is strictly <strong>single-use</strong>. Generating a new key invalidates any prior key immediately.
+                Plaintext backup keys are never stored on RouteX servers (Argon2id cryptographic hash only).
+              </p>
 
-            {backupKeyFeedback && (
-              <div
-                className={`feedback-banner ${backupKeyFeedback.tone}`}
-                role="alert"
-                style={{
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  marginBottom: "16px",
-                  backgroundColor: backupKeyFeedback.tone === "success" ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
-                  color: backupKeyFeedback.tone === "success" ? "#059669" : "#dc2626",
-                  border: `1px solid ${backupKeyFeedback.tone === "success" ? "#10b981" : "#ef4444"}`,
-                }}
-              >
-                {backupKeyFeedback.text}
-              </div>
-            )}
-
-            {generatedBackupKey && (
-              <div
-                style={{
-                  padding: "16px",
-                  borderRadius: "8px",
-                  border: "1px dashed var(--color-accent-deep)",
-                  backgroundColor: "var(--color-surface-subtle)",
-                  marginBottom: "20px",
-                }}
-              >
-                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-accent-deep)", marginBottom: "4px" }}>
-                  Your New Single-Use Emergency Backup Key:
+              {backupKeyFeedback ? (
+                <div className={`settings-form-alert ${backupKeyFeedback.tone}`}>
+                  {backupKeyFeedback.text}
                 </div>
+              ) : null}
+
+              {generatedBackupKey && (
                 <div
                   style={{
-                    fontFamily: "monospace",
-                    fontSize: "20px",
-                    fontWeight: 700,
-                    letterSpacing: "1.5px",
-                    padding: "10px 0",
-                    color: "var(--color-text)",
-                    userSelect: "all",
+                    padding: "16px",
+                    borderRadius: "10px",
+                    border: "1px dashed var(--color-accent-deep, #c2410c)",
+                    backgroundColor: "var(--color-surface-subtle, rgba(245, 158, 11, 0.05))",
                   }}
                 >
-                  {generatedBackupKey}
-                </div>
-                <p
-                  style={{
-                    margin: "4px 0 14px",
-                    fontSize: "12px",
-                    color: "var(--color-text-muted)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#f59e0b"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{ flexShrink: 0 }}
-                    aria-hidden="true"
-                  >
-                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                    <line x1="12" y1="9" x2="12" y2="13" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                  </svg>
-                  <span>Save this key in a secure location (e.g. password manager, safe). It will never be displayed again.</span>
-                </p>
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ padding: "6px 14px", fontSize: "12px", fontWeight: 600 }}
-                    onClick={() => {
-                      navigator.clipboard.writeText(generatedBackupKey);
-                      toast.success("Emergency backup key copied to clipboard!");
+                  <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-accent-deep, #c2410c)", marginBottom: "4px" }}>
+                    Your New Single-Use Emergency Backup Key:
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: "20px",
+                      fontWeight: 700,
+                      letterSpacing: "1.5px",
+                      padding: "10px 0",
+                      color: "var(--color-text-primary)",
+                      userSelect: "all",
                     }}
                   >
-                    Copy Key
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ padding: "6px 14px", fontSize: "12px", fontWeight: 600 }}
-                    onClick={() => {
-                      const content = `ROUTEX EMERGENCY BACKUP KEY\nAccount: ${actor.username}\nKey: ${generatedBackupKey}\nGenerated: ${new Date().toISOString()}\n\nNote: This is a single-use emergency backup key. Store offline in a secure location.`;
-                      const blob = new Blob([content], { type: "text/plain" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `routex-backup-key-${actor.username}.txt`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                      toast.success("Backup key downloaded!");
+                    {generatedBackupKey}
+                  </div>
+                  <p
+                    style={{
+                      margin: "4px 0 14px",
+                      fontSize: "12px",
+                      color: "var(--color-text-muted)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
                     }}
                   >
-                    Download .txt
-                  </button>
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#f59e0b"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ flexShrink: 0 }}
+                      aria-hidden="true"
+                    >
+                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    <span>Save this key in a secure location (e.g. password manager, safe). It will never be displayed again.</span>
+                  </p>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ padding: "6px 14px", fontSize: "12px", fontWeight: 600 }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedBackupKey);
+                        toast.success("Emergency backup key copied to clipboard!");
+                      }}
+                    >
+                      Copy Key
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ padding: "6px 14px", fontSize: "12px", fontWeight: 600 }}
+                      onClick={() => {
+                        const content = `ROUTEX EMERGENCY BACKUP KEY\nAccount: ${actor.username}\nKey: ${generatedBackupKey}\nGenerated: ${new Date().toISOString()}\n\nNote: This is a single-use emergency backup key. Store offline in a secure location.`;
+                        const blob = new Blob([content], { type: "text/plain" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `routex-backup-key-${actor.username}.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        toast.success("Backup key downloaded!");
+                      }}
+                    >
+                      Download .txt
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <form onSubmit={handleGenerateBackupKey} className="settings-backup-key-form" noValidate>
-              <div className="settings-field-group" style={{ maxWidth: "380px", flex: "1 1 280px" }}>
-                <label htmlFor="input-backupkey-password" className="settings-field-label">
+              <div className="settings-form-field">
+                <label htmlFor="input-backupkey-password">
                   Current Password (Identity Verification)
                 </label>
                 <input
@@ -1372,63 +1377,17 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div className="settings-backup-key-action">
+              <div className="settings-form-actions">
                 <button
                   type="submit"
                   className="primary-action-button"
                   disabled={backupKeySubmitting}
-                  style={{ minHeight: "40px", padding: "0 20px" }}
+                  style={{ minHeight: "42px", padding: "0 22px" }}
                 >
                   {backupKeySubmitting ? "Generating…" : hasExistingBackupKey ? "Regenerate Backup Key" : "Generate Emergency Backup Key"}
                 </button>
               </div>
             </form>
-          </section>
-
-          {/* Section 5: Account Security Status */}
-          <section className="records-card settings-card-section" aria-label="Account Security Status">
-            <div className="settings-section-header">
-              <h2>Account Security Status</h2>
-              <p>Security protections enabled for your account.</p>
-            </div>
-
-            <div className="settings-security-minimal-list">
-              <div className="settings-security-minimal-row">
-                <div className="settings-security-minimal-info">
-                  <span className="settings-security-minimal-title">Password Protection</span>
-                  <span className="settings-security-minimal-desc">Argon2id encryption</span>
-                </div>
-                <span className="settings-security-status-text ok">Active</span>
-              </div>
-
-              <div className="settings-security-minimal-row">
-                <div className="settings-security-minimal-info">
-                  <span className="settings-security-minimal-title">Security Question</span>
-                  <span className="settings-security-minimal-desc">
-                    {currentQuestion !== "Not yet configured"
-                      ? "Recovery question configured"
-                      : "Required for self-service recovery"}
-                  </span>
-                </div>
-                <span className={`settings-security-status-text ${currentQuestion !== "Not yet configured" ? "ok" : "pending"}`}>
-                  {currentQuestion !== "Not yet configured" ? "Configured" : "Pending"}
-                </span>
-              </div>
-
-              <div className="settings-security-minimal-row">
-                <div className="settings-security-minimal-info">
-                  <span className="settings-security-minimal-title">Emergency Backup Key</span>
-                  <span className="settings-security-minimal-desc">
-                    {hasExistingBackupKey || Boolean(generatedBackupKey)
-                      ? "Single-use key ready for emergency recovery"
-                      : "Recommended for secure offline recovery"}
-                  </span>
-                </div>
-                <span className={`settings-security-status-text ${hasExistingBackupKey || Boolean(generatedBackupKey) ? "ok" : "pending"}`}>
-                  {hasExistingBackupKey || Boolean(generatedBackupKey) ? "Configured" : "Not generated"}
-                </span>
-              </div>
-            </div>
           </section>
               </div>
             )}

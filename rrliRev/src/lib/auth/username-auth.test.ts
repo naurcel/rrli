@@ -136,21 +136,21 @@ test("Username format and case-insensitive normalization", () => {
 
 test("Case-insensitive username authentication with case-sensitive passwords", async () => {
   // Match with exact username
-  const exact = await verifyServerAccountCredentials("admin", "Admin2026!");
+  const exact = await verifyServerAccountCredentials("mori_mochi", "Admin2026!");
   assert.equal(exact.ok, true, "Exact username matches");
   if (exact.ok) {
-    assert.equal(exact.profile.username, "admin");
+    assert.equal(exact.profile.username, "mori_mochi");
   }
 
   // Match with uppercase username
-  const upper = await verifyServerAccountCredentials("ADMIN", "Admin2026!");
+  const upper = await verifyServerAccountCredentials("MORI_MOCHI", "Admin2026!");
   assert.equal(upper.ok, true, "Uppercase username matches case-insensitively");
   if (upper.ok && exact.ok) {
     assert.equal(upper.profile.id, exact.profile.id);
   }
 
   // Match with surrounding whitespace trimmed
-  const trimmed = await verifyServerAccountCredentials("  admin  ", "Admin2026!");
+  const trimmed = await verifyServerAccountCredentials("  mori_mochi  ", "Admin2026!");
   assert.equal(trimmed.ok, true, "Whitespace is trimmed on username");
 
   // Wrong password rejected
@@ -390,8 +390,8 @@ test("Username self-management under Account Settings", async () => {
   assert.equal(duplicateRes.ok, false);
   assert.ok(duplicateRes.message.includes("already taken"));
 
-  // Restore username back to hr
-  updateServerAccountUsername(user.id, "hr");
+  // Restore username back to jxleners
+  updateServerAccountUsername(user.id, "jxleners");
 });
 
 test("Password self-management under Account Settings", async () => {
@@ -427,8 +427,8 @@ test("Contact info self-management and records preservation", async () => {
   assert.ok(user);
   if (!user) return;
 
-  assert.equal(user.phoneNumber, "+63 917 123 4567");
-  assert.equal(user.email, "admin@routex.local");
+  assert.equal(user.phoneNumber, "09171234567");
+  assert.equal(user.email, "adrianmangampat@gmail.com");
 
   // Invalid email rejected
   const badEmailRes = updateServerAccountContact(user.id, "invalid-email", "+63 999 888 7777");
@@ -443,9 +443,9 @@ test("Contact info self-management and records preservation", async () => {
   assert.equal(updatedRes.ok, true);
   if (updatedRes.ok) {
     assert.equal(updatedRes.profile.email, "admin.shinryu@routex.ph");
-    assert.equal(updatedRes.profile.phoneNumber, "+63 999 111 2222");
+    assert.equal(updatedRes.profile.phoneNumber, "09991112222");
   }
 
   // Restore admin contact info
-  updateServerAccountContact(user.id, "admin@routex.local", "+63 917 123 4567");
+  updateServerAccountContact(user.id, "adrianmangampat@gmail.com", "09171234567");
 });
