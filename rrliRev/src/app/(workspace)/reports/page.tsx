@@ -43,6 +43,8 @@ import {
 } from "@/features/finance/browser-preview-expenses";
 import { canExportReports } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
+import { ReportsDataExportTab } from "@/components/reports-data-export-tab";
+import { canAccessDataExportTab } from "@/features/reports/data-export-engine";
 
 export default function ReportsPage() {
   const actor = useAuthenticatedActor();
@@ -53,13 +55,22 @@ export default function ReportsPage() {
     return toDateKey(new Date());
   });
 
-  const PRIMARY_REPORT_TABS = [
-    { id: "default-profitability", label: "Profitability" },
-    { id: "default-revenue", label: "Client Summary" },
-    { id: "default-trip-ledger", label: "Trip Ledger" },
-  ] as const;
+  const PRIMARY_REPORT_TABS = useMemo(() => {
+    const tabs: { id: string; label: string }[] = [
+      { id: "default-profitability", label: "Profitability" },
+      { id: "default-revenue", label: "Client Summary" },
+      { id: "default-trip-ledger", label: "Trip Ledger" },
+    ];
+    if (canAccessDataExportTab(actor)) {
+      tabs.push({ id: "data-export", label: "Export Data" });
+    }
+    return tabs;
+  }, [actor]);
 
   const activePrimaryTab = useMemo(() => {
+    if (activeTemplateId === "data-export" || activeTemplateId === "export") {
+      return "data-export";
+    }
     if (activeTemplateId === "default-expenses" || activeTemplateId === "default-profitability") {
       return "default-profitability";
     }
@@ -349,6 +360,10 @@ export default function ReportsPage() {
             box-shadow: none !important;
             border: none !important;
           }
+          @page {
+            size: A4 portrait;
+            margin: 12mm 15mm;
+          }
           aside.sidebar,
           .sidebar,
           header.topbar,
@@ -383,6 +398,40 @@ export default function ReportsPage() {
             border: none !important;
             box-shadow: none !important;
           }
+          .report-print-logo {
+            display: block !important;
+            max-height: 80px !important;
+            width: 80px !important;
+            height: 80px !important;
+            object-fit: contain !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .report-stat-item,
+          .report-stat-card,
+          .report-metadata-strip {
+            border: none !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+          }
+          .report-stat-item {
+            border-bottom: 1px solid #e5e7eb !important;
+            padding: 4px 0 !important;
+          }
+          .report-metadata-strip {
+            border-bottom: 1px solid #e5e7eb !important;
+            margin-top: 6px !important;
+            padding: 6px 0 !important;
+          }
+          .doc-sheet-footer {
+            text-align: center !important;
+            border-top: 1px solid #e5e7eb !important;
+            padding-top: 10px !important;
+            margin-top: 24px !important;
+            font-size: 10px !important;
+            color: #6b7280 !important;
+          }
           .report-screen-only-row {
             display: none !important;
           }
@@ -406,7 +455,7 @@ export default function ReportsPage() {
             </p>
           </div>
           <div className="report-actions">
-            {canExportReports(actor) && (
+            {activePrimaryTab !== "data-export" && canExportReports(actor) && (
               <>
                 <button
                   type="button"
@@ -442,14 +491,16 @@ export default function ReportsPage() {
                 </button>
               </>
             )}
-            <button
-              type="button"
-              className="report-print-button page-intro-action"
-              aria-label="Print report"
-              onClick={() => window.print()}
-            >
-              Print
-            </button>
+            {activePrimaryTab !== "data-export" && (
+              <button
+                type="button"
+                className="report-print-button page-intro-action"
+                aria-label="Print report"
+                onClick={() => window.print()}
+              >
+                Print
+              </button>
+            )}
           </div>
         </header>
 
@@ -547,96 +598,124 @@ export default function ReportsPage() {
             </div>
 
             <div className="report-tabs-bar-controls">
-              {!isDailyTripReport ? (
-                <GlobalDateRangePicker />
-              ) : (
-                <div className="daily-trip-date-controls" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                  <button
-                    type="button"
-                    className="daily-nav-btn"
-                    disabled={dailyDate <= "2024-01-01"}
-                    onClick={() =>
-                      setDailyDate((prev) => {
-                        const next = toDateKey(addDays(parseDateValue(prev), -1));
-                        return next < "2024-01-01" ? "2024-01-01" : next;
-                      })
-                    }
-                    aria-label="Previous day"
-                    title="Previous day"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", fontSize: "11.5px" }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="15 18 9 12 15 6" />
-                    </svg>
-                    <span>Prev</span>
-                  </button>
-                  <div style={{ minWidth: "165px" }}>
-                    <SingleDatePicker
-                      min="2024-01-01"
-                      ariaLabel="Select report date"
-                      value={dailyDate}
-                      onChange={(val) => {
-                        if (val) {
-                          setDailyDate(val < "2024-01-01" ? "2024-01-01" : val);
-                        }
-                      }}
-                    />
+              {activePrimaryTab !== "data-export" && (
+                !isDailyTripReport ? (
+                  <GlobalDateRangePicker />
+                ) : (
+                  <div className="daily-trip-date-controls" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    <button
+                      type="button"
+                      className="daily-nav-btn"
+                      disabled={dailyDate <= "2024-01-01"}
+                      onClick={() =>
+                        setDailyDate((prev) => {
+                          const next = toDateKey(addDays(parseDateValue(prev), -1));
+                          return next < "2024-01-01" ? "2024-01-01" : next;
+                        })
+                      }
+                      aria-label="Previous day"
+                      title="Previous day"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", fontSize: "11.5px" }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="15 18 9 12 15 6" />
+                      </svg>
+                      <span>Prev</span>
+                    </button>
+                    <div style={{ minWidth: "165px" }}>
+                      <SingleDatePicker
+                        min="2024-01-01"
+                        ariaLabel="Select report date"
+                        value={dailyDate}
+                        onChange={(val) => {
+                          if (val) {
+                            setDailyDate(val < "2024-01-01" ? "2024-01-01" : val);
+                          }
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="daily-nav-btn"
+                      onClick={() => setDailyDate((prev) => toDateKey(addDays(parseDateValue(prev), 1)))}
+                      aria-label="Next day"
+                      title="Next day"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", fontSize: "11.5px" }}
+                    >
+                      <span>Next</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="daily-today-btn"
+                      onClick={() => setDailyDate(toDateKey(new Date()))}
+                      style={{ padding: "4px 8px", fontSize: "11.5px" }}
+                    >
+                      Today
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="daily-nav-btn"
-                    onClick={() => setDailyDate((prev) => toDateKey(addDays(parseDateValue(prev), 1)))}
-                    aria-label="Next day"
-                    title="Next day"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", fontSize: "11.5px" }}
-                  >
-                    <span>Next</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="daily-today-btn"
-                    onClick={() => setDailyDate(toDateKey(new Date()))}
-                    style={{ padding: "4px 8px", fontSize: "11.5px" }}
-                  >
-                    Today
-                  </button>
-                </div>
+                )
               )}
             </div>
           </div>
 
           {/* ========================================================================= */}
-          {/* COMPACT CLEAN DOCUMENT SHEET                                              */}
+          {/* COMPACT CLEAN DOCUMENT SHEET OR DATA EXPORT VIEW                          */}
           {/* ========================================================================= */}
-          <article className="report-document doc-sheet" aria-label="Formatted operational report">
+          {activePrimaryTab === "data-export" ? (
+            <ReportsDataExportTab
+              actor={actor}
+              allDeliveries={filteredDeliveries}
+              allCompanyExpenses={companyExpenses}
+              dateFrom={effectiveRange.startDate ? toDateKey(effectiveRange.startDate) : null}
+              dateTo={effectiveRange.endDate ? toDateKey(effectiveRange.endDate) : null}
+              periodLabel={isDailyTripReport ? formatShortDate(parseDateValue(dailyDate)) : formatDateRange(effectiveRange)}
+              dateRangePicker={<GlobalDateRangePicker />}
+            />
+          ) : (
+            <article className="report-document doc-sheet" aria-label="Formatted operational report">
             {/* Document Letterhead */}
-            <header className="doc-header-border" style={{ paddingBottom: "10px", marginBottom: "14px", borderBottom: "2px solid #111827" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
+            <header className="doc-header-border" style={{ paddingBottom: "12px", marginBottom: "16px", borderBottom: "2px solid #111827" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
                 <div>
-                  <span style={{ fontSize: "10px", fontWeight: 750, letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 750, letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b7280" }}>
                     REDEEMED ROUTE LOGISTICS INC.
                   </span>
-                  <h1 style={{ margin: "2px 0 0", fontSize: "18px", fontWeight: 800, color: "#111827", letterSpacing: "-0.01em" }}>
+                  <h1 style={{ margin: "3px 0 0", fontSize: "21px", fontWeight: 800, color: "#111827", letterSpacing: "-0.01em" }}>
                     {activeTemplate.layout.title}
                   </h1>
-                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#4b5563" }}>
+                  <p style={{ margin: "3px 0 0", fontSize: "11px", color: "#4b5563" }}>
                     {isDailyTripReport
                       ? `Daily operational trip manifest for ${formatShortDate(parseDateValue(dailyDate))}.`
                       : (activeTemplate.layout.subtitle || "Consolidated operations and corporate financial statement.")}
                   </p>
                 </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <span style={{ display: "inline-block", fontSize: "9.5px", fontWeight: 700, padding: "2px 7px", borderRadius: "4px", background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", textTransform: "uppercase" }}>
+                <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
+                  <img
+                    src="/branding/redeemed-route-emblem.png"
+                    alt="Redeemed Route Logistics Inc. (RRLI) Logo"
+                    className="report-print-logo"
+                    width={76}
+                    height={76}
+                    loading="eager"
+                    decoding="sync"
+                    style={{
+                      width: "76px",
+                      height: "76px",
+                      objectFit: "contain",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span className="no-print" style={{ display: "inline-block", fontSize: "9px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb", textTransform: "uppercase" }}>
                     Official Report
                   </span>
                 </div>
               </div>
 
               {/* Compact Inline Metadata Strip */}
-              <div style={{ display: "flex", alignItems: "center", gap: "14px", marginTop: "8px", padding: "4px 8px", background: "#f9fafb", borderRadius: "4px", border: "1px solid #f3f4f6", fontSize: "10.5px", color: "#4b5563", flexWrap: "wrap" }}>
+              <div className="report-metadata-strip" style={{ display: "flex", alignItems: "center", gap: "14px", marginTop: "10px", padding: "6px 10px", background: "#f9fafb", borderRadius: "4px", border: "1px solid #f3f4f6", fontSize: "10.5px", color: "#4b5563", flexWrap: "wrap" }}>
                 <span><strong>Period:</strong> {isDailyTripReport ? `${formatShortDate(parseDateValue(dailyDate))} (Daily)` : formatDateRange(effectiveRange)}</span>
                 <span>·</span>
                 <span><strong>Generated:</strong> {generatedDateString}</span>
@@ -717,25 +796,25 @@ export default function ReportsPage() {
                 2. Operational Volume Statistics
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "8px" }}>
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: "4px", padding: "6px 10px", background: "#f9fafb" }}>
+                <div className="report-stat-item" style={{ border: "1px solid #e5e7eb", borderRadius: "4px", padding: "6px 10px", background: "#f9fafb" }}>
                   <span style={{ display: "block", fontSize: "9.5px", color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Completed Trips</span>
                   <strong style={{ display: "block", fontSize: "14px", fontWeight: 800, color: "#111827" }}>
                     {processedReport.totals.totalTrips}
                   </strong>
                 </div>
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: "4px", padding: "6px 10px", background: "#f9fafb" }}>
+                <div className="report-stat-item" style={{ border: "1px solid #e5e7eb", borderRadius: "4px", padding: "6px 10px", background: "#f9fafb" }}>
                   <span style={{ display: "block", fontSize: "9.5px", color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Store Drop-offs</span>
                   <strong style={{ display: "block", fontSize: "14px", fontWeight: 800, color: "#111827" }}>
                     {processedReport.totals.totalStoreDropoffs}
                   </strong>
                 </div>
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: "4px", padding: "6px 10px", background: "#f9fafb" }}>
+                <div className="report-stat-item" style={{ border: "1px solid #e5e7eb", borderRadius: "4px", padding: "6px 10px", background: "#f9fafb" }}>
                   <span style={{ display: "block", fontSize: "9.5px", color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Active Trucks</span>
                   <strong style={{ display: "block", fontSize: "14px", fontWeight: 800, color: "#111827" }}>
                     {processedReport.totals.activeTruckCount}
                   </strong>
                 </div>
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: "4px", padding: "6px 10px", background: "#f9fafb" }}>
+                <div className="report-stat-item" style={{ border: "1px solid #e5e7eb", borderRadius: "4px", padding: "6px 10px", background: "#f9fafb" }}>
                   <span style={{ display: "block", fontSize: "9.5px", color: "#6b7280", fontWeight: 600, textTransform: "uppercase" }}>Finance Records</span>
                   <strong style={{ display: "block", fontSize: "14px", fontWeight: 800, color: "#111827" }}>
                     {companyFinanceSummary.totalCount}
@@ -976,11 +1055,11 @@ export default function ReportsPage() {
             </section>
 
             {/* Document Sheet Footer */}
-            <footer style={{ marginTop: "16px", paddingTop: "8px", borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", fontSize: "9.5px", color: "#9ca3af" }}>
-              <span>RouteX Enterprise Logistics System · Official Document</span>
-              <span>CONFIDENTIAL — REDEEMED ROUTE LOGISTICS INC.</span>
+            <footer className="doc-sheet-footer" style={{ marginTop: "24px", paddingTop: "12px", borderTop: "1px solid #e5e7eb", textAlign: "center", fontSize: "10px", color: "#6b7280", letterSpacing: "0.02em" }}>
+              Redeemed Route Logistics Inc. · Confidential Operational Report
             </footer>
           </article>
+          )}
         </div>
       </div>
     </>

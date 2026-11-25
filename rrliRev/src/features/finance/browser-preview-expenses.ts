@@ -75,3 +75,7 @@ export function deleteBrowserPreviewExpense(id: string): boolean {
 
   return false;
 }
+
+export function clearBrowserPreviewExpenses(): void {
+  writeBrowserPreviewExpenses([]);
+}

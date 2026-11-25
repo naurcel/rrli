@@ -345,6 +345,21 @@ export default function FinancePage() {
     setFormError(null);
   }
 
+  // Auto-open record transaction modal if navigated with ?record=1, ?record=expense, or ?record=income
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const recordParam = params.get("record");
+      if (recordParam === "1" || recordParam === "expense") {
+        openRecordExpenseModal();
+      } else if (recordParam === "income") {
+        openRecordIncomeModal();
+      }
+    } catch {
+      // Ignore URL parsing errors
+    }
+  }, []);
+
   // Handle new transaction submission (Income or Expense)
   async function handleCreateExpense(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

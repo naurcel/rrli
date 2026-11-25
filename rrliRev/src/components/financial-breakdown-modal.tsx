@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatPercent, formatPeso } from "@/lib/format";
@@ -792,7 +793,14 @@ export function FinancialBreakdownModal({
                                   flexShrink: 0,
                                 }}
                               />
-                              <strong style={{ color: "var(--color-text-primary)" }}>{c.client}</strong>
+                              <Link
+                                href={`/deliveries?client=${encodeURIComponent(c.client)}`}
+                                onClick={onClose}
+                                style={{ color: "var(--color-text-primary)", fontWeight: 700, textDecoration: "none" }}
+                                title={`View all deliveries for ${c.client}`}
+                              >
+                                {c.client}
+                              </Link>
                               <span
                                 style={{
                                   fontSize: "9.5px",
