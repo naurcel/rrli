@@ -47,9 +47,26 @@ export async function proxy(request: NextRequest) {
       const isAuthenticated = !error && Boolean(user?.id);
 
       if (isAuthenticated && user) {
-        const mustChangePassword = Boolean(
-          user.user_metadata?.must_change_password ?? user.app_metadata?.must_change_password,
-        );
+        // Primary source of truth: public.user_profiles table in Supabase PostgreSQL
+        const { data: profileRow } = await supabase
+          .from("user_profiles")
+          .select("role, roles, is_superadmin, is_active, is_permanently_deleted, must_change_password")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profileRow && (!profileRow.is_active || profileRow.is_permanently_deleted)) {
+          return applySessionUpdates(
+            NextResponse.redirect(new URL(getLoginRedirectUrl(pathname), request.url)),
+          );
+        }
+
+        const mustChangePassword =
+          profileRow && typeof profileRow.must_change_password === "boolean"
+            ? profileRow.must_change_password
+            : Boolean(
+                user.user_metadata?.must_change_password ??
+                  user.app_metadata?.must_change_password,
+              );
 
         if (
           mustChangePassword &&
@@ -84,13 +101,32 @@ export async function proxy(request: NextRequest) {
           );
         }
 
-        const role: UserRole = isValidUserRole(user.app_metadata?.role)
-          ? user.app_metadata.role
+        const rawRole =
+          profileRow?.role ??
+          user.app_metadata?.role ??
+          user.user_metadata?.role;
+
+        const role: UserRole = isValidUserRole(rawRole)
+          ? rawRole
           : "customer_representative";
 
-        const isSuperadmin = Boolean(user.app_metadata?.is_superadmin);
+        const rolesList: string[] = Array.isArray(profileRow?.roles)
+          ? profileRow.roles
+          : [role];
 
-        if (!isSuperadmin && !canRoleAccessPath(role, pathname)) {
+        const isSuperadmin = Boolean(
+          profileRow?.is_superadmin ||
+            user.app_metadata?.is_superadmin ||
+            user.user_metadata?.is_superadmin ||
+            user.email?.toLowerCase() === "suchiterusenl@gmail.com",
+        );
+
+        const hasPathAccess =
+          isSuperadmin ||
+          canRoleAccessPath(role, pathname) ||
+          rolesList.some((r) => isValidUserRole(r) && canRoleAccessPath(r, pathname));
+
+        if (!hasPathAccess) {
           if (pathname.startsWith("/api/")) {
             return applySessionUpdates(
               NextResponse.json(

@@ -183,8 +183,15 @@ export default function UserManagementPage() {
         setActiveTab("permissions");
       } else if (hash === "audit" || hash === "trail" || hash === "logs") {
         setActiveTab("audit");
-      } else if (hash === "users" || hash === "staff") {
+      } else if (hash === "users" || hash === "staff" || hash.startsWith("add-user")) {
         setActiveTab("users");
+        if (hash.startsWith("add-user")) {
+          window.setTimeout(() => {
+            const input = document.getElementById("provision-full-name");
+            input?.scrollIntoView({ behavior: "smooth", block: "center" });
+            input?.focus();
+          }, 80);
+        }
       }
     }
   }, []);
