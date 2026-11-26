@@ -267,7 +267,13 @@ export function DiscordPermissionsManager({
     if (stagedUserDepts[selectedUser.id] !== undefined) {
       return stagedUserDepts[selectedUser.id];
     }
-    return selectedUser.departments ? [...selectedUser.departments] : [selectedUser.role];
+    if (Array.isArray(selectedUser.departments) && selectedUser.departments.length > 0) {
+      return [...selectedUser.departments];
+    }
+    if (Array.isArray((selectedUser as { roles?: string[] }).roles) && (selectedUser as { roles?: string[] }).roles!.length > 0) {
+      return [...(selectedUser as { roles?: string[] }).roles!];
+    }
+    return [selectedUser.role];
   }, [selectedUser, stagedUserDepts]);
 
   // Effective permissions for selected user

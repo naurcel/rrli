@@ -95,7 +95,8 @@ export async function GET(request: Request) {
             fullName: row.full_name,
             role: row.role,
             roles: userRoles,
-            roleLabel: isSuperadmin ? "Superadmin" : userRoles.length > 1 ? userRoles.join(" + ") : meta.label,
+            departments: userRoles,
+            roleLabel: isSuperadmin ? "President" : userRoles.length > 1 ? userRoles.map((r) => (isValidUserRole(r) ? getRoleMetadata(r).label : r)).join(" + ") : meta.label,
             accessLevel: isSuperadmin ? "admin" : meta.accessLevel,
             accessLevelLabel: isSuperadmin ? "Full Access" : meta.accessLevelLabel,
             isActive: row.is_active,
@@ -398,6 +399,98 @@ export async function POST(request: Request) {
   );
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type ResolvedTargetUser = {
+  id: string;
+  username: string;
+  email: string;
+  phoneNumber?: string;
+  fullName: string;
+  role: UserRole;
+  roles: string[];
+  departments: string[];
+  isActive: boolean;
+  isSuperadmin: boolean;
+  customGrants: Permission[];
+  customRestrictions: Permission[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+async function resolveTargetUser(userId: string): Promise<ResolvedTargetUser | null> {
+  if (!userId) return null;
+
+  // 1. Primary source of truth when Supabase Admin is configured: public.user_profiles
+  if (isSupabaseAdminConfigured()) {
+    try {
+      const adminSupabase = createAdminSupabaseClient();
+      const { data: row } = await adminSupabase
+        .from("user_profiles")
+        .select(
+          "id, username, email, phone_number, full_name, role, roles, is_active, is_superadmin, custom_grants, custom_restrictions, created_at, updated_at",
+        )
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (row) {
+        const primaryRole: UserRole = isValidUserRole(row.role)
+          ? row.role
+          : "customer_representative";
+        const roles: string[] =
+          Array.isArray(row.roles) && row.roles.length > 0 ? row.roles : [primaryRole];
+        const username = row.username || (row.email ? row.email.split("@")[0] : "user");
+        return {
+          id: row.id,
+          username,
+          email: row.email || "",
+          phoneNumber: row.phone_number || undefined,
+          fullName: row.full_name || username,
+          role: primaryRole,
+          roles,
+          departments: roles,
+          isActive: Boolean(row.is_active),
+          isSuperadmin: Boolean(row.is_superadmin),
+          customGrants: Array.isArray(row.custom_grants) ? row.custom_grants : [],
+          customRestrictions: Array.isArray(row.custom_restrictions)
+            ? row.custom_restrictions
+            : [],
+          createdAt: row.created_at || new Date().toISOString(),
+          updatedAt: row.updated_at || new Date().toISOString(),
+        };
+      }
+    } catch {
+      // Fall through to in-memory account store
+    }
+  }
+
+  // 2. Fallback to in-memory store (unit tests and local mock dev)
+  const mem = findServerAccountById(userId);
+  if (!mem) return null;
+  const roles =
+    Array.isArray(mem.departments) && mem.departments.length > 0
+      ? [...mem.departments]
+      : [mem.role];
+  return {
+    id: mem.id,
+    username: mem.username,
+    email: mem.email,
+    phoneNumber: mem.phoneNumber,
+    fullName: mem.fullName,
+    role: mem.role,
+    roles,
+    departments: roles,
+    isActive: mem.isActive,
+    isSuperadmin: Boolean(mem.isSuperadmin),
+    customGrants: Array.isArray(mem.customGrants) ? [...mem.customGrants] : [],
+    customRestrictions: Array.isArray(mem.customRestrictions)
+      ? [...mem.customRestrictions]
+      : [],
+    createdAt: mem.createdAt,
+    updatedAt: mem.updatedAt,
+  };
+}
+
 export async function PATCH(request: Request) {
   const auth = await verifyServerPermission("users:manage");
   if (!auth.ok) {
@@ -417,15 +510,32 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: false, message: "Invalid user ID." }, { status: 400 });
     }
 
-    const targetUser = findServerAccountById(parsed.data.userId);
+    const targetUser = await resolveTargetUser(parsed.data.userId);
     if (!targetUser) {
       return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
     }
 
-    const resetAuth = authorizeServerAccountReset(targetUser.id, auth.actor.username);
-    if (!resetAuth.ok) {
-      return NextResponse.json({ ok: false, message: resetAuth.message }, { status: 400 });
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+
+    if (isSupabaseAdminConfigured()) {
+      try {
+        const adminSupabase = createAdminSupabaseClient();
+        await adminSupabase
+          .from("user_profiles")
+          .update({
+            recovery_authorized_at: now.toISOString(),
+            recovery_expires_at: expiresAt,
+            updated_at: now.toISOString(),
+          })
+          .eq("id", targetUser.id);
+      } catch {
+        // Fallback gracefully
+      }
     }
+
+    const resetAuth = authorizeServerAccountReset(targetUser.id, auth.actor.username);
+    const effectiveExpiresAt = resetAuth.ok ? resetAuth.expiresAt : expiresAt;
 
     recordAuditEntry({
       actorId: auth.actor.id,
@@ -437,14 +547,14 @@ export async function PATCH(request: Request) {
       changes: {
         authorizedBy: auth.actor.username,
         targetUsername: targetUser.username,
-        expiresAt: resetAuth.expiresAt,
+        expiresAt: effectiveExpiresAt,
       },
     });
 
     return NextResponse.json({
       ok: true,
       message: `Password reset authorized for @${targetUser.username}. The user can now use Forgot Password to reset their password within 24 hours.`,
-      expiresAt: resetAuth.expiresAt,
+      expiresAt: effectiveExpiresAt,
     });
   }
 
@@ -458,7 +568,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const targetUser = findServerAccountById(parsed.data.userId);
+    const targetUser = await resolveTargetUser(parsed.data.userId);
     if (!targetUser) {
       return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
     }
@@ -471,26 +581,36 @@ export async function PATCH(request: Request) {
     }
 
     const oldUsername = targetUser.username;
-    const updateRes = updateServerAccountUsername(targetUser.id, parsed.data.newUsername);
-    if (!updateRes.ok) {
-      return NextResponse.json({ ok: false, message: updateRes.message }, { status: 400 });
-    }
+    const cleanUsername = parsed.data.newUsername.trim();
 
     if (isSupabaseAdminConfigured()) {
       try {
         const adminSupabase = createAdminSupabaseClient();
-        await adminSupabase
+        const { error: dbErr } = await adminSupabase
           .from("user_profiles")
           .update({
-            username: updateRes.profile.username,
-            normalized_username: updateRes.profile.username.toLowerCase(),
+            username: cleanUsername,
+            normalized_username: cleanUsername.toLowerCase(),
             updated_at: new Date().toISOString(),
           })
           .eq("id", targetUser.id);
+
+        if (dbErr) {
+          return NextResponse.json({ ok: false, message: dbErr.message }, { status: 400 });
+        }
       } catch {
         // Fallback gracefully
       }
     }
+
+    const updateRes = updateServerAccountUsername(targetUser.id, cleanUsername);
+    if (!isSupabaseAdminConfigured() && !updateRes.ok) {
+      return NextResponse.json({ ok: false, message: updateRes.message }, { status: 400 });
+    }
+
+    const updatedProfile = updateRes.ok
+      ? updateRes.profile
+      : { ...targetUser, username: cleanUsername, normalizedUsername: cleanUsername.toLowerCase() };
 
     recordAuditEntry({
       actorId: auth.actor.id,
@@ -498,17 +618,17 @@ export async function PATCH(request: Request) {
       action: "user.username_changed_by_admin",
       entityType: "user",
       entityId: targetUser.id,
-      summary: `Admin @${auth.actor.username} changed username of ${targetUser.fullName} from '@${oldUsername}' to '@${updateRes.profile.username}'.`,
+      summary: `Admin @${auth.actor.username} changed username of ${targetUser.fullName} from '@${oldUsername}' to '@${cleanUsername}'.`,
       changes: {
         oldUsername,
-        newUsername: updateRes.profile.username,
+        newUsername: cleanUsername,
       },
     });
 
     return NextResponse.json({
       ok: true,
-      message: `Username updated to @${updateRes.profile.username}.`,
-      profile: updateRes.profile,
+      message: `Username updated to @${cleanUsername}.`,
+      profile: updatedProfile,
     });
   }
 
@@ -522,7 +642,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const targetUser = findServerAccountById(parsed.data.userId);
+    const targetUser = await resolveTargetUser(parsed.data.userId);
     if (!targetUser) {
       return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
     }
@@ -536,10 +656,8 @@ export async function PATCH(request: Request) {
 
     const oldEmail = targetUser.email;
     const oldPhone = targetUser.phoneNumber || "None";
-    const updateRes = updateServerAccountContact(targetUser.id, parsed.data.email, parsed.data.phoneNumber);
-    if (!updateRes.ok) {
-      return NextResponse.json({ ok: false, message: updateRes.message }, { status: 400 });
-    }
+    const cleanEmail = parsed.data.email.trim().toLowerCase();
+    const cleanPhone = formatPhoneNumber(parsed.data.phoneNumber);
 
     if (isSupabaseAdminConfigured()) {
       try {
@@ -547,17 +665,22 @@ export async function PATCH(request: Request) {
         await adminSupabase
           .from("user_profiles")
           .update({
-            email: updateRes.profile.email,
-            phone_number: updateRes.profile.phoneNumber,
+            email: cleanEmail,
+            phone_number: cleanPhone,
             updated_at: new Date().toISOString(),
           })
           .eq("id", targetUser.id);
         await adminSupabase.auth.admin.updateUserById(targetUser.id, {
-          email: updateRes.profile.email,
+          email: cleanEmail,
         });
       } catch {
         // Fallback gracefully
       }
+    }
+
+    const updateRes = updateServerAccountContact(targetUser.id, cleanEmail, cleanPhone);
+    if (!isSupabaseAdminConfigured() && !updateRes.ok) {
+      return NextResponse.json({ ok: false, message: updateRes.message }, { status: 400 });
     }
 
     recordAuditEntry({
@@ -569,18 +692,20 @@ export async function PATCH(request: Request) {
       summary: `Admin @${auth.actor.username} updated contact information for ${targetUser.fullName} (@${targetUser.username}).`,
       changes: {
         oldEmail,
-        newEmail: updateRes.profile.email,
+        newEmail: cleanEmail,
         oldPhone,
-        newPhone: updateRes.profile.phoneNumber,
+        newPhone: cleanPhone,
       },
     });
 
-    const meta = getRoleMetadata(updateRes.profile.role);
+    const meta = getRoleMetadata(targetUser.role);
     return NextResponse.json({
       ok: true,
-      message: `Contact details updated for @${updateRes.profile.username}.`,
+      message: `Contact details updated for @${targetUser.username}.`,
       user: {
-        ...updateRes.profile,
+        ...(updateRes.ok ? updateRes.profile : targetUser),
+        email: cleanEmail,
+        phoneNumber: cleanPhone,
         roleLabel: meta.label,
         accessLevel: meta.accessLevel,
         accessLevelLabel: meta.accessLevelLabel,
@@ -594,7 +719,7 @@ export async function PATCH(request: Request) {
     const customGrants = Array.isArray(rawBody?.customGrants) ? (rawBody.customGrants as Permission[]) : [];
     const customRestrictions = Array.isArray(rawBody?.customRestrictions) ? (rawBody.customRestrictions as Permission[]) : [];
 
-    const targetUser = findServerAccountById(userId);
+    const targetUser = await resolveTargetUser(userId);
     if (!targetUser) {
       return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
     }
@@ -604,11 +729,6 @@ export async function PATCH(request: Request) {
         { ok: false, code: "FORBIDDEN", message: "Regular Admins cannot modify Superadmin permissions." },
         { status: 403 },
       );
-    }
-
-    const res = updateUserCustomPermissions(userId, customGrants, customRestrictions);
-    if (!res.ok) {
-      return NextResponse.json({ ok: false, message: res.message }, { status: 400 });
     }
 
     if (isSupabaseAdminConfigured()) {
@@ -627,6 +747,11 @@ export async function PATCH(request: Request) {
       }
     }
 
+    const res = updateUserCustomPermissions(userId, customGrants, customRestrictions);
+    if (!isSupabaseAdminConfigured() && !res.ok) {
+      return NextResponse.json({ ok: false, message: res.message }, { status: 400 });
+    }
+
     recordAuditEntry({
       actorId: auth.actor.id,
       actorEmail: auth.actor.email,
@@ -640,7 +765,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({
       ok: true,
       message: `Permissions updated for @${targetUser.username}.`,
-      profile: res.profile,
+      profile: res.ok
+        ? res.profile
+        : { ...targetUser, customGrants, customRestrictions },
     });
   }
 
@@ -649,9 +776,10 @@ export async function PATCH(request: Request) {
     const sourceUserId = typeof rawBody?.sourceUserId === "string" ? rawBody.sourceUserId : "";
     const targetUserId = typeof rawBody?.targetUserId === "string" ? rawBody.targetUserId : "";
 
-    const targetUser = findServerAccountById(targetUserId);
-    if (!targetUser) {
-      return NextResponse.json({ ok: false, message: "Target user not found." }, { status: 404 });
+    const sourceUser = await resolveTargetUser(sourceUserId);
+    const targetUser = await resolveTargetUser(targetUserId);
+    if (!targetUser || !sourceUser) {
+      return NextResponse.json({ ok: false, message: "Target or source user not found." }, { status: 404 });
     }
 
     if (targetUser.isSuperadmin && !auth.actor.isSuperadmin) {
@@ -661,8 +789,24 @@ export async function PATCH(request: Request) {
       );
     }
 
+    if (isSupabaseAdminConfigured()) {
+      try {
+        const adminSupabase = createAdminSupabaseClient();
+        await adminSupabase
+          .from("user_profiles")
+          .update({
+            custom_grants: sourceUser.customGrants,
+            custom_restrictions: sourceUser.customRestrictions,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", targetUserId);
+      } catch {
+        // Fallback gracefully
+      }
+    }
+
     const res = duplicateUserCustomPermissions(sourceUserId, targetUserId);
-    if (!res.ok) {
+    if (!isSupabaseAdminConfigured() && !res.ok) {
       return NextResponse.json({ ok: false, message: res.message }, { status: 400 });
     }
 
@@ -672,23 +816,38 @@ export async function PATCH(request: Request) {
       action: "user.permissions_duplicated",
       entityType: "user",
       entityId: targetUserId,
-      summary: `@${auth.actor.username} copied individual permissions from @${sourceUserId} to @${targetUser.username}.`,
+      summary: `@${auth.actor.username} copied individual permissions from @${sourceUser.username} to @${targetUser.username}.`,
       changes: { sourceUserId, targetUserId },
     });
 
     return NextResponse.json({
       ok: true,
       message: `Permissions copied successfully to @${targetUser.username}.`,
-      profile: res.profile,
+      profile: res.ok
+        ? res.profile
+        : {
+            ...targetUser,
+            customGrants: sourceUser.customGrants,
+            customRestrictions: sourceUser.customRestrictions,
+          },
     });
   }
 
-  // 5. Assign Department Memberships
+  // 5. Assign Roles & Department Memberships
   if (action === "assign-departments") {
     const userId = typeof rawBody?.userId === "string" ? rawBody.userId : "";
-    const departmentIds = Array.isArray(rawBody?.departmentIds) ? (rawBody.departmentIds as string[]) : [];
+    const departmentIds = Array.isArray(rawBody?.departmentIds)
+      ? (rawBody.departmentIds as string[]).filter(Boolean)
+      : [];
 
-    const targetUser = findServerAccountById(userId);
+    if (departmentIds.length === 0) {
+      return NextResponse.json(
+        { ok: false, message: "A user must retain at least one assigned role or department." },
+        { status: 400 },
+      );
+    }
+
+    const targetUser = await resolveTargetUser(userId);
     if (!targetUser) {
       return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
     }
@@ -700,24 +859,61 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const res = assignUserDepartments(userId, departmentIds);
-    if (!res.ok) {
-      return NextResponse.json({ ok: false, message: res.message }, { status: 400 });
+    // Only Superadmin (President) can assign or revoke the Admin role
+    const hadAdmin = targetUser.role === "admin" || targetUser.roles.includes("admin");
+    const willHaveAdmin = departmentIds.includes("admin");
+    if ((hadAdmin !== willHaveAdmin) && !auth.actor.isSuperadmin) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "SUPERADMIN_AUTHORITY_REQUIRED",
+          message: "Only the Superadmin (President) can assign or revoke the Admin role.",
+        },
+        { status: 403 },
+      );
     }
+
+    const firstValidRole = departmentIds.find((r) => isValidUserRole(r)) as UserRole | undefined;
+    const primaryRole: UserRole = firstValidRole || targetUser.role;
 
     if (isSupabaseAdminConfigured()) {
       try {
         const adminSupabase = createAdminSupabaseClient();
-        await adminSupabase
+        const nowIso = new Date().toISOString();
+        const { error: rolesUpdateErr } = await adminSupabase
           .from("user_profiles")
           .update({
+            role: primaryRole,
             roles: departmentIds,
-            updated_at: new Date().toISOString(),
+            updated_at: nowIso,
           })
           .eq("id", userId);
+
+        if (rolesUpdateErr) {
+          // Schema cache fallback if `roles` array column is not cached
+          await adminSupabase
+            .from("user_profiles")
+            .update({
+              role: primaryRole,
+              updated_at: nowIso,
+            })
+            .eq("id", userId);
+        }
+
+        await adminSupabase.auth.admin.updateUserById(userId, {
+          app_metadata: {
+            role: primaryRole,
+            roles: departmentIds,
+          },
+        });
       } catch {
         // Fallback gracefully
       }
+    }
+
+    const res = assignUserDepartments(userId, departmentIds);
+    if (!isSupabaseAdminConfigured() && !res.ok) {
+      return NextResponse.json({ ok: false, message: res.message }, { status: 400 });
     }
 
     recordAuditEntry({
@@ -726,14 +922,21 @@ export async function PATCH(request: Request) {
       action: "user.departments_assigned",
       entityType: "user",
       entityId: userId,
-      summary: `@${auth.actor.username} updated department memberships for @${targetUser.username}.`,
-      changes: { departmentIds },
+      summary: `@${auth.actor.username} updated roles & department memberships for @${targetUser.username}.`,
+      changes: { departmentIds, primaryRole },
     });
 
     return NextResponse.json({
       ok: true,
-      message: `Departments updated for @${targetUser.username}.`,
-      profile: res.profile,
+      message: `Roles updated for @${targetUser.username}.`,
+      profile: res.ok
+        ? res.profile
+        : {
+            ...targetUser,
+            role: primaryRole,
+            roles: departmentIds,
+            departments: departmentIds,
+          },
     });
   }
 
@@ -750,7 +953,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const targetAccount = findServerAccountById(parsed.data.userId);
+  const targetAccount = await resolveTargetUser(parsed.data.userId);
   if (!targetAccount) {
     return NextResponse.json({ ok: false, message: "User not found." }, { status: 404 });
   }
@@ -793,6 +996,15 @@ export async function PATCH(request: Request) {
     }
   }
 
+  const nextRole: UserRole = parsed.data.role ?? targetAccount.role;
+  const nextIsActive: boolean =
+    typeof parsed.data.isActive === "boolean" ? parsed.data.isActive : targetAccount.isActive;
+  const nextRoles = parsed.data.role
+    ? targetAccount.roles.includes(parsed.data.role)
+      ? targetAccount.roles
+      : [parsed.data.role, ...targetAccount.roles]
+    : targetAccount.roles;
+
   // Synchronize with Supabase if configured
   if (isSupabaseAdminConfigured()) {
     try {
@@ -800,13 +1012,28 @@ export async function PATCH(request: Request) {
       const updates: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
-      if (parsed.data.role) updates.role = parsed.data.role;
+      if (parsed.data.role) {
+        updates.role = parsed.data.role;
+        updates.roles = nextRoles;
+      }
       if (typeof parsed.data.isActive === "boolean") updates.is_active = parsed.data.isActive;
 
-      await adminSupabase.from("user_profiles").update(updates).eq("id", parsed.data.userId);
+      const { error: dbErr } = await adminSupabase
+        .from("user_profiles")
+        .update(updates)
+        .eq("id", parsed.data.userId);
+
+      if (dbErr && parsed.data.role) {
+        delete updates.roles;
+        await adminSupabase
+          .from("user_profiles")
+          .update(updates)
+          .eq("id", parsed.data.userId);
+      }
+
       await adminSupabase.auth.admin.updateUserById(parsed.data.userId, {
         app_metadata: {
-          ...(parsed.data.role ? { role: parsed.data.role } : {}),
+          ...(parsed.data.role ? { role: parsed.data.role, roles: nextRoles } : {}),
           ...(typeof parsed.data.isActive === "boolean" ? { is_active: parsed.data.isActive } : {}),
         },
       });
@@ -819,25 +1046,35 @@ export async function PATCH(request: Request) {
     ...parsed.data,
     actorIsSuperadmin: auth.actor.isSuperadmin,
   });
-  if (!updated.ok) {
+  if (!isSupabaseAdminConfigured() && !updated.ok) {
     return NextResponse.json({ ok: false, message: updated.message }, { status: 400 });
   }
+
+  const finalProfile = updated.ok
+    ? updated.profile
+    : {
+        ...targetAccount,
+        role: nextRole,
+        roles: nextRoles,
+        departments: nextRoles,
+        isActive: nextIsActive,
+      };
 
   recordAuditEntry({
     actorId: auth.actor.id,
     actorEmail: auth.actor.email,
     action: "user.profile_updated",
     entityType: "user",
-    entityId: updated.profile.id,
-    summary: `Updated account status for @${updated.profile.username}.`,
-    changes: { role: updated.profile.role, isActive: updated.profile.isActive },
+    entityId: finalProfile.id,
+    summary: `Updated account status for @${finalProfile.username}.`,
+    changes: { role: finalProfile.role, isActive: finalProfile.isActive },
   });
 
-  const meta = getRoleMetadata(updated.profile.role);
+  const meta = getRoleMetadata(finalProfile.role);
   return NextResponse.json({
     ok: true,
     user: {
-      ...updated.profile,
+      ...finalProfile,
       roleLabel: meta.label,
       accessLevel: meta.accessLevel,
       accessLevelLabel: meta.accessLevelLabel,
@@ -900,7 +1137,7 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const user = findServerAccountById(userId);
+  const user = await resolveTargetUser(userId);
   if (!user) {
     return NextResponse.json({ ok: false, message: "User account was not found." }, { status: 404 });
   }
@@ -920,7 +1157,7 @@ export async function DELETE(request: Request) {
         is_permanently_deleted: true,
         deleted_at: new Date().toISOString(),
         deleted_reason: reason.trim(),
-        deleted_by: auth.actor.username,
+        deleted_by: UUID_REGEX.test(auth.actor.id) ? auth.actor.id : null,
         is_active: false,
       }).eq("id", userId);
       await adminSupabase.auth.admin.deleteUser(userId);
@@ -930,7 +1167,7 @@ export async function DELETE(request: Request) {
   }
 
   const result = permanentlyDeleteServerAccount(userId, auth.actor.username, reason.trim());
-  if (!result.ok) {
+  if (!isSupabaseAdminConfigured() && !result.ok) {
     return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
   }
 

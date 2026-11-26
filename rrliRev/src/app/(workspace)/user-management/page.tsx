@@ -351,6 +351,7 @@ export default function UserManagementPage() {
     let nextRoles: string[];
     if (currentRoles.includes(toggledRole)) {
       if (currentRoles.length === 1) {
+        toast.error("A user must retain at least one assigned role.");
         setFeedback({
           tone: "error",
           text: "A user must retain at least one assigned role.",
@@ -361,6 +362,26 @@ export default function UserManagementPage() {
     } else {
       nextRoles = [...currentRoles, toggledRole];
     }
+
+    const firstValidRole = nextRoles.find((r) => USER_ROLES.includes(r as UserRole)) as UserRole | undefined;
+    const primaryRole = firstValidRole || user.role;
+    const updatedLabel = nextRoles.map((r) => getRoleOrDeptName(r)).join(" + ");
+
+    // Optimistically update the UI immediately so checkboxes respond in 0ms
+    const previousUsers = users;
+    setUsers((current) =>
+      current.map((item) =>
+        item.id === user.id
+          ? {
+              ...item,
+              role: primaryRole,
+              roles: nextRoles,
+              departments: nextRoles,
+              roleLabel: updatedLabel,
+            }
+          : item,
+      ),
+    );
 
     try {
       const response = await fetch("/api/users", {
@@ -379,47 +400,25 @@ export default function UserManagementPage() {
       } | null;
 
       if (!response.ok || !payload?.ok) {
+        setUsers(previousUsers);
+        const errMsg = payload?.message ?? "Could not update user roles.";
+        toast.error(errMsg);
         setFeedback({
           tone: "error",
-          text: payload?.message ?? "Could not update user roles.",
+          text: errMsg,
         });
         return;
       }
 
-      const firstValidRole = nextRoles.find((r) => USER_ROLES.includes(r as UserRole)) as UserRole | undefined;
-      const primaryRole = firstValidRole || user.role;
-      if (primaryRole !== user.role) {
-        await fetch("/api/users", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: user.id,
-            role: primaryRole,
-          }),
-        }).catch(() => {});
-      }
-
-      const updatedLabel = nextRoles.map((r) => getRoleOrDeptName(r)).join(" + ");
-      setUsers((current) =>
-        current.map((item) =>
-          item.id === user.id
-            ? {
-                ...item,
-                role: primaryRole,
-                roles: nextRoles,
-                departments: nextRoles,
-                roleLabel: updatedLabel,
-              }
-            : item,
-        ),
-      );
-
+      toast.success(`Updated roles for ${user.fullName}: ${updatedLabel}`);
       setFeedback({
         tone: "success",
         text: `Updated roles for ${user.fullName}: ${updatedLabel}.`,
       });
       void loadAuditEntries(true);
     } catch {
+      setUsers(previousUsers);
+      toast.error("Could not update user roles.");
       setFeedback({
         tone: "error",
         text: "Could not update user roles.",
