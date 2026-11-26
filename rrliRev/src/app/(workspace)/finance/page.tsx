@@ -31,12 +31,14 @@ import {
 } from "@/features/deliveries/delivery-input-utils";
 import {
   deleteBrowserPreviewExpense,
+  mergeRemoteAndLocalCompanyExpenses,
   readBrowserPreviewExpenses,
   ROUTEX_COMPANY_EXPENSES_CHANGED,
   upsertBrowserPreviewExpense,
 } from "@/features/finance/browser-preview-expenses";
 import {
   filterExpensesByDateRange,
+  formatExpenseActorUsername,
   type CompanyExpense,
   type FinanceTransactionType,
   type ValidatedCompanyExpense,
@@ -125,8 +127,9 @@ export default function FinancePage() {
       if (res.ok) {
         const data = await res.json();
         if (data.ok && Array.isArray(data.items)) {
-          cachedFinanceExpenses = data.items;
-          setExpenses(data.items);
+          const merged = mergeRemoteAndLocalCompanyExpenses(data.items);
+          cachedFinanceExpenses = merged;
+          setExpenses(merged);
           setLoading(false);
           return;
         }
@@ -148,8 +151,11 @@ export default function FinancePage() {
   // Reactive listeners for cross-tab or cross-component expense events
   useEffect(() => {
     const handleExpenseChange = () => {
-      const preview = readBrowserPreviewExpenses();
-      setExpenses(preview);
+      setExpenses((prev) => {
+        const merged = mergeRemoteAndLocalCompanyExpenses(prev);
+        cachedFinanceExpenses = merged;
+        return merged;
+      });
     };
 
     window.addEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, handleExpenseChange);
@@ -210,7 +216,7 @@ export default function FinancePage() {
     actors.add("admin");
     actors.add("finance");
     expenses.forEach((e) => {
-      const c = e.createdBy?.trim();
+      const c = formatExpenseActorUsername(e.createdBy, actor);
       if (c) actors.add(c);
       else actors.add("system");
     });
@@ -238,7 +244,7 @@ export default function FinancePage() {
         return { value: val, label };
       }),
     ];
-  }, [expenses]);
+  }, [expenses, actor]);
 
   // Table filtering & sorting
   const filteredAndSortedExpenses = useMemo(() => {
@@ -251,7 +257,7 @@ export default function FinancePage() {
     if (actorFilter !== "all") {
       const target = actorFilter.toLowerCase().replace(/^@/, "");
       result = result.filter((e) => {
-        const creator = (e.createdBy?.trim() || "system").toLowerCase().replace(/^@/, "");
+        const creator = formatExpenseActorUsername(e.createdBy, actor).toLowerCase().replace(/^@/, "");
         return creator === target;
       });
     }
@@ -262,6 +268,7 @@ export default function FinancePage() {
         (e) =>
           e.description.toLowerCase().includes(q) ||
           (e.notes && e.notes.toLowerCase().includes(q)) ||
+          formatExpenseActorUsername(e.createdBy, actor).toLowerCase().includes(q) ||
           (e.createdBy && e.createdBy.toLowerCase().includes(q)) ||
           e.expenseDate.includes(q) ||
           e.amount.toString().includes(q),
@@ -280,7 +287,7 @@ export default function FinancePage() {
     });
 
     return result;
-  }, [dateFilteredExpenses, debouncedSearchQuery, actorFilter, typeFilter, sortField, sortDirection]);
+  }, [dateFilteredExpenses, debouncedSearchQuery, actorFilter, typeFilter, sortField, sortDirection, actor]);
 
   // Pagination slice
   const totalItems = filteredAndSortedExpenses.length;
@@ -766,60 +773,8 @@ export default function FinancePage() {
               ariaLabel="Filter expenses by user or role"
               className="finance-actor-filter"
             />
-          </div>
 
-          {hasActiveFilters ? (
-            <div className="active-filter-chips" aria-label="Active filters">
-              <span className="filter-chips-label">Filtered by:</span>
-              {(range.startDate || range.endDate) ? (
-                <span className="filter-chip">
-                  <span className="filter-chip-category">Date:</span>{" "}
-                  {formatDateRange(range)}
-                  <button
-                    type="button"
-                    className="filter-chip-remove"
-                    aria-label="Remove date range filter"
-                    title="Remove date range filter"
-                    onClick={() => setRange({ startDate: null, endDate: null })}
-                  >
-                    ×
-                  </button>
-                </span>
-              ) : null}
-              {searchQuery.trim() ? (
-                <span className="filter-chip">
-                  <span className="filter-chip-category">Search:</span>{" "}
-                  {searchQuery.trim()}
-                  <button
-                    type="button"
-                    className="filter-chip-remove"
-                    aria-label="Remove search filter"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setPage(1);
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              ) : null}
-              {actorFilter !== "all" ? (
-                <span className="filter-chip">
-                  <span className="filter-chip-category">User / Role:</span>{" "}
-                  {actorFilterOptions.find((o) => o.value === actorFilter)?.label ?? actorFilter}
-                  <button
-                    type="button"
-                    className="filter-chip-remove"
-                    aria-label="Remove actor filter"
-                    onClick={() => {
-                      setActorFilter("all");
-                      setPage(1);
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              ) : null}
+            {hasActiveFilters ? (
               <button
                 type="button"
                 className="filter-chip-clear-all"
@@ -827,8 +782,8 @@ export default function FinancePage() {
               >
                 Clear all
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
 
           {(loading && expenses.length === 0) ? (
             <SimpleLoading
@@ -902,7 +857,7 @@ export default function FinancePage() {
                             </strong>
                           </td>
                           <td className="finance-note-cell">{exp.notes || "—"}</td>
-                          <td>{exp.createdBy || "system"}</td>
+                          <td>{formatExpenseActorUsername(exp.createdBy, actor)}</td>
                           <td className="money">
                             <strong
                               style={{

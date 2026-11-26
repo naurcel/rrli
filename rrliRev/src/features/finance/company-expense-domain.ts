@@ -54,6 +54,46 @@ export type CompanyExpenseValidationResult =
 export const COMPANY_FOUNDATION_YEAR = 2024;
 export const COMPANY_FOUNDATION_DATE = "2024-01-01";
 
+const KNOWN_EMAIL_TO_USERNAME: Record<string, string> = {
+  "suchiterusenl@gmail.com": "shinr6u",
+  "adrianmangampat@gmail.com": "mori_mochi",
+  "marcrancel@gmail.com": "narcel",
+  "louizajoy@gmail.com": "azula",
+  "jelenepunongbayan@gmail.com": "jxleners",
+  "zeankurt@gmail.com": "ze.ku",
+  "rainibasco@gmail.com": "ravicci",
+};
+
+/**
+ * Resolves a stored creator identifier (email or username) into a clean username.
+ */
+export function formatExpenseActorUsername(
+  raw?: string | null,
+  currentActor?: { email?: string; username?: string } | null,
+): string {
+  const trimmed = (raw ?? "").trim().replace(/^@/, "");
+  if (!trimmed) return "system";
+
+  const lower = trimmed.toLowerCase();
+  if (
+    currentActor?.email &&
+    currentActor?.username &&
+    lower === currentActor.email.trim().toLowerCase()
+  ) {
+    return currentActor.username.replace(/^@/, "");
+  }
+
+  if (KNOWN_EMAIL_TO_USERNAME[lower]) {
+    return KNOWN_EMAIL_TO_USERNAME[lower];
+  }
+
+  if (trimmed.includes("@")) {
+    return trimmed.split("@")[0] || "system";
+  }
+
+  return trimmed;
+}
+
 /**
  * Validates and sanitizes company expense input.
  * Ensures monetary amount is valid, strictly positive, and formatted with 2 decimal precision.

@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { type ChangeEvent, type DragEvent, useEffect, useId, useMemo, useState } from "react";
+import {
+  type ChangeEvent,
+  type DragEvent,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import {
-  COMMON_EXPENSE_CATEGORIES,
   generateCompanyExpenseSampleCsv,
   generateCompanyExpenseSampleXlsx,
   generateExpenseImportErrorReport,
@@ -14,17 +21,19 @@ import {
   type StagedExpenseRow,
 } from "@/features/finance/company-expense-import-parser";
 import {
+  batchUpsertBrowserPreviewExpenses,
   readBrowserPreviewExpenses,
-  upsertBrowserPreviewExpense,
 } from "@/features/finance/browser-preview-expenses";
 import type { CompanyExpense } from "@/features/finance/company-expense-domain";
+import { useAuthenticatedActor } from "@/components/auth-context";
 import { RoundedSelect } from "@/components/rounded-select";
+import { TablePagination } from "@/components/table-pagination";
 import { formatPeso } from "@/lib/format";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 type ImportStep = 1 | 2 | 3 | 4;
-type FilterTab = "all" | "ready" | "attention" | "duplicate" | "incoming" | "outgoing";
+type FilterTab = "all" | "attention" | "duplicate" | "incoming" | "outgoing";
 
 export function CompanyExpenseImportClient({
   actorRoleLabel: _actorRoleLabel,
@@ -35,6 +44,7 @@ export function CompanyExpenseImportClient({
   actorFullName: string;
   returnHref?: string;
 }) {
+  const actor = useAuthenticatedActor();
   const [step, setStep] = useState<ImportStep>(1);
   const [batchName, setBatchName] = useState(() => `Expenses-Batch-${new Date().toISOString().slice(0, 10)}`);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -46,6 +56,9 @@ export function CompanyExpenseImportClient({
   const [existingExpenses, setExistingExpenses] = useState<CompanyExpense[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewPageSize, setReviewPageSize] = useState(25);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{
@@ -72,7 +85,7 @@ export function CompanyExpenseImportClient({
       // Ignore
     }
 
-    fetch("/api/finance/expenses?pageSize=100")
+    fetch("/api/finance/expenses?pageSize=1000")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && Array.isArray(data.items)) {
@@ -210,23 +223,29 @@ export function CompanyExpenseImportClient({
     setStep(1);
   }
 
-  // Row updates
-  function updateRowField(id: string, field: keyof StagedExpenseRow, value: unknown) {
-    setStagedRows((prev) => {
-      const existingKeys = new Set(
+  // Memoized existing expense signature keys for fast row edits
+  const existingKeys = useMemo(
+    () =>
+      new Set(
         existingExpenses.map(
           (e) => `${e.expenseDate}_${e.amount.toFixed(2)}_${e.description.toLowerCase().trim()}`,
         ),
-      );
+      ),
+    [existingExpenses],
+  );
+
+  // Row updates
+  function updateRowField(id: string, field: keyof StagedExpenseRow, value: unknown) {
+    setStagedRows((prev) => {
       const seen = new Set<string>();
+      for (const row of prev) {
+        if (row.id !== id && row.status === "ready") {
+          seen.add(`${row.expenseDate}_${row.amount.toFixed(2)}_${row.description.toLowerCase().trim()}`);
+        }
+      }
 
       return prev.map((row) => {
-        if (row.id !== id) {
-          if (row.status === "ready") {
-            seen.add(`${row.expenseDate}_${row.amount.toFixed(2)}_${row.description.toLowerCase().trim()}`);
-          }
-          return row;
-        }
+        if (row.id !== id) return row;
 
         const updated: StagedExpenseRow = {
           ...row,
@@ -265,33 +284,68 @@ export function CompanyExpenseImportClient({
     );
   }
 
-  // Metrics
-  const readyRows = stagedRows.filter((r) => r.status === "ready");
-  const readyCount = readyRows.length;
-  const attentionCount = stagedRows.filter((r) => r.status === "needs_attention").length;
-  const duplicateCount = stagedRows.filter((r) => r.status === "duplicate").length;
+  // Metrics (single pass)
+  const {
+    readyRows,
+    readyCount,
+    attentionCount,
+    duplicateCount,
+    incomingReadyRows,
+    outgoingReadyRows,
+    totalIncomingStaged,
+    totalOutgoingStaged,
+    netActivityStaged,
+  } = useMemo(() => {
+    const ready: StagedExpenseRow[] = [];
+    const incomingReady: StagedExpenseRow[] = [];
+    const outgoingReady: StagedExpenseRow[] = [];
+    let attention = 0;
+    let duplicate = 0;
+    let incomingSum = 0;
+    let outgoingSum = 0;
 
-  const incomingReadyRows = readyRows.filter((r) => r.transactionType === "Incoming");
-  const outgoingReadyRows = readyRows.filter((r) => r.transactionType !== "Incoming");
+    for (const r of stagedRows) {
+      if (r.status === "ready") {
+        ready.push(r);
+        if (r.transactionType === "Incoming") {
+          incomingReady.push(r);
+          incomingSum += r.amount;
+        } else {
+          outgoingReady.push(r);
+          outgoingSum += r.amount;
+        }
+      } else if (r.status === "needs_attention") {
+        attention++;
+      } else if (r.status === "duplicate") {
+        duplicate++;
+      }
+    }
 
-  const totalIncomingStaged = incomingReadyRows.reduce((sum, r) => sum + r.amount, 0);
-  const totalOutgoingStaged = outgoingReadyRows.reduce((sum, r) => sum + r.amount, 0);
-  const netActivityStaged = totalIncomingStaged - totalOutgoingStaged;
+    return {
+      readyRows: ready,
+      readyCount: ready.length,
+      attentionCount: attention,
+      duplicateCount: duplicate,
+      incomingReadyRows: incomingReady,
+      outgoingReadyRows: outgoingReady,
+      totalIncomingStaged: incomingSum,
+      totalOutgoingStaged: outgoingSum,
+      netActivityStaged: incomingSum - outgoingSum,
+    };
+  }, [stagedRows]);
 
   const visibleRows = useMemo(() => {
     let list = stagedRows;
-    if (activeTab === "ready") list = list.filter((r) => r.status === "ready");
-    else if (activeTab === "attention") list = list.filter((r) => r.status === "needs_attention");
+    if (activeTab === "attention") list = list.filter((r) => r.status === "needs_attention");
     else if (activeTab === "duplicate") list = list.filter((r) => r.status === "duplicate");
     else if (activeTab === "incoming") list = list.filter((r) => r.transactionType === "Incoming");
     else if (activeTab === "outgoing") list = list.filter((r) => r.transactionType === "Outgoing");
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
+    if (deferredSearchQuery.trim()) {
+      const q = deferredSearchQuery.toLowerCase().trim();
       list = list.filter(
         (r) =>
           r.description.toLowerCase().includes(q) ||
-          r.category.toLowerCase().includes(q) ||
           r.expenseDate.includes(q) ||
           (r.sourceSheet && r.sourceSheet.toLowerCase().includes(q)) ||
           (r.sourceRef && r.sourceRef.toLowerCase().includes(q)) ||
@@ -300,7 +354,24 @@ export function CompanyExpenseImportClient({
       );
     }
     return list;
-  }, [stagedRows, activeTab, searchQuery]);
+  }, [stagedRows, activeTab, deferredSearchQuery]);
+
+  const reviewPageCount = Math.max(1, Math.ceil(visibleRows.length / reviewPageSize));
+
+  useEffect(() => {
+    setReviewPage(1);
+  }, [activeTab, deferredSearchQuery, selectedSheet, reviewPageSize]);
+
+  useEffect(() => {
+    if (reviewPage > reviewPageCount) {
+      setReviewPage(reviewPageCount);
+    }
+  }, [reviewPage, reviewPageCount]);
+
+  const paginatedVisibleRows = useMemo(() => {
+    const start = (reviewPage - 1) * reviewPageSize;
+    return visibleRows.slice(start, start + reviewPageSize);
+  }, [visibleRows, reviewPage, reviewPageSize]);
 
   // Commit batch
   async function handleCommitBatch() {
@@ -339,12 +410,12 @@ export function CompanyExpenseImportClient({
 
       if (!res.ok || !data.ok) {
         // Fallback for preview mode
-        const fallbackCreated: CompanyExpense[] = readyRows.map((r, idx) => ({
-          id: `preview-exp-${Date.now()}-${idx}`,
+        const fallbackCreated: CompanyExpense[] = readyRows.map((r) => ({
+          id: crypto.randomUUID(),
           description: r.description,
           amount: r.amount,
           expenseDate: r.expenseDate,
-          category: r.category,
+          category: (r.transactionType || "Outgoing") === "Incoming" ? "Company Income" : "Company Expenses",
           notes: r.notes || null,
           transactionType: r.transactionType || "Outgoing",
           sourceSheet: r.sourceSheet || null,
@@ -352,12 +423,10 @@ export function CompanyExpenseImportClient({
           sourceRef: r.sourceRef || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          createdBy: "Current User",
+          createdBy: actor.username || "system",
         }));
 
-        for (const item of fallbackCreated) {
-          upsertBrowserPreviewExpense(item);
-        }
+        batchUpsertBrowserPreviewExpenses(fallbackCreated);
 
         setImportResult({
           batchName: payload.batchName,
@@ -377,9 +446,7 @@ export function CompanyExpenseImportClient({
       }
 
       const committed = (data.committedExpenses as CompanyExpense[]) || [];
-      for (const item of committed) {
-        upsertBrowserPreviewExpense(item);
-      }
+      batchUpsertBrowserPreviewExpenses(committed);
 
       setImportResult({
         batchName: data.batchName || payload.batchName,
@@ -397,12 +464,12 @@ export function CompanyExpenseImportClient({
       toast.success(`Batch import completed: ${data.committedCount} transactions saved.`);
     } catch {
       // Offline fallback
-      const fallbackCreated: CompanyExpense[] = readyRows.map((r, idx) => ({
-        id: `preview-exp-${Date.now()}-${idx}`,
+      const fallbackCreated: CompanyExpense[] = readyRows.map((r) => ({
+        id: crypto.randomUUID(),
         description: r.description,
         amount: r.amount,
         expenseDate: r.expenseDate,
-        category: r.category,
+        category: (r.transactionType || "Outgoing") === "Incoming" ? "Company Income" : "Company Expenses",
         notes: r.notes || null,
         transactionType: r.transactionType || "Outgoing",
         sourceSheet: r.sourceSheet || null,
@@ -410,12 +477,10 @@ export function CompanyExpenseImportClient({
         sourceRef: r.sourceRef || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        createdBy: "Current User",
+        createdBy: actor.username || "system",
       }));
 
-      for (const item of fallbackCreated) {
-        upsertBrowserPreviewExpense(item);
-      }
+      batchUpsertBrowserPreviewExpenses(fallbackCreated);
 
       setImportResult({
         batchName: payload.batchName,
@@ -644,7 +709,7 @@ export function CompanyExpenseImportClient({
                 disabled={readyCount === 0}
                 onClick={() => setStep(3)}
               >
-                Proceed to Confirmation ({readyCount} Ready)
+                Proceed to Confirmation ({readyCount})
               </button>
             </div>
           </div>
@@ -710,17 +775,7 @@ export function CompanyExpenseImportClient({
               <strong style={{ fontSize: "16px", color: netActivityStaged >= 0 ? "var(--color-status-success, #059669)" : "var(--color-danger, #dc2626)", display: "block", marginTop: "2px" }}>
                 {netActivityStaged >= 0 ? "+" : ""}{formatPeso(netActivityStaged)}
               </strong>
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>Ready to import</span>
-            </div>
-
-            <div style={{ padding: "10px 14px", background: "var(--color-surface, #ffffff)", borderRadius: "8px", border: "1px solid var(--color-border)" }}>
-              <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--color-text-muted)", display: "block" }}>BATCH HEALTH</span>
-              <strong style={{ fontSize: "16px", color: attentionCount === 0 ? "var(--color-status-success, #059669)" : "var(--color-status-warning, #b45309)", display: "block", marginTop: "2px" }}>
-                {readyCount} / {stagedRows.length} Ready
-              </strong>
-              <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
-                {duplicateCount} duplicates · {attentionCount} errors
-              </span>
+              <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>{readyCount} transactions</span>
             </div>
           </div>
 
@@ -735,16 +790,6 @@ export function CompanyExpenseImportClient({
             >
               All Records
               <span className="tab-count-badge">{stagedRows.length}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "ready"}
-              className={`delivery-status-tab${activeTab === "ready" ? " active" : ""}`}
-              onClick={() => setActiveTab("ready")}
-            >
-              Ready
-              <span className="tab-count-badge">{readyCount}</span>
             </button>
             <button
               type="button"
@@ -817,13 +862,42 @@ export function CompanyExpenseImportClient({
               <button
                 type="button"
                 className="secondary-button"
-                style={{ fontSize: "12px", padding: "6px 12px", marginLeft: "auto" }}
+                style={{ fontSize: "12px", padding: "6px 12px" }}
                 onClick={downloadErrorReport}
                 title="Download CSV report of validation errors"
               >
                 Download Error Report
               </button>
             )}
+            <label
+              style={{
+                marginLeft: "auto",
+                fontSize: "12px",
+                color: "var(--color-text-muted)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              Rows per page:
+              <select
+                value={reviewPageSize}
+                onChange={(e) => setReviewPageSize(Number(e.target.value))}
+                style={{
+                  fontSize: "12px",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  border: "1px solid var(--line)",
+                  background: "var(--color-surface)",
+                  color: "var(--color-text-primary)",
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
           </div>
 
           {/* Staged Expenses Table */}
@@ -831,25 +905,23 @@ export function CompanyExpenseImportClient({
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: "95px" }}>Status</th>
-                  <th style={{ width: "95px" }}>Type</th>
-                  <th style={{ width: "130px" }}>Date</th>
+                  <th style={{ width: "100px" }}>Type</th>
+                  <th style={{ width: "145px" }}>Date</th>
                   <th>Description / Reference</th>
-                  <th style={{ width: "150px" }}>Amount (₱)</th>
-                  <th style={{ width: "160px" }}>Category</th>
-                  <th style={{ width: "160px" }}>Sheet / Notes</th>
-                  <th style={{ width: "70px", textAlign: "right" }}>Actions</th>
+                  <th style={{ width: "155px" }}>Amount (₱)</th>
+                  <th style={{ width: "220px" }}>Sheet / Notes</th>
+                  <th style={{ width: "80px", textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.length === 0 ? (
+                {paginatedVisibleRows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: "center", padding: "36px 16px", color: "var(--color-text-muted)" }}>
+                    <td colSpan={6} style={{ textAlign: "center", padding: "36px 16px", color: "var(--color-text-muted)" }}>
                       No records matching current filter.
                     </td>
                   </tr>
                 ) : (
-                  visibleRows.map((row) => (
+                  paginatedVisibleRows.map((row) => (
                     <tr
                       key={row.id}
                       className={
@@ -860,51 +932,19 @@ export function CompanyExpenseImportClient({
                             : ""
                       }
                     >
-                      <td>
-                        <span
-                          className={`routex-badge ${
-                            row.status === "ready"
-                              ? "tone-success"
-                              : row.status === "duplicate"
-                                ? "tone-warning"
-                                : "tone-danger"
-                          }`}
-                          style={{ fontSize: "10px", fontWeight: 700 }}
-                        >
-                          {row.status === "ready"
-                            ? "READY"
-                            : row.status === "duplicate"
-                              ? "DUPLICATE"
-                              : "ATTENTION"}
-                        </span>
-                      </td>
-
                       {/* Transaction Type */}
                       <td>
                         <span
                           style={{
-                            display: "inline-block",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            fontSize: "10px",
-                            fontWeight: 700,
-                            letterSpacing: "0.03em",
-                            background:
-                              row.transactionType === "Incoming"
-                                ? "rgba(16, 185, 129, 0.12)"
-                                : "rgba(245, 158, 11, 0.14)",
+                            fontSize: "12px",
+                            fontWeight: 600,
                             color:
                               row.transactionType === "Incoming"
                                 ? "var(--color-status-success, #059669)"
-                                : "var(--color-status-warning, #b45309)",
-                            border: `1px solid ${
-                              row.transactionType === "Incoming"
-                                ? "rgba(16, 185, 129, 0.25)"
-                                : "rgba(245, 158, 11, 0.25)"
-                            }`,
+                                : "var(--color-text-secondary)",
                           }}
                         >
-                          {(row.transactionType ?? "Outgoing").toUpperCase()}
+                          {row.transactionType === "Incoming" ? "Incoming" : "Outgoing"}
                         </span>
                       </td>
 
@@ -915,7 +955,7 @@ export function CompanyExpenseImportClient({
                           className={`import-table-input${row.issues.some((i) => i.field === "expenseDate") ? " has-error" : ""}`}
                           value={row.expenseDate}
                           onChange={(e) => updateRowField(row.id, "expenseDate", e.target.value)}
-                          style={{ width: "125px" }}
+                          style={{ width: "130px" }}
                         />
                         {row.issues
                           .filter((i) => i.field === "expenseDate")
@@ -987,25 +1027,6 @@ export function CompanyExpenseImportClient({
                           ))}
                       </td>
 
-                      {/* Category */}
-                      <td>
-                        <select
-                          className="import-table-select"
-                          value={row.category}
-                          onChange={(e) => updateRowField(row.id, "category", e.target.value)}
-                          style={{ width: "100%" }}
-                        >
-                          {COMMON_EXPENSE_CATEGORIES.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                          {!COMMON_EXPENSE_CATEGORIES.includes(row.category as (typeof COMMON_EXPENSE_CATEGORIES)[number]) && row.category && (
-                            <option value={row.category}>{row.category}</option>
-                          )}
-                        </select>
-                      </td>
-
                       {/* Sheet / Notes */}
                       <td>
                         <input
@@ -1074,6 +1095,18 @@ export function CompanyExpenseImportClient({
               </tbody>
             </table>
           </div>
+
+          {visibleRows.length > 0 ? (
+            <TablePagination
+              page={reviewPage}
+              pageCount={reviewPageCount}
+              totalItems={visibleRows.length}
+              pageSize={reviewPageSize}
+              onPageChange={setReviewPage}
+              itemLabel="staged transactions"
+              itemCountInPage={paginatedVisibleRows.length}
+            />
+          ) : null}
         </section>
       ) : null}
 
@@ -1171,7 +1204,7 @@ export function CompanyExpenseImportClient({
                 Import Safety Guarantees:
               </strong>
               <ul className="import-guide-list">
-                <li>Only rows marked as <strong>Ready</strong> will be committed to the RouteX database.</li>
+                <li>Valid, non-duplicate transactions will be committed to the RouteX database.</li>
                 <li>Cross-sheet and existing database duplicates are detected and safely excluded by default.</li>
                 <li>All transactions are committed as completed historical <strong>Incoming</strong> or <strong>Outgoing</strong> transactions (no pending status).</li>
                 <li>Imported transactions are immediately reflected in Finance reporting, dashboards, and company profit calculations.</li>

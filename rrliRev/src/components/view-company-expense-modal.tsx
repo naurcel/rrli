@@ -3,7 +3,10 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
-import type { CompanyExpense } from "@/features/finance/company-expense-domain";
+import {
+  formatExpenseActorUsername,
+  type CompanyExpense,
+} from "@/features/finance/company-expense-domain";
 import { formatPeso } from "@/lib/format";
 
 export function ViewCompanyExpenseModal({
@@ -65,9 +68,10 @@ export function ViewCompanyExpenseModal({
       })
     : null;
 
-  const actorUsername = expense.createdBy?.startsWith("@")
-    ? expense.createdBy
-    : `@${expense.createdBy || "system"}`;
+  const resolvedUsername = formatExpenseActorUsername(expense.createdBy);
+  const actorUsername = resolvedUsername.startsWith("@")
+    ? resolvedUsername
+    : `@${resolvedUsername}`;
 
   const isIncome = expense.transactionType === "Incoming";
 

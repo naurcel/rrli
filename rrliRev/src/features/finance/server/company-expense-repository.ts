@@ -8,12 +8,17 @@ import {
   aggregateExpensesByCategory,
   aggregateMonthlyExpenses,
   filterExpensesByDateRange,
+  formatExpenseActorUsername,
 } from "../company-expense-domain.ts";
 
 async function getSupabaseClient() {
   if (!isSupabaseConfigured()) return null;
   try {
-    const { createServerSupabaseClient } = await import("../../../lib/supabase/server.ts");
+    const { isSupabaseAdminConfigured } = await import("../../../lib/config/env.ts");
+    const { createAdminSupabaseClient, createServerSupabaseClient } = await import("../../../lib/supabase/server.ts");
+    if (isSupabaseAdminConfigured()) {
+      return createAdminSupabaseClient();
+    }
     return await createServerSupabaseClient();
   } catch {
     return null;
@@ -67,6 +72,10 @@ export function resetCompanyExpensesStore(): CompanyExpense[] {
   return mockExpensesGlobal.__routexCompanyExpenses;
 }
 
+export function clearAllCompanyExpensesStore(): void {
+  mockExpensesGlobal.__routexCompanyExpenses = [];
+}
+
 export async function listCompanyExpenses(query: CompanyExpenseQuery = {}): Promise<CompanyExpenseListResult> {
   const page = Math.max(1, query.page ?? 1);
   const pageSize = Math.max(1, Math.min(5000, query.pageSize ?? 10));
@@ -102,21 +111,28 @@ export async function listCompanyExpenses(query: CompanyExpenseQuery = {}): Prom
 
       const { data, count, error } = await dbQuery;
       if (!error && data) {
-        const items: CompanyExpense[] = data.map((row) => ({
-          id: row.id,
-          description: row.description,
-          amount: Number(row.amount),
-          expenseDate: row.expense_date,
-          category: row.category,
-          notes: row.notes,
-          transactionType: (row.transaction_type as "Incoming" | "Outgoing") ?? "Outgoing",
-          sourceSheet: row.source_sheet ?? null,
-          sourceRow: row.source_row ?? null,
-          sourceRef: row.source_ref ?? null,
-          createdBy: row.created_by,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-        }));
+        const items: CompanyExpense[] = data.map((row) => {
+          const txType: "Incoming" | "Outgoing" =
+            (row.transaction_type as "Incoming" | "Outgoing") ??
+            (row.category === "Company Income" || row.category === "Billing Revenue" || row.category === "Revenue"
+              ? "Incoming"
+              : "Outgoing");
+          return {
+            id: row.id,
+            description: row.description,
+            amount: Number(row.amount),
+            expenseDate: row.expense_date,
+            category: txType === "Incoming" ? "Company Income" : "Company Expenses",
+            notes: row.notes,
+            transactionType: txType,
+            sourceSheet: row.source_sheet ?? null,
+            sourceRow: row.source_row ?? null,
+            sourceRef: row.source_ref ?? null,
+            createdBy: formatExpenseActorUsername(row.created_by),
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          };
+        });
 
         const total = count ?? items.length;
         const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -250,7 +266,7 @@ export async function getCompanyExpenseById(id: string): Promise<CompanyExpense 
             sourceSheet: data.source_sheet ?? null,
             sourceRow: data.source_row ?? null,
             sourceRef: data.source_ref ?? null,
-            createdBy: data.created_by,
+            createdBy: formatExpenseActorUsername(data.created_by),
             createdAt: data.created_at,
             updatedAt: data.updated_at,
           };
@@ -271,15 +287,17 @@ export async function createCompanyExpense(
 ): Promise<CompanyExpense> {
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
+  const txType = validated.transactionType ?? "Outgoing";
+  const resolvedCategory = txType === "Incoming" ? "Company Income" : "Company Expenses";
 
   const newExpense: CompanyExpense = {
     id,
     description: validated.description,
     amount: validated.amount,
     expenseDate: validated.expenseDate,
-    category: validated.category,
+    category: resolvedCategory,
     notes: validated.notes,
-    transactionType: validated.transactionType ?? "Outgoing",
+    transactionType: txType,
     sourceSheet: validated.sourceSheet ?? null,
     sourceRow: validated.sourceRow ?? null,
     sourceRef: validated.sourceRef ?? null,
@@ -308,12 +326,26 @@ export async function createCompanyExpense(
             created_by: newExpense.createdBy,
             created_at: newExpense.createdAt,
             updated_at: newExpense.updatedAt,
-          })
-          .select()
-          .single();
+          });
 
         if (error) {
-          throw new Error(error.message);
+          // Retry with baseline columns in case older schema lacks transaction_type/source_* columns
+          const fallbackRes = await supabase
+            .from("company_expenses")
+            .insert({
+              id: newExpense.id,
+              description: newExpense.description,
+              amount: newExpense.amount,
+              expense_date: newExpense.expenseDate,
+              category: newExpense.category,
+              notes: newExpense.notes,
+              created_by: newExpense.createdBy,
+              created_at: newExpense.createdAt,
+              updated_at: newExpense.updatedAt,
+            });
+          if (fallbackRes.error) {
+            throw new Error(fallbackRes.error.message);
+          }
         }
       }
     } catch (err) {
@@ -351,38 +383,64 @@ export async function batchCreateCompanyExpenses(
   batchName?: string,
 ): Promise<{ committed: CompanyExpense[]; count: number }> {
   const now = new Date().toISOString();
-  const createdList: CompanyExpense[] = expenses.map((validated, idx) => ({
-    id: `comp-exp-${Date.now()}-${idx}-${crypto.randomUUID().slice(0, 8)}`,
-    description: validated.description,
-    amount: validated.amount,
-    expenseDate: validated.expenseDate,
-    category: validated.category,
-    notes: validated.notes,
-    transactionType: validated.transactionType ?? "Outgoing",
-    sourceSheet: validated.sourceSheet ?? null,
-    sourceRow: validated.sourceRow ?? null,
-    sourceRef: validated.sourceRef ?? null,
-    createdBy: actorEmail,
-    createdAt: now,
-    updatedAt: now,
-  }));
+  const createdList: CompanyExpense[] = expenses.map((validated) => {
+    const txType = validated.transactionType ?? "Outgoing";
+    const resolvedCategory = txType === "Incoming" ? "Company Income" : "Company Expenses";
+    return {
+      id: crypto.randomUUID(),
+      description: validated.description,
+      amount: validated.amount,
+      expenseDate: validated.expenseDate,
+      category: resolvedCategory,
+      notes: validated.notes,
+      transactionType: txType,
+      sourceSheet: validated.sourceSheet ?? null,
+      sourceRow: validated.sourceRow ?? null,
+      sourceRef: validated.sourceRef ?? null,
+      createdBy: actorEmail,
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
 
   if (isSupabaseConfigured()) {
     try {
       const supabase = await getSupabaseClient();
       if (supabase && createdList.length > 0) {
-        const rows = createdList.map((e) => ({
+        const fullRows = createdList.map((e) => ({
           id: e.id,
           description: e.description,
           amount: e.amount,
           expense_date: e.expenseDate,
           category: e.category,
           notes: e.notes,
+          transaction_type: e.transactionType,
+          source_sheet: e.sourceSheet,
+          source_row: e.sourceRow,
+          source_ref: e.sourceRef,
           created_by: e.createdBy,
           created_at: e.createdAt,
           updated_at: e.updatedAt,
         }));
-        await supabase.from("company_expenses").insert(rows);
+        const { error } = await supabase.from("company_expenses").insert(fullRows);
+        if (error) {
+          // Retry with core columns if older schema does not have transaction_type/source_* columns
+          const coreRows = createdList.map((e) => ({
+            id: e.id,
+            description: e.description,
+            amount: e.amount,
+            expense_date: e.expenseDate,
+            category: e.category,
+            notes: e.notes,
+            created_by: e.createdBy,
+            created_at: e.createdAt,
+            updated_at: e.updatedAt,
+          }));
+          const fallbackRes = await supabase.from("company_expenses").insert(coreRows);
+          if (fallbackRes.error) {
+            console.warn("Supabase batch core insert error:", fallbackRes.error.message);
+          }
+        }
       }
     } catch (err) {
       console.warn("Supabase batch insert failed, falling back to in-memory:", err);

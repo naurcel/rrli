@@ -68,8 +68,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const actorEmail = auth.actor?.email ?? "operations@routex.local";
-    const expense = await createCompanyExpense(validation.data, actorEmail);
+    const actorUsername =
+      auth.actor?.username || auth.actor?.email?.split("@")[0] || "operations";
+    const expense = await createCompanyExpense(validation.data, actorUsername);
     return NextResponse.json({ ok: true, expense }, { status: 201 });
   } catch (error) {
     return NextResponse.json(

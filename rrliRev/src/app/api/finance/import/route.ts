@@ -85,7 +85,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const actorEmail = auth.actor?.email ?? "admin@routex.local";
+    const actorUsername =
+      auth.actor?.username || auth.actor?.email?.split("@")[0] || "admin";
 
     const validatedList: ValidatedCompanyExpense[] = rows.map((r) => ({
       description: r.description,
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
       sourceRef: r.sourceRef || null,
     }));
 
-    const result = await batchCreateCompanyExpenses(validatedList, actorEmail, batchName);
+    const result = await batchCreateCompanyExpenses(validatedList, actorUsername, batchName);
 
     processedIdempotencyKeys.add(idempotencyKey);
 

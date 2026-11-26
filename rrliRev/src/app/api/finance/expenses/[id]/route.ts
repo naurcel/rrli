@@ -64,8 +64,9 @@ export async function PUT(
   }
 
   try {
-    const actorEmail = auth.actor?.email ?? "operations@routex.local";
-    const updated = await updateCompanyExpense(id, validation.data, actorEmail);
+    const actorUsername =
+      auth.actor?.username || auth.actor?.email?.split("@")[0] || "operations";
+    const updated = await updateCompanyExpense(id, validation.data, actorUsername);
     if (!updated) {
       return NextResponse.json(
         { ok: false, message: "Company expense not found." },
