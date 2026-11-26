@@ -1414,16 +1414,24 @@ html[data-theme="dark"] .pod-action-btn:hover:not(:disabled) {
   gap: 8px;
 }
 
+.delivery-truck-plate-number,
 .delivery-truck-plate-badge {
-  font-family: monospace;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
   color: var(--color-text-primary);
-  background: var(--color-surface-subtle);
-  border: 1.5px solid var(--line);
-  padding: 3px 8px;
-  border-radius: 6px;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+a.delivery-truck-plate-number:hover,
+a.delivery-truck-plate-badge:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
 }
 
 .truck-capability-pill {

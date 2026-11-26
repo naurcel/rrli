@@ -420,12 +420,7 @@ export function BackdatingTicketsModal({
                               style={{
                                 fontSize: "11px",
                                 fontWeight: 600,
-                                padding: "1px 7px",
-                                borderRadius: "4px",
-                                background: "var(--color-surface-subtle)",
                                 color: "var(--color-text-secondary)",
-                                border: "1px solid var(--color-border)",
-                                fontFamily: "var(--font-mono, monospace)",
                               }}
                             >
                               Plate: {t.plateNumber}

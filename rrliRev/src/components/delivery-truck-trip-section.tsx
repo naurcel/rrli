@@ -67,14 +67,14 @@ export function DeliveryTruckTripSection({
             {truckHref && truckOwnership === "Owned" ? (
               <Link
                 href={truckHref}
-                className="delivery-truck-plate-badge"
+                className="delivery-truck-plate-number"
                 title={`View truck profile for ${plateNumber}`}
                 style={{ textDecoration: "none" }}
               >
                 {plateNumber}
               </Link>
             ) : (
-              <span className="delivery-truck-plate-badge">{plateNumber}</span>
+              <span className="delivery-truck-plate-number">{plateNumber}</span>
             )}
             <span
               className={`detail-status ${truckOwnership === "Owned" ? "success" : "warning"}`}
