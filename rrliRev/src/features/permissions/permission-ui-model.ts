@@ -166,13 +166,6 @@ export const FRIENDLY_PERMISSIONS: readonly FriendlyPermissionDefinition[] = [
     category: "reports",
     categoryLabel: "Reports & Exports",
   },
-  {
-    key: "reports:manage_templates",
-    title: "Manage Custom Report Templates",
-    description: "Create, customize, and save tailored reporting templates with column layouts and formulas.",
-    category: "reports",
-    categoryLabel: "Reports & Exports",
-  },
 
   // 5. User Management & Audit
   {

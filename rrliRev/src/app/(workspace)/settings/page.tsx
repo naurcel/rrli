@@ -43,8 +43,13 @@ import {
   type DateRange,
 } from "@/components/global-date-range-picker";
 import { ReportsDataExportTab } from "@/components/reports-data-export-tab";
-import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import {
+  invalidatePersistedDeliveriesCache,
+  usePersistedDeliveries,
+} from "@/features/deliveries/use-persisted-deliveries";
+import { clearBrowserPreviewDeliveries } from "@/features/deliveries/browser-preview-deliveries";
+import {
+  clearBrowserPreviewExpenses,
   readBrowserPreviewExpenses,
   ROUTEX_COMPANY_EXPENSES_CHANGED,
 } from "@/features/finance/browser-preview-expenses";
@@ -119,6 +124,12 @@ export default function SettingsPage() {
   const [backupKeySubmitting, setBackupKeySubmitting] = useState(false);
   const [generatedBackupKey, setGeneratedBackupKey] = useState<string | null>(null);
   const [hasExistingBackupKey, setHasExistingBackupKey] = useState(false);
+
+  // Superadmin Clear Data state
+  const [clearScopeModal, setClearScopeModal] = useState<"deliveries" | "transactions" | "all" | null>(null);
+  const [clearConfirmInput, setClearConfirmInput] = useState("");
+  const [clearReasonInput, setClearReasonInput] = useState("");
+  const [clearSubmitting, setClearSubmitting] = useState(false);
 
   // Design Preferences state & Dark mode sync
   type SettingsTab = "account" | "appearance" | "security" | "export";
@@ -672,6 +683,56 @@ export default function SettingsPage() {
       setBackupKeyFeedback({ tone: "error", text: "Network error generating emergency backup key." });
     } finally {
       setBackupKeySubmitting(false);
+    }
+  }
+
+  async function handleConfirmClearData(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!clearScopeModal || clearSubmitting) return;
+    if (clearConfirmInput.trim().toUpperCase() !== "CLEAR") {
+      toast.error('Please type "CLEAR" to confirm this action.');
+      return;
+    }
+
+    setClearSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/clear-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: clearScopeModal,
+          reason: clearReasonInput.trim() || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        toast.error(data?.message || "Failed to clear system data.");
+        return;
+      }
+
+      if (clearScopeModal === "deliveries" || clearScopeModal === "all") {
+        clearBrowserPreviewDeliveries();
+        invalidatePersistedDeliveriesCache();
+      }
+      if (clearScopeModal === "transactions" || clearScopeModal === "all") {
+        clearBrowserPreviewExpenses();
+        setCompanyExpenses([]);
+      }
+
+      const label =
+        clearScopeModal === "all"
+          ? "all deliveries and finance transactions"
+          : clearScopeModal === "deliveries"
+            ? "all delivery records"
+            : "all finance transactions";
+      toast.success(`Successfully cleared ${label}.`);
+      setClearScopeModal(null);
+      setClearConfirmInput("");
+      setClearReasonInput("");
+    } catch {
+      toast.error("Network error while clearing data.");
+    } finally {
+      setClearSubmitting(false);
     }
   }
 
@@ -1524,6 +1585,94 @@ export default function SettingsPage() {
               </div>
             </form>
           </section>
+
+          {actor.isSuperadmin && (
+            <section
+              className="records-card settings-card-section"
+              aria-label="Superadmin Data Management"
+              style={{ borderColor: "rgba(220, 38, 38, 0.25)" }}
+            >
+              <div className="settings-section-header">
+                <div className="settings-section-header-icon" aria-hidden="true" style={{ color: "var(--color-danger, #dc2626)" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 style={{ color: "var(--color-danger, #dc2626)" }}>Superadmin Data Management</h2>
+                  <p>Permanently clear operational deliveries, finance transactions, or all workspace data.</p>
+                </div>
+              </div>
+
+              <div className="settings-form-body" style={{ display: "grid", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--line)" }}>
+                  <div>
+                    <strong style={{ display: "block", fontSize: "13.5px" }}>Clear All Deliveries</strong>
+                    <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
+                      Removes all delivery trips, store drop-offs, and POD records.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ color: "var(--color-danger, #dc2626)", borderColor: "rgba(220, 38, 38, 0.3)", minHeight: "36px", padding: "0 14px" }}
+                    onClick={() => {
+                      setClearConfirmInput("");
+                      setClearReasonInput("");
+                      setClearScopeModal("deliveries");
+                    }}
+                  >
+                    Clear All Deliveries
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--line)" }}>
+                  <div>
+                    <strong style={{ display: "block", fontSize: "13.5px" }}>Clear All Transactions</strong>
+                    <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
+                      Removes all Company Finance income and operating expense records.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ color: "var(--color-danger, #dc2626)", borderColor: "rgba(220, 38, 38, 0.3)", minHeight: "36px", padding: "0 14px" }}
+                    onClick={() => {
+                      setClearConfirmInput("");
+                      setClearReasonInput("");
+                      setClearScopeModal("transactions");
+                    }}
+                  >
+                    Clear All Transactions
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", padding: "12px 14px", borderRadius: "10px", border: "1px solid rgba(220, 38, 38, 0.35)", background: "rgba(220, 38, 38, 0.04)" }}>
+                  <div>
+                    <strong style={{ display: "block", fontSize: "13.5px", color: "var(--color-danger, #dc2626)" }}>Clear All Data</strong>
+                    <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
+                      Wipes both all deliveries and all finance transactions (preserves user accounts, trucks, and settings).
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-action-button"
+                    style={{ background: "var(--color-danger, #dc2626)", borderColor: "var(--color-danger, #dc2626)", minHeight: "36px", padding: "0 16px" }}
+                    onClick={() => {
+                      setClearConfirmInput("");
+                      setClearReasonInput("");
+                      setClearScopeModal("all");
+                    }}
+                  >
+                    Clear All Data
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
               </div>
             )}
 
@@ -1550,6 +1699,84 @@ export default function SettingsPage() {
         onCancel={() => setCropSourceUrl(null)}
         onConfirm={handleSaveCroppedPhoto}
       />
+
+      {clearScopeModal && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="clear-data-modal-title">
+          <div className="modal-card" style={{ maxWidth: "460px" }}>
+            <div className="modal-header">
+              <h2 id="clear-data-modal-title" style={{ color: "var(--color-danger, #dc2626)" }}>
+                {clearScopeModal === "all"
+                  ? "Confirm Clear All Data"
+                  : clearScopeModal === "deliveries"
+                    ? "Confirm Clear All Deliveries"
+                    : "Confirm Clear All Transactions"}
+              </h2>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => !clearSubmitting && setClearScopeModal(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleConfirmClearData} style={{ display: "grid", gap: "14px", padding: "16px 20px 20px" }}>
+              <p style={{ margin: 0, fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+                This action will permanently delete{" "}
+                <strong>
+                  {clearScopeModal === "all"
+                    ? "all delivery records and all finance transactions"
+                    : clearScopeModal === "deliveries"
+                      ? "all delivery records, store drop-offs, and PODs"
+                      : "all finance income and expense transactions"}
+                </strong>
+                . Export a backup first if you want to view this data later in the Archive Machine.
+              </p>
+              <div className="settings-form-field">
+                <label htmlFor="clear-reason-input">Reason (Optional)</label>
+                <input
+                  id="clear-reason-input"
+                  type="text"
+                  className="settings-input"
+                  placeholder="e.g. Resetting staging records before production launch"
+                  value={clearReasonInput}
+                  onChange={(e) => setClearReasonInput(e.target.value)}
+                />
+              </div>
+              <div className="settings-form-field">
+                <label htmlFor="clear-confirm-input">Type CLEAR to confirm</label>
+                <input
+                  id="clear-confirm-input"
+                  type="text"
+                  required
+                  className="settings-input"
+                  placeholder="CLEAR"
+                  value={clearConfirmInput}
+                  onChange={(e) => setClearConfirmInput(e.target.value)}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "4px" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={clearSubmitting}
+                  onClick={() => setClearScopeModal(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-action-button"
+                  disabled={clearSubmitting || clearConfirmInput.trim().toUpperCase() !== "CLEAR"}
+                  style={{ background: "var(--color-danger, #dc2626)", borderColor: "var(--color-danger, #dc2626)" }}
+                >
+                  {clearSubmitting ? "Clearing…" : "Permanently Clear"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }
