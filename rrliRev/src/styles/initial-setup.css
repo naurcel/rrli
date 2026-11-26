@@ -382,7 +382,7 @@
 .native-setup-text-input {
   width: 100%;
   height: 50px;
-  padding: 0 84px 0 16px;
+  padding: 0 46px 0 16px;
   font-family: inherit;
   font-size: 15px;
   color: var(--color-text-primary, #15201d);
@@ -439,33 +439,30 @@
     0 6px 16px rgba(245, 158, 11, 0.1) !important;
 }
 
-/* Password Visibility Toggle */
+/* Password Visibility Toggle — Icon only, no background */
 .native-setup-toggle-pw {
   position: absolute;
-  right: 8px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 34px;
-  padding: 0 11px;
-  background: rgba(245, 158, 11, 0.06);
-  border: 1px solid rgba(245, 158, 11, 0.15);
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary, #586762);
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--color-text-muted, #74827d);
   cursor: pointer;
-  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+  transition: color 0.16s ease;
   user-select: none;
-  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.03), -2px -2px 5px rgba(255, 255, 255, 0.8);
 }
 
 .native-setup-toggle-pw:hover {
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--color-accent, #b45309);
-  border-color: rgba(245, 158, 11, 0.28);
+  background: transparent !important;
+  color: var(--color-text-primary, #15201d);
 }
 
 .native-setup-field-hint {
