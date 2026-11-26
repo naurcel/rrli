@@ -27,6 +27,7 @@ export const PERMISSIONS = [
   "deliveries:view",
   "deliveries:create",
   "deliveries:edit",
+  "deliveries:delete",
   "deliveries:complete",
   "dropoffs:manage",
   "imports:upload",
@@ -34,13 +35,16 @@ export const PERMISSIONS = [
   "pod:view",
   "profitability:view",
   "profitability:manage",
+  "profitability:delete",
   "reports:view",
   "reports:export",
   "reports:manage_templates",
   "finance:view",
   "finance:manage",
+  "finance:delete",
   "users:view",
   "users:manage",
+  "users:delete",
   "settings:view",
   "settings:manage",
 ] as const;
@@ -86,11 +90,13 @@ const OPERATIONS_PERMISSIONS: readonly Permission[] = [
   ...VIEW_ONLY_PERMISSIONS,
   "deliveries:create",
   "deliveries:edit",
+  "deliveries:delete",
   "deliveries:complete",
   "dropoffs:manage",
   "imports:upload",
   "imports:review_confirm",
   "profitability:manage",
+  "profitability:delete",
   "reports:export",
 ] as const;
 
@@ -101,9 +107,11 @@ const OPERATIONS_PERMISSIONS: readonly Permission[] = [
 const ADMIN_PERMISSIONS: readonly Permission[] = [
   ...OPERATIONS_PERMISSIONS,
   "finance:manage",
+  "finance:delete",
   "reports:manage_templates",
   "users:view",
   "users:manage",
+  "users:delete",
   "settings:manage",
 ] as const;
 

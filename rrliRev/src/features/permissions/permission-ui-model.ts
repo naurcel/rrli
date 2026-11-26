@@ -1,11 +1,7 @@
 import type { Permission } from "@/lib/auth/rbac";
 
 export type PermissionCategory =
-  | "dashboard"
   | "deliveries"
-  | "dropoffs"
-  | "imports"
-  | "pod"
   | "trucks"
   | "finance"
   | "reports"
@@ -25,28 +21,12 @@ export const PERMISSION_CATEGORIES: {
   label: string;
 }[] = [
   {
-    id: "dashboard",
-    label: "Dashboard",
-  },
-  {
     id: "deliveries",
-    label: "Deliveries",
-  },
-  {
-    id: "dropoffs",
-    label: "Store Drop-offs",
-  },
-  {
-    id: "imports",
-    label: "Delivery Import",
-  },
-  {
-    id: "pod",
-    label: "Proof of Delivery & Documents",
+    label: "Deliveries & Dispatch",
   },
   {
     id: "trucks",
-    label: "Trucks & Profitability",
+    label: "Fleet & Trucks",
   },
   {
     id: "finance",
@@ -54,7 +34,7 @@ export const PERMISSION_CATEGORIES: {
   },
   {
     id: "reports",
-    label: "Reports",
+    label: "Reports & Exports",
   },
   {
     id: "users",
@@ -62,101 +42,93 @@ export const PERMISSION_CATEGORIES: {
   },
   {
     id: "settings",
-    label: "Profile Settings & System",
+    label: "System & Settings",
   },
 ];
 
 export const FRIENDLY_PERMISSIONS: readonly FriendlyPermissionDefinition[] = [
-  // 1. Dashboard
-  {
-    key: "dashboard:view",
-    title: "View Operational Dashboard",
-    description: "Access high-level operations summaries, active deliveries, and real-time KPI overview.",
-    category: "dashboard",
-    categoryLabel: "Dashboard",
-  },
-
-  // 2. Deliveries
+  // 1. Deliveries & Dispatch (Merged Deliveries, Drop-offs, Imports, POD)
   {
     key: "deliveries:view",
     title: "View Deliveries Ledger",
     description: "Browse all delivery trip records, waybill details, client accounts, and schedules.",
     category: "deliveries",
-    categoryLabel: "Deliveries",
+    categoryLabel: "Deliveries & Dispatch",
   },
   {
     key: "deliveries:create",
-    title: "Create Delivery Trips",
+    title: "Create Delivery Trips (Add)",
     description: "Record new delivery trips, designate clients, assign available trucks, and enter trip dates.",
     category: "deliveries",
-    categoryLabel: "Deliveries",
+    categoryLabel: "Deliveries & Dispatch",
   },
   {
     key: "deliveries:edit",
-    title: "Edit Delivery Records",
+    title: "Edit Delivery Records (Edit)",
     description: "Modify active delivery records, trip dates, crew assignments, and operational notes.",
     category: "deliveries",
-    categoryLabel: "Deliveries",
+    categoryLabel: "Deliveries & Dispatch",
   },
   {
-    key: "deliveries:complete",
-    title: "Finalize Deliveries",
-    description: "Lock and finalize verified delivery trips, confirming trip completion and expense reconciliations.",
+    key: "deliveries:delete",
+    title: "Delete Delivery Records (Delete)",
+    description: "Permanently delete delivery trip entries with documented reason in compliance audit history.",
     category: "deliveries",
-    categoryLabel: "Deliveries",
+    categoryLabel: "Deliveries & Dispatch",
   },
-
-  // 3. Store Drop-offs
   {
     key: "dropoffs:manage",
     title: "Manage Store Drop-offs",
     description: "Add, modify, and sequence multi-stop store drop-off locations and delivery quantities per trip.",
-    category: "dropoffs",
-    categoryLabel: "Store Drop-offs",
+    category: "deliveries",
+    categoryLabel: "Deliveries & Dispatch",
   },
-
-  // 4. Delivery Import
   {
     key: "imports:upload",
     title: "Upload Delivery Spreadsheets",
     description: "Upload Excel workbook files (.xlsx, .csv) containing batch delivery schedules for processing.",
-    category: "imports",
-    categoryLabel: "Delivery Import",
+    category: "deliveries",
+    categoryLabel: "Deliveries & Dispatch",
   },
   {
     key: "imports:review_confirm",
     title: "Review & Commit Imports",
     description: "Review staging data, inspect validation flags, resolve unknown trucks, and commit trips into the ledger.",
-    category: "imports",
-    categoryLabel: "Delivery Import",
+    category: "deliveries",
+    categoryLabel: "Deliveries & Dispatch",
   },
-
-  // 5. POD and Documents
   {
     key: "pod:view",
     title: "View & Manage Proof of Delivery (POD)",
-    description: "Inspect uploaded digital POD documents, customer delivery signatures, and timestamped receipts.",
-    category: "pod",
-    categoryLabel: "Proof of Delivery & Documents",
+    description: "Inspect uploaded digital POD documents, customer delivery signatures, and supporting files.",
+    category: "deliveries",
+    categoryLabel: "Deliveries & Dispatch",
   },
 
-  // 6. Trucks and Profitability
+  // 2. Fleet & Trucks
   {
     key: "profitability:view",
-    title: "View Truck Profitability",
+    title: "View Fleet & Trucks",
     description: "Analyze financial yield, fuel usage, toll expenses, crew costs, and net margins per fleet truck.",
     category: "trucks",
-    categoryLabel: "Trucks & Profitability",
+    categoryLabel: "Fleet & Trucks",
   },
   {
     key: "profitability:manage",
-    title: "Manage Fleet & Trucks",
-    description: "Register new trucks, maintain ownership classifications (Owned vs Subcontracted), and edit plate records.",
+    title: "Add & Edit Trucks (Add / Edit)",
+    description: "Register new fleet trucks, maintain ownership classifications (Owned vs Subcontracted), and edit plate records.",
     category: "trucks",
-    categoryLabel: "Trucks & Profitability",
+    categoryLabel: "Fleet & Trucks",
+  },
+  {
+    key: "profitability:delete",
+    title: "Delete Trucks (Delete)",
+    description: "Remove fleet vehicles and assets from the active registry with compliance audit logging.",
+    category: "trucks",
+    categoryLabel: "Fleet & Trucks",
   },
 
-  // 7. Company Finance (Strictly Company-level: Income, Expenses)
+  // 3. Company Finance
   {
     key: "finance:view",
     title: "View Company Finance",
@@ -166,29 +138,43 @@ export const FRIENDLY_PERMISSIONS: readonly FriendlyPermissionDefinition[] = [
   },
   {
     key: "finance:manage",
-    title: "Record & Manage Company Expenses",
+    title: "Record & Edit Operating Expenses (Add / Edit)",
     description: "Create, edit, and categorize company-level incoming funds and corporate operating overhead.",
     category: "finance",
     categoryLabel: "Company Finance",
   },
+  {
+    key: "finance:delete",
+    title: "Delete Financial Records (Delete)",
+    description: "Delete erroneous or voided corporate financial transactions with an audited ledger justification.",
+    category: "finance",
+    categoryLabel: "Company Finance",
+  },
 
-  // 8. Reports (Standard Operational Reports & Data Export)
+  // 4. Reports & Exports
   {
     key: "reports:view",
     title: "View Operational Reports",
     description: "Generate standard performance reports including revenue breakdown, expense summaries, and daily trips.",
     category: "reports",
-    categoryLabel: "Reports",
+    categoryLabel: "Reports & Exports",
   },
   {
     key: "reports:export",
     title: "Export Report Data",
     description: "Download formatted Excel spreadsheets and CSV data tables for external reporting and auditing.",
     category: "reports",
-    categoryLabel: "Reports",
+    categoryLabel: "Reports & Exports",
+  },
+  {
+    key: "reports:manage_templates",
+    title: "Manage Custom Report Templates",
+    description: "Create, customize, and save tailored reporting templates with column layouts and formulas.",
+    category: "reports",
+    categoryLabel: "Reports & Exports",
   },
 
-  // 9. User Management & Audit History
+  // 5. User Management & Audit
   {
     key: "users:view",
     title: "View Staff & Audit History",
@@ -198,26 +184,33 @@ export const FRIENDLY_PERMISSIONS: readonly FriendlyPermissionDefinition[] = [
   },
   {
     key: "users:manage",
-    title: "Manage Users & Role Permissions",
+    title: "Add & Edit Users (Add / Edit)",
     description: "Provision staff credentials, manage account lifecycles, and configure role-based access permissions.",
     category: "users",
     categoryLabel: "User Management & Audit",
   },
+  {
+    key: "users:delete",
+    title: "Delete User Accounts (Delete)",
+    description: "Deactivate and remove staff accounts permanently with compliance audit logging.",
+    category: "users",
+    categoryLabel: "User Management & Audit",
+  },
 
-  // 10. Profile Settings & System
+  // 6. System & Settings
   {
     key: "settings:view",
     title: "View Profile & Security Settings",
     description: "Access user profile configuration, avatar management, and security question settings.",
     category: "settings",
-    categoryLabel: "Profile Settings & System",
+    categoryLabel: "System & Settings",
   },
   {
     key: "settings:manage",
     title: "Manage Workspace Configuration",
     description: "Configure workspace design preferences, appearance themes, and generate emergency backup keys.",
     category: "settings",
-    categoryLabel: "Profile Settings & System",
+    categoryLabel: "System & Settings",
   },
 ];
 
@@ -233,6 +226,6 @@ export function getFriendlyPermission(key: Permission): FriendlyPermissionDefini
     title: key.replace(/[:_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
     description: "Manage permissions for this operational feature.",
     category: "settings",
-    categoryLabel: "Profile Settings & System",
+    categoryLabel: "System & Settings",
   };
 }

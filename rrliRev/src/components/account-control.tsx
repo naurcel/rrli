@@ -204,6 +204,13 @@ export function AccountControl({ className = "" }: { className?: string; collaps
         return;
       }
 
+      if (typeof window !== "undefined") {
+        const currentTheme = document.documentElement.dataset.theme;
+        if (currentTheme === "dark" || currentTheme === "light") {
+          window.localStorage.setItem("routex-theme", currentTheme);
+        }
+      }
+
       setIsOpen(false);
       setActiveView("menu");
       window.location.replace("/login");

@@ -121,6 +121,12 @@ export default function LoginPage() {
       }
 
       try {
+        const activeTheme = isDark ? "dark" : "light";
+        window.localStorage.setItem("routex-theme", activeTheme);
+        const actorId = (payload.actor as { id?: string })?.id;
+        if (actorId) {
+          window.localStorage.setItem(`routex.theme.${actorId}`, activeTheme);
+        }
         if (rememberMe) {
           window.localStorage.setItem("routex-remembered-username", trimmedIdentifier);
         } else {

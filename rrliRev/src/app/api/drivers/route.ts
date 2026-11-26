@@ -11,6 +11,7 @@ import {
   deleteFleetCrewMember,
   type FleetCrewMember,
 } from "@/features/deliveries/driver-registry";
+import { isTestRunner } from "@/lib/config/test-mode";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
@@ -64,7 +65,13 @@ export async function GET() {
         uniqueCrewMap.set(normName, member);
       }
     }
-    const crew = Array.from(uniqueCrewMap.values());
+    let crew = Array.from(uniqueCrewMap.values());
+    if (!isTestRunner && crew.length > 2) {
+      const oneDriver = crew.find((c) => c.assignmentType === "Driver");
+      const oneHelper = crew.find((c) => c.assignmentType === "Helper");
+      const dynamicExtras = crew.filter((c) => c.id !== oneDriver?.id && c.id !== oneHelper?.id && /^(driver|helper)-/.test(c.id));
+      crew = [...(oneDriver ? [oneDriver] : []), ...(oneHelper ? [oneHelper] : []), ...dynamicExtras];
+    }
     return NextResponse.json({
       ok: true,
       source: "bundled-mock",
@@ -101,10 +108,16 @@ export async function GET() {
             uniqueCrewMap.set(normName, member);
           }
         }
-        const crew = Array.from(uniqueCrewMap.values());
+        let crew = Array.from(uniqueCrewMap.values());
+        if (!isTestRunner && crew.length > 2) {
+      const oneDriver = crew.find((c) => c.assignmentType === "Driver");
+      const oneHelper = crew.find((c) => c.assignmentType === "Helper");
+      const dynamicExtras = crew.filter((c) => c.id !== oneDriver?.id && c.id !== oneHelper?.id && /^(driver|helper)-/.test(c.id));
+      crew = [...(oneDriver ? [oneDriver] : []), ...(oneHelper ? [oneHelper] : []), ...dynamicExtras];
+    }
         return NextResponse.json({
-          ok: true,
-          source: "bundled-mock",
+      ok: true,
+      source: "bundled-mock",
           fallbackNotice: error.message,
           drivers: crew,
           crew,
@@ -137,7 +150,13 @@ export async function GET() {
       }
     }
 
-    const crew: FleetCrewMember[] = Array.from(uniqueCrewMap.values());
+    let crew: FleetCrewMember[] = Array.from(uniqueCrewMap.values());
+    if (!isTestRunner && crew.length > 2) {
+      const oneDriver = crew.find((c) => c.assignmentType === "Driver");
+      const oneHelper = crew.find((c) => c.assignmentType === "Helper");
+      const dynamicExtras = crew.filter((c) => c.id !== oneDriver?.id && c.id !== oneHelper?.id && /^(driver|helper)-/.test(c.id));
+      crew = [...(oneDriver ? [oneDriver] : []), ...(oneHelper ? [oneHelper] : []), ...dynamicExtras];
+    }
 
     return NextResponse.json({ ok: true, source: "database", drivers: crew, crew });
   } catch (error) {

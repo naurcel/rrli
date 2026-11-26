@@ -23,8 +23,17 @@ export function AuthActorProvider({
     if (typeof window === "undefined" || !actor?.id) return;
     const userPrefs = loadDesignPreferences(actor.id);
     applyDesignPreferences(userPrefs, actor.id);
-    const userTheme = loadTheme(actor.id);
-    applyTheme(userTheme, actor.id);
+
+    const userStored = window.localStorage.getItem(`routex.theme.${actor.id}`);
+    if (userStored === "dark" || userStored === "light") {
+      applyTheme(userStored, actor.id);
+    } else {
+      const activeTheme =
+        (document.documentElement.dataset.theme as "light" | "dark") ||
+        (window.localStorage.getItem("routex-theme") as "light" | "dark") ||
+        "light";
+      applyTheme(activeTheme, actor.id);
+    }
   }, [actor?.id]);
 
   return (

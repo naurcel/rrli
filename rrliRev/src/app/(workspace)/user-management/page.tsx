@@ -284,6 +284,95 @@ export default function UserManagementPage() {
   const [actionMenuOpensAbove, setActionMenuOpensAbove] = useState(false);
   const [openRoleMenuUserId, setOpenRoleMenuUserId] = useState<string | null>(null);
   const [roleMenuOpensAbove, setRoleMenuOpensAbove] = useState(false);
+  const [draftUserRoles, setDraftUserRoles] = useState<Record<string, string[]>>({});
+  const [isSavingUserRole, setIsSavingUserRole] = useState(false);
+
+  function handleOpenRoleMenu(user: ManagedUserRecord) {
+    if (openRoleMenuUserId === user.id) {
+      setOpenRoleMenuUserId(null);
+    } else {
+      setOpenRoleMenuUserId(user.id);
+      setDraftUserRoles((prev) => ({
+        ...prev,
+        [user.id]: getUserAssignedRoles(user).filter((r) => r !== "superadmin"),
+      }));
+    }
+  }
+
+  function handleToggleDraftRole(userId: string, roleKey: string) {
+    setDraftUserRoles((prev) => {
+      const current = prev[userId] || [];
+      if (current.includes(roleKey)) {
+        if (current.length === 1) {
+          toast.error("A user must retain at least one assigned role.");
+          return prev;
+        }
+        return { ...prev, [userId]: current.filter((r) => r !== roleKey) };
+      } else {
+        return { ...prev, [userId]: [...current, roleKey] };
+      }
+    });
+  }
+
+  async function handleSaveUserRoles(user: ManagedUserRecord) {
+    const nextRoles = draftUserRoles[user.id] ?? getUserAssignedRoles(user).filter((r) => r !== "superadmin");
+    if (nextRoles.length === 0 && !user.isSuperadmin) {
+      toast.error("A user must retain at least one assigned role.");
+      return;
+    }
+    setIsSavingUserRole(true);
+    const firstValidRole = nextRoles.find((r) => USER_ROLES.includes(r as UserRole)) as UserRole | undefined;
+    const primaryRole = firstValidRole || user.role;
+    const updatedLabel = nextRoles.map((r) => getRoleOrDeptName(r)).join(" + ");
+
+    const previousUsers = users;
+    setUsers((current) =>
+      current.map((item) =>
+        item.id === user.id
+          ? {
+              ...item,
+              role: primaryRole,
+              roles: nextRoles,
+              departments: nextRoles,
+              roleLabel: updatedLabel,
+            }
+          : item,
+      ),
+    );
+
+    try {
+      const response = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "assign-departments",
+          userId: user.id,
+          departmentIds: nextRoles,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setUsers(previousUsers);
+        const errMsg = payload?.message ?? "Could not update user roles.";
+        toast.error(errMsg);
+        setFeedback({ tone: "error", text: errMsg });
+      } else {
+        toast.success(`Roles updated for ${user.fullName}`);
+        setFeedback({ tone: "success", text: `Roles updated for ${user.fullName}` });
+        setOpenRoleMenuUserId(null);
+      }
+    } catch {
+      setUsers(previousUsers);
+      toast.error("Network error while updating user roles.");
+    } finally {
+      setIsSavingUserRole(false);
+    }
+  }
 
   type DeptSimpleRecord = {
     id: string;
@@ -1887,7 +1976,7 @@ export default function UserManagementPage() {
                                           const rect = e.currentTarget.getBoundingClientRect();
                                           const spaceBelow = window.innerHeight - rect.bottom;
                                           setRoleMenuOpensAbove(spaceBelow < 220 || userIndex >= paginatedUsers.length - 2);
-                                          setOpenRoleMenuUserId((curr) => curr === user.id ? null : user.id);
+                                          handleOpenRoleMenu(user);
                                         }}
                                         title={`Assign or change roles/departments for ${user.fullName}`}
                                         aria-label={`Assign or change roles for ${user.fullName}`}
@@ -1930,7 +2019,7 @@ export default function UserManagementPage() {
 
                                       <div style={{ display: "flex", flexDirection: "column", gap: "2px", maxHeight: "180px", overflowY: "auto" }}>
                                         {assignableRoles.map((roleOpt) => {
-                                          const currentRoles = getUserAssignedRoles(user);
+                                          const currentRoles = draftUserRoles[user.id] ?? getUserAssignedRoles(user);
                                           const isChecked = currentRoles.includes(roleOpt.value);
                                           const dotColor = getRoleDotColor(roleOpt.value);
                                           return (
@@ -1950,7 +2039,7 @@ export default function UserManagementPage() {
                                               <input
                                                 type="checkbox"
                                                 checked={isChecked}
-                                                onChange={() => handleToggleUserRole(user, roleOpt.value)}
+                                                onChange={() => handleToggleDraftRole(user.id, roleOpt.value)}
                                                 style={{ accentColor: "var(--color-primary, #0284c7)" }}
                                               />
                                               <span
@@ -1969,7 +2058,27 @@ export default function UserManagementPage() {
                                         })}
                                       </div>
 
-                                      <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "6px", marginTop: "2px" }}>
+                                      <div style={{ display: "flex", gap: "6px", marginTop: "4px", paddingTop: "6px", borderTop: "1px solid var(--color-border)" }}>
+                                         <button
+                                           type="button"
+                                           className="routex-btn variant-primary size-xs"
+                                           style={{ flex: 1, minHeight: "26px", fontSize: "11px", justifyContent: "center" }}
+                                           onClick={() => handleSaveUserRoles(user)}
+                                           disabled={isSavingUserRole}
+                                         >
+                                           {isSavingUserRole ? "Saving..." : "Save Roles"}
+                                         </button>
+                                         <button
+                                           type="button"
+                                           className="routex-btn variant-secondary size-xs"
+                                           style={{ minHeight: "26px", fontSize: "11px", padding: "0 8px" }}
+                                           onClick={() => setOpenRoleMenuUserId(null)}
+                                         >
+                                           Cancel
+                                         </button>
+                                       </div>
+
+                                       <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "6px", marginTop: "2px" }}>
                                         <button
                                           type="button"
                                           onClick={() => {
