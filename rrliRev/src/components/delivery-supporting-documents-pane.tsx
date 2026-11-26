@@ -125,7 +125,7 @@ export function DeliverySupportingDocumentsPane({
     }
   }
 
-  function handleFilesAdded(files: FileList | File[]) {
+  async function handleFilesAdded(files: FileList | File[]) {
     if (!canManage) return;
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return;
@@ -148,12 +148,36 @@ export function DeliverySupportingDocumentsPane({
         continue;
       }
       existingNames.push(cleanName.toLowerCase());
+
+      let uploadedFileUrl: string | undefined;
+      try {
+        const fd = new FormData();
+        fd.append("deliveryId", trip.id);
+        fd.append("file", f);
+        const res = await fetch("/api/deliveries/supporting-documents", {
+          method: "POST",
+          body: fd,
+        });
+        if (res.ok) {
+          const data = (await res.json().catch(() => null)) as {
+            ok?: boolean;
+            fileUrl?: string | null;
+          } | null;
+          if (data?.ok && data.fileUrl) {
+            uploadedFileUrl = data.fileUrl;
+          }
+        }
+      } catch {
+        // Fallback to metadata-only attachment if offline
+      }
+
       newItems.push({
         id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         name: cleanName,
         dropoffId: selectedStop ? selectedStop.id : null,
         storeName: selectedStop ? selectedStop.storeName : null,
         uploadedAt: new Date().toISOString(),
+        ...(uploadedFileUrl ? { fileUrl: uploadedFileUrl } : {}),
       });
     }
 

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 import { verifyServerPermission } from "@/lib/auth/server-session";
-import { isSupabaseConfigured } from "@/lib/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/config/env";
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
 import { SMALL_MOCK_DATABASE } from "@/features/deliveries/small-mock-database";
 import { derivePodVerificationStatus } from "@/features/deliveries/delivery-domain";
 import { getAllMockDeliveries } from "@/features/deliveries/small-mock-repository";
@@ -111,7 +111,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = isSupabaseAdminConfigured()
+      ? createAdminSupabaseClient()
+      : await createServerSupabaseClient();
     const { data: doc, error } = await supabase
       .from("delivery_documents")
       .select("id, status, storage_path, original_filename, verification_notes")
@@ -300,7 +302,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = isSupabaseAdminConfigured()
+      ? createAdminSupabaseClient()
+      : await createServerSupabaseClient();
 
     let storagePath: string | null = null;
     if (file && file.size > 0) {
