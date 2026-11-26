@@ -6,6 +6,7 @@ import { ToasterProvider } from "@/components/toaster-provider";
 import "./globals.css";
 import "@/styles/components.css";
 import "@/styles/login.css";
+import "@/styles/initial-setup.css";
 import "@/styles/delivery-import.css";
 import "@/styles/permissions.css";
 import "@/styles/print.css";

@@ -33,22 +33,23 @@ export function PasswordCriteriaList({ password }: { password: string }) {
               style={{
                 display: "inline-grid",
                 placeItems: "center",
-                width: "14px",
-                height: "14px",
+                width: "16px",
+                height: "16px",
                 borderRadius: "50%",
-                fontSize: "10px",
+                flexShrink: 0,
                 background: item.valid
-                  ? "color-mix(in srgb, var(--color-status-success) 14%, transparent)"
-                  : "color-mix(in srgb, var(--color-border) 60%, transparent)",
+                  ? "rgba(16, 185, 129, 0.14)"
+                  : "rgba(0, 0, 0, 0.05)",
                 color: item.valid ? "var(--color-status-success)" : "var(--color-text-muted)",
+                transition: "all .2s ease",
               }}
             >
               {item.valid ? (
-                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               ) : (
-                "•"
+                <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "currentColor", opacity: 0.6 }} />
               )}
             </span>
             {item.label}

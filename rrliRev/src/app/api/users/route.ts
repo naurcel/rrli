@@ -267,7 +267,7 @@ export async function POST(request: Request) {
         .single();
 
       // Gracefully handle schema cache column race or edge cases by falling back to core fields
-      if (profileError && profileError.message.includes("phone_number")) {
+      if (profileError && (profileError.message.includes("phone_number") || profileError.message.includes("schema cache"))) {
         delete profilePayload.phone_number;
         const retry = await adminSupabase
           .from("user_profiles")
