@@ -1772,6 +1772,20 @@ html[data-theme="dark"] .truck-card-delete-btn:hover {
 .global-date-filter.has-active .global-date-filter-icon {
   stroke: var(--color-accent);
 }
+.global-date-filter-spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--color-accent) 24%, transparent);
+  border-top-color: var(--color-accent);
+  animation: global-date-spin 0.65s linear infinite;
+}
+@keyframes global-date-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .dropdown-chevron { width: 7px; height: 7px; flex: 0 0 7px; margin-top: -3px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transform-origin: center; transition: margin .18s ease, transform .18s ease; }
 [aria-expanded="true"] > .dropdown-chevron { margin-top: 3px; transform: rotate(225deg); }
 @media (max-width: 700px) { .topbar-filter-slot { display: none; } }
@@ -3183,54 +3197,60 @@ html[data-theme="dark"] .record-detail-backdrop { background: rgba(0, 0, 0, .42)
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none !important;
-  border-radius: 0 !important;
-  background: transparent !important;
+  gap: 5px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-surface-strong);
   color: var(--color-text-secondary);
-  box-shadow: none !important;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  transition: color .18s ease, transform .18s ease !important;
+  transition: all .18s ease;
 }
 
 .daily-nav-btn:hover:not(:disabled) {
-  border: none !important;
-  background: transparent !important;
-  color: var(--color-accent) !important;
-  transform: translateY(-1.5px) !important;
-  box-shadow: none !important;
+  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--glass-border));
+  background: var(--color-accent-soft);
+  color: var(--color-accent-deep);
+}
+
+.daily-nav-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 html[data-theme="dark"] .daily-nav-btn {
-  border: none !important;
-  background: transparent !important;
-  color: #94a3b8 !important;
-  box-shadow: none !important;
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.65);
+  color: #cbd5e1;
 }
 
 html[data-theme="dark"] .daily-nav-btn:hover:not(:disabled) {
-  border: none !important;
-  background: transparent !important;
-  color: #ffd187 !important;
-  transform: translateY(-1.5px) !important;
-  box-shadow: none !important;
+  border-color: rgba(255, 209, 135, 0.4);
+  background: rgba(255, 209, 135, 0.12);
+  color: #ffd187;
 }
 
 .daily-today-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
-  padding: 0 10px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--glass-surface-strong);
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   transition: all .18s ease;
 }
@@ -9709,6 +9729,9 @@ html[data-theme="dark"] .filter-popover-footer {
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
   transition: color 0.12s ease;
 }
 
@@ -9781,7 +9804,7 @@ input[type="number"] {
   flex-direction: column;
   gap: 10px;
   padding: 12px 14px 14px;
-  max-height: 420px;
+  max-height: 256px;
   overflow-y: auto;
 }
 
@@ -14468,7 +14491,7 @@ html[data-theme="dark"] .expand-all-text-button:hover {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px 14px;
-  max-height: 380px;
+  max-height: 256px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
@@ -14633,8 +14656,6 @@ html[data-theme="dark"] .dashboard-attention-item.is-expanded {
   width: 100%;
   min-width: 620px;
   table-layout: auto;
-  flex: 1 1 auto;
-  height: 100%;
 }
 
 .dashboard-recent-deliveries .table-empty-cell {
@@ -16695,7 +16716,7 @@ html[data-theme="dark"] .drawer-dropoff-linked-doc {
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   letter-spacing: 0.02em;
-}
+... [truncated for diff preview]
 
 /* ==========================================================================
    Authoritative Print Stylesheet -> Extracted to @/styles/print.css

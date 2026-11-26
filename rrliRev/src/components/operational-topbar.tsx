@@ -1,6 +1,7 @@
 "use client";
 
 import { AccountControl } from "@/components/account-control";
+import { ArchiveMachineBanner } from "@/components/archive-machine-banner";
 import { GlobalDateRangePicker } from "@/components/global-date-range-picker";
 
 export function OperationalTopbar({
@@ -11,17 +12,20 @@ export function OperationalTopbar({
   showDateFilter?: boolean;
 }) {
   return (
-    <header className="topbar no-print">
-      <div className="topbar-primary">
-        {showDateFilter ? (
-          <div className="topbar-filter-slot">
-            <GlobalDateRangePicker />
-          </div>
-        ) : null}
-      </div>
-      <div className="topbar-actions">
-        <AccountControl />
-      </div>
-    </header>
+    <>
+      <header className="topbar no-print">
+        <div className="topbar-primary">
+          {showDateFilter ? (
+            <div className="topbar-filter-slot">
+              <GlobalDateRangePicker />
+            </div>
+          ) : null}
+        </div>
+        <div className="topbar-actions">
+          <AccountControl />
+        </div>
+      </header>
+      <ArchiveMachineBanner />
+    </>
   );
 }

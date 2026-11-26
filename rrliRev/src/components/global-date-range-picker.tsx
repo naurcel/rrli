@@ -27,6 +27,7 @@ import {
   type DateRange,
   WEEK_DAYS,
 } from "./date-range-utils";
+import { readArchiveMachineSnapshot } from "@/features/archive/archive-machine";
 
 export {
   addDays,
@@ -48,7 +49,29 @@ export {
 type DateRangeContextValue = {
   range: DateRange;
   setRange: (range: DateRange) => void;
+  isLoading: boolean;
 };
+
+const activeDateRangeLoadIds = new Set<string>();
+const dateRangeLoadListeners = new Set<(count: number) => void>();
+
+function notifyDateRangeLoadListeners(): void {
+  const count = activeDateRangeLoadIds.size;
+  for (const listener of dateRangeLoadListeners) {
+    listener(count);
+  }
+}
+
+export function beginDateRangeLoad(loadId: string): void {
+  activeDateRangeLoadIds.add(loadId);
+  notifyDateRangeLoadListeners();
+}
+
+export function endDateRangeLoad(loadId: string): void {
+  if (activeDateRangeLoadIds.delete(loadId)) {
+    notifyDateRangeLoadListeners();
+  }
+}
 
 const monthNames = MONTH_NAMES;
 const weekDays = WEEK_DAYS;
@@ -71,6 +94,25 @@ function serializeDateRange(range: DateRange): string {
   });
 }
 
+function getEffectiveReferenceToday(): Date {
+  const archive = readArchiveMachineSnapshot();
+  if (archive && archive.referenceDate) {
+    const parsed = parseDateValue(archive.referenceDate);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  return new Date();
+}
+
+function getEffectiveMinYear(): number {
+  const archive = readArchiveMachineSnapshot();
+  if (archive && archive.archiveYear) {
+    return Math.min(COMPANY_FOUNDATION_YEAR, archive.archiveYear);
+  }
+  return COMPANY_FOUNDATION_YEAR;
+}
+
 function parseStoredDateRange(raw: string): DateRange | null {
   try {
     const parsed = JSON.parse(raw) as {
@@ -87,9 +129,10 @@ function parseStoredDateRange(raw: string): DateRange | null {
     if (start && isNaN(start.getTime())) return null;
     if (end && isNaN(end.getTime())) return null;
     if (start || end) {
-      // Relative presets always recompute against today so they roll over automatically
+      const refToday = getEffectiveReferenceToday();
+      // Relative presets always recompute against today (or archive reference date)
       if (parsed.preset === "month") {
-        return { ...presetRange("month"), preset: "month" };
+        return { ...presetRange("month", refToday), preset: "month" };
       }
       if (parsed.preset === "week" && (start || end)) {
         const ref = end ?? start!;
@@ -185,8 +228,41 @@ export function GlobalDateRangeProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const [activeLoadCount, setActiveLoadCount] = useState(0);
+  const [isSwitchingRange, setIsSwitchingRange] = useState(false);
+  const isFirstRenderRef = useRef(true);
+  const prevRangeKeyRef = useRef<string>(serializeDateRange(range));
+
+  useEffect(() => {
+    const syncCount = (count: number) => setActiveLoadCount(count);
+    dateRangeLoadListeners.add(syncCount);
+    setActiveLoadCount(activeDateRangeLoadIds.size);
+    return () => {
+      dateRangeLoadListeners.delete(syncCount);
+    };
+  }, []);
+
+  useEffect(() => {
+    const nextKey = serializeDateRange(range);
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      prevRangeKeyRef.current = nextKey;
+      return;
+    }
+    if (prevRangeKeyRef.current !== nextKey) {
+      prevRangeKeyRef.current = nextKey;
+      setIsSwitchingRange(true);
+      const timer = window.setTimeout(() => {
+        setIsSwitchingRange(false);
+      }, 320);
+      return () => window.clearTimeout(timer);
+    }
+  }, [range]);
+
+  const isLoading = isSwitchingRange || activeLoadCount > 0;
+
   return (
-    <DateRangeContext.Provider value={{ range, setRange }}>
+    <DateRangeContext.Provider value={{ range, setRange, isLoading }}>
       {children}
     </DateRangeContext.Provider>
   );
@@ -211,7 +287,7 @@ export function GlobalDateRangePicker() {
   const [month, setMonth] = useState(() => new Date(2026, 10, 1));
   const [viewMode, setViewMode] = useState<"days" | "months">("days");
 
-  const { range, setRange } = useGlobalDateRange();
+  const { range, setRange, isLoading } = useGlobalDateRange();
   const [draftStart, setDraftStart] = useState<Date | null>(range.startDate);
   const [draftEnd, setDraftEnd] = useState<Date | null>(range.endDate);
 
@@ -284,7 +360,7 @@ export function GlobalDateRangePicker() {
   }, [month]);
 
   const chooseDate = (date: Date) => {
-    if (date.getFullYear() < COMPANY_FOUNDATION_YEAR) return;
+    if (date.getFullYear() < getEffectiveMinYear()) return;
     const normalized = startOfDay(date);
 
     if (!draftStart || (draftStart && draftEnd)) {
@@ -306,7 +382,8 @@ export function GlobalDateRangePicker() {
   };
 
   const choosePreset = (preset: DatePreset) => {
-    const next = { ...presetRange(preset), preset };
+    const refToday = getEffectiveReferenceToday();
+    const next = { ...presetRange(preset, refToday), preset };
     setRange(next);
     setDraftStart(next.startDate);
     setDraftEnd(next.endDate);
@@ -326,7 +403,7 @@ export function GlobalDateRangePicker() {
   const isThisMonth = useMemo(() => {
     if (range.preset === "month") return true;
     if (!range.startDate || !range.endDate) return false;
-    const now = new Date();
+    const now = getEffectiveReferenceToday();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     return (
@@ -350,9 +427,11 @@ export function GlobalDateRangePicker() {
     <div className="global-date-picker">
       <button
         ref={triggerRef}
-        className={`global-date-filter${range.startDate || range.endDate ? " has-active" : ""}`}
+        className={`global-date-filter${range.startDate || range.endDate ? " has-active" : ""}${isLoading ? " is-range-loading" : ""}`}
         type="button"
-        aria-label={`Date range: ${label}`}
+        aria-label={`Date range: ${label}${isLoading ? " (Loading)" : ""}`}
+        aria-busy={isLoading}
+        title={isLoading ? "Loading records for selected date range…" : undefined}
         aria-haspopup="dialog"
         aria-controls={dialogId}
         aria-expanded={open}
@@ -365,15 +444,19 @@ export function GlobalDateRangePicker() {
           }
         }}
       >
-        <svg
-          className="global-date-filter-icon"
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          focusable="false"
-        >
-          <rect x="3" y="5" width="18" height="16" rx="2" />
-          <path d="M16 3v4M8 3v4M3 10h18" />
-        </svg>
+        {isLoading ? (
+          <span className="global-date-filter-spinner" aria-hidden="true" />
+        ) : (
+          <svg
+            className="global-date-filter-icon"
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            focusable="false"
+          >
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M16 3v4M8 3v4M3 10h18" />
+          </svg>
+        )}
         <span>{label}</span>
         <span className="dropdown-chevron" aria-hidden="true" />
       </button>
@@ -397,9 +480,9 @@ export function GlobalDateRangePicker() {
                   type="button"
                   aria-label="Previous year"
                   title="Previous year"
-                  disabled={month.getFullYear() <= COMPANY_FOUNDATION_YEAR}
+                  disabled={month.getFullYear() <= getEffectiveMinYear()}
                   onClick={() => {
-                    if (month.getFullYear() > COMPANY_FOUNDATION_YEAR) {
+                    if (month.getFullYear() > getEffectiveMinYear()) {
                       setMonth(new Date(month.getFullYear() - 1, month.getMonth(), 1));
                     }
                   }}
@@ -442,10 +525,10 @@ export function GlobalDateRangePicker() {
                   type="button"
                   aria-label="Previous month"
                   title="Previous month"
-                  disabled={month.getFullYear() <= COMPANY_FOUNDATION_YEAR && month.getMonth() <= 0}
+                  disabled={month.getFullYear() <= getEffectiveMinYear() && month.getMonth() <= 0}
                   onClick={() => {
                     const prev = new Date(month.getFullYear(), month.getMonth() - 1, 1);
-                    if (prev.getFullYear() >= COMPANY_FOUNDATION_YEAR) {
+                    if (prev.getFullYear() >= getEffectiveMinYear()) {
                       setMonth(prev);
                     }
                   }}
