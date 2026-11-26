@@ -19,6 +19,8 @@ import { TablePagination } from "@/components/table-pagination";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { useSearchBuffer } from "@/components/search-buffer";
 import {
+  deleteTruckPhoto,
+  fetchTruckPhoto,
   getTruckPhotoFromStorage,
   saveTruckPhotoFile,
   storageKey,
@@ -272,6 +274,7 @@ export default function TruckProfilePage({
     const multiplier = historySort.direction === "asc" ? 1 : -1;
     return [...filteredTruckTrips].sort((left, right) => {
       const values: Record<string, [string | number, string | number]> = {
+        waybill: [left.waybillNumber, right.waybillNumber],
         date: [left.deliveryDate, right.deliveryDate],
         client: [left.clientName, right.clientName],
         dropoffs: [getTripTotalDropoffs(left.dropoffs), getTripTotalDropoffs(right.dropoffs)],
@@ -369,6 +372,9 @@ export default function TruckProfilePage({
     setEditContactPerson(registeredTruck?.contactPerson ?? "");
     setEditTruckPhotoFile(null);
     setEditTruckPhotoPreview(getTruckPhotoFromStorage(activeTruck.plateNumber));
+    void fetchTruckPhoto(activeTruck.plateNumber).then((remoteUrl) => {
+      if (remoteUrl) setEditTruckPhotoPreview(remoteUrl);
+    });
     setIsEditModalOpen(true);
   }
 
@@ -427,7 +433,11 @@ export default function TruckProfilePage({
 
       const oldKey = storageKey(activeTruck.plateNumber);
       const newKey = storageKey(updatedTruck.plateNumber);
-      if (oldKey !== newKey && !editTruckPhotoFile && typeof window !== "undefined") {
+      if (!editTruckPhotoPreview && !editTruckPhotoFile && typeof window !== "undefined") {
+        window.localStorage.removeItem(oldKey);
+        window.localStorage.removeItem(newKey);
+        await deleteTruckPhoto(activeTruck.plateNumber);
+      } else if (oldKey !== newKey && !editTruckPhotoFile && typeof window !== "undefined") {
         const existingPhoto = window.localStorage.getItem(oldKey);
         if (existingPhoto) {
           window.localStorage.setItem(newKey, existingPhoto);
@@ -727,7 +737,8 @@ export default function TruckProfilePage({
                 <table>
                   <thead>
                     <tr>
-                      <SortableTableHeader label="Waybill & Date" sortKey="date" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Waybill" sortKey="waybill" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
+                      <SortableTableHeader label="Date" sortKey="date" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                       <SortableTableHeader label="Client" sortKey="client" activeSortKey={historySort.key} direction={historySort.direction} onSort={(key, direction) => setHistorySort({ key, direction })} />
                       <SortableTableHeader label="Drop-offs" sortKey="dropoffs" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
                       <SortableTableHeader label="Distance" sortKey="distance" activeSortKey={historySort.key} direction={historySort.direction} defaultDirection="desc" onSort={(key, direction) => setHistorySort({ key, direction })} />
@@ -740,7 +751,7 @@ export default function TruckProfilePage({
                   <tbody>
                     {sortedTruckTrips.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="table-empty-cell">
+                        <td colSpan={9} className="table-empty-cell">
                           <div className="empty-state minimal">
                             <strong className="empty-state-title">
                               {debouncedHistorySearch.trim()
@@ -775,9 +786,9 @@ export default function TruckProfilePage({
                             title={`View waybill ${trip.waybillNumber}`}
                           >
                             <td>
-                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                <strong className="record-link">#{trip.waybillNumber}</strong>
-                              </div>
+                              <strong className="record-link">#{trip.waybillNumber}</strong>
+                            </td>
+                            <td style={{ whiteSpace: "nowrap" }}>
                               <small>{trip.deliveryDate}</small>
                             </td>
                             <td>{trip.clientName}</td>

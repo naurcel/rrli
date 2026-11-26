@@ -70,7 +70,14 @@ export function DashboardRecentDeliveries({
         <TableHeader>
           <tr>
             <SortableTableHeader
-              label="Waybill & Date"
+              label="Waybill"
+              sortKey="waybill"
+              activeSortKey={deliverySort.key}
+              direction={deliverySort.direction}
+              onSort={onSort}
+            />
+            <SortableTableHeader
+              label="Date"
               sortKey="date"
               activeSortKey={deliverySort.key}
               direction={deliverySort.direction}
@@ -120,7 +127,7 @@ export function DashboardRecentDeliveries({
         <TableBody>
           {deliveries.length === 0 ? (
             <TableEmptyState
-              colSpan={6}
+              colSpan={7}
               title="No records found"
               description="No delivery trips recorded in this period."
             />
@@ -144,9 +151,9 @@ export function DashboardRecentDeliveries({
                   }}
                 >
                   <TableCell>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <strong>{trip.waybillNumber}</strong>
-                    </div>
+                    <strong>{trip.waybillNumber}</strong>
+                  </TableCell>
+                  <TableCell style={{ whiteSpace: "nowrap" }}>
                     <small>{formatDashboardDate(trip.deliveryDate)}</small>
                   </TableCell>
                   <TableCell>

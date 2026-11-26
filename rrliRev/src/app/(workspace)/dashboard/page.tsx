@@ -29,6 +29,7 @@ import {
   getDeliveryIncompleteIssues,
   isDeliveryFinanciallyComplete,
   isDeliveryIncomplete,
+  summarizeTruckProfitability,
 } from "@/features/deliveries/delivery-domain";
 import {
   useDeliveryProfitabilitySummary,
@@ -36,6 +37,7 @@ import {
 } from "@/features/deliveries/use-delivery-profitability-summary";
 import { usePersistedDeliveries } from "@/features/deliveries/use-persisted-deliveries";
 import {
+  mergeRemoteAndLocalCompanyExpenses,
   readBrowserPreviewExpenses,
   ROUTEX_COMPANY_EXPENSES_CHANGED,
 } from "@/features/finance/browser-preview-expenses";
@@ -69,7 +71,8 @@ export default function DashboardPage() {
   const actor = useAuthenticatedActor();
   const { range, setRange } = useGlobalDateRange();
   const { deliveries, loading, error } = usePersistedDeliveries(range);
-  const { summary: persistedSummary } = useDeliveryProfitabilitySummary(range);
+  const { summary: persistedSummary, loading: summaryLoading } = useDeliveryProfitabilitySummary(range);
+  const isLoading = loading || summaryLoading;
   const [accessNoticeDismissed, setAccessNoticeDismissed] = useState(false);
   const [truckRankingMetric, setTruckRankingMetric] =
     useState<TruckRankingMetric>("netIncome");
@@ -152,7 +155,7 @@ export default function DashboardPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.ok && Array.isArray(data.items)) {
-            setCompanyExpenses(data.items);
+            setCompanyExpenses(mergeRemoteAndLocalCompanyExpenses(data.items));
             return;
           }
         }
@@ -165,7 +168,7 @@ export default function DashboardPage() {
     fetchExpenses();
 
     const onExpensesChanged = () => {
-      setCompanyExpenses(readBrowserPreviewExpenses());
+      setCompanyExpenses((prev) => mergeRemoteAndLocalCompanyExpenses(prev));
     };
     window.addEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, onExpensesChanged);
     return () => {
@@ -202,6 +205,7 @@ export default function DashboardPage() {
     const multiplier = deliverySort.direction === "asc" ? 1 : -1;
     return [...filteredDeliveries].sort((left, right) => {
       const values: Record<string, [string | number, string | number]> = {
+        waybill: [left.waybillNumber, right.waybillNumber],
         date: [left.deliveryDate, right.deliveryDate],
         client: [left.clientName, right.clientName],
         truck: [left.plateNumber, right.plateNumber],
@@ -245,8 +249,14 @@ export default function DashboardPage() {
       (sum, item) => sum + (item.totalExpenses ?? 0),
       0,
     );
-    const deliveryRevenue = persistedSummary?.revenue ?? fallbackEarnings;
-    const deliveryExpenses = persistedSummary?.expenses ?? fallbackExpenses;
+    const deliveryRevenue =
+      filteredDeliveries.length > 0
+        ? fallbackEarnings
+        : (persistedSummary?.revenue ?? fallbackEarnings);
+    const deliveryExpenses =
+      filteredDeliveries.length > 0
+        ? fallbackExpenses
+        : (persistedSummary?.expenses ?? fallbackExpenses);
 
     const companyRevenue = filteredCompanyExpenses
       .filter((e) => e.transactionType === "Incoming")
@@ -269,7 +279,10 @@ export default function DashboardPage() {
     const incompleteDeliveries = filteredDeliveries.filter(isDeliveryIncomplete);
     const incompleteCount = incompleteDeliveries.length;
     const completedCount = filteredDeliveries.length - incompleteCount;
-    const finalizedCount = persistedSummary?.deliveries ?? financiallyComplete.length;
+    const finalizedCount =
+      filteredDeliveries.length > 0
+        ? financiallyComplete.length
+        : (persistedSummary?.deliveries ?? financiallyComplete.length);
 
     return {
       earnings: totalRevenue,
@@ -293,21 +306,32 @@ export default function DashboardPage() {
     [filteredDeliveries, filteredCompanyExpenses, range],
   );
 
-  const truckRankings = useMemo(
-    () =>
-      [...(persistedSummary?.trucks ?? [])]
-        .sort((left, right) => {
-          const leftValue = truckRankingValue(left, truckRankingMetric);
-          const rightValue = truckRankingValue(right, truckRankingMetric);
-          if (leftValue !== rightValue) return rightValue > leftValue ? 1 : -1;
-          if (right.net_income !== left.net_income) {
-            return right.net_income - left.net_income;
-          }
-          return left.plate_number.localeCompare(right.plate_number);
-        })
-        .slice(0, 3),
-    [persistedSummary?.trucks, truckRankingMetric],
-  );
+  const truckRankings = useMemo(() => {
+    const derivedTrucks: PersistedTruckSummary[] =
+      filteredDeliveries.length > 0
+        ? summarizeTruckProfitability(filteredDeliveries).map((t) => ({
+            truck_id: t.plateNumber,
+            plate_number: t.plateNumber,
+            deliveries: t.completedTrips,
+            revenue: t.totalEarnings,
+            expenses: t.totalExpenses,
+            net_income: t.netProfit,
+            profit_margin: t.marginPercent,
+          }))
+        : [...(persistedSummary?.trucks ?? [])];
+
+    return derivedTrucks
+      .sort((left, right) => {
+        const leftValue = truckRankingValue(left, truckRankingMetric);
+        const rightValue = truckRankingValue(right, truckRankingMetric);
+        if (leftValue !== rightValue) return rightValue > leftValue ? 1 : -1;
+        if (right.net_income !== left.net_income) {
+          return right.net_income - left.net_income;
+        }
+        return left.plate_number.localeCompare(right.plate_number);
+      })
+      .slice(0, 3);
+  }, [filteredDeliveries, persistedSummary?.trucks, truckRankingMetric]);
 
   const canWrite = canMutateDeliveryRecords(actor);
   const actorName = actor.fullName
@@ -331,14 +355,14 @@ export default function DashboardPage() {
           isSuperadmin={actor.isSuperadmin}
           currentDashboardUrl={buildCurrentDashboardUrl()}
           error={error}
-          loading={loading}
+          loading={isLoading}
           accessLevel={actor.accessLevel}
           accessNoticeDismissed={accessNoticeDismissed}
           onDismissAccessNotice={() => setAccessNoticeDismissed(true)}
         />
 
         <section
-          className={`dashboard-overview-grid${loading ? " is-page-loading" : ""}`}
+          className={`dashboard-overview-grid${isLoading ? " is-page-loading" : ""}`}
           aria-label="Performance and profitability overview"
         >
           <DashboardFinancialChart
@@ -352,7 +376,7 @@ export default function DashboardPage() {
           />
         </section>
 
-        <div className={`dashboard-columns${loading ? " is-page-loading" : ""}`}>
+        <div className={`dashboard-columns${isLoading ? " is-page-loading" : ""}`}>
           <DashboardRecentDeliveries
             deliveries={recentDeliveries}
             deliverySort={deliverySort}

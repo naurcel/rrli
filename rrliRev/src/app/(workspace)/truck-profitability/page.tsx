@@ -8,7 +8,6 @@ import { toast } from "sonner";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
-  formatDateRange,
   GlobalDateRangePicker,
   parseDateValue,
   toDateKey,
@@ -29,6 +28,8 @@ import {
   type OwnedTruckSort,
 } from "@/components/truck-filter-dropdown";
 import {
+  deleteTruckPhoto,
+  fetchTruckPhoto,
   getTruckPhotoFromStorage,
   saveTruckPhotoFile,
   storageKey,
@@ -172,7 +173,8 @@ export default function TruckProfitabilityPage() {
     direction: TableSortDirection;
   }>({ key: "plateNumber", direction: "asc" });
 
-  const [extraTrucks, setExtraTrucks] = useState<FleetTruck[]>([]);
+  const [apiTrucks, setApiTrucks] = useState<FleetTruck[]>([]);
+  const [localTrucks, setLocalTrucks] = useState<FleetTruck[]>([]);
   const [isAddTruckOpen, setIsAddTruckOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -613,7 +615,7 @@ export default function TruckProfitabilityPage() {
 
   useEffect(() => {
     const syncLocal = () => {
-      setExtraTrucks(readBrowserPreviewTrucks());
+      setLocalTrucks(readBrowserPreviewTrucks());
       setDeletedPlates(new Set(readBrowserDeletedTrucks().map((p) => p.toUpperCase())));
     };
     syncLocal();
@@ -622,7 +624,7 @@ export default function TruckProfitabilityPage() {
       .then((res) => res.json())
       .then((data: { ok?: boolean; trucks?: FleetTruck[] }) => {
         if (data?.ok && Array.isArray(data.trucks)) {
-          setExtraTrucks(data.trucks);
+          setApiTrucks(data.trucks);
         }
       })
       .catch(() => {});
@@ -665,8 +667,21 @@ export default function TruckProfitabilityPage() {
   }, []);
 
   const allFleetTrucks = useMemo(() => {
-    return extraTrucks.filter((t) => !deletedPlates.has(t.plateNumber.trim().toUpperCase()));
-  }, [extraTrucks, deletedPlates]);
+    const byPlate = new Map<string, FleetTruck>();
+    for (const truck of apiTrucks) {
+      const key = truck.plateNumber.trim().toUpperCase();
+      if (!deletedPlates.has(key)) {
+        byPlate.set(key, truck);
+      }
+    }
+    for (const truck of localTrucks) {
+      const key = truck.plateNumber.trim().toUpperCase();
+      if (!deletedPlates.has(key)) {
+        byPlate.set(key, truck);
+      }
+    }
+    return Array.from(byPlate.values());
+  }, [apiTrucks, localTrucks, deletedPlates]);
 
   const allOwnedTrucks = useMemo(
     () => allFleetTrucks.filter((t) => t.ownershipType === "Owned"),
@@ -1281,7 +1296,11 @@ export default function TruckProfitabilityPage() {
     setEditDriverName(resolvedDriver);
     setEditHelperName(resolvedHelper);
     setEditTruckPhotoFile(null);
-    setEditTruckPhotoPreview(getTruckPhotoFromStorage(truck.plateNumber));
+    const localPreview = getTruckPhotoFromStorage(truck.plateNumber);
+    setEditTruckPhotoPreview(localPreview);
+    void fetchTruckPhoto(truck.plateNumber).then((remoteUrl) => {
+      if (remoteUrl) setEditTruckPhotoPreview(remoteUrl);
+    });
   }
 
   async function handleUpdateTruck(event: FormEvent<HTMLFormElement>) {
@@ -1344,7 +1363,10 @@ export default function TruckProfitabilityPage() {
       if (!editTruckPhotoPreview && !editTruckPhotoFile && typeof window !== "undefined") {
         window.localStorage.removeItem(oldKey);
         window.localStorage.removeItem(newKey);
-        window.dispatchEvent(new Event(TRUCK_PHOTO_EVENT));
+        await deleteTruckPhoto(editingTruck.plateNumber);
+        if (oldKey !== newKey) {
+          await deleteTruckPhoto(updatedTruck.plateNumber);
+        }
       } else if (oldKey !== newKey && !editTruckPhotoFile && typeof window !== "undefined") {
         const existingPhoto = window.localStorage.getItem(oldKey);
         if (existingPhoto) {
@@ -1356,7 +1378,14 @@ export default function TruckProfitabilityPage() {
         await saveTruckPhotoFile(updatedTruck.plateNumber, editTruckPhotoFile);
       }
 
-      setExtraTrucks(readBrowserPreviewTrucks());
+      setApiTrucks((prev) =>
+        prev.map((t) =>
+          t.plateNumber.trim().toUpperCase() === editingTruck.plateNumber.trim().toUpperCase()
+            ? updatedTruck
+            : t,
+        ),
+      );
+      setLocalTrucks(readBrowserPreviewTrucks());
       setDeletedPlates(new Set(readBrowserDeletedTrucks().map((p) => p.toUpperCase())));
       setEditingTruck(null);
 
@@ -1750,88 +1779,8 @@ export default function TruckProfitabilityPage() {
                   placeholder="Sort by"
                 />
               </div>
-            </div>
 
-            {hasActiveFilters && (
-              <div className="active-filter-chips" aria-label="Active filters">
-                <span className="active-chips-label">Active filters:</span>
-                {(range.startDate || range.endDate) && (
-                  <span className="filter-chip">
-                    <span className="filter-chip-category">Date:</span>{" "}
-                    {formatDateRange(range)}
-                    <button
-                      type="button"
-                      className="filter-chip-remove"
-                      aria-label="Remove date range filter"
-                      title="Clear date filter"
-                      onClick={() =>
-                        setRange({ startDate: null, endDate: null })
-                      }
-                    >
-                      ×
-                    </button>
-                  </span>
-                )}
-                {plateSearch.trim() && (
-                  <span className="filter-chip">
-                    <span className="filter-chip-category">Plate:</span> {plateSearch.trim()}
-                    <button
-                      type="button"
-                      className="filter-chip-remove"
-                      aria-label="Remove plate search"
-                      title="Clear plate filter"
-                      onClick={() => clearPlateSearch()}
-                    >
-                      ×
-                    </button>
-                  </span>
-                )}
-                {classificationFilter !== "all" && (
-                  <span className="filter-chip">
-                    <span className="filter-chip-category">Classification:</span>{" "}
-                    {TRUCK_CLASSIFICATION_FILTER_OPTIONS.find((o) => o.value === classificationFilter)?.label ??
-                      (classificationFilter === "refrigerated" || classificationFilter === "cold" ? "Cold Chain" : classificationFilter)}
-                    <button
-                      type="button"
-                      className="filter-chip-remove"
-                      aria-label="Remove classification filter"
-                      title="Clear classification"
-                      onClick={() => setClassificationFilter("all")}
-                    >
-                      ×
-                    </button>
-                  </span>
-                )}
-                {vehicleSizeFilter !== "all" && (
-                  <span className="filter-chip">
-                    <span className="filter-chip-category">Vehicle Size:</span>{" "}
-                    {vehicleSizeFilter}
-                    <button
-                      type="button"
-                      className="filter-chip-remove"
-                      aria-label="Remove vehicle size filter"
-                      title="Clear vehicle size filter"
-                      onClick={() => setVehicleSizeFilter("all")}
-                    >
-                      ×
-                    </button>
-                  </span>
-                )}
-                {performanceFilter !== "all" && (
-                  <span className="filter-chip">
-                    <span className="filter-chip-category">Tier:</span>{" "}
-                    {TRUCK_PERFORMANCE_FILTER_OPTIONS.find((o) => o.value === performanceFilter)?.label ?? performanceFilter}
-                    <button
-                      type="button"
-                      className="filter-chip-remove"
-                      aria-label="Remove performance tier filter"
-                      title="Clear tier filter"
-                      onClick={() => setPerformanceFilter("all")}
-                    >
-                      ×
-                    </button>
-                  </span>
-                )}
+              {hasActiveFilters && (
                 <button
                   type="button"
                   className="filter-chip-clear-all"
@@ -1840,8 +1789,8 @@ export default function TruckProfitabilityPage() {
                 >
                   Clear all
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {error ? null : (loading && sortedTruckSummaries.length === 0) ? (
