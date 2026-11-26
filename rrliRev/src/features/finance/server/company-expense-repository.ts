@@ -1,3 +1,4 @@
+import { isTestRunner } from "../../../lib/config/test-mode.ts";
 import { SMALL_MOCK_COMPANY_EXPENSES } from "../../deliveries/small-mock-database.ts";
 import { recordAuditEntry } from "../../../lib/audit/server-audit-store.ts";
 import { isSupabaseConfigured } from "../../../lib/config/env.ts";
@@ -51,7 +52,8 @@ const mockExpensesGlobal = globalThis as typeof globalThis & {
 
 function getMockExpensesStore(): CompanyExpense[] {
   if (!mockExpensesGlobal.__routexCompanyExpenses) {
-    mockExpensesGlobal.__routexCompanyExpenses = SMALL_MOCK_COMPANY_EXPENSES.map((e) => ({
+    const base = !isTestRunner ? SMALL_MOCK_COMPANY_EXPENSES.slice(0, 1) : SMALL_MOCK_COMPANY_EXPENSES;
+    mockExpensesGlobal.__routexCompanyExpenses = base.map((e) => ({
       ...e,
     }));
   }

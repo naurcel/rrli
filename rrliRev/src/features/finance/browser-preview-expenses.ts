@@ -5,7 +5,7 @@ export const COMPANY_EXPENSES_STORAGE_KEY = "routex-browser-preview-company-expe
 export const ROUTEX_COMPANY_EXPENSES_CHANGED = "routex:company-expenses-changed";
 
 function getInitialCompanyExpenses(): CompanyExpense[] {
-  return SMALL_MOCK_COMPANY_EXPENSES.map((exp) => ({ ...exp }));
+  return [SMALL_MOCK_COMPANY_EXPENSES[0]];
 }
 
 export function readBrowserPreviewExpenses(): CompanyExpense[] {
