@@ -105,7 +105,7 @@ test("Delivery Ops: Multiple drop-offs and general location stop counts calculat
   assert.equal(totalStops, 7, "Total dropoff count must sum explicit and defaulted stop counts");
 });
 
-test("Delivery Ops: Completeness evaluation flags missing POD, unknown expenses, or missing revenue", () => {
+test("Delivery Ops: Completeness evaluation flags unknown expenses or missing revenue, while POD is not required", () => {
   const incompleteTrip: DeliveryTripRecord = {
     id: "del-test-inc-1",
     waybillNumber: "WB-99001",
@@ -168,7 +168,7 @@ test("Delivery Ops: Completeness evaluation flags missing POD, unknown expenses,
   assert.equal(isDeliveryFinanciallyComplete(incompleteTrip), false);
 
   const issues = getDeliveryIncompleteIssues(incompleteTrip);
-  assert.ok(issues.some((i) => i.toLowerCase().includes("pod")), "Must flag missing POD");
+  assert.equal(issues.some((i) => i.toLowerCase().includes("pod")), false, "POD is not required for daily trips and must not be flagged");
   assert.ok(issues.some((i) => i.toLowerCase().includes("pending other expenses") || i.toLowerCase().includes("other expenses")), "Must flag pending expense");
 });
 

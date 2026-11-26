@@ -57,10 +57,10 @@ test("incomplete delivery detection rules: required core items vs optional suppo
   assert.equal(isDeliveryFinanciallyComplete(completeTrip), true);
   assert.deepEqual(getDeliveryIncompleteIssues(completeTrip), []);
 
-  // 1. Missing POD makes delivery incomplete, but finances remain complete
-  const missingPodTrip: typeof completeTrip = {
+  // 1. Absence of POD does NOT make daily trip incomplete (trips may take days or weeks)
+  const pendingPodTrip: typeof completeTrip = {
     ...completeTrip,
-    id: "test-trip-missing-pod",
+    id: "test-trip-pending-pod",
     dropoffs: [
       {
         ...completeTrip.dropoffs[0],
@@ -69,10 +69,10 @@ test("incomplete delivery detection rules: required core items vs optional suppo
       },
     ],
   };
-  assert.equal(isDeliveryIncomplete(missingPodTrip), true, "Missing POD must make delivery incomplete");
-  assert.equal(isDeliveryFinanciallyComplete(missingPodTrip), true, "Finances remain complete when expenses are confirmed");
-  const podIssues = getDeliveryIncompleteIssues(missingPodTrip);
-  assert.ok(podIssues.some((issue) => issue.toLowerCase().includes("pod")));
+  assert.equal(isDeliveryIncomplete(pendingPodTrip), false, "POD is not required to record daily trip");
+  assert.equal(isDeliveryFinanciallyComplete(pendingPodTrip), true, "Finances remain complete when expenses are confirmed");
+  const podIssues = getDeliveryIncompleteIssues(pendingPodTrip);
+  assert.equal(podIssues.some((issue) => issue.toLowerCase().includes("pod")), false);
 
   // 2. Unknown expense makes delivery incomplete AND financially incomplete
   const unknownExpenseTrip: typeof completeTrip = {

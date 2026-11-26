@@ -179,8 +179,8 @@ export function createConfirmedExpenseStates(): TripExpenseStates {
  * Supporting documents (supportingDocsComplete, supportingDocuments) are NOT required for completeness.
  */
 export const HUMAN_FRIENDLY_EXPENSE_ISSUES: Record<string, string> = {
-  dieselExpenses: "Pending fuel receipt",
-  tollGateExpenses: "Pending toll receipts",
+  dieselExpenses: "Pending diesel expense",
+  tollGateExpenses: "Pending toll expense",
   entryFees: "Pending store entry fee",
   driverAllowance: "Pending driver allowance",
   driverDailyRate: "Pending driver rate",
@@ -202,8 +202,8 @@ export function formatFinancialIntegrityIssue(raw: string): string {
     }
     if (rest.includes("no amount") || rest.includes("missing")) {
       const nounMap: Record<string, string> = {
-        dieselExpenses: "fuel receipt",
-        tollGateExpenses: "toll receipts",
+        dieselExpenses: "diesel expense",
+        tollGateExpenses: "toll expense",
         entryFees: "store entry fee",
         driverAllowance: "driver allowance",
         driverDailyRate: "driver rate",
@@ -220,20 +220,9 @@ export function formatFinancialIntegrityIssue(raw: string): string {
 export function getDeliveryIncompleteIssues(delivery: DeliveryTripRecord): string[] {
   const issues: string[] = [];
 
-  // 1. Missing Proof of Delivery (POD) for any store drop-off
-  const missingPods = (delivery.dropoffs ?? []).filter((d) => !d.podSubmitted);
-  if (missingPods.length > 0) {
-    if (missingPods.length === 1) {
-      const fullStoreName = missingPods[0].storeName.trim();
-      const primaryStore = fullStoreName.split(/\s*[-–—@/(]\s*/)[0].trim();
-      const conciseName = primaryStore.length > 0 && primaryStore.length <= 14 ? primaryStore : "";
-      issues.push(conciseName ? `Missing POD: ${conciseName}` : "Missing POD");
-    } else {
-      issues.push(`Missing PODs (${missingPods.length})`);
-    }
-  }
+  // Note: Proof of Delivery (POD) is NOT required to record a daily trip. Trips may take days or weeks.
 
-  // 2. Pending or unconfirmed expenses
+  // 1. Pending or unconfirmed expenses
   const unknownKeys = Object.entries(delivery.expenseStates ?? {})
     .filter(([_, status]) => status === "unknown")
     .map(([key]) => key);
@@ -301,7 +290,7 @@ export function isDeliveryFinanciallyComplete(delivery: DeliveryTripRecord): boo
 
   if ((delivery.financialIntegrityIssues?.length ?? 0) > 0) return false;
 
-  return delivery.financialState === "finalized";
+  return true;
 }
 
 export function derivePodVerificationStatus(

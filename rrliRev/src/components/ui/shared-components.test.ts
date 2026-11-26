@@ -81,7 +81,6 @@ describe("RouteX Shared Component System Architecture", () => {
       assert.ok(dashboardPage.includes("<DashboardSummaryCards"));
       assert.ok(dashboardPage.includes("<DashboardRecentDeliveries"));
       assert.ok(dashboardPage.includes("<DashboardTopTrucks"));
-      assert.ok(dashboardPage.includes("<DashboardAttentionNeeded"));
     });
 
     it("has a compact orchestrator page file under 500 lines (down from 1,664)", () => {

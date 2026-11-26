@@ -650,7 +650,7 @@ export function FinancialBreakdownModal({
                   <strong style={{ display: "block", fontSize: "16px", fontWeight: 800, color: "var(--color-text-primary)", marginTop: "2px" }}>
                     {formatPeso(kpiBreakdown.avgRevenuePerTrip)}
                   </strong>
-                  <span style={{ fontSize: "10.5px", color: "var(--color-text-secondary)" }}>Per finalized waybill</span>
+                  <span style={{ fontSize: "10.5px", color: "var(--color-text-secondary)" }}>Per completed waybill</span>
                 </div>
 
                 <div
@@ -671,7 +671,7 @@ export function FinancialBreakdownModal({
                   <span style={{ fontSize: "10.5px", color: "var(--color-text-secondary)" }}>
                     {kpiBreakdown.totalTrips > 0
                       ? `${((kpiBreakdown.finalizedCount / kpiBreakdown.totalTrips) * 100).toFixed(1)}% completed`
-                      : "Finalized records"}
+                      : "Completed records"}
                   </span>
                 </div>
               </div>
@@ -1213,7 +1213,7 @@ export function FinancialBreakdownModal({
                       alignItems: "center",
                     }}
                   >
-                    <span>Finalized Trip Volume</span>
+                    <span>Completed Trip Volume</span>
                     <strong style={{ color: "var(--color-text-primary)" }}>{kpiBreakdown.finalizedCount} trips</strong>
                   </div>
                 </div>

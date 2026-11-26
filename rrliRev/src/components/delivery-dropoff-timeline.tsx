@@ -161,9 +161,9 @@ export function DeliveryDropoffTimeline({
                         gap: "4px",
                         fontSize: "11.5px",
                         fontWeight: 600,
-                        color: "var(--color-accent-deep, #b45309)",
+                        color: "var(--color-text-secondary, #64748b)",
                       }}
-                      title="Proof of delivery document missing"
+                      title="Proof of delivery document pending"
                     >
                       <svg
                         width="11"
@@ -171,7 +171,7 @@ export function DeliveryDropoffTimeline({
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
-                        strokeWidth="2.5"
+                        strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         aria-hidden="true"
@@ -180,7 +180,7 @@ export function DeliveryDropoffTimeline({
                         <line x1="12" y1="8" x2="12" y2="12" />
                         <line x1="12" y1="16" x2="12.01" y2="16" />
                       </svg>
-                      <span>Missing POD</span>
+                      <span>Pending POD</span>
                     </span>
                   )}
 

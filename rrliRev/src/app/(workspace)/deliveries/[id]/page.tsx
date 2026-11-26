@@ -12,11 +12,6 @@ import { DeliveryFinancialBreakdown } from "@/components/delivery-financial-brea
 import { DeliveryNavigator } from "@/components/delivery-navigator";
 import { DeliverySupportingDocumentsPane } from "@/components/delivery-supporting-documents-pane";
 import { DeliveryTruckInfoSection } from "@/components/delivery-truck-info-section";
-import { DeliveryAttentionModal } from "@/components/delivery-attention-flags";
-import {
-  countUnresolvedDeliveryAttentionFlags,
-  DELIVERY_FLAGS_CHANGED_EVENT,
-} from "@/features/deliveries/delivery-attention-flags";
 import {
   isDateInRange,
   parseDateValue,
@@ -113,8 +108,6 @@ function DeliveryDetailsPageContent({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
-  const [unresolvedFlagCount, setUnresolvedFlagCount] = useState(0);
-  const [isFlagsModalOpen, setIsFlagsModalOpen] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -133,22 +126,6 @@ function DeliveryDetailsPageContent({
     stopId?: string;
     notes?: string;
   } | null>(null);
-
-  useEffect(() => {
-    if (!delivery?.id) return;
-    function updateCount() {
-      if (delivery) {
-        setUnresolvedFlagCount(countUnresolvedDeliveryAttentionFlags(delivery.id));
-      }
-    }
-    updateCount();
-    window.addEventListener(DELIVERY_FLAGS_CHANGED_EVENT, updateCount);
-    window.addEventListener("storage", updateCount);
-    return () => {
-      window.removeEventListener(DELIVERY_FLAGS_CHANGED_EVENT, updateCount);
-      window.removeEventListener("storage", updateCount);
-    };
-  }, [delivery?.id]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -851,20 +828,19 @@ function DeliveryDetailsPageContent({
               <span className="simple-hero-badge-sep">·</span>
 
               <span
-                className={`simple-hero-badge ${delivery.podStatus === "Verified" ? "positive" : "warning"}`}
+                className={`simple-hero-badge ${delivery.podStatus === "Verified" ? "positive" : "neutral"}`}
               >
                 {delivery.podStatus === "Verified" ? (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 ) : (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                    <line x1="12" y1="9" x2="12" y2="13" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
                   </svg>
                 )}
-                <span>{delivery.podStatus === "Verified" ? "POD Attached" : "Missing POD"}</span>
+                <span>{delivery.podStatus === "Verified" ? "POD Attached" : "Pending POD"}</span>
               </span>
 
               <span className="simple-hero-badge-sep">·</span>
@@ -879,71 +855,11 @@ function DeliveryDetailsPageContent({
               <span className="simple-hero-badge neutral">
                 Version {delivery.version}
               </span>
-
-              {unresolvedFlagCount > 0 ? (
-                <>
-                  <span className="simple-hero-badge-sep">·</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsFlagsModalOpen(true)}
-                    className="simple-hero-badge warning"
-                    style={{
-                      cursor: "pointer",
-                      background: "rgba(245, 158, 11, 0.12)",
-                      border: "1px solid rgba(245, 158, 11, 0.3)",
-                      borderRadius: "6px",
-                      padding: "2px 8px",
-                      color: "var(--color-accent-deep, #b45309)",
-                      fontWeight: 700,
-                    }}
-                    title="Click to view attention flags and missing items"
-                  >
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                        <line x1="4" y1="22" x2="4" y2="15" />
-                      </svg>
-                      {unresolvedFlagCount} {unresolvedFlagCount === 1 ? "Item Needs Attention" : "Items Need Attention"}
-                    </span>
-                  </button>
-                </>
-              ) : null}
             </div>
           </div>
 
           {canWrite ? (
             <div className="delivery-header-actions" style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-              <button
-                type="button"
-                className="truck-action-icon-btn"
-                style={{ position: "relative" }}
-                aria-label="Flag item for this delivery"
-                title="Flag missing document or attention item for this delivery"
-                onClick={() => setIsFlagsModalOpen(true)}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                  <line x1="4" y1="22" x2="4" y2="15" />
-                </svg>
-                {unresolvedFlagCount > 0 ? (
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: "-4px",
-                      right: "-4px",
-                      background: "var(--color-accent-deep, #b45309)",
-                      color: "#ffffff",
-                      borderRadius: "10px",
-                      padding: "0 5px",
-                      fontSize: "9px",
-                      fontWeight: 700,
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {unresolvedFlagCount}
-                  </span>
-                ) : null}
-              </button>
               <button
                 type="button"
                 className="truck-action-icon-btn"
@@ -1332,16 +1248,6 @@ function DeliveryDetailsPageContent({
         }
         canEditNotes={canWrite}
         notesPlaceholder="Add drop-off POD remarks (e.g. store manager received, stamp verified, condition good)..."
-      />
-
-      {/* Attention & Missing Items Dialog */}
-      <DeliveryAttentionModal
-        isOpen={isFlagsModalOpen}
-        onClose={() => setIsFlagsModalOpen(false)}
-        deliveryId={delivery.id}
-        waybillNumber={delivery.waybillNumber}
-        canManage={canWrite}
-        currentUser={actor.username || actor.email || "Operations"}
       />
     </>
   );

@@ -18,7 +18,6 @@ import { OperationalTopbar } from "@/components/operational-topbar";
 import { FinancialBreakdownModal } from "@/components/financial-breakdown-modal";
 import { DeliveryFilterDropdown } from "@/components/delivery-filter-dropdown";
 import { TablePagination } from "@/components/table-pagination";
-import { EditDeliveryModal } from "@/components/edit-delivery-modal";
 import { ViewTripExpensesModal } from "@/components/view-trip-expenses-modal";
 import { SortableTableHeader, type TableSortDirection } from "@/components/sortable-table-header";
 import { useSearchBuffer } from "@/components/search-buffer";
@@ -228,7 +227,6 @@ export default function DeliveriesPage() {
     router.push(`/deliveries/${encodeURIComponent(trip.id)}${qs ? `?${qs}` : ""}`);
   }
 
-  const [correctingTrip, setCorrectingTrip] = useState<DeliveryLedgerItem | null>(null);
   const handledEditLink = useRef<string | null>(null);
 
   function openDeleteDeliveryModal(trip: DeliveryLedgerItem) {
@@ -1125,42 +1123,6 @@ export default function DeliveriesPage() {
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{trip.notes}</span>
                               </span>
                             ) : null}
-                            {countUnresolvedDeliveryAttentionFlags(trip.id) > 0 ? (
-                              <span
-                                className="routex-badge tone-warning"
-                                style={{
-                                  fontSize: "9px",
-                                  fontWeight: 700,
-                                  gap: "3px",
-                                  padding: "1px 5px",
-                                  borderRadius: "4px",
-                                  marginTop: "2px",
-                                  border: "1px solid rgba(245, 158, 11, 0.3)",
-                                  background: "rgba(245, 158, 11, 0.12)",
-                                  color: "var(--color-accent-deep, #b45309)",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                }}
-                                title={`${countUnresolvedDeliveryAttentionFlags(trip.id)} attention item(s) pending`}
-                              >
-                                <svg
-                                  width="9"
-                                  height="9"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  style={{ flexShrink: 0 }}
-                                  aria-hidden="true"
-                                >
-                                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                                  <line x1="4" y1="22" x2="4" y2="15" />
-                                </svg>
-                                {countUnresolvedDeliveryAttentionFlags(trip.id)}
-                              </span>
-                            ) : null}
                           </div>
                         </td>
                       <td className="cell-date">
@@ -1305,21 +1267,6 @@ export default function DeliveriesPage() {
                                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                                 </svg>
                               </button>
-                              <button
-                                type="button"
-                                className="truck-action-icon-btn"
-                                aria-label={`Edit financials for delivery #${trip.waybillNumber}`}
-                                title="Edit financials"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCorrectingTrip(trip);
-                                }}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <line x1="12" y1="1" x2="12" y2="23" />
-                                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                                </svg>
-                              </button>
                               {canDeleteDelivery && (
                                 <button
                                   type="button"
@@ -1383,24 +1330,6 @@ export default function DeliveriesPage() {
         summary={summary}
         kpiBreakdown={kpiBreakdown}
       />
-
-      {correctingTrip ? (
-        <EditDeliveryModal
-          delivery={correctingTrip}
-          drivers={drivers}
-          helpers={helpers}
-          onClose={() => setCorrectingTrip(null)}
-          onSaved={(updatedTrip, msg) => {
-            setCorrectingTrip(null);
-            setFinancialActionMessage(msg);
-            toast.success("Delivery updated", { description: msg });
-            upsertBrowserPreviewDelivery(updatedTrip);
-            setDeliveries((prev) =>
-              prev.map((item) => (item.id === updatedTrip.id ? { ...item, ...updatedTrip } : item)),
-            );
-          }}
-        />
-      ) : null}
 
       <ConfirmDeliveryDeletionDialog
         delivery={deliveryToDelete}

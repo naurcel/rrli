@@ -159,7 +159,7 @@ export default function PodDocumentsPage() {
     let list = flattenedStops;
     if (filterStatus === "POD Attached") {
       list = list.filter((item) => item.hasPod);
-    } else if (filterStatus === "Missing POD") {
+    } else if (filterStatus === "Pending POD" || filterStatus === "Missing POD") {
       list = list.filter((item) => !item.hasPod);
     }
     const q = bufferedQuery.trim().toLowerCase();
@@ -194,8 +194,8 @@ export default function PodDocumentsPage() {
       resetSearch(searchParam);
     }
     const statusParam = params.get("status");
-    if (statusParam === "All Drop-offs" || statusParam === "POD Attached" || statusParam === "Missing POD") {
-      setFilterStatus(statusParam);
+    if (statusParam === "All Drop-offs" || statusParam === "POD Attached" || statusParam === "Pending POD" || statusParam === "Missing POD") {
+      setFilterStatus(statusParam === "Missing POD" ? "Pending POD" : statusParam);
     }
     const pageParam = params.get("page");
     if (pageParam && Number(pageParam) > 1) {
@@ -397,7 +397,7 @@ export default function PodDocumentsPage() {
             <span className="stat-meta positive">Verified files</span>
           </article>
           <article className="stat-card">
-            <span className="stat-label">MISSING POD</span>
+            <span className="stat-label">PENDING POD</span>
             <strong>{counts.missing}</strong>
             <span className={`stat-meta ${counts.missing > 0 ? "warning" : "positive"}`}>
               {counts.missing > 0
@@ -439,7 +439,7 @@ export default function PodDocumentsPage() {
               <GlobalDateRangePicker />
               <RoundedSelect
                 value={filterStatus}
-                options={["All Drop-offs", "POD Attached", "Missing POD"]}
+                options={["All Drop-offs", "POD Attached", "Pending POD"]}
                 onChange={setFilterStatus}
                 ariaLabel="Filter drop-offs by document status"
               />
@@ -521,10 +521,10 @@ export default function PodDocumentsPage() {
                           className={`pod-status ${
                             item.hasPod ? "attached" : "missing"
                           }`}
-                          title={item.hasPod ? "POD attached" : "Missing POD"}
+                          title={item.hasPod ? "POD attached" : "Pending POD"}
                         >
                           <i aria-hidden="true" />
-                          {item.hasPod ? "Attached" : "Missing"}
+                          {item.hasPod ? "Attached" : "Pending"}
                         </span>
                       </td>
                       <td title={item.stop.documentRef ? `Document: ${item.stop.documentRef}` : "Pending upload"}>

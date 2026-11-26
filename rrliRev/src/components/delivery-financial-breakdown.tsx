@@ -759,7 +759,7 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.dieselExpenses === "unknown" ? (
-                    <StatusWarningIcon size={12} title="Pending fuel receipt" />
+                    <StatusWarningIcon size={12} title="Pending diesel expense" />
                   ) : trip.expenseStates.dieselExpenses === "not_applicable" ? (
                     <StatusNeutralBadge title="Not applicable" />
                   ) : (
@@ -778,7 +778,7 @@ export function DeliveryFinancialBreakdown({
                 </div>
                 <div className="item-value-box">
                   {trip.expenseStates.tollGateExpenses === "unknown" ? (
-                    <StatusWarningIcon size={12} title="Pending toll receipts" />
+                    <StatusWarningIcon size={12} title="Pending toll expense" />
                   ) : trip.expenseStates.tollGateExpenses === "not_applicable" ? (
                     <StatusNeutralBadge title="Not applicable" />
                   ) : (

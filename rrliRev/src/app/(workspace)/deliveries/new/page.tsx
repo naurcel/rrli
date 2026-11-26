@@ -707,31 +707,16 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     // Fuel expenses
     const dieselVal = numberValue(values.dieselExpenses);
     if (dieselVal == null || dieselVal < 0) {
-      issues.push("Pending fuel expenses");
+      issues.push("Pending diesel expenses");
     }
 
     // Toll fees
     const tollVal = numberValue(values.tollGateExpenses);
     if (tollVal == null || tollVal < 0) {
-      issues.push("Pending toll receipts");
+      issues.push("Pending toll expenses");
     }
 
-    // Dropoffs POD and entry fees
-    const missingPods = dropoffs.filter(
-      (d) =>
-        !d.podSubmitted &&
-        !d.podFile &&
-        (!d.documentRef || d.documentRef === "Pending upload"),
-    );
-    if (missingPods.length > 0) {
-      if (missingPods.length === 1) {
-        const store = missingPods[0].storeName.trim().split(/\s*[-–—@/(]\s*/)[0].trim() || "Stop 1";
-        issues.push(`Missing POD: ${store}`);
-      } else {
-        issues.push(`Missing PODs (${missingPods.length})`);
-      }
-    }
-
+    // Note: Proof of Delivery (POD) is not required to record a daily trip.
     const isComplete = issues.length === 0;
 
     return {
