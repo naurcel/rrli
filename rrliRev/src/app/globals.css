@@ -16716,7 +16716,7 @@ html[data-theme="dark"] .drawer-dropoff-linked-doc {
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   letter-spacing: 0.02em;
-... [truncated for diff preview]
+}
 
 /* ==========================================================================
    Authoritative Print Stylesheet -> Extracted to @/styles/print.css
