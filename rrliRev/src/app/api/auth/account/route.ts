@@ -11,7 +11,8 @@ import {
   updateContactInfoSchema,
 } from "@/lib/auth/auth-schemas";
 import { hashWithArgon2id } from "@/lib/auth/argon2id";
-import { normalizeSecurityAnswer } from "@/lib/auth/password-policy";
+import { normalizeSecurityAnswer, validateUsernameFormat } from "@/lib/auth/password-policy";
+import { formatPhoneNumber } from "@/lib/format";
 import {
   completeInitialServerAccountSetup,
   updateServerAccountAvatar,
@@ -21,7 +22,33 @@ import {
   updateServerAccountUsername,
   verifyServerAccountCurrentPassword,
 } from "@/lib/auth/server-account-store";
-import { getAuthenticatedActor } from "@/lib/auth/server-session";
+import { getAuthenticatedActor, type AuthenticatedActor } from "@/lib/auth/server-session";
+
+async function verifyCurrentPassword(
+  actor: AuthenticatedActor,
+  currentPassword: string,
+): Promise<boolean> {
+  // First attempt fast in-memory store verification (supports local test runs and seed accounts)
+  if (verifyServerAccountCurrentPassword(actor.id, currentPassword)) {
+    return true;
+  }
+
+  // Next, if Supabase Auth is configured, attempt password verification via Supabase Auth
+  if (isSupabaseConfigured() && actor.email) {
+    try {
+      const supabase = await createServerSupabaseClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: actor.email,
+        password: currentPassword,
+      });
+      return !error;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
 
 export async function POST(request: Request) {
   const actor = await getAuthenticatedActor();
@@ -48,7 +75,8 @@ export async function POST(request: Request) {
     const { newUsername, currentPassword } = parsed.data;
 
     // Verify current password
-    if (!verifyServerAccountCurrentPassword(actor.id, currentPassword)) {
+    const isCurrentValid = await verifyCurrentPassword(actor, currentPassword);
+    if (!isCurrentValid) {
       return NextResponse.json(
         { ok: false, message: "The current password you entered is incorrect." },
         { status: 403 },
@@ -56,21 +84,68 @@ export async function POST(request: Request) {
     }
 
     const oldUsername = actor.username;
-    const result = updateServerAccountUsername(actor.id, newUsername);
-    if (!result.ok) {
-      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
-    }
 
     if (isSupabaseConfigured()) {
       try {
         const supabase = await createServerSupabaseClient();
-        await supabase
+        const usernameCheck = validateUsernameFormat(newUsername);
+        if (!usernameCheck.isValid) {
+          return NextResponse.json(
+            { ok: false, message: usernameCheck.message || "Invalid username format." },
+            { status: 400 },
+          );
+        }
+
+        const { data: updatedProfile, error: updateErr } = await supabase
           .from("user_profiles")
-          .update({ username: result.profile.username })
-          .eq("id", actor.id);
-      } catch {
-        // Fallback gracefully if Supabase table is unavailable
+          .update({ username: newUsername.trim() })
+          .eq("id", actor.id)
+          .select()
+          .maybeSingle();
+
+        if (updateErr) {
+          return NextResponse.json({ ok: false, message: updateErr.message }, { status: 400 });
+        }
+
+        try {
+          updateServerAccountUsername(actor.id, newUsername);
+        } catch {
+          // Fallback gracefully if not present in memory store
+        }
+
+        recordAuditEntry({
+          actorId: actor.id,
+          actorEmail: actor.email,
+          action: "user.username_changed",
+          entityType: "user",
+          entityId: actor.id,
+          summary: `User '${oldUsername}' changed their username to '${newUsername.trim()}'.`,
+          changes: {
+            oldUsername,
+            newUsername: newUsername.trim(),
+            userId: actor.id,
+          },
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: `Username updated to '${newUsername.trim()}'.`,
+          profile: updatedProfile || {
+            ...actor,
+            username: newUsername.trim(),
+          },
+        });
+      } catch (err) {
+        return NextResponse.json(
+          { ok: false, message: err instanceof Error ? err.message : "Failed to update username." },
+          { status: 500 },
+        );
       }
+    }
+
+    const result = updateServerAccountUsername(actor.id, newUsername);
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
     }
 
     recordAuditEntry({
@@ -107,7 +182,8 @@ export async function POST(request: Request) {
     const { email, phoneNumber, currentPassword } = parsed.data;
 
     // Verify current password
-    if (!verifyServerAccountCurrentPassword(actor.id, currentPassword)) {
+    const isCurrentValid = await verifyCurrentPassword(actor, currentPassword);
+    if (!isCurrentValid) {
       return NextResponse.json(
         { ok: false, message: "The current password you entered is incorrect." },
         { status: 403 },
@@ -116,24 +192,67 @@ export async function POST(request: Request) {
 
     const oldEmail = actor.email;
     const oldPhone = actor.phoneNumber || "None";
-    const result = updateServerAccountContact(actor.id, email, phoneNumber);
-    if (!result.ok) {
-      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
-    }
 
     if (isSupabaseConfigured()) {
       try {
         const supabase = await createServerSupabaseClient();
-        await supabase
+        const formattedPhone = formatPhoneNumber(phoneNumber);
+        const { data: updatedProfile, error: updateErr } = await supabase
           .from("user_profiles")
           .update({
-            email: result.profile.email,
-            phone_number: result.profile.phoneNumber,
+            email: email.trim().toLowerCase(),
+            phone_number: formattedPhone,
           })
-          .eq("id", actor.id);
-      } catch {
-        // Fallback gracefully if Supabase table is unavailable
+          .eq("id", actor.id)
+          .select()
+          .maybeSingle();
+
+        if (updateErr) {
+          return NextResponse.json({ ok: false, message: updateErr.message }, { status: 400 });
+        }
+
+        try {
+          updateServerAccountContact(actor.id, email, phoneNumber);
+        } catch {
+          // Fallback gracefully if not present in memory store
+        }
+
+        recordAuditEntry({
+          actorId: actor.id,
+          actorEmail: email.trim().toLowerCase(),
+          action: "user.contact_updated",
+          entityType: "user",
+          entityId: actor.id,
+          summary: `User '@${actor.username}' updated contact details (email: ${email.trim().toLowerCase()}, phone: ${formattedPhone}).`,
+          changes: {
+            oldEmail,
+            newEmail: email.trim().toLowerCase(),
+            oldPhone,
+            newPhone: formattedPhone,
+            userId: actor.id,
+          },
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: "Contact information updated successfully.",
+          profile: updatedProfile || {
+            ...actor,
+            email: email.trim().toLowerCase(),
+            phoneNumber: formattedPhone,
+          },
+        });
+      } catch (err) {
+        return NextResponse.json(
+          { ok: false, message: err instanceof Error ? err.message : "Failed to update contact info." },
+          { status: 500 },
+        );
       }
+    }
+
+    const result = updateServerAccountContact(actor.id, email, phoneNumber);
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
     }
 
     recordAuditEntry({
@@ -178,7 +297,8 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!verifyServerAccountCurrentPassword(actor.id, currentPassword)) {
+    const isCurrentValid = await verifyCurrentPassword(actor, currentPassword);
+    if (!isCurrentValid) {
       return NextResponse.json(
         { ok: false, message: "The current password you entered is incorrect." },
         { status: 403 },
@@ -206,6 +326,31 @@ export async function POST(request: Request) {
             password_changed_at: new Date().toISOString(),
           })
           .eq("id", actor.id);
+
+        try {
+          updateServerAccountPassword(actor.id, newPassword);
+        } catch {
+          // Fallback gracefully
+        }
+
+        recordAuditEntry({
+          actorId: actor.id,
+          actorEmail: actor.email,
+          action: "user.password_changed",
+          entityType: "user",
+          entityId: actor.id,
+          summary: `User '${actor.username}' updated their account password.`,
+          changes: {
+            username: actor.username,
+            userId: actor.id,
+            passwordChangedAt: new Date().toISOString(),
+          },
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: "Password successfully updated.",
+        });
       } catch (err) {
         return NextResponse.json(
           { ok: false, message: err instanceof Error ? err.message : "Failed to update password." },
@@ -258,16 +403,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!verifyServerAccountCurrentPassword(actor.id, currentPassword)) {
+    const isCurrentValid = await verifyCurrentPassword(actor, currentPassword);
+    if (!isCurrentValid) {
       return NextResponse.json(
         { ok: false, message: "The current password you entered is incorrect." },
         { status: 403 },
       );
-    }
-
-    const result = updateServerAccountSecurityQuestion(actor.id, question, answer);
-    if (!result.ok) {
-      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
     }
 
     if (isSupabaseConfigured()) {
@@ -281,9 +422,42 @@ export async function POST(request: Request) {
             security_answer_hash: answerHash,
           })
           .eq("id", actor.id);
-      } catch {
-        // Fallback gracefully if Supabase table is unavailable
+
+        try {
+          updateServerAccountSecurityQuestion(actor.id, question, answer);
+        } catch {
+          // Fallback gracefully
+        }
+
+        recordAuditEntry({
+          actorId: actor.id,
+          actorEmail: actor.email,
+          action: "user.security_question_changed",
+          entityType: "user",
+          entityId: actor.id,
+          summary: `User '${actor.username}' updated their security question.`,
+          changes: {
+            username: actor.username,
+            question,
+            updatedAt: new Date().toISOString(),
+          },
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: "Security question and answer successfully configured.",
+        });
+      } catch (err) {
+        return NextResponse.json(
+          { ok: false, message: err instanceof Error ? err.message : "Failed to update security question." },
+          { status: 500 },
+        );
       }
+    }
+
+    const result = updateServerAccountSecurityQuestion(actor.id, question, answer);
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
     }
 
     recordAuditEntry({
@@ -351,7 +525,7 @@ export async function POST(request: Request) {
         }
 
         const answerHash = hashWithArgon2id(normalizeSecurityAnswer(answer));
-        await supabase
+        const { data: updatedProfile, error: profileError } = await supabase
           .from("user_profiles")
           .update({
             must_change_password: false,
@@ -360,7 +534,60 @@ export async function POST(request: Request) {
             password_changed_at: new Date().toISOString(),
             avatar_url: avatarUrl || undefined,
           })
-          .eq("id", actor.id);
+          .eq("id", actor.id)
+          .select()
+          .maybeSingle();
+
+        if (profileError) {
+          return NextResponse.json(
+            { ok: false, message: profileError.message || "Failed to update user profile in database." },
+            { status: 400 },
+          );
+        }
+
+        // Also update memory store if account exists there (for hybrid/tests)
+        try {
+          completeInitialServerAccountSetup(
+            actor.id,
+            newPassword,
+            question,
+            answer,
+          );
+          if (avatarUrl) {
+            updateServerAccountAvatar(actor.id, avatarUrl);
+          }
+        } catch {
+          // Ignore if not present in memory store
+        }
+
+        recordAuditEntry({
+          actorId: actor.id,
+          actorEmail: actor.email,
+          action: "user.initial_setup_completed",
+          entityType: "user",
+          entityId: actor.id,
+          summary: `User '${actor.username}' completed first-login permanent password and security question setup.`,
+          changes: {
+            username: actor.username,
+            userId: actor.id,
+            completedAt: new Date().toISOString(),
+          },
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: "Initial account setup completed successfully.",
+          profile: updatedProfile || {
+            id: actor.id,
+            username: actor.username,
+            email: actor.email,
+            fullName: actor.fullName,
+            role: actor.role,
+            mustChangePassword: false,
+            hasSecurityQuestion: true,
+            avatarUrl: avatarUrl || actor.avatarUrl || null,
+          },
+        });
       } catch (err) {
         return NextResponse.json(
           { ok: false, message: err instanceof Error ? err.message : "Failed to save initial setup." },
@@ -369,6 +596,7 @@ export async function POST(request: Request) {
       }
     }
 
+    // Fallback for non-Supabase environments (e.g. unit tests and local dev)
     const result = completeInitialServerAccountSetup(
       actor.id,
       newPassword,
@@ -382,17 +610,6 @@ export async function POST(request: Request) {
 
     if (avatarUrl) {
       updateServerAccountAvatar(actor.id, avatarUrl);
-      if (isSupabaseConfigured()) {
-        try {
-          const supabase = await createServerSupabaseClient();
-          await supabase
-            .from("user_profiles")
-            .update({ avatar_url: avatarUrl })
-            .eq("id", actor.id);
-        } catch {
-          // Fallback gracefully
-        }
-      }
     }
 
     recordAuditEntry({
@@ -450,21 +667,63 @@ export async function POST(request: Request) {
       avatarUrl = trimmed;
     }
 
-    const result = updateServerAccountAvatar(actor.id, avatarUrl);
-    if (!result.ok) {
-      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
-    }
-
     if (isSupabaseConfigured()) {
       try {
         const supabase = await createServerSupabaseClient();
-        await supabase
+        const { data: updatedProfile, error: profileErr } = await supabase
           .from("user_profiles")
           .update({ avatar_url: avatarUrl })
-          .eq("id", actor.id);
-      } catch {
-        // Fallback gracefully if Supabase table is not configured
+          .eq("id", actor.id)
+          .select()
+          .maybeSingle();
+
+        if (profileErr) {
+          return NextResponse.json({ ok: false, message: profileErr.message }, { status: 400 });
+        }
+
+        try {
+          updateServerAccountAvatar(actor.id, avatarUrl);
+        } catch {
+          // Ignore if not in memory store
+        }
+
+        recordAuditEntry({
+          actorId: actor.id,
+          actorEmail: actor.email,
+          action: "user.profile_photo_updated",
+          entityType: "user",
+          entityId: actor.id,
+          summary: avatarUrl
+            ? `User '${actor.username}' updated their profile picture.`
+            : `User '${actor.username}' removed their profile picture.`,
+          changes: {
+            username: actor.username,
+            userId: actor.id,
+            hasAvatar: Boolean(avatarUrl),
+            updatedAt: new Date().toISOString(),
+          },
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: avatarUrl ? "Profile picture updated successfully." : "Profile picture removed.",
+          avatarUrl,
+          profile: updatedProfile || {
+            ...actor,
+            avatarUrl,
+          },
+        });
+      } catch (err) {
+        return NextResponse.json(
+          { ok: false, message: err instanceof Error ? err.message : "Failed to update profile picture." },
+          { status: 500 },
+        );
       }
+    }
+
+    const result = updateServerAccountAvatar(actor.id, avatarUrl);
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
     }
 
     recordAuditEntry({
@@ -494,4 +753,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: false, message: "Unsupported action." }, { status: 400 });
 }
-

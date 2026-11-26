@@ -412,11 +412,32 @@ export function verifyServerAccountCredentials(
   return { ok: false, reason: "invalid_credentials" };
 }
 
+export function findServerAccountEntry(idOrIdentifier: string): ServerAccountEntry | undefined {
+  if (!idOrIdentifier) return undefined;
+  const store = getStore();
+  const direct = store.get(idOrIdentifier);
+  if (direct) return direct;
+
+  const needle = idOrIdentifier.trim().toLowerCase();
+  for (const entry of store.values()) {
+    if (
+      entry.id.toLowerCase() === needle ||
+      entry.normalizedUsername === needle ||
+      entry.username.toLowerCase() === needle ||
+      entry.email.toLowerCase() === needle ||
+      Boolean(entry.legacyAliases?.map((a) => a.toLowerCase()).includes(needle))
+    ) {
+      return entry;
+    }
+  }
+  return undefined;
+}
+
 export function findServerAccountById(
   userId: string,
   options?: { includeDeleted?: boolean },
 ): ServerUserProfileRecord | null {
-  const entry = getStore().get(userId);
+  const entry = findServerAccountEntry(userId);
   if (!entry) return null;
   if (entry.isPermanentlyDeleted && !options?.includeDeleted) {
     return null;
@@ -597,8 +618,7 @@ export function updateServerAccountContact(
 ):
   | { ok: true; profile: ServerUserProfileRecord }
   | { ok: false; message: string } {
-  const store = getStore();
-  const existing = store.get(userId);
+  const existing = findServerAccountEntry(userId);
   if (!existing) {
     return { ok: false, message: "The specified user account was not found." };
   }
@@ -630,8 +650,7 @@ export function updateServerAccountUsername(
 ):
   | { ok: true; profile: ServerUserProfileRecord }
   | { ok: false; message: string } {
-  const store = getStore();
-  const existing = store.get(userId);
+  const existing = findServerAccountEntry(userId);
   if (!existing) {
     return { ok: false, message: "The specified user account was not found." };
   }
@@ -663,8 +682,7 @@ export function verifyServerAccountCurrentPassword(
   userId: string,
   currentPassword: string,
 ): boolean {
-  const store = getStore();
-  const existing = store.get(userId);
+  const existing = findServerAccountEntry(userId);
   if (!existing || !existing.isActive) return false;
 
   const isArgon = verifyWithArgon2id(currentPassword, existing.passwordHash);
@@ -685,8 +703,7 @@ export function updateServerAccountPassword(
 ):
   | { ok: true; profile: ServerUserProfileRecord }
   | { ok: false; message: string } {
-  const store = getStore();
-  const existing = store.get(userId);
+  const existing = findServerAccountEntry(userId);
   if (!existing) {
     return { ok: false, message: "The specified user account was not found." };
   }
@@ -715,8 +732,7 @@ export function updateServerAccountSecurityQuestion(
 ):
   | { ok: true; profile: ServerUserProfileRecord }
   | { ok: false; message: string } {
-  const store = getStore();
-  const existing = store.get(userId);
+  const existing = findServerAccountEntry(userId);
   if (!existing) {
     return { ok: false, message: "The specified user account was not found." };
   }
@@ -768,8 +784,7 @@ export function authorizeServerAccountReset(
 ):
   | { ok: true; recoveryToken: string; expiresAt: string }
   | { ok: false; message: string } {
-  const store = getStore();
-  const existing = store.get(userId);
+  const existing = findServerAccountEntry(userId);
   if (!existing) {
     return { ok: false, message: "The specified user account was not found." };
   }
@@ -1216,8 +1231,7 @@ export function updateServerAccountAvatar(
 ):
   | { ok: true; profile: ServerUserProfileRecord }
   | { ok: false; message: string } {
-  const store = getStore();
-  const existing = store.get(userId);
+  const existing = findServerAccountEntry(userId);
   if (!existing) {
     return { ok: false, message: "The specified user account was not found." };
   }
