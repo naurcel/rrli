@@ -8,8 +8,15 @@ import {
   verifyServerAccountCurrentPassword,
 } from "@/lib/auth/server-account-store";
 import { getAuthenticatedActor } from "@/lib/auth/server-session";
-import { isSupabaseConfigured } from "@/lib/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/config/env";
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
+
+async function getDatabaseClient() {
+  if (isSupabaseAdminConfigured()) {
+    return createAdminSupabaseClient();
+  }
+  return createServerSupabaseClient();
+}
 
 export async function POST(request: Request) {
   const actor = await getAuthenticatedActor();
@@ -35,9 +42,9 @@ export async function POST(request: Request) {
   if (result.ok) {
     if (isSupabaseConfigured()) {
       try {
-        const supabase = await createServerSupabaseClient();
+        const db = await getDatabaseClient();
         const backupKeyHash = hashWithArgon2id(normalizeBackupKey(result.backupKey));
-        await supabase
+        await db
           .from("user_profiles")
           .update({
             backup_key_hash: backupKeyHash,
@@ -77,7 +84,8 @@ export async function POST(request: Request) {
       const generatedAt = new Date().toISOString();
       const backupKeyHash = hashWithArgon2id(normalizeBackupKey(rawKey));
 
-      await supabase
+      const db = await getDatabaseClient();
+      await db
         .from("user_profiles")
         .update({
           backup_key_hash: backupKeyHash,

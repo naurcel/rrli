@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { recordAuditEntry } from "@/lib/audit/server-audit-store";
-import { isSupabaseConfigured } from "@/lib/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/config/env";
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   changePasswordSchema,
   changeSecurityQuestionSchema,
@@ -29,6 +29,13 @@ import {
   verifyServerAccountCurrentPassword,
 } from "@/lib/auth/server-account-store";
 import { getAuthenticatedActor, type AuthenticatedActor } from "@/lib/auth/server-session";
+
+async function getDatabaseClient() {
+  if (isSupabaseAdminConfigured()) {
+    return createAdminSupabaseClient();
+  }
+  return createServerSupabaseClient();
+}
 
 async function verifyCurrentPassword(
   actor: AuthenticatedActor,
@@ -93,7 +100,6 @@ export async function POST(request: Request) {
 
     if (isSupabaseConfigured()) {
       try {
-        const supabase = await createServerSupabaseClient();
         const usernameCheck = validateUsernameFormat(newUsername);
         if (!usernameCheck.isValid) {
           return NextResponse.json(
@@ -102,7 +108,8 @@ export async function POST(request: Request) {
           );
         }
 
-        const { data: updatedProfile, error: updateErr } = await supabase
+        const db = await getDatabaseClient();
+        const { data: updatedProfile, error: updateErr } = await db
           .from("user_profiles")
           .update({ username: newUsername.trim() })
           .eq("id", actor.id)
@@ -201,9 +208,9 @@ export async function POST(request: Request) {
 
     if (isSupabaseConfigured()) {
       try {
-        const supabase = await createServerSupabaseClient();
+        const db = await getDatabaseClient();
         const formattedPhone = formatPhoneNumber(phoneNumber);
-        const { data: updatedProfile, error: updateErr } = await supabase
+        const { data: updatedProfile, error: updateErr } = await db
           .from("user_profiles")
           .update({
             email: email.trim().toLowerCase(),
@@ -326,7 +333,8 @@ export async function POST(request: Request) {
           );
         }
 
-        await supabase
+        const db = await getDatabaseClient();
+        await db
           .from("user_profiles")
           .update({
             password_changed_at: new Date().toISOString(),
@@ -419,9 +427,9 @@ export async function POST(request: Request) {
 
     if (isSupabaseConfigured()) {
       try {
-        const supabase = await createServerSupabaseClient();
+        const db = await getDatabaseClient();
         const answerHash = hashWithArgon2id(normalizeSecurityAnswer(answer));
-        await supabase
+        await db
           .from("user_profiles")
           .update({
             security_question: question.trim(),
@@ -530,12 +538,13 @@ export async function POST(request: Request) {
           );
         }
 
+        const db = await getDatabaseClient();
         const nowIso = new Date().toISOString();
         const rawBackupKey = generateBackupKey();
         const backupKeyHash = hashWithArgon2id(normalizeBackupKey(rawBackupKey));
         const answerHash = hashWithArgon2id(normalizeSecurityAnswer(answer));
 
-        const { data: updatedProfile, error: profileError } = await supabase
+        const { data: updatedProfile, error: profileError } = await db
           .from("user_profiles")
           .update({
             must_change_password: false,
@@ -557,7 +566,7 @@ export async function POST(request: Request) {
 
         // Persist emergency backup key hash (non-blocking if schema cache hasn't refreshed column)
         try {
-          await supabase
+          await db
             .from("user_profiles")
             .update({
               backup_key_hash: backupKeyHash,
@@ -703,8 +712,8 @@ export async function POST(request: Request) {
 
     if (isSupabaseConfigured()) {
       try {
-        const supabase = await createServerSupabaseClient();
-        const { data: updatedProfile, error: profileErr } = await supabase
+        const db = await getDatabaseClient();
+        const { data: updatedProfile, error: profileErr } = await db
           .from("user_profiles")
           .update({ avatar_url: avatarUrl })
           .eq("id", actor.id)

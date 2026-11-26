@@ -3,8 +3,8 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { isSupabaseConfigured } from "@/lib/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/config/env";
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
 
 import {
   getAccessLevelForRole,
@@ -123,7 +123,9 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
 
       if (!userError && user && user.email) {
         // Primary source of truth: public.user_profiles table in Supabase PostgreSQL
-        const { data: profileRow, error: profileError } = await supabase
+        // Use admin client when available to avoid any RLS policy evaluation overhead
+        const db = isSupabaseAdminConfigured() ? createAdminSupabaseClient() : supabase;
+        const { data: profileRow, error: profileError } = await db
           .from("user_profiles")
           .select("id, email, username, full_name, role, roles, is_active, must_change_password, security_question, security_answer_hash, is_superadmin, designation, is_permanently_deleted, custom_grants, custom_restrictions, phone_number, avatar_url")
           .eq("id", user.id)
