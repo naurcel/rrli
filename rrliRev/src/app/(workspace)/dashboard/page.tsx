@@ -386,7 +386,7 @@ export default function DashboardPage() {
 
           <div
             className="dashboard-actions"
-            style={{ display: "grid", gap: "16px", alignContent: "start" }}
+            style={{ display: "flex", flexDirection: "column", gap: "16px", height: "100%" }}
           >
             <DashboardTopTrucks
               truckRankings={truckRankings}

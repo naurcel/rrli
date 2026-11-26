@@ -80,7 +80,7 @@ export function DashboardTopTrucks({
                 <circle cx="18.5" cy="18.5" r="2.5" />
               </svg>
             </span>
-            <span className="top-truck-empty-text">No finalized truck records in this range.</span>
+            <span className="top-truck-empty-text">No completed truck records in this range.</span>
           </li>
         ) : null}
         {truckRankings.map((truck, idx) => (
@@ -98,7 +98,7 @@ export function DashboardTopTrucks({
               <div>
                 <strong>{truck.plate_number}</strong>
                 <span>
-                  {truck.deliveries} finalized trip{truck.deliveries === 1 ? "" : "s"}
+                  {truck.deliveries} completed trip{truck.deliveries === 1 ? "" : "s"}
                   {truckRankingMetric === "profitMargin" || truckRankingMetric === "expenses"
                     ? ` · ${formatPeso(truck.net_income)} net profit`
                     : ` · ${formatPercent(truck.profit_margin)} margin`}

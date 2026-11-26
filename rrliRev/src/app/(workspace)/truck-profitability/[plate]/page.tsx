@@ -566,7 +566,7 @@ export default function TruckProfilePage({
         ) : !activeTruck ? (
           <section className="fallback-panel truck-profile-unavailable">
             <h1>Truck profile unavailable</h1>
-            <p>No fleet record or finalized deliveries for {normalizedPlate} were found.</p>
+            <p>No fleet record or completed deliveries for {normalizedPlate} were found.</p>
             <Link className="fallback-link" href={backHref}>{backLabel}</Link>
           </section>
         ) : (
@@ -761,7 +761,7 @@ export default function TruckProfilePage({
                             <span className="empty-state-desc">
                               {debouncedHistorySearch.trim()
                                 ? `No trips for ${activeTruck.plateNumber} match this search. Try a different search term or clear the search input.`
-                                : `No finalized trips have been recorded for ${activeTruck.plateNumber} within the selected date range.`}
+                                : `No completed trips have been recorded for ${activeTruck.plateNumber} within the selected date range.`}
                             </span>
                           </div>
                         </td>
