@@ -241,8 +241,13 @@ html[data-theme="dark"] .routex-badge.tone-neutral {
 }
 
 .routex-btn.variant-primary:hover:not(:disabled) {
+  transform: translateY(-1.5px);
   background: linear-gradient(105deg, #9a3412, #d97706);
   box-shadow: 0 4px 16px rgba(180, 83, 9, 0.35), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.routex-btn.variant-primary:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .routex-btn.variant-secondary {
@@ -903,24 +908,31 @@ html[data-theme="dark"] .empty-state .empty-state-desc {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 2px;
+  padding: 0 4px;
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
   color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap !important;
 }
 
 .pagination-input-wrap span {
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  width: auto !important;
   min-width: 0 !important;
+  height: auto !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
   color: var(--color-text-muted) !important;
   font-size: 12px !important;
   font-weight: 500 !important;
-  line-height: 1;
+  line-height: normal !important;
+  white-space: nowrap !important;
 }
 
 .pagination-page-input {
@@ -3297,15 +3309,18 @@ html[data-theme="dark"] .daily-nav-btn:hover:not(:disabled) {
 .report-document-footer { display: flex; justify-content: space-between; gap: 16px; padding: 14px 28px; border-top: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.06)); color: var(--color-text-muted); font-size: 10px; }
 .report-document-footer span:last-child { text-align: right; }
 
-/* Document Sheet Layout (Microsoft Word / Google Docs style) */
+/* Document Sheet Layout (A4 formatted sheet preview) */
 .report-document.doc-sheet {
-  max-width: 940px;
+  width: 100%;
+  max-width: 794px;
+  min-height: 1123px;
+  aspect-ratio: 1 / 1.4142;
   margin: 0 auto;
   background: #ffffff !important;
   color: #111827 !important;
   border: 1px solid #d1d5db;
   border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 20px 25px -5px rgba(0, 0, 0, 0.08);
   padding: 44px 50px;
   box-sizing: border-box;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
@@ -4699,7 +4714,10 @@ body.has-global-tooltip [data-tooltip]::after {
 
 .field-label-text,
 .dropoff-field .field-label-text {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
   color: color-mix(in srgb, var(--color-text-primary) 82%, var(--color-text-secondary));
   font-size: 12px;
   font-weight: 750;
@@ -7677,14 +7695,9 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
   animation: none;
 }
 
-.main-content > .content-wrap { animation: none; }
-
-/* Older browsers keep a lightweight entrance fallback. Modern browsers use
-   the coordinated enter/exit snapshots below instead of replaying both. */
-@supports not (view-transition-name: none) {
-  .main-content > .content-wrap {
-    animation: route-content-performant 180ms var(--motion-ease-smooth) both;
-  }
+/* Standard page entrance animation across all workspace pages */
+.main-content > .content-wrap {
+  animation: route-content-performant 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes route-content-performant {
@@ -14599,14 +14612,20 @@ html[data-theme="dark"] .dashboard-attention-item.is-expanded {
 
 /* 4. Recent Deliveries Space & Width Optimization */
 .dashboard-columns {
-  align-items: start !important;
+  align-items: stretch !important;
 }
 
 .dashboard-recent-deliveries {
-  align-self: start;
+  align-self: stretch !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 .dashboard-recent-deliveries .table-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   overflow-x: auto;
 }
 
@@ -14614,6 +14633,21 @@ html[data-theme="dark"] .dashboard-attention-item.is-expanded {
   width: 100%;
   min-width: 620px;
   table-layout: auto;
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+.dashboard-recent-deliveries .table-empty-cell {
+  height: 100%;
+  vertical-align: middle;
+}
+
+.dashboard-recent-deliveries .empty-state {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .dashboard-recent-deliveries td,
@@ -15279,7 +15313,7 @@ html[data-compactness="compact"] .sidebar:not(.collapsed) .management-navigation
 
 html[data-compactness="compact"] .content-wrap {
   gap: 12px !important;
-  padding-top: 18px !important;
+  padding-top: 32px !important;
   padding-bottom: 24px !important;
 }
 

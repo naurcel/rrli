@@ -1103,12 +1103,16 @@ html[data-theme="dark"] .top-trucks-card .dashboard-card-link:active {
   box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.55), inset -1px -1px 4px rgba(255, 255, 255, 0.03) !important;
 }
 
-/* 12. Compact Reports Sheet Refinements */
+/* 12. A4 Reports Sheet Preview */
 .report-document.doc-sheet {
-  max-width: 1040px !important;
-  padding: 22px 28px !important;
+  width: 100% !important;
+  max-width: 794px !important;
+  min-height: 1123px !important;
+  aspect-ratio: 1 / 1.4142 !important;
+  padding: 36px 42px !important;
   margin: 0 auto !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 20px 25px -5px rgba(0, 0, 0, 0.08) !important;
 }
 
 .report-document.doc-sheet table.doc-table th,
@@ -2232,17 +2236,14 @@ html[data-theme="dark"] .classification-badge-segment.is-active {
 }
 
 .subcon-plate-cell .subcon-plate-primary {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 9px;
-  border-radius: 7px;
-  font-size: 12.5px !important;
-  font-weight: 750 !important;
-  font-family: var(--font-mono, monospace);
-  letter-spacing: 0.03em;
-  color: var(--color-accent-deep, #92400e) !important;
-  background: rgba(245, 158, 11, 0.13);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  display: inline;
+  font-size: inherit;
+  font-weight: 700;
+  color: inherit;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
 }
 
 .subcontracted-trucks-table td.subcon-secondary-cell {
@@ -2255,9 +2256,9 @@ html[data-theme="dark"] .subcon-trucker-cell .subcon-trucker-primary {
 }
 
 html[data-theme="dark"] .subcon-plate-cell .subcon-plate-primary {
-  color: #fcd34d !important;
-  background: rgba(245, 158, 11, 0.18);
-  border-color: rgba(245, 158, 11, 0.38);
+  color: inherit !important;
+  background: transparent !important;
+  border: none !important;
 }
 
 html[data-theme="dark"] .subcontracted-trucks-table td.subcon-secondary-cell {

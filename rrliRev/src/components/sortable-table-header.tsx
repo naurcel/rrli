@@ -61,16 +61,11 @@ export function SortableTableHeader({
     <th
       aria-sort={sortAria}
       className={className ? `th-${sortKey} ${className}` : `th-${sortKey}`}
-      onClick={handleClick}
-      style={{ cursor: "pointer", userSelect: "none" }}
     >
       <button
         className={`sortable-table-header${active ? ` ${direction} active-sort` : ""}`}
         type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          handleClick();
-        }}
+        onClick={handleClick}
         title={sortTooltip}
         aria-label={sortTooltip}
       >

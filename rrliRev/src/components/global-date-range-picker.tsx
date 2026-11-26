@@ -323,10 +323,28 @@ export function GlobalDateRangePicker() {
     setViewMode("days");
   };
 
+  const isThisMonth = useMemo(() => {
+    if (range.preset === "month") return true;
+    if (!range.startDate || !range.endDate) return false;
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return (
+      range.startDate.getFullYear() === firstDay.getFullYear() &&
+      range.startDate.getMonth() === firstDay.getMonth() &&
+      range.startDate.getDate() === firstDay.getDate() &&
+      range.endDate.getFullYear() === lastDay.getFullYear() &&
+      range.endDate.getMonth() === lastDay.getMonth() &&
+      range.endDate.getDate() === lastDay.getDate()
+    );
+  }, [range]);
+
   const label =
     range.startDate && !range.endDate
       ? `${formatShort(range.startDate)} – Select end`
-      : formatDateRange(range);
+      : isThisMonth
+        ? "This Month"
+        : formatDateRange(range);
 
   return (
     <div className="global-date-picker">
