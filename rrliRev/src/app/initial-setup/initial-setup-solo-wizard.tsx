@@ -64,6 +64,8 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
   const [customQuestionText, setCustomQuestionText] = useState("");
   const [answer, setAnswer] = useState("");
   const [confirmAnswer, setConfirmAnswer] = useState("");
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [showConfirmAnswer, setShowConfirmAnswer] = useState(false);
 
   // Stage 4: Emergency Backup Key state
   const [backupKey, setBackupKey] = useState<string>("");
@@ -798,30 +800,68 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
 
               <div className="native-setup-field-group setup-stagger setup-stagger-4">
                 <label htmlFor="sec-answer">Secret Answer</label>
-                <input
-                  id="sec-answer"
-                  type="text"
-                  className="native-setup-text-input"
-                  placeholder="Enter your answer..."
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  autoComplete="off"
-                  required
-                />
+                <div className="native-setup-input-wrap">
+                  <input
+                    id="sec-answer"
+                    type={showAnswer ? "text" : "password"}
+                    placeholder="Enter your answer..."
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    autoComplete="off"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="native-setup-toggle-pw"
+                    onClick={() => setShowAnswer((prev) => !prev)}
+                    aria-label={showAnswer ? "Hide secret answer" : "Show secret answer"}
+                  >
+                    {showAnswer ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="native-setup-field-group setup-stagger setup-stagger-4">
                 <label htmlFor="sec-answer-confirm">Confirm Secret Answer</label>
-                <input
-                  id="sec-answer-confirm"
-                  type="text"
-                  className="native-setup-text-input"
-                  placeholder="Confirm your answer..."
-                  value={confirmAnswer}
-                  onChange={(e) => setConfirmAnswer(e.target.value)}
-                  autoComplete="off"
-                  required
-                />
+                <div className="native-setup-input-wrap">
+                  <input
+                    id="sec-answer-confirm"
+                    type={showConfirmAnswer ? "text" : "password"}
+                    placeholder="Confirm your answer..."
+                    value={confirmAnswer}
+                    onChange={(e) => setConfirmAnswer(e.target.value)}
+                    autoComplete="off"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="native-setup-toggle-pw"
+                    onClick={() => setShowConfirmAnswer((prev) => !prev)}
+                    aria-label={showConfirmAnswer ? "Hide secret answer" : "Show secret answer"}
+                  >
+                    {showConfirmAnswer ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
                 {confirmAnswer.length > 0 && !answersMatch ? (
                   <span className="native-setup-field-hint error">Answers do not match</span>
                 ) : null}
