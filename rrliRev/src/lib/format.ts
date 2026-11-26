@@ -1,8 +1,11 @@
 export function formatPeso(amount: number | null | undefined): string {
   if (amount == null || !Number.isFinite(amount)) return "N/A";
-  const rounded = Math.round(amount);
-  const absFormatted = Math.abs(rounded).toLocaleString("en-PH");
-  return rounded < 0 ? `-₱${absFormatted}` : `₱${absFormatted}`;
+  const rounded = Math.round(amount * 100) / 100;
+  const sign = rounded < 0 ? "-" : "";
+  const absFormatted = Math.abs(rounded).toLocaleString("en-PH", {
+    maximumFractionDigits: 2,
+  });
+  return `${sign}₱${absFormatted}`;
 }
 
 export type CompactFormatResult = {
