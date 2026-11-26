@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { listAuditEntries } from "@/lib/audit/server-audit-store";
+import { clearAuditEntriesAsync, listAuditEntriesAsync } from "@/lib/audit/server-audit-store";
 import { verifyServerPermission } from "@/lib/auth/server-session";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(request: Request) {
   const auth = await verifyServerPermission("users:view");
@@ -18,7 +21,7 @@ export async function GET(request: Request) {
   const action = searchParams.get("action");
   const search = searchParams.get("q")?.toLowerCase();
 
-  let entries = listAuditEntries();
+  let entries = await listAuditEntriesAsync();
 
   if (entityType && entityType !== "all") {
     entries = entries.filter((e) => e.entityType.toLowerCase() === entityType.toLowerCase());
@@ -37,5 +40,44 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, entries });
+  return NextResponse.json(
+    { ok: true, entries },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    },
+  );
+}
+
+export async function DELETE() {
+  const auth = await verifyServerPermission("users:manage");
+  if (!auth.ok) {
+    return NextResponse.json(
+      { ok: false, code: auth.code, message: auth.message },
+      { status: auth.status },
+    );
+  }
+
+  if (!auth.actor.isSuperadmin) {
+    return NextResponse.json(
+      { ok: false, code: "SUPERADMIN_AUTHORITY_REQUIRED", message: "Only the Superadmin (President) can purge audit logs." },
+      { status: 403 },
+    );
+  }
+
+  await clearAuditEntriesAsync();
+
+  return NextResponse.json(
+    { ok: true, message: "Audit log purged successfully." },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }

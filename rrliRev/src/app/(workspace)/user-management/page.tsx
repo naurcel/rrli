@@ -198,6 +198,9 @@ export default function UserManagementPage() {
 
   function handleSelectTab(tab: UserManagementTab) {
     setActiveTab(tab);
+    if (tab === "audit") {
+      void loadAuditEntries(true);
+    }
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", '#' + tab);
     }
@@ -521,7 +524,13 @@ export default function UserManagementPage() {
     if (!silent) setAuditLoading(true);
     setAuditError(null);
     try {
-      const response = await fetch("/api/audit");
+      const response = await fetch(`/api/audit?_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
       const payload = (await response.json().catch(() => null)) as {
         ok?: boolean;
         entries?: AuditEntry[];
@@ -541,6 +550,28 @@ export default function UserManagementPage() {
     } finally {
       setAuditLoading(false);
       if (!silent) setAuditLoading(false);
+    }
+  }
+
+  async function handlePurgeAuditLog() {
+    if (!window.confirm("Are you sure you want to clear all audit records? This action is permanent.")) {
+      return;
+    }
+    setAuditLoading(true);
+    try {
+      const response = await fetch("/api/audit", {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.message ?? "Failed to clear audit trail.");
+      }
+      setAuditEntries([]);
+      toast.success("Audit trail cleared successfully.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error clearing audit records.");
+    } finally {
+      setAuditLoading(false);
     }
   }
 
@@ -2194,6 +2225,10 @@ export default function UserManagementPage() {
                     setUsers((curr) =>
                       curr.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)),
                     );
+                    void loadAuditEntries(true);
+                  }}
+                  onPermissionsSaved={() => {
+                    void loadAuditEntries(true);
                   }}
                 />
               </div>
@@ -2228,20 +2263,79 @@ export default function UserManagementPage() {
                   <h2>Audit Trail</h2>
                   <p>Detailed event log of data changes, staff actions, and security operations.</p>
                 </div>
-                <span
-                  className="ledger-total-badge"
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    boxShadow: "none",
-                    padding: 0,
-                    fontSize: "12px",
-                    color: "var(--color-text-secondary)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {filteredAuditEntries.length} of {auditEntries.length} events
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={() => void loadAuditEntries()}
+                    disabled={auditLoading}
+                    className="secondary-button"
+                    style={{
+                      padding: "5px 12px",
+                      fontSize: "12px",
+                      borderRadius: "8px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      height: "32px",
+                    }}
+                    title="Reload audit records from server"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        width: "14px",
+                        height: "14px",
+                        animation: auditLoading ? "spin 1s linear infinite" : "none",
+                      }}
+                      aria-hidden="true"
+                    >
+                      <polyline points="23 4 23 10 17 10" />
+                      <polyline points="1 20 1 14 7 14" />
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                    </svg>
+                    Refresh
+                  </button>
+
+                  {actor.isSuperadmin && auditEntries.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void handlePurgeAuditLog()}
+                      disabled={auditLoading}
+                      className="secondary-button"
+                      style={{
+                        padding: "5px 12px",
+                        fontSize: "12px",
+                        borderRadius: "8px",
+                        color: "#ef4444",
+                        borderColor: "rgba(239, 68, 68, 0.3)",
+                        height: "32px",
+                      }}
+                      title="Clear all audit log history (President only)"
+                    >
+                      Clear Log
+                    </button>
+                  )}
+
+                  <span
+                    className="ledger-total-badge"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      boxShadow: "none",
+                      padding: 0,
+                      fontSize: "12px",
+                      color: "var(--color-text-secondary)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {filteredAuditEntries.length} of {auditEntries.length} events
+                  </span>
+                </div>
               </div>
 
               <div className="filters" aria-label="Filter audit records">

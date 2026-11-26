@@ -153,13 +153,95 @@ const auditGlobal = globalThis as typeof globalThis & { __routexAuditEntries?: A
 const entries = auditGlobal.__routexAuditEntries ?? [...INITIAL_AUDIT_ENTRIES];
 auditGlobal.__routexAuditEntries = entries;
 
+async function getAdminSupabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key || url.includes("your-project-ref.supabase.co")) return null;
+  try {
+    const { createAdminSupabaseClient } = await import("@/lib/supabase/server");
+    return createAdminSupabaseClient();
+  } catch {
+    return null;
+  }
+}
+
 export function recordAuditEntry(input: Omit<AuditEntry, "id" | "occurredAt">): AuditEntry {
   const entry: AuditEntry = { ...input, id: `aud-${crypto.randomUUID().slice(0, 8)}`, occurredAt: new Date().toISOString() };
   entries.unshift(entry);
   if (entries.length > 500) entries.length = 500;
+
+  // Asynchronously persist to Supabase PostgreSQL when available
+  void (async () => {
+    try {
+      const client = await getAdminSupabaseClient();
+      if (!client) return;
+      await client.from("audit_logs").insert({
+        id: entry.id,
+        occurred_at: entry.occurredAt,
+        actor_id: entry.actorId,
+        actor_email: entry.actorEmail,
+        action: entry.action,
+        entity_type: entry.entityType,
+        entity_id: entry.entityId,
+        summary: entry.summary,
+        changes: entry.changes ?? {},
+      });
+    } catch {
+      // Ignore if table not yet migrated or offline
+    }
+  })();
+
   return entry;
 }
 
 export function listAuditEntries(): readonly AuditEntry[] {
   return entries;
+}
+
+export async function listAuditEntriesAsync(): Promise<readonly AuditEntry[]> {
+  try {
+    const client = await getAdminSupabaseClient();
+    if (client) {
+      const { data, error } = await client
+        .from("audit_logs")
+        .select("*")
+        .order("occurred_at", { ascending: false })
+        .limit(200);
+
+      if (!error && Array.isArray(data)) {
+        const remoteEntries: AuditEntry[] = data.map((row) => ({
+          id: row.id,
+          occurredAt: row.occurred_at,
+          actorId: row.actor_id,
+          actorEmail: row.actor_email,
+          action: row.action,
+          entityType: row.entity_type,
+          entityId: row.entity_id,
+          summary: row.summary,
+          changes: (row.changes as Record<string, unknown>) ?? undefined,
+        }));
+
+        // Merge any newly created in-memory entries that haven't been fetched yet
+        const existingIds = new Set(remoteEntries.map((e) => e.id));
+        const newLocal = entries.filter((e) => !existingIds.has(e.id) && !e.id.startsWith("aud-00"));
+        return [...newLocal, ...remoteEntries];
+      }
+    }
+  } catch {
+    // Fall back to in-memory entries
+  }
+
+  return entries;
+}
+
+export async function clearAuditEntriesAsync(): Promise<void> {
+  entries.length = 0;
+  try {
+    const client = await getAdminSupabaseClient();
+    if (client) {
+      await client.from("audit_logs").delete().neq("id", "00000000");
+    }
+  } catch {
+    // Silently continue
+  }
 }

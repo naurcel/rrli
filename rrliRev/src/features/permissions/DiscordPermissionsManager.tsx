@@ -119,12 +119,14 @@ type Props = {
   initialSelectedUserId?: string;
   initialSelectedRole?: UserRole;
   onUserSaved?: (updatedUser: Partial<ManagedUserSummary>) => void;
+  onPermissionsSaved?: () => void;
 };
 
 export function DiscordPermissionsManager({
   initialSelectedUserId,
   initialSelectedRole,
   onUserSaved,
+  onPermissionsSaved,
 }: Props) {
   const actor = useAuthenticatedActor();
 
@@ -722,6 +724,7 @@ export function DiscordPermissionsManager({
         );
 
         toast.success(`Permissions saved for @${selectedUser.username}.`);
+        onPermissionsSaved?.();
       } else if (selectedEntity.kind === "role") {
         if (selectedEntity.roleKey === "superadmin") {
           toast.info("Superadmin permissions are unconditional and permanently set.");
@@ -753,6 +756,7 @@ export function DiscordPermissionsManager({
         }
 
         toast.success(`Permissions saved for ${BUILT_IN_ROLE_CONFIG[roleKey].label}.`);
+        onPermissionsSaved?.();
       } else if (selectedEntity.kind === "custom_role" && selectedCustomRole) {
         const roleId = selectedCustomRole.id;
         const permsToSave = stagedCustomRolePerms[roleId] ?? selectedCustomRole.permissions;
@@ -772,6 +776,7 @@ export function DiscordPermissionsManager({
           prev.map((r) => (r.id === roleId ? { ...r, permissions: permsToSave } : r)),
         );
         toast.success(`Permissions saved for ${selectedCustomRole.name}.`);
+        onPermissionsSaved?.();
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error saving permissions.";
