@@ -13,7 +13,7 @@ import {
 } from "@/features/deliveries/driver-registry";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
 
 const createCrewSchema = z.object({
   fullName: z
@@ -61,7 +61,7 @@ export async function GET() {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
     const { data: rows, error } = await supabase
       .from("employees")
       .select("id, employee_code, full_name, assignment_type, contact_number, is_active")
@@ -180,7 +180,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
 
     // Check for duplicate name for this role
     const { data: existing } = await supabase
@@ -382,7 +382,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
     const updatePayload: Record<string, unknown> = {};
     if (isActive !== undefined) updatePayload.is_active = isActive;
     if (fullName !== undefined) updatePayload.full_name = fullName;
@@ -502,7 +502,7 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
     const { error } = await supabase.from("employees").delete().eq("id", id);
     if (error) {
       if (

@@ -13,7 +13,7 @@ import {
 } from "@/features/deliveries/truck-registry";
 import { verifyServerPermission } from "@/lib/auth/server-session";
 import { isSupabaseConfigured } from "@/lib/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
 
 const createTruckSchema = z.object({
   plateNumber: z
@@ -85,7 +85,7 @@ export async function GET() {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
     const { data: rows, error } = await supabase
       .from("trucks")
       .select("id, plate_number, truck_type, storage_capability, ownership_type, rate_basis, provider, contact_person, is_active")
@@ -217,7 +217,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
 
     // Check for duplicate plate number
     const { data: existing } = await supabase
@@ -370,7 +370,7 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       identifier,
     );
@@ -575,7 +575,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = createAdminSupabaseClient();
 
     if (normalizedOriginal !== normalizedPlate) {
       const { data: existing } = await supabase

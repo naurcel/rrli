@@ -55,7 +55,7 @@ export async function GET(request: Request) {
 
   if (isSupabaseConfigured()) {
     try {
-      const supabase = await createServerSupabaseClient();
+      const supabase = createAdminSupabaseClient();
       let query = supabase
         .from("user_profiles")
         .select("id, email, username, full_name, role, roles, is_active, must_change_password, security_question, recovery_authorized_at, recovery_expires_at, is_superadmin, designation, is_permanently_deleted, deleted_at, deleted_reason, deleted_by, custom_grants, custom_restrictions, phone_number, created_at, updated_at")
