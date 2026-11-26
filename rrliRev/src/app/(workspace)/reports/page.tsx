@@ -849,7 +849,7 @@ export default function ReportsPage() {
                   </h2>
                   <span style={{ fontSize: "10.5px", color: "#6b7280" }}>
                     {sortedRows.length} {sortedRows.length === 1 ? "record" : "records"}
-                    {activeTemplate.filters.financialState === "finalized_only" ? " (finalized only)" : ""}
+                    {activeTemplate.filters.financialState === "finalized_only" ? " (completed only)" : ""}
                   </span>
                 </div>
                 <div className="no-print" style={{ display: "flex", alignItems: "center", gap: "6px" }}>

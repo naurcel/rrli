@@ -402,7 +402,7 @@ export function ViewTripExpensesModal<T extends DeliveryTripRecord = DeliveryTri
                     border: `1px solid ${isComplete ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)"}`,
                   }}
                 >
-                  {isComplete ? "Finalized" : "Pending Verification"}
+                  {isComplete ? "Completed" : "Pending Verification"}
                 </span>
               </div>
             </div>

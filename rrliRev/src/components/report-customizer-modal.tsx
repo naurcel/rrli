@@ -715,7 +715,7 @@ export function ReportCustomizerModal({
                       }}
                     >
                       <option value="finalized_only">
-                        Finalized Trips Only (Excludes unknown expenses)
+                        Completed Trips Only (Excludes unknown expenses)
                       </option>
                       <option value="all">All Trips (Includes trips with pending expenses)</option>
                     </select>
