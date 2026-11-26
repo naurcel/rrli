@@ -56,24 +56,30 @@ export function DashboardHeader({
             Overview of delivery operations and profitability.
           </p>
         </div>
-        <div className="fleet-intro-actions">
-          <Button
-            variant={actions.secondary.variant}
-            href={actions.secondary.href}
-            aria-label={actions.secondary.ariaLabel}
-            className="page-intro-action"
-          >
-            {actions.secondary.label}
-          </Button>
-          <Button
-            variant={actions.primary.variant}
-            href={actions.primary.href}
-            aria-label={actions.primary.ariaLabel}
-            className="page-intro-action"
-          >
-            {actions.primary.label}
-          </Button>
-        </div>
+        {(actions.secondary || actions.primary) && (
+          <div className="fleet-intro-actions">
+            {actions.secondary && (
+              <Button
+                variant={actions.secondary.variant}
+                href={actions.secondary.href}
+                aria-label={actions.secondary.ariaLabel}
+                className="page-intro-action"
+              >
+                {actions.secondary.label}
+              </Button>
+            )}
+            {actions.primary && (
+              <Button
+                variant={actions.primary.variant}
+                href={actions.primary.href}
+                aria-label={actions.primary.ariaLabel}
+                className="page-intro-action"
+              >
+                {actions.primary.label}
+              </Button>
+            )}
+          </div>
+        )}
       </header>
 
       {error ? (

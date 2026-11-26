@@ -17,6 +17,7 @@ import {
   calculateTopClient,
 } from "@/features/dashboard/dashboard-kpi";
 import {
+  DashboardAttentionNeeded,
   DashboardFinancialChart,
   DashboardHeader,
   DashboardRecentDeliveries,
@@ -77,6 +78,7 @@ export default function DashboardPage() {
     direction: TableSortDirection;
   }>({ key: "date", direction: "desc" });
   const [companyExpenses, setCompanyExpenses] = useState<CompanyExpense[]>([]);
+  const [expandedAttentionIds, setExpandedAttentionIds] = useState<Set<string>>(new Set());
   const [greeting, setGreeting] = useState<string>(() => getTimeOfDayGreeting());
 
   useEffect(() => {
@@ -133,6 +135,16 @@ export default function DashboardPage() {
     router.push(`/deliveries/${encodeURIComponent(tripId)}?${params.toString()}`);
   }
 
+  const toggleAttentionItem = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedAttentionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   useEffect(() => {
     async function fetchExpenses() {
       try {
@@ -162,6 +174,25 @@ export default function DashboardPage() {
   }, []);
 
   const filteredDeliveries = deliveries;
+  const deliveriesWithMissingDetails = useMemo(() => {
+    return filteredDeliveries
+      .map((delivery) => {
+        const issues = getDeliveryIncompleteIssues(delivery).filter(
+          (issue) =>
+            !/fuel|diesel|gasoline|receipt/i.test(issue) &&
+            !/pod|proof of delivery/i.test(issue),
+        );
+        return {
+          delivery,
+          issues: issues.map((label) => ({
+            label,
+            tooltip: label,
+          })),
+        };
+      })
+      .filter((item) => item.issues.length > 0);
+  }, [filteredDeliveries]);
+
   const topClientData = useMemo(
     () => calculateTopClient(filteredDeliveries),
     [filteredDeliveries],
@@ -338,6 +369,29 @@ export default function DashboardPage() {
               truckRankingMetric={truckRankingMetric}
               onMetricChange={(metric) => setTruckRankingMetric(metric)}
               currentDashboardUrl={buildCurrentDashboardUrl()}
+            />
+
+            <DashboardAttentionNeeded
+              items={deliveriesWithMissingDetails}
+              expandedIds={expandedAttentionIds}
+              onToggleItem={toggleAttentionItem}
+              onToggleAll={() => {
+                if (
+                  expandedAttentionIds.size ===
+                  deliveriesWithMissingDetails.length
+                ) {
+                  setExpandedAttentionIds(new Set());
+                } else {
+                  setExpandedAttentionIds(
+                    new Set(
+                      deliveriesWithMissingDetails.map((d) => d.delivery.id),
+                    ),
+                  );
+                }
+              }}
+              onSelectDelivery={(deliveryId) =>
+                navigateToDashboardDelivery(deliveryId)
+              }
             />
           </div>
         </div>

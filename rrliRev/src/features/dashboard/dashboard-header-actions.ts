@@ -12,7 +12,7 @@ export function getRoleDashboardActions(
   isSuperadmin: boolean | undefined,
   canWriteDeliveries: boolean,
   currentDashboardUrl: string,
-): { primary: DashboardRoleAction; secondary: DashboardRoleAction } {
+): { primary: DashboardRoleAction | null; secondary: DashboardRoleAction | null } {
   const normRole = (role || "").toLowerCase().trim();
 
   // 1. Finance: manages expenses & income transactions
@@ -33,15 +33,10 @@ export function getRoleDashboardActions(
     };
   }
 
-  // 2. Admin / President: system oversight & user onboarding
+  // 2. Admin / Superadmin: system oversight & user onboarding (no record delivery quick action)
   if (normRole === "admin" || isSuperadmin) {
     return {
-      secondary: {
-        label: "Record delivery",
-        href: withReturnContext("/deliveries/new", currentDashboardUrl, "Dashboard"),
-        variant: "secondary",
-        ariaLabel: "Record a completed delivery and its trip details",
-      },
+      secondary: null,
       primary: {
         label: "Add user",
         href: withReturnContext("/user-management#add-user", currentDashboardUrl, "Dashboard"),
@@ -69,90 +64,32 @@ export function getRoleDashboardActions(
     };
   }
 
-  // 4. HR: crew allowances, driver records, operational reports
-  if (normRole === "hr") {
+  // 4. View-only and primarily review roles: HR, Secretary, Customer Rep have no dashboard quick actions
+  if (
+    normRole === "hr" ||
+    normRole === "secretary" ||
+    normRole === "customer_representative" ||
+    !canWriteDeliveries
+  ) {
     return {
-      secondary: {
-        label: "View reports",
-        href: withReturnContext("/reports", currentDashboardUrl, "Dashboard"),
-        variant: "secondary",
-        ariaLabel: "View company and operational reports",
-      },
-      primary: {
-        label: "Drivers & crew",
-        href: withReturnContext("/drivers", currentDashboardUrl, "Dashboard"),
-        variant: "primary",
-        ariaLabel: "Manage and review drivers and crew members",
-      },
+      secondary: null,
+      primary: null,
     };
   }
 
-  // 5. Secretary: document compliance, POD verification, manifests
-  if (normRole === "secretary") {
-    return {
-      secondary: {
-        label: "View deliveries",
-        href: withReturnContext("/deliveries", currentDashboardUrl, "Dashboard"),
-        variant: "secondary",
-        ariaLabel: "View delivery records",
-      },
-      primary: {
-        label: "Verify PODs",
-        href: withReturnContext("/pod-documents", currentDashboardUrl, "Dashboard"),
-        variant: "primary",
-        ariaLabel: "Review and verify proof of delivery documents",
-      },
-    };
-  }
-
-  // 6. Customer Representative: shipment inquiry, waybills, client tracking
-  if (normRole === "customer_representative") {
-    return {
-      secondary: {
-        label: "Track PODs",
-        href: withReturnContext("/pod-documents", currentDashboardUrl, "Dashboard"),
-        variant: "secondary",
-        ariaLabel: "Review proof of delivery files",
-      },
-      primary: {
-        label: "Search deliveries",
-        href: withReturnContext("/deliveries", currentDashboardUrl, "Dashboard"),
-        variant: "primary",
-        ariaLabel: "Search client deliveries and waybills",
-      },
-    };
-  }
-
-  // 7. General Custom Roles or Generic Write vs View-Only Fallback
-  if (canWriteDeliveries) {
-    return {
-      secondary: {
-        label: "Import",
-        href: withReturnContext("/deliveries/import", currentDashboardUrl, "Dashboard"),
-        variant: "secondary",
-        ariaLabel: "Import an Excel trip report",
-      },
-      primary: {
-        label: "Record delivery",
-        href: withReturnContext("/deliveries/new", currentDashboardUrl, "Dashboard"),
-        variant: "primary",
-        ariaLabel: "Record a completed delivery and its trip details",
-      },
-    };
-  }
-
+  // 5. Custom roles with write permissions
   return {
     secondary: {
-      label: "View reports",
-      href: withReturnContext("/reports", currentDashboardUrl, "Dashboard"),
+      label: "Import",
+      href: withReturnContext("/deliveries/import", currentDashboardUrl, "Dashboard"),
       variant: "secondary",
-      ariaLabel: "View operational reports",
+      ariaLabel: "Import an Excel trip report",
     },
     primary: {
-      label: "View deliveries",
-      href: withReturnContext("/deliveries", currentDashboardUrl, "Dashboard"),
+      label: "Record delivery",
+      href: withReturnContext("/deliveries/new", currentDashboardUrl, "Dashboard"),
       variant: "primary",
-      ariaLabel: "Browse delivery records",
+      ariaLabel: "Record a completed delivery and its trip details",
     },
   };
 }

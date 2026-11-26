@@ -65,6 +65,10 @@ import {
   getTruckStorageCapability,
   TRUCK_CLASSIFICATION_FILTER_OPTIONS,
   TRUCK_PERFORMANCE_FILTER_OPTIONS,
+  getAllAvailableTruckTypes,
+  readCustomTruckTypes,
+  saveCustomTruckType,
+  ROUTEX_TRUCK_TYPES_CHANGED_EVENT,
   type FleetTruck,
   type TruckClassificationFilterKey,
   type TruckPerformanceFilterKey,
@@ -294,8 +298,23 @@ export default function TruckProfitabilityPage() {
     };
   }, [hasActiveModal]);
 
+  const deduplicatedCrew = useMemo(() => {
+    const map = new Map<string, FleetCrewMember>();
+    for (const c of crew) {
+      const key = (c.fullName ?? "").trim().toLowerCase();
+      if (!key) continue;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, c);
+      } else if (c.assignmentType === "Driver" && existing.assignmentType === "Helper") {
+        map.set(key, c);
+      }
+    }
+    return Array.from(map.values());
+  }, [crew]);
+
   const filteredCrew = useMemo(() => {
-    let list = crew;
+    let list = deduplicatedCrew;
     if (crewRoleFilter !== "All") {
       list = list.filter((c) => c.assignmentType === crewRoleFilter);
     }
@@ -330,12 +349,12 @@ export default function TruckProfitabilityPage() {
   }, [filteredCrew, crewPage]);
 
   const driverCount = useMemo(
-    () => crew.filter((c) => c.assignmentType === "Driver").length,
-    [crew],
+    () => deduplicatedCrew.filter((c) => c.assignmentType === "Driver").length,
+    [deduplicatedCrew],
   );
   const helperCount = useMemo(
-    () => crew.filter((c) => c.assignmentType === "Helper").length,
-    [crew],
+    () => deduplicatedCrew.filter((c) => c.assignmentType === "Helper").length,
+    [deduplicatedCrew],
   );
 
   function openEditCrewModal(member: FleetCrewMember) {
@@ -528,28 +547,40 @@ export default function TruckProfitabilityPage() {
     const allDeliveries = [...localDeliveries, ...(dateFilteredTrips || [])];
 
     setCrew((prev) => {
-      const seen = new Set(prev.map((c) => `${c.assignmentType}:${c.fullName.toLowerCase()}`));
-      const additional: FleetCrewMember[] = [];
+      // Deduplicate by person's normalized full name
+      // A person must only appear ONCE in the crew roster!
+      const crewMap = new Map<string, FleetCrewMember>();
+      for (const c of prev) {
+        const norm = c.fullName.trim().toLowerCase();
+        if (!norm) continue;
+        const existing = crewMap.get(norm);
+        if (!existing) {
+          crewMap.set(norm, c);
+        } else if (c.assignmentType === "Driver" && existing.assignmentType === "Helper") {
+          crewMap.set(norm, c);
+        }
+      }
 
       for (const trip of allDeliveries) {
         if (trip.driverName) {
           const names = parsePersonnelNames(trip.driverName);
           for (const name of names) {
-            const key = `Driver:${name.toLowerCase()}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              const count =
-                prev.filter((c) => c.assignmentType === "Driver").length +
-                additional.filter((c) => c.assignmentType === "Driver").length +
-                1;
-              additional.push({
-                id: `driver-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+            const key = name.trim().toLowerCase();
+            if (!key) continue;
+            const existing = crewMap.get(key);
+            if (!existing) {
+              const count = Array.from(crewMap.values()).filter((c) => c.assignmentType === "Driver").length + 1;
+              crewMap.set(key, {
+                id: `driver-${key.replace(/[^a-z0-9]+/g, "-")}`,
                 employeeCode: `DRV-${String(count).padStart(2, "0")}`,
-                fullName: name,
+                fullName: name.trim(),
                 assignmentType: "Driver",
                 contactNumber: null,
                 isActive: true,
               });
+            } else if (existing.assignmentType === "Helper") {
+              // A driver should not also be listed as a helper: ensure role is Driver
+              crewMap.set(key, { ...existing, assignmentType: "Driver" });
             }
           }
         }
@@ -557,28 +588,26 @@ export default function TruckProfitabilityPage() {
         if (trip.helperName) {
           const names = parsePersonnelNames(trip.helperName);
           for (const name of names) {
-            const key = `Helper:${name.toLowerCase()}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              const count =
-                prev.filter((c) => c.assignmentType === "Helper").length +
-                additional.filter((c) => c.assignmentType === "Helper").length +
-                1;
-              additional.push({
-                id: `helper-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+            const key = name.trim().toLowerCase();
+            if (!key) continue;
+            const existing = crewMap.get(key);
+            if (!existing) {
+              const count = Array.from(crewMap.values()).filter((c) => c.assignmentType === "Helper").length + 1;
+              crewMap.set(key, {
+                id: `helper-${key.replace(/[^a-z0-9]+/g, "-")}`,
                 employeeCode: `HLP-${String(count).padStart(2, "0")}`,
-                fullName: name,
+                fullName: name.trim(),
                 assignmentType: "Helper",
                 contactNumber: null,
                 isActive: true,
               });
             }
+            // If existing is already Driver, do NOT duplicate or overwrite with Helper!
           }
         }
       }
 
-      if (additional.length === 0) return prev;
-      return [...prev, ...additional];
+      return Array.from(crewMap.values());
     });
   }, [dateFilteredTrips]);
 
@@ -811,20 +840,31 @@ export default function TruckProfitabilityPage() {
     });
   }, [allOwnedTrucks, deletedPlates, ownedTruckSort, truckSummaries, ownedViewMode, ownedListSort]);
 
+  const [customSizes, setCustomSizes] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    return readCustomTruckTypes();
+  });
+
+  useEffect(() => {
+    const syncTypes = () => setCustomSizes(readCustomTruckTypes());
+    window.addEventListener(ROUTEX_TRUCK_TYPES_CHANGED_EVENT, syncTypes);
+    window.addEventListener("storage", syncTypes);
+    return () => {
+      window.removeEventListener(ROUTEX_TRUCK_TYPES_CHANGED_EVENT, syncTypes);
+      window.removeEventListener("storage", syncTypes);
+    };
+  }, []);
+
+  const availableTruckSizes = useMemo(() => {
+    return getAllAvailableTruckTypes([...allOwnedTrucks, ...allSubcontractedTrucks]);
+  }, [allOwnedTrucks, allSubcontractedTrucks, customSizes]);
+
   const vehicleSizeFilterOptions = useMemo(() => {
-    const presetSizes = ["4-Wheeler", "6-Wheeler", "10-Wheeler"];
-    const customSizes = new Set<string>();
-    for (const t of [...allOwnedTrucks, ...allSubcontractedTrucks]) {
-      if (t.truckType && !presetSizes.includes(t.truckType)) {
-        customSizes.add(t.truckType);
-      }
-    }
     return [
       { value: "all", label: "All Vehicle Sizes" },
-      ...presetSizes.map((size) => ({ value: size, label: size })),
-      ...Array.from(customSizes).map((size) => ({ value: size, label: size })),
+      ...availableTruckSizes.map((size) => ({ value: size, label: size })),
     ];
-  }, [allOwnedTrucks, allSubcontractedTrucks]);
+  }, [availableTruckSizes]);
 
   const filteredOwnedTrucks = useMemo(() => {
     const cleanSearch = debouncedPlateSearch.trim().toLowerCase().replace(/\s+/g, "");
@@ -1385,6 +1425,40 @@ export default function TruckProfitabilityPage() {
     }
   }
 
+  async function handleBulkDeleteOwnedTrucks() {
+    if (selectedOwnedPlates.size === 0 || isDeletingTruck) return;
+    const count = selectedOwnedPlates.size;
+    if (!window.confirm(`Are you sure you want to delete ${count} selected truck${count > 1 ? "s" : ""}?`)) return;
+    setIsDeletingTruck(true);
+    try {
+      for (const plate of Array.from(selectedOwnedPlates)) {
+        deleteBrowserPreviewTruck(plate);
+      }
+      setDeletedPlates((prev) => new Set([...prev, ...Array.from(selectedOwnedPlates).map((p) => p.toUpperCase())]));
+      setSelectedOwnedPlates(new Set());
+      toast.success(`Deleted ${count} truck(s) from fleet registry`);
+    } finally {
+      setIsDeletingTruck(false);
+    }
+  }
+
+  async function handleBulkDeleteSubconTrucks() {
+    if (selectedSubconPlates.size === 0 || isDeletingTruck) return;
+    const count = selectedSubconPlates.size;
+    if (!window.confirm(`Are you sure you want to delete ${count} selected subcontracted truck${count > 1 ? "s" : ""}?`)) return;
+    setIsDeletingTruck(true);
+    try {
+      for (const plate of Array.from(selectedSubconPlates)) {
+        deleteBrowserPreviewTruck(plate);
+      }
+      setDeletedPlates((prev) => new Set([...prev, ...Array.from(selectedSubconPlates).map((p) => p.toUpperCase())]));
+      setSelectedSubconPlates(new Set());
+      toast.success(`Deleted ${count} subcontracted truck(s) from fleet registry`);
+    } finally {
+      setIsDeletingTruck(false);
+    }
+  }
+
   async function handleCreateCrew(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setCrewFormError(null);
@@ -1932,21 +2006,15 @@ export default function TruckProfitabilityPage() {
                   <span className="bulk-selection-count">
                     <strong>{selectedOwnedPlates.size}</strong> owned truck{selectedOwnedPlates.size === 1 ? "" : "s"} selected
                   </span>
-                  <div className="bulk-selection-actions">
+                  <div className="bulk-selection-actions" style={{ display: "flex", gap: "8px" }}>
                     <button
                       type="button"
                       className="secondary-button"
-                      style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
-                      onClick={() => {
-                        const rows = filteredOwnedTrucks.filter((t) => selectedOwnedPlates.has(t.plateNumber));
-                        const text = rows
-                          .map((t) => `${t.plateNumber}\t${t.truckType}\t${getTruckStorageCapability(t.plateNumber, t.storageCapability)}\tNet: ${formatPeso(t.netProfit)}`)
-                          .join("\n");
-                        navigator.clipboard?.writeText(text);
-                        toast.success(`Copied ${rows.length} truck record(s) to clipboard`);
-                      }}
+                      style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px", color: "var(--color-danger, #dc2626)", borderColor: "rgba(220, 38, 38, 0.3)" }}
+                      onClick={handleBulkDeleteOwnedTrucks}
+                      disabled={isDeletingTruck}
                     >
-                      Copy Selected
+                      {isDeletingTruck ? "Deleting..." : "Delete"}
                     </button>
                     <button
                       type="button"
@@ -1954,7 +2022,7 @@ export default function TruckProfitabilityPage() {
                       style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
                       onClick={() => setSelectedOwnedPlates(new Set())}
                     >
-                      Clear selection
+                      Cancel
                     </button>
                   </div>
                 </div>
@@ -2187,21 +2255,15 @@ export default function TruckProfitabilityPage() {
               <span className="bulk-selection-count">
                 <strong>{selectedSubconPlates.size}</strong> subcontracted truck{selectedSubconPlates.size === 1 ? "" : "s"} selected
               </span>
-              <div className="bulk-selection-actions">
+              <div className="bulk-selection-actions" style={{ display: "flex", gap: "8px" }}>
                 <button
                   type="button"
                   className="secondary-button"
-                  style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
-                  onClick={() => {
-                    const rows = filteredSubcontractedTrucks.filter((t) => selectedSubconPlates.has(t.plateNumber));
-                    const text = rows
-                      .map((t) => `${t.provider || "—"}\t${t.plateNumber}\t${t.truckType}\t${getTruckStorageCapability(t.plateNumber, t.storageCapability)}\t${t.driverName || t.contactPerson || "—"}`)
-                      .join("\n");
-                    navigator.clipboard?.writeText(text);
-                    toast.success(`Copied ${rows.length} subcontracted truck(s) to clipboard`);
-                  }}
+                  style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px", color: "var(--color-danger, #dc2626)", borderColor: "rgba(220, 38, 38, 0.3)" }}
+                  onClick={handleBulkDeleteSubconTrucks}
+                  disabled={isDeletingTruck}
                 >
-                  Copy Selected
+                  {isDeletingTruck ? "Deleting..." : "Delete"}
                 </button>
                 <button
                   type="button"
@@ -2209,7 +2271,7 @@ export default function TruckProfitabilityPage() {
                   style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
                   onClick={() => setSelectedSubconPlates(new Set())}
                 >
-                  Clear selection
+                  Cancel
                 </button>
               </div>
             </div>
@@ -2308,7 +2370,7 @@ export default function TruckProfitabilityPage() {
                         <strong className="subcon-trucker-primary">{truck.provider || "—"}</strong>
                       </td>
                       <td className="subcon-plate-cell">
-                        <strong className="truck-code subcon-plate-primary">{truck.plateNumber}</strong>
+                        <strong className="truck-code">{truck.plateNumber}</strong>
                       </td>
                       <td className="subcon-secondary-cell"><span className="truck-table-spec">{truck.truckType}</span></td>
                       <td className="subcon-secondary-cell">{capability}</td>
@@ -2447,7 +2509,7 @@ export default function TruckProfitabilityPage() {
                 title="All crew"
                 onClick={() => setCrewRoleFilter("All")}
               >
-                All ({crew.length})
+                All ({deduplicatedCrew.length})
               </button>
               <button
                 type="button"
@@ -2805,12 +2867,25 @@ export default function TruckProfitabilityPage() {
                     </label>
                     <RoundedSelect
                       value={truckType}
-                      options={["4-Wheeler", "6-Wheeler", "10-Wheeler"]}
-                      onChange={(value) => setTruckType(value as FleetTruck["truckType"])}
+                      options={availableTruckSizes.map((s) => ({ value: s, label: s }))}
+                      onChange={(value) => {
+                        const trimmed = value ? value.trim() : "";
+                        setTruckType(trimmed as FleetTruck["truckType"]);
+                        if (trimmed) {
+                          saveCustomTruckType(trimmed);
+                          setCustomSizes(readCustomTruckTypes());
+                        }
+                      }}
                       ariaLabel="Select or type vehicle size"
                       searchable
                       allowCustomValue
                       searchPlaceholder="Type or select size..."
+                      customValueLabel={(query) => (
+                        <>
+                          <span>Add </span>
+                          <strong>{query}</strong>
+                        </>
+                      )}
                     />
                   </div>
 
@@ -3105,12 +3180,25 @@ export default function TruckProfitabilityPage() {
                     </label>
                     <RoundedSelect
                       value={editTruckType}
-                      options={["4-Wheeler", "6-Wheeler", "10-Wheeler"]}
-                      onChange={(value) => setEditTruckType(value as FleetTruck["truckType"])}
+                      options={availableTruckSizes.map((s) => ({ value: s, label: s }))}
+                      onChange={(value) => {
+                        const trimmed = value ? value.trim() : "";
+                        setEditTruckType(trimmed as FleetTruck["truckType"]);
+                        if (trimmed) {
+                          saveCustomTruckType(trimmed);
+                          setCustomSizes(readCustomTruckTypes());
+                        }
+                      }}
                       ariaLabel="Select or type vehicle size"
                       searchable
                       allowCustomValue
                       searchPlaceholder="Type or select size..."
+                      customValueLabel={(query) => (
+                        <>
+                          <span>Add </span>
+                          <strong>{query}</strong>
+                        </>
+                      )}
                     />
                   </div>
 

@@ -35,6 +35,8 @@ import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-r
 import {
   getFleetTrucks,
   getTruckStorageCapability,
+  getAllAvailableTruckTypes,
+  saveCustomTruckType,
   type FleetTruck,
   type TruckStorageCapability,
 } from "@/features/deliveries/truck-registry";
@@ -1357,12 +1359,24 @@ export default function TruckProfilePage({
                     </label>
                     <RoundedSelect
                       value={editTruckType}
-                      options={["4-Wheeler", "6-Wheeler", "10-Wheeler"]}
-                      onChange={(value) => setEditTruckType(value as FleetTruck["truckType"])}
+                      options={getAllAvailableTruckTypes([activeTruck]).map((s) => ({ value: s, label: s }))}
+                      onChange={(value) => {
+                        const trimmed = value ? value.trim() : "";
+                        setEditTruckType(trimmed as FleetTruck["truckType"]);
+                        if (trimmed) {
+                          saveCustomTruckType(trimmed);
+                        }
+                      }}
                       ariaLabel="Select or type vehicle size"
                       searchable
                       allowCustomValue
                       searchPlaceholder="Type or select size..."
+                      customValueLabel={(query) => (
+                        <>
+                          <span>Add </span>
+                          <strong>{query}</strong>
+                        </>
+                      )}
                     />
                   </div>
 
