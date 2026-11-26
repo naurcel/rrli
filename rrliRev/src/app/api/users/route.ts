@@ -24,7 +24,8 @@ import {
   updateServerAccountUsername,
   updateUserCustomPermissions,
 } from "@/lib/auth/server-account-store";
-import { verifyServerPermission } from "@/lib/auth/server-session";
+import { invalidateServerActorCache, verifyServerPermission } from "@/lib/auth/server-session";
+import { invalidateProxyProfileCache } from "@/proxy";
 import { isSupabaseConfigured, isSupabaseAdminConfigured } from "@/lib/config/env";
 import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatPhoneNumber } from "@/lib/format";
@@ -500,6 +501,9 @@ export async function PATCH(request: Request) {
       { status: auth.status },
     );
   }
+
+  invalidateServerActorCache();
+  invalidateProxyProfileCache();
 
   const rawBody = await request.json().catch(() => null);
   const action = typeof rawBody?.action === "string" ? rawBody.action : "";
@@ -1187,6 +1191,9 @@ export async function DELETE(request: Request) {
       reason: reason.trim(),
     },
   });
+
+  invalidateServerActorCache(userId);
+  invalidateProxyProfileCache(userId);
 
   return NextResponse.json({
     ok: true,

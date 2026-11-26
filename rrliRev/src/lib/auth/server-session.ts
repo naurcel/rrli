@@ -50,6 +50,22 @@ export function getAuthProviderMode(): AuthProviderMode {
   return isSupabaseConfigured() ? "supabase" : "server_verified";
 }
 
+type CachedProfileEntry = {
+  actor: AuthenticatedActor | null;
+  expiresAt: number;
+};
+
+const SERVER_ACTOR_CACHE_TTL_MS = 12_000;
+const serverActorCache = new Map<string, CachedProfileEntry>();
+
+export function invalidateServerActorCache(userId?: string): void {
+  if (userId) {
+    serverActorCache.delete(userId);
+  } else {
+    serverActorCache.clear();
+  }
+}
+
 function buildAuthenticatedActor(params: {
   id: string;
   username: string;
@@ -122,6 +138,12 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
       } = await supabase.auth.getUser();
 
       if (!userError && user && user.email) {
+        const now = Date.now();
+        const cached = serverActorCache.get(user.id);
+        if (cached && cached.expiresAt > now) {
+          return cached.actor;
+        }
+
         // Primary source of truth: public.user_profiles table in Supabase PostgreSQL
         // Use admin client when available to avoid any RLS policy evaluation overhead
         const db = isSupabaseAdminConfigured() ? createAdminSupabaseClient() : supabase;
@@ -133,6 +155,7 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
 
         if (!profileError && profileRow) {
           if (!profileRow.is_active || profileRow.is_permanently_deleted) {
+            serverActorCache.set(user.id, { actor: null, expiresAt: now + SERVER_ACTOR_CACHE_TTL_MS });
             return null;
           }
 
@@ -146,7 +169,7 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
 
           const username = profileRow.username || user.email.split("@")[0];
 
-          return buildAuthenticatedActor({
+          const resolvedActor = buildAuthenticatedActor({
             id: profileRow.id,
             username,
             email: profileRow.email || user.email,
@@ -162,6 +185,8 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
             customGrants: profileRow.custom_grants,
             customRestrictions: profileRow.custom_restrictions,
           });
+          serverActorCache.set(user.id, { actor: resolvedActor, expiresAt: now + SERVER_ACTOR_CACHE_TTL_MS });
+          return resolvedActor;
         }
 
         // Protected admin-assigned app_metadata fallback

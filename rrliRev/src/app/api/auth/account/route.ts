@@ -28,7 +28,8 @@ import {
   updateServerAccountUsername,
   verifyServerAccountCurrentPassword,
 } from "@/lib/auth/server-account-store";
-import { getAuthenticatedActor, type AuthenticatedActor } from "@/lib/auth/server-session";
+import { getAuthenticatedActor, invalidateServerActorCache, type AuthenticatedActor } from "@/lib/auth/server-session";
+import { invalidateProxyProfileCache } from "@/proxy";
 
 async function getDatabaseClient() {
   if (isSupabaseAdminConfigured()) {
@@ -71,6 +72,9 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   }
+
+  invalidateServerActorCache(actor.id);
+  invalidateProxyProfileCache(actor.id);
 
   const body = await request.json().catch(() => null);
   const action = typeof body?.action === "string" ? body.action : "";

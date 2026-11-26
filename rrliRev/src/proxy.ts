@@ -14,6 +14,26 @@ import {
 import { isSupabaseConfigured } from "@/lib/config/env";
 import { createProxySupabaseClient } from "@/lib/supabase/server";
 
+type ProxyProfileRow = {
+  role: string | null;
+  roles: string[] | null;
+  is_superadmin: boolean | null;
+  is_active: boolean | null;
+  is_permanently_deleted: boolean | null;
+  must_change_password: boolean | null;
+};
+
+const PROXY_PROFILE_TTL_MS = 10_000;
+const proxyProfileCache = new Map<string, { row: ProxyProfileRow | null; expiresAt: number }>();
+
+export function invalidateProxyProfileCache(userId?: string): void {
+  if (userId) {
+    proxyProfileCache.delete(userId);
+  } else {
+    proxyProfileCache.clear();
+  }
+}
+
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
@@ -47,12 +67,21 @@ export async function proxy(request: NextRequest) {
       const isAuthenticated = !error && Boolean(user?.id);
 
       if (isAuthenticated && user) {
-        // Primary source of truth: public.user_profiles table in Supabase PostgreSQL
-        const { data: profileRow } = await supabase
-          .from("user_profiles")
-          .select("role, roles, is_superadmin, is_active, is_permanently_deleted, must_change_password")
-          .eq("id", user.id)
-          .maybeSingle();
+        // Primary source of truth: public.user_profiles table in Supabase PostgreSQL (with 10s TTL cache)
+        const now = Date.now();
+        const cached = proxyProfileCache.get(user.id);
+        let profileRow: ProxyProfileRow | null = null;
+        if (cached && cached.expiresAt > now) {
+          profileRow = cached.row;
+        } else {
+          const { data } = await supabase
+            .from("user_profiles")
+            .select("role, roles, is_superadmin, is_active, is_permanently_deleted, must_change_password")
+            .eq("id", user.id)
+            .maybeSingle();
+          profileRow = (data as ProxyProfileRow | null) ?? null;
+          proxyProfileCache.set(user.id, { row: profileRow, expiresAt: now + PROXY_PROFILE_TTL_MS });
+        }
 
         if (profileRow && (!profileRow.is_active || profileRow.is_permanently_deleted)) {
           return applySessionUpdates(

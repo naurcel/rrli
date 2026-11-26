@@ -1751,8 +1751,8 @@ export default function TruckProfitabilityPage() {
             )}
           </div>
 
-          {error ? null : (loading || isPlateSearchBuffering) ? (
-            <SimpleLoading message={isPlateSearchBuffering ? "Searching trucks…" : "Loading trucks…"} />
+          {error ? null : (loading && sortedTruckSummaries.length === 0) ? (
+            <SimpleLoading message="Loading trucks…" />
           ) : filteredOwnedTrucks.length === 0 ? (
             <div className="empty-state minimal" title="No matching trucks">
               <strong className="empty-state-title">No owned trucks match the selected filters</strong>

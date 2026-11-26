@@ -47,6 +47,7 @@ import { formatPercent, formatPeso } from "@/lib/format";
 import { CompactMoney } from "@/components/compact-money";
 
 const PAGE_SIZE = 10;
+let cachedFinanceExpenses: CompanyExpense[] | null = null;
 
 export default function FinancePage() {
   const actor = useAuthenticatedActor();
@@ -54,8 +55,8 @@ export default function FinancePage() {
   const { range, setRange } = useGlobalDateRange();
 
   // Company expenses state
-  const [expenses, setExpenses] = useState<CompanyExpense[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [expenses, setExpenses] = useState<CompanyExpense[]>(() => cachedFinanceExpenses ?? []);
+  const [loading, setLoading] = useState<boolean>(() => cachedFinanceExpenses === null);
   const [error, setError] = useState<string | null>(null);
 
   // Record Modal state
@@ -114,7 +115,9 @@ export default function FinancePage() {
 
   // Fetch or sync company expenses
   const loadExpenses = useCallback(async () => {
-    setLoading(true);
+    if (!cachedFinanceExpenses) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -122,6 +125,7 @@ export default function FinancePage() {
       if (res.ok) {
         const data = await res.json();
         if (data.ok && Array.isArray(data.items)) {
+          cachedFinanceExpenses = data.items;
           setExpenses(data.items);
           setLoading(false);
           return;
@@ -132,6 +136,7 @@ export default function FinancePage() {
     }
 
     const previewExpenses = readBrowserPreviewExpenses();
+    cachedFinanceExpenses = previewExpenses;
     setExpenses(previewExpenses);
     setLoading(false);
   }, []);
@@ -883,9 +888,9 @@ export default function FinancePage() {
             </div>
           ) : null}
 
-          {(loading || isSearchBuffering) ? (
+          {(loading && expenses.length === 0) ? (
             <SimpleLoading
-              message={isSearchBuffering ? "Searching expenses…" : "Loading expense ledger…"}
+              message="Loading expense ledger…"
             />
           ) : (
             <div className="table-wrap">

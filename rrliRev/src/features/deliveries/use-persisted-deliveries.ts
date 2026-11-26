@@ -43,12 +43,22 @@ async function fetchDeliveryPage(
   return payload;
 }
 
+const deliveriesSwrCache = new Map<string, readonly DeliveryLedgerItem[]>();
+
+export function invalidatePersistedDeliveriesCache(): void {
+  deliveriesSwrCache.clear();
+}
+
 export function usePersistedDeliveries(range: DateRange, options: { allPages?: boolean } = {}) {
-  const [deliveries, setDeliveries] = useState<readonly DeliveryLedgerItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const startTime = range.startDate?.getTime() ?? null;
   const endTime = range.endDate?.getTime() ?? null;
+  const cacheKey = `${startTime ?? "all"}:${endTime ?? "all"}:${options.allPages ?? true}`;
+
+  const [deliveries, setDeliveries] = useState<readonly DeliveryLedgerItem[]>(
+    () => deliveriesSwrCache.get(cacheKey) ?? [],
+  );
+  const [loading, setLoading] = useState<boolean>(() => !deliveriesSwrCache.has(cacheKey));
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -57,7 +67,13 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
       endDate: endTime == null ? null : new Date(endTime),
     };
 
-    setLoading(true);
+    const cached = deliveriesSwrCache.get(cacheKey);
+    if (cached) {
+      setDeliveries(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     const load = () => fetchDeliveryPage(1, activeRange, controller.signal)
       .then(async (firstPage) => {
@@ -78,7 +94,9 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
             })
           : [];
         const localIds = new Set(local.map((item) => item.id));
-        setDeliveries([...local, ...persisted.filter((item) => !localIds.has(item.id))]);
+        const nextDeliveries = [...local, ...persisted.filter((item) => !localIds.has(item.id))];
+        deliveriesSwrCache.set(cacheKey, nextDeliveries);
+        setDeliveries(nextDeliveries);
       })
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;
@@ -88,9 +106,10 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
           dateTo: activeRange.endDate ? toDateKey(activeRange.endDate) : undefined,
         });
         if (local.length > 0) {
+          deliveriesSwrCache.set(cacheKey, local);
           setDeliveries(local);
           setError(null);
-        } else {
+        } else if (!deliveriesSwrCache.has(cacheKey)) {
           setDeliveries([]);
           setError(
             requestError instanceof Error
@@ -102,7 +121,10 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
       .finally(() => setLoading(false));
 
     void load();
-    const reload = () => { if (!controller.signal.aborted) void load(); };
+    const reload = () => {
+      deliveriesSwrCache.clear();
+      if (!controller.signal.aborted) void load();
+    };
     const onStorage = (event: StorageEvent) => {
       if (controller.signal.aborted) return;
       if (
@@ -111,6 +133,7 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
         event.key.startsWith("routex:delivery") ||
         event.key.includes("deliveries")
       ) {
+        deliveriesSwrCache.clear();
         void load();
       }
     };
@@ -122,7 +145,7 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
       window.removeEventListener("storage", onStorage);
       controller.abort();
     };
-  }, [endTime, options.allPages, startTime]);
+  }, [cacheKey, endTime, options.allPages, startTime]);
 
   return { deliveries, loading, error } as const;
 }

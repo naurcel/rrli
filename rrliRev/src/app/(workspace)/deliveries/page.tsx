@@ -280,7 +280,9 @@ export default function DeliveriesPage() {
       params.set("sort", sortField);
       params.set("direction", direction);
 
-      setLoading(true);
+      if (deliveries.length === 0) {
+        setLoading(true);
+      }
       setLoadError(null);
       fetch(`/api/deliveries?${params.toString()}`, { signal: controller.signal })
         .then(async (response) => {
@@ -379,7 +381,8 @@ export default function DeliveriesPage() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [range, debouncedSearchQuery, selectedClients, selectedTrucks, sort]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range, debouncedSearchQuery, selectedClients, selectedTrucks]);
 
   const isInitialParamsParsed = useRef(false);
 
@@ -948,9 +951,9 @@ export default function DeliveriesPage() {
               <strong>Delivery database is unavailable</strong>
               <span>{loadError}</span>
             </div>
-          ) : (loading || isSearchBuffering) ? (
+          ) : (loading && deliveries.length === 0) ? (
             <SimpleLoading
-              message={isSearchBuffering ? "Searching deliveries…" : "Loading deliveries…"}
+              message="Loading deliveries…"
             />
           ) : (
             <>

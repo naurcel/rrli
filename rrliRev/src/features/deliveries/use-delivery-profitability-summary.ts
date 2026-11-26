@@ -32,19 +32,32 @@ function dateKey(value: Date | null): string | null {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
+const summarySwrCache = new Map<string, PersistedProfitabilitySummary>();
+
 export function useDeliveryProfitabilitySummary(range: DateRange) {
-  const [summary, setSummary] = useState<PersistedProfitabilitySummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const start = dateKey(range.startDate);
   const end = dateKey(range.endDate);
+  const cacheKey = `${start ?? "all"}:${end ?? "all"}`;
+
+  const [summary, setSummary] = useState<PersistedProfitabilitySummary | null>(
+    () => summarySwrCache.get(cacheKey) ?? null,
+  );
+  const [loading, setLoading] = useState<boolean>(() => !summarySwrCache.has(cacheKey));
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     const params = new URLSearchParams();
     if (start) params.set("dateFrom", start);
     if (end) params.set("dateTo", end);
-    setLoading(true);
+
+    const cached = summarySwrCache.get(cacheKey);
+    if (cached) {
+      setSummary(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     const load = () => fetch(`/api/deliveries/summary?${params}`, { signal: controller.signal })
       .then(async (response) => {
@@ -56,9 +69,11 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
           includedDeliveryIds?: string[];
         };
         if (!response.ok || !payload.ok || !payload.summary) throw new Error(payload.message ?? "Unable to load profitability summary.");
-        setSummary(payload.source === "bundled-mock"
+        const nextSummary = payload.source === "bundled-mock"
           ? mergeBrowserPreviewSummary(payload.summary, start, end, payload.includedDeliveryIds)
-          : payload.summary);
+          : payload.summary;
+        summarySwrCache.set(cacheKey, nextSummary);
+        setSummary(nextSummary);
       })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
@@ -72,16 +87,20 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
         };
         const fallback = mergeBrowserPreviewSummary(emptySummary, start, end, []);
         if (fallback.deliveries > 0) {
+          summarySwrCache.set(cacheKey, fallback);
           setSummary(fallback);
           setError(null);
-        } else {
+        } else if (!summarySwrCache.has(cacheKey)) {
           setSummary(null);
           setError(reason instanceof Error ? reason.message : "Unable to load profitability summary.");
         }
       })
       .finally(() => setLoading(false));
     void load();
-    const reload = () => { if (!controller.signal.aborted) void load(); };
+    const reload = () => {
+      summarySwrCache.clear();
+      if (!controller.signal.aborted) void load();
+    };
     const onStorage = (event: StorageEvent) => {
       if (controller.signal.aborted) return;
       if (
@@ -90,6 +109,7 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
         event.key.startsWith("routex:delivery") ||
         event.key.includes("deliveries")
       ) {
+        summarySwrCache.clear();
         void load();
       }
     };
@@ -100,7 +120,7 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
       window.removeEventListener("storage", onStorage);
       controller.abort();
     };
-  }, [end, start]);
+  }, [cacheKey, end, start]);
 
   return { summary, loading, error } as const;
 }

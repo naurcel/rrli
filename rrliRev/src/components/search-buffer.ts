@@ -9,10 +9,11 @@ export interface SearchBufferOptions {
 }
 
 export function useSearchBuffer({
-  delay = 500,
+  delay = 150,
   initialValue = "",
   onSearch,
 }: SearchBufferOptions = {}) {
+  const effectiveDelay = Math.min(Math.max(delay, 30), 150);
   const [value, setValue] = useState(initialValue);
   const [bufferedQuery, setBufferedQuery] = useState(initialValue);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -33,12 +34,12 @@ export function useSearchBuffer({
       setBufferedQuery(value);
       setIsBuffering(false);
       onSearchRef.current?.(value);
-    }, delay);
+    }, effectiveDelay);
 
     return () => {
       clearTimeout(handler);
     };
-  }, [value, bufferedQuery, delay]);
+  }, [value, bufferedQuery, effectiveDelay]);
 
   const clear = useCallback(() => {
     setValue("");
