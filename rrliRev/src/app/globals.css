@@ -7833,7 +7833,7 @@ html[data-theme="dark"] .truck-dialog-photo-card:hover {
 /* Let the browser interpolate the SVG tooltip instead of scheduling React
    state updates on every animation frame. */
 .chart-point-tooltip {
-  transition: transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1), opacity 180ms ease;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
   transform-box: view-box;
   will-change: transform;
   pointer-events: none;

@@ -560,7 +560,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
         {phase === "outro-password" ? (
           <div key="phase-outro-password" className="native-setup-interstitial">
             <h1 className="interstitial-sentence setup-stagger setup-stagger-1">
-              Take care of your new password.
+              <strong className="interstitial-bold">Take care</strong> of your new password.
             </h1>
           </div>
         ) : null}
@@ -731,7 +731,9 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                   Looking good, <span className="interstitial-highlight">{firstName}</span>.
                 </>
               ) : (
-                "No problem — you can add one anytime."
+                <>
+                  <strong className="interstitial-bold">No worries</strong> — you can add one anytime.
+                </>
               )}
             </h1>
           </div>
@@ -972,7 +974,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
         {phase === "outro-recovery" ? (
           <div key="phase-outro-recovery" className="native-setup-interstitial">
             <h1 className="interstitial-sentence setup-stagger setup-stagger-1">
-              One last thing before we begin.
+              <strong className="interstitial-bold">One last thing</strong> before we begin.
             </h1>
           </div>
         ) : null}

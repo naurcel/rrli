@@ -279,7 +279,7 @@
 
 .interstitial-sentence {
   font-size: clamp(30px, 5.2vw, 44px);
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: -0.035em;
   line-height: 1.18;
   color: var(--color-text-primary, #15201d);
@@ -288,10 +288,15 @@
 }
 
 .interstitial-highlight {
+  font-weight: 700;
   background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.interstitial-bold {
+  font-weight: 700;
 }
 
 .interstitial-subcaption {

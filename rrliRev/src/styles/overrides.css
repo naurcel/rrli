@@ -363,7 +363,7 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
 .records-heading-copy,
 .routex-card-header-main {
   min-width: 0 !important;
-  flex: 1 1 200px !important;
+  flex: 1 1 auto !important;
 }
 
 .records-heading-meta,
@@ -372,6 +372,30 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
   align-items: center !important;
   flex-wrap: wrap !important;
   gap: 8px 12px !important;
+}
+
+@media (max-width: 960px) {
+  .records-heading {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .records-heading-copy,
+  .routex-card-header-main {
+    width: 100% !important;
+    flex: 0 0 auto !important;
+  }
+
+  .records-heading-meta,
+  .routex-card-actions {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
 }
 
 @media (max-width: 768px) {
@@ -399,28 +423,6 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
     flex-wrap: wrap !important;
     gap: 8px 10px !important;
     width: 100% !important;
-  }
-
-  .records-heading {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 10px !important;
-  }
-
-  .records-heading-copy,
-  .routex-card-header-main {
-    width: 100% !important;
-    flex: 0 0 auto !important;
-  }
-
-  .records-heading-meta,
-  .routex-card-actions {
-    width: 100% !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    flex-wrap: wrap !important;
-    gap: 8px !important;
   }
 }
 
@@ -570,6 +572,42 @@ html[data-theme="dark"] .crew-role-pill.helper-2 {
   font-size: 13px !important;
   font-weight: 600 !important;
   color: var(--color-primary, #b45309) !important;
+}
+
+.margin-pill,
+.margin-pill.good,
+.margin-pill.mod,
+.margin-pill.low,
+.pill-success,
+.pill-neutral,
+.pill-warn,
+.routex-badge:not(.variant-counter),
+.routex-badge:not(.variant-counter).tone-primary,
+.routex-badge:not(.variant-counter).tone-success,
+.routex-badge:not(.variant-counter).tone-warning,
+.routex-badge:not(.variant-counter).tone-danger,
+.routex-badge:not(.variant-counter).tone-purple,
+.routex-badge:not(.variant-counter).tone-neutral,
+html[data-theme="dark"] .margin-pill,
+html[data-theme="dark"] .margin-pill.good,
+html[data-theme="dark"] .margin-pill.mod,
+html[data-theme="dark"] .margin-pill.low,
+html[data-theme="dark"] .pill-success,
+html[data-theme="dark"] .pill-neutral,
+html[data-theme="dark"] .pill-warn,
+html[data-theme="dark"] .routex-badge:not(.variant-counter),
+html[data-theme="dark"] .routex-badge:not(.variant-counter).tone-primary,
+html[data-theme="dark"] .routex-badge:not(.variant-counter).tone-success,
+html[data-theme="dark"] .routex-badge:not(.variant-counter).tone-warning,
+html[data-theme="dark"] .routex-badge:not(.variant-counter).tone-danger,
+html[data-theme="dark"] .routex-badge:not(.variant-counter).tone-purple,
+html[data-theme="dark"] .routex-badge:not(.variant-counter).tone-neutral {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  min-height: auto !important;
 }
 
 /* 7. Truck Filter Toolbar & Dropdown Layout */
@@ -1256,8 +1294,9 @@ html[data-theme="dark"] .dashboard-view-all-btn:active {
 }
 
 /* ==========================================================================
-   16. Modal Background Gaussian Blur & Popup Entrance Animation
-   Applies a slight Gaussian backdrop blur and smooth popup animation across all modal overlays.
+   16. Fast GPU-Composited Modal Overlays (Zero-Lag Entrance)
+   Replaces expensive full-viewport backdrop-filter and app-shell filter blurs
+   with a clean translucent scrim and composited transform/opacity animation.
    ========================================================================== */
 @keyframes routex-modal-backdrop-in {
   from {
@@ -1271,20 +1310,31 @@ html[data-theme="dark"] .dashboard-view-all-btn:active {
 @keyframes routex-modal-pop-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.95);
+    transform: translate3d(0, 8px, 0) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
 .routex-dialog-backdrop,
 .record-detail-backdrop,
 .image-viewer-backdrop {
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  animation: routex-modal-backdrop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(15, 23, 21, 0.46) !important;
+  will-change: opacity;
+  animation: routex-modal-backdrop-in 0.14s ease-out both !important;
+}
+
+.routex-dialog,
+.routex-dialog-panel,
+.routex-dialog-header,
+.record-detail-drawer,
+.image-viewer-dialog {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .routex-dialog,
@@ -1294,14 +1344,16 @@ html[data-theme="dark"] .dashboard-view-all-btn:active {
 [role="dialog"][aria-modal="true"] > .records-card,
 .routex-dialog-backdrop > div {
   transform-origin: center center;
-  animation: routex-modal-pop-in 0.26s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+  will-change: transform, opacity;
+  contain: layout style;
+  animation: routex-modal-pop-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both !important;
 }
 
 body > .routex-dialog-layer ~ .app-shell,
 body:has(> .routex-dialog-layer) .app-shell,
 body:has(> .record-detail-layer) .app-shell {
-  filter: blur(2.5px);
-  transition: filter 0.22s ease;
+  filter: none !important;
+  transition: none !important;
 }
 
 /* ==========================================================================
@@ -2297,8 +2349,8 @@ html[data-compactness="compact"] .content-wrap {
 }
 
 .dashboard-kpi-grid .stat-card strong {
-  font-size: clamp(18px, 2vw, 24px) !important;
-  line-height: 1.2 !important;
+  font-size: clamp(22px, 2.3vw, 29px) !important;
+  line-height: 1.15 !important;
   overflow-wrap: anywhere !important;
   word-break: break-word !important;
 }
@@ -2483,5 +2535,60 @@ html[data-theme="dark"] .secondary-button:hover:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.28);
   color: #ffffff;
 }
+
+/* ==========================================================================
+   FINANCIAL BREAKDOWN DONUT CHART: AUTO-STACK TO VERTICAL BEFORE TEXT TRUNCATION
+   Uses container query so the donut + 2-col legend stack vertically as soon
+   as the card width can no longer fit legend labels cleanly.
+   ========================================================================== */
+.breakdown-chart-showcase-card,
+.breakdown-chart-section {
+  container-type: inline-size;
+  container-name: breakdown-card;
+}
+
+@container breakdown-card (max-width: 650px) {
+  .breakdown-chart-wrapper,
+  .breakdown-chart-wrapper.is-large {
+    grid-template-columns: 1fr !important;
+    justify-items: center !important;
+    gap: 16px !important;
+  }
+
+  .breakdown-legend-list {
+    width: 100% !important;
+  }
+}
+
+/* ==========================================================================
+   DASHBOARD GREETING HEADING SCALE
+   Slightly enlarges only the Dashboard greeting ("Good morning, ...") without
+   affecting other pages' .page-intro h1 titles.
+   ========================================================================== */
+html .main-content .page-intro.dashboard-welcome h1 {
+  font-size: clamp(32px, 3.6vw, 46px) !important;
+  line-height: 1.12 !important;
+}
+
+/* ==========================================================================
+   DASHBOARD BOTTOM COLUMNS ALIGNMENT
+   Stretches Top Trucks card to fill remaining vertical space in
+   .dashboard-actions so its bottom aligns cleanly with Recent Deliveries.
+   ========================================================================== */
+.dashboard-actions .top-trucks-card {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.dashboard-actions .top-trucks-card .top-truck-list {
+  flex: 1 1 auto !important;
+  align-content: start !important;
+}
+
+.dashboard-actions .top-trucks-card .dashboard-card-link {
+  margin-top: auto !important;
+}
+
 
 
