@@ -111,6 +111,15 @@ function buildSmoothPath(
 }
 
 const METRIC_CONFIG = {
+  comparison: {
+    label: "All",
+    title: "Financial overview over time",
+    subtitleSuffix: "all daily revenue, expenses, and net profit",
+    color: "var(--color-accent-highlight, #f59e0b)",
+    dotClass: "legend-dot-revenue",
+    gradientId: "chart-fill-revenue",
+    emptyMsg: "No financial activity in this range",
+  },
   revenue: {
     label: "Revenue",
     title: "Revenue over time",
@@ -138,15 +147,6 @@ const METRIC_CONFIG = {
     gradientId: "chart-fill-profit",
     emptyMsg: "No net profit activity in this range",
   },
-  comparison: {
-    label: "All",
-    title: "Financial overview over time",
-    subtitleSuffix: "all daily revenue, expenses, and net profit",
-    color: "var(--color-accent-highlight, #f59e0b)",
-    dotClass: "legend-dot-revenue",
-    gradientId: "chart-fill-revenue",
-    emptyMsg: "No financial activity in this range",
-  },
 } as const;
 
 export type DashboardFinancialChartProps = {
@@ -158,7 +158,7 @@ export type DashboardFinancialChartProps = {
 export function DashboardFinancialChart({
   series,
   periodLabel,
-  initialMetric = "revenue",
+  initialMetric = "comparison",
 }: DashboardFinancialChartProps) {
   const [metric, setMetric] = useState<FinancialChartMetric>(initialMetric);
   const [viewMode, setViewMode] = useState<FinancialChartView>("line");
@@ -404,6 +404,16 @@ export function DashboardFinancialChart({
           className="chart-metric-tabs"
         >
           <TabTrigger
+            value="comparison"
+            active={metric === "comparison"}
+            onClick={() => {
+              setActiveIndex(null);
+              setMetric("comparison");
+            }}
+          >
+            All
+          </TabTrigger>
+          <TabTrigger
             value="revenue"
             active={metric === "revenue"}
             onClick={() => {
@@ -432,16 +442,6 @@ export function DashboardFinancialChart({
             }}
           >
             Profit
-          </TabTrigger>
-          <TabTrigger
-            value="comparison"
-            active={metric === "comparison"}
-            onClick={() => {
-              setActiveIndex(null);
-              setMetric("comparison");
-            }}
-          >
-            All
           </TabTrigger>
         </TabList>
 
