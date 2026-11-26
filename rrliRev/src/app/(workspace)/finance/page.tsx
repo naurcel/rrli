@@ -324,18 +324,8 @@ export default function FinancePage() {
     setPage(1);
   }
 
-  function openRecordExpenseModal() {
-    setRecordType("Outgoing");
-    setFormError(null);
-    setNewDescription("");
-    setNewAmount("");
-    setNewDate(toDateKey(new Date()));
-    setNewNotes("");
-    setIsRecordModalOpen(true);
-  }
-
-  function openRecordIncomeModal() {
-    setRecordType("Incoming");
+  function openRecordModal(initialType: "Incoming" | "Outgoing" = "Outgoing") {
+    setRecordType(initialType);
     setFormError(null);
     setNewDescription("");
     setNewAmount("");
@@ -350,15 +340,15 @@ export default function FinancePage() {
     setFormError(null);
   }
 
-  // Auto-open record transaction modal if navigated with ?record=1, ?record=expense, or ?record=income
+  // Preserve direct links while keeping a single entry action in the page header.
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const recordParam = params.get("record");
       if (recordParam === "1" || recordParam === "expense") {
-        openRecordExpenseModal();
+        openRecordModal("Outgoing");
       } else if (recordParam === "income") {
-        openRecordIncomeModal();
+        openRecordModal("Incoming");
       }
     } catch {
       // Ignore URL parsing errors
@@ -582,19 +572,11 @@ export default function FinancePage() {
                 </Link>
                 <button
                   type="button"
-                  className="secondary-button page-intro-action finance-record-income-btn"
-                  onClick={openRecordIncomeModal}
-                  style={{ borderRadius: "8px", margin: "0" }}
-                >
-                  + Record Income
-                </button>
-                <button
-                  type="button"
                   className="primary-action-button page-intro-action"
-                  onClick={openRecordExpenseModal}
+                  onClick={() => openRecordModal()}
                   style={{ borderRadius: "8px", margin: "0" }}
                 >
-                  + Record Expense
+                  + Record transaction
                 </button>
               </>
             ) : (
@@ -721,47 +703,7 @@ export default function FinancePage() {
           aria-label="Company finance ledger"
         >
           <div className="records-heading">
-            <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
-              <h2>Company Ledger</h2>
-              <div className="finance-ledger-tabs" role="tablist" aria-label="Filter ledger view">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={typeFilter === "all"}
-                  className={`finance-ledger-tab${typeFilter === "all" ? " active" : ""}`}
-                  onClick={() => {
-                    setTypeFilter("all");
-                    setPage(1);
-                  }}
-                >
-                  All Records
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={typeFilter === "Incoming"}
-                  className={`finance-ledger-tab${typeFilter === "Incoming" ? " active income" : ""}`}
-                  onClick={() => {
-                    setTypeFilter("Incoming");
-                    setPage(1);
-                  }}
-                >
-                  Company Income
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={typeFilter === "Outgoing"}
-                  className={`finance-ledger-tab${typeFilter === "Outgoing" ? " active expense" : ""}`}
-                  onClick={() => {
-                    setTypeFilter("Outgoing");
-                    setPage(1);
-                  }}
-                >
-                  Company Expenses
-                </button>
-              </div>
-            </div>
+            <h2>Company Ledger</h2>
             <span className="ledger-total-badge">
               {filteredAndSortedExpenses.length} of {expenses.length} records
             </span>

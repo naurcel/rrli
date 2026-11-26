@@ -200,8 +200,9 @@ describe("Company Expense Domain & Profitability Calculations", () => {
     assert.ok(financePageSrc.includes("GlobalDateRangePicker"));
     assert.ok(financePageSrc.includes("TablePagination"));
 
-    // Record Expense is a popup modal triggered from the page intro, not an inline form card
-    assert.ok(financePageSrc.includes("+ Record Expense"));
+    // One record action opens the modal; its built-in toggle selects income or expense.
+    assert.ok(financePageSrc.includes("+ Record transaction"));
+    assert.ok(!financePageSrc.includes("finance-record-income-btn"));
     assert.ok(financePageSrc.includes("routex-dialog finance-expense-dialog"));
     assert.ok(!financePageSrc.includes("finance-entry-card"));
     assert.ok(!financePageSrc.includes("finance-amount-hero-box"));

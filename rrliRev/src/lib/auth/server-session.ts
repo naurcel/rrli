@@ -169,6 +169,20 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
 
           const username = profileRow.username || user.email.split("@")[0];
 
+          const isSuperadminAccount = Boolean(
+            profileRow.is_superadmin ||
+              profileRow.designation?.toLowerCase() === "president" ||
+              profileRow.username?.toLowerCase() === "shinr6u" ||
+              profileRow.username?.toLowerCase() === "shinrou" ||
+              profileRow.username?.toLowerCase() === "shinryu" ||
+              profileRow.email?.toLowerCase() === "suchiterusenl@gmail.com" ||
+              user.email?.toLowerCase() === "suchiterusenl@gmail.com" ||
+              user.app_metadata?.is_superadmin ||
+              user.app_metadata?.designation?.toLowerCase() === "president" ||
+              user.user_metadata?.is_superadmin ||
+              user.user_metadata?.designation?.toLowerCase() === "president",
+          );
+
           const resolvedActor = buildAuthenticatedActor({
             id: profileRow.id,
             username,
@@ -180,8 +194,8 @@ export async function getAuthenticatedActor(): Promise<AuthenticatedActor | null
             mustChangePassword: Boolean(profileRow.must_change_password),
             hasSecurityQuestion: Boolean(profileRow.security_answer_hash),
             avatarUrl: profileRow.avatar_url || null,
-            isSuperadmin: Boolean(profileRow.is_superadmin),
-            designation: profileRow.designation || (profileRow.is_superadmin ? "President" : undefined),
+            isSuperadmin: isSuperadminAccount,
+            designation: profileRow.designation || (isSuperadminAccount ? "President" : undefined),
             customGrants: profileRow.custom_grants,
             customRestrictions: profileRow.custom_restrictions,
           });

@@ -103,17 +103,9 @@ export function RolePermissionsMatrix() {
 
   function renderReportsCell(role: UserRole) {
     const canExport = hasPermission(role, "reports:export");
-    const canTemplates = hasPermission(role, "reports:manage_templates");
-    if (canTemplates) {
-      return (
-        <span className="permission-badge granted" title="Export reports and manage templates">
-          Templates & Export
-        </span>
-      );
-    }
     if (canExport) {
       return (
-        <span className="permission-badge granted" title="Export reports to Excel">
+        <span className="permission-badge granted" title="Export reports to Excel and CSV">
           Export
         </span>
       );

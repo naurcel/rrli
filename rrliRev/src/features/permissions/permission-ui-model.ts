@@ -172,7 +172,7 @@ export const FRIENDLY_PERMISSIONS: readonly FriendlyPermissionDefinition[] = [
     categoryLabel: "Company Finance",
   },
 
-  // 8. Reports (No Report Templates)
+  // 8. Reports (Standard Operational Reports & Data Export)
   {
     key: "reports:view",
     title: "View Operational Reports",
@@ -184,13 +184,6 @@ export const FRIENDLY_PERMISSIONS: readonly FriendlyPermissionDefinition[] = [
     key: "reports:export",
     title: "Export Report Data",
     description: "Download formatted Excel spreadsheets and CSV data tables for external reporting and auditing.",
-    category: "reports",
-    categoryLabel: "Reports",
-  },
-  {
-    key: "reports:manage_templates",
-    title: "Manage Report Templates",
-    description: "Configure report templates, visible data columns, and export layouts.",
     category: "reports",
     categoryLabel: "Reports",
   },
