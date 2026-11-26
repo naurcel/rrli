@@ -1082,9 +1082,6 @@ export function FinancialBreakdownModal({
                       style={{
                         fontSize: "11px",
                         fontWeight: 700,
-                        padding: "2px 8px",
-                        borderRadius: "6px",
-                        background: (kpiBreakdown.marginPercent ?? 0) >= 0 ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
                         color: (kpiBreakdown.marginPercent ?? 0) >= 0 ? "#059669" : "#dc2626",
                       }}
                     >

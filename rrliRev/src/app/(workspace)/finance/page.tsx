@@ -213,8 +213,6 @@ export default function FinancePage() {
   // Actor filter options derived from unique expense creators
   const actorFilterOptions = useMemo(() => {
     const actors = new Set<string>();
-    actors.add("admin");
-    actors.add("finance");
     expenses.forEach((e) => {
       const c = formatExpenseActorUsername(e.createdBy, actor);
       if (c) actors.add(c);
@@ -223,24 +221,21 @@ export default function FinancePage() {
     const sorted = Array.from(actors).sort((a, b) => {
       const aLower = a.replace(/^@/, "").toLowerCase();
       const bLower = b.replace(/^@/, "").toLowerCase();
-      if (aLower === "admin") return -1;
-      if (bLower === "admin") return 1;
-      if (aLower === "finance") return -1;
-      if (bLower === "finance") return 1;
       if (aLower === "system") return 1;
       if (bLower === "system") return -1;
       return aLower.localeCompare(bLower);
     });
 
     return [
-      { value: "all", label: "All Users / Roles" },
+      { value: "all", label: "All Users" },
       ...sorted.map((val) => {
         const clean = val.replace(/^@/, "").toLowerCase();
-        let label = val;
-        if (clean === "admin") label = "@admin (Admin)";
-        else if (clean === "finance") label = "@finance (Finance)";
-        else if (clean === "system") label = "System";
-        else label = val.startsWith("@") ? val : `@${val}`;
+        const label =
+          clean === "system"
+            ? "System"
+            : val.startsWith("@")
+              ? val
+              : `@${val}`;
         return { value: val, label };
       }),
     ];

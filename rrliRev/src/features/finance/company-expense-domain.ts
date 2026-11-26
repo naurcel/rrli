@@ -56,12 +56,22 @@ export const COMPANY_FOUNDATION_DATE = "2024-01-01";
 
 const KNOWN_EMAIL_TO_USERNAME: Record<string, string> = {
   "suchiterusenl@gmail.com": "shinr6u",
-  "adrianmangampat@gmail.com": "mori_mochi",
-  "marcrancel@gmail.com": "narcel",
+  "zeankurt.balboa@gmail.com": "ze.ku",
+  "zeankurt@gmail.com": "ze.ku",
+  "azulajoy@gmail.com": "azula",
   "louizajoy@gmail.com": "azula",
   "jelenepunongbayan@gmail.com": "jxleners",
-  "zeankurt@gmail.com": "ze.ku",
-  "rainibasco@gmail.com": "ravicci",
+  "rain.ibasco@gmail.com": "ulan",
+  "rainibasco@gmail.com": "ulan",
+  "adrianmangampat15@gmail.com": "aidzz",
+  "adrianmangampat@gmail.com": "aidzz",
+  "marcrancel@gmail.com": "narcel",
+  "admin@routex.local": "shinr6u",
+  "operations@routex.local": "azula",
+  "finance@routex.local": "jxleners",
+  "admin": "shinr6u",
+  "operations": "azula",
+  "finance": "jxleners",
 };
 
 /**
