@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   addDays,
   dayKey,
@@ -41,7 +42,9 @@ export function SingleDatePicker({
   const [isOpen, setIsOpen] = useState(false);
   const [opensAbove, setOpensAbove] = useState(false);
   const [alignRight, setAlignRight] = useState(false);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const dialogId = useId();
 
   // Current viewing month
@@ -66,9 +69,9 @@ export function SingleDatePicker({
   useEffect(() => {
     if (!isOpen) return;
     const handlePointerDown = (event: PointerEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target) || popoverRef.current?.contains(target)) return;
+      setIsOpen(false);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -83,15 +86,46 @@ export function SingleDatePicker({
     };
   }, [isOpen]);
 
+  // Position the calendar in a body-level portal so modal bodies, footers, and
+  // scroll containers can never clip or cover it.
   useLayoutEffect(() => {
-    if (!isOpen) return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const estimatedHeight = 320;
-    const hasSpaceBelow = window.innerHeight - rect.bottom >= estimatedHeight + 12;
-    const hasSpaceAbove = rect.top >= estimatedHeight + 12;
-    setOpensAbove(!hasSpaceBelow && hasSpaceAbove);
-    setAlignRight(rect.right > window.innerWidth - 60 || rect.left > window.innerWidth * 0.65);
+    if (!isOpen) {
+      setPopoverPos(null);
+      return;
+    }
+    const POPOVER_WIDTH = 280;
+    const GAP = 6;
+    const MARGIN = 8;
+
+    const updatePosition = () => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const popoverHeight = popoverRef.current?.offsetHeight || 320;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const above = spaceBelow < popoverHeight + GAP + MARGIN && spaceAbove > spaceBelow;
+      const right = rect.left + POPOVER_WIDTH > window.innerWidth - MARGIN;
+
+      let top = above ? rect.top - popoverHeight - GAP : rect.bottom + GAP;
+      top = Math.max(MARGIN, Math.min(top, window.innerHeight - popoverHeight - MARGIN));
+      let left = right ? rect.right - POPOVER_WIDTH : rect.left;
+      left = Math.max(MARGIN, Math.min(left, window.innerWidth - POPOVER_WIDTH - MARGIN));
+
+      setOpensAbove(above);
+      setAlignRight(right);
+      setPopoverPos({ top, left });
+    };
+
+    updatePosition();
+    // Re-measure once the popover has rendered with its real height
+    const raf = window.requestAnimationFrame(updatePosition);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
   }, [isOpen]);
 
   // Grid computation (42 cells)
@@ -210,13 +244,24 @@ export function SingleDatePicker({
         />
       )}
 
-      {isOpen && (
+      {isOpen && typeof document !== "undefined" && createPortal(
         <div
+          ref={popoverRef}
           id={dialogId}
-          className="single-date-picker-popover"
+          className={`single-date-picker-popover is-portaled${opensAbove ? " opens-above" : ""}`}
           role="dialog"
           aria-label={ariaLabel}
           tabIndex={-1}
+          style={{
+            position: "fixed",
+            top: popoverPos?.top ?? -9999,
+            left: popoverPos?.left ?? -9999,
+            right: "auto",
+            bottom: "auto",
+            margin: 0,
+            visibility: popoverPos ? "visible" : "hidden",
+            transformOrigin: `${opensAbove ? "bottom" : "top"} ${alignRight ? "right" : "left"}`,
+          }}
         >
           {/* Header */}
           <div className="single-date-picker-header">
@@ -294,7 +339,8 @@ export function SingleDatePicker({
               Close
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

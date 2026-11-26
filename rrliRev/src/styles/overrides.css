@@ -1368,6 +1368,11 @@ body:has(> .record-detail-layer) .app-shell {
   z-index: 1400 !important;
 }
 
+/* 18.4b Body-portaled date picker floats above every modal, footer and scroll container */
+.single-date-picker-popover.is-portaled {
+  z-index: 10050 !important;
+}
+
 /* 18.5 Elevate Topbar above main content whenever a topbar dropdown is open */
 .topbar:has(.rounded-select.is-open),
 .topbar:has(.single-date-picker-popover),
