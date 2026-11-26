@@ -412,6 +412,15 @@ test("generateReportXlsx creates valid Excel workbook bytes with metadata and ro
   const xlsxBytes = generateReportXlsx(processed, "Nov 1, 2026 - Nov 30, 2026");
   assert.ok(xlsxBytes instanceof Uint8Array);
   assert.ok(xlsxBytes.length > 500, "Should generate valid XLSX binary");
+
+  const dtrProcessed = processReport(MOCK_DELIVERIES, DEFAULT_DAILY_TRIP_TEMPLATE);
+  const dtrCsv = generateReportCsv(dtrProcessed, "Nov 1, 2026");
+  assert.ok(dtrCsv.includes("3961,REDEEMED ROUTE LOGSITICS INC."));
+  assert.ok(dtrCsv.includes("ALLOWANCE,DAILY RATE,ALLOWANCE,DAILY RATE"));
+
+  const dtrXlsx = generateReportXlsx(dtrProcessed, "Nov 1, 2026");
+  assert.ok(dtrXlsx instanceof Uint8Array);
+  assert.ok(dtrXlsx.length > 500);
 });
 
 // ============================================================================

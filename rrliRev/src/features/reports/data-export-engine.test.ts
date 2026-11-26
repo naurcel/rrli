@@ -17,6 +17,10 @@ import {
   generateWorkingWebsiteHtml,
   reviewDataExportRequest,
 } from "./data-export-engine.ts";
+import {
+  parseArchiveMachineText,
+  parseArchiveMachineWorkbook,
+} from "../archive/archive-machine.ts";
 
 const allMockDeliveries = listSmallMockDeliveryRecords({ page: 1, pageSize: 100 }).items;
 
@@ -80,6 +84,32 @@ test("generateDatasetsCsvBundle, generateDatabaseJsonDump, generateDatabaseSqlDu
   const xlsxBytes = generateDatasetsXlsxWorkbook(payload);
   assert.ok(xlsxBytes instanceof Uint8Array);
   assert.ok(xlsxBytes.length > 1000, "Should generate multi-sheet XLSX binary workbook");
+
+  // Round-trip every exported format through the Archive Machine parser
+  const jsonArchive = parseArchiveMachineText(generateDatabaseJsonDump(payload), "archive-2026.json");
+  assert.equal(jsonArchive.archiveYear, 2026);
+  assert.equal(jsonArchive.deliveries.length, payload.deliveries.length);
+  assert.equal(jsonArchive.companyExpenses.length, payload.companyExpenses.length);
+
+  const htmlArchive = parseArchiveMachineText(htmlWebsite, "archive-2026.html");
+  assert.equal(htmlArchive.archiveYear, 2026);
+  assert.equal(htmlArchive.deliveries.length, payload.deliveries.length);
+  assert.equal(htmlArchive.companyExpenses.length, payload.companyExpenses.length);
+
+  const sqlArchive = parseArchiveMachineText(sqlDump, "archive-2026.sql");
+  assert.equal(sqlArchive.archiveYear, 2026);
+  assert.equal(sqlArchive.deliveries.length, payload.deliveries.length);
+  assert.equal(sqlArchive.companyExpenses.length, payload.companyExpenses.length);
+
+  const csvArchive = parseArchiveMachineText(csv, "archive-2026.csv");
+  assert.equal(csvArchive.archiveYear, 2026);
+  assert.ok(csvArchive.deliveries.length > 0);
+  assert.equal(csvArchive.companyExpenses.length, payload.companyExpenses.length);
+
+  const xlsxArchive = parseArchiveMachineWorkbook(xlsxBytes, "archive-2026.xlsx");
+  assert.equal(xlsxArchive.archiveYear, 2026);
+  assert.ok(xlsxArchive.deliveries.length > 0);
+  assert.ok(xlsxArchive.companyExpenses.length > 0);
 });
 
 test("enforces Admin-only approval governance for Operations and Finance export requests", () => {

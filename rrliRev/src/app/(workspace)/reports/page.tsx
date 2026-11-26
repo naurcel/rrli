@@ -38,6 +38,7 @@ import {
   filterExpensesByDateRange,
 } from "@/features/finance/company-expense-domain";
 import {
+  mergeRemoteAndLocalCompanyExpenses,
   readBrowserPreviewExpenses,
   ROUTEX_COMPANY_EXPENSES_CHANGED,
 } from "@/features/finance/browser-preview-expenses";
@@ -123,6 +124,18 @@ export default function ReportsPage() {
 
   // Company finance records (incoming & outgoing)
   const [companyExpenses, setCompanyExpenses] = useState<CompanyExpense[]>([]);
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  useEffect(() => {
+    const handleBeforePrint = () => setIsPrinting(true);
+    const handleAfterPrint = () => setIsPrinting(false);
+    window.addEventListener("beforeprint", handleBeforePrint);
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, []);
 
   useEffect(() => {
     async function fetchExpenses() {
@@ -131,7 +144,7 @@ export default function ReportsPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.ok && Array.isArray(data.items)) {
-            setCompanyExpenses(data.items);
+            setCompanyExpenses(mergeRemoteAndLocalCompanyExpenses(data.items));
             return;
           }
         }
@@ -144,7 +157,7 @@ export default function ReportsPage() {
     fetchExpenses();
 
     const onExpensesChanged = () => {
-      setCompanyExpenses(readBrowserPreviewExpenses());
+      setCompanyExpenses((prev) => mergeRemoteAndLocalCompanyExpenses(prev));
     };
     window.addEventListener(ROUTEX_COMPANY_EXPENSES_CHANGED, onExpensesChanged);
     return () => {
@@ -496,7 +509,10 @@ export default function ReportsPage() {
                 type="button"
                 className="report-print-button page-intro-action"
                 aria-label="Print report"
-                onClick={() => window.print()}
+                onClick={() => {
+                  setIsPrinting(true);
+                  window.setTimeout(() => window.print(), 20);
+                }}
               >
                 Print
               </button>
@@ -602,7 +618,7 @@ export default function ReportsPage() {
                 !isDailyTripReport ? (
                   <GlobalDateRangePicker />
                 ) : (
-                  <div className="daily-trip-date-controls" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                  <div className="daily-trip-date-controls" style={{ display: "inline-flex", alignItems: "center", gap: "8px", flexWrap: "nowrap" }}>
                     <button
                       type="button"
                       className="daily-nav-btn"
@@ -615,9 +631,8 @@ export default function ReportsPage() {
                       }
                       aria-label="Previous day"
                       title="Previous day"
-                      style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", fontSize: "11.5px" }}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <polyline points="15 18 9 12 15 6" />
                       </svg>
                       <span>Prev</span>
@@ -640,10 +655,9 @@ export default function ReportsPage() {
                       onClick={() => setDailyDate((prev) => toDateKey(addDays(parseDateValue(prev), 1)))}
                       aria-label="Next day"
                       title="Next day"
-                      style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px", fontSize: "11.5px" }}
                     >
                       <span>Next</span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <polyline points="9 18 15 12 9 6" />
                       </svg>
                     </button>
@@ -651,7 +665,6 @@ export default function ReportsPage() {
                       type="button"
                       className="daily-today-btn"
                       onClick={() => setDailyDate(toDateKey(new Date()))}
-                      style={{ padding: "4px 8px", fontSize: "11.5px" }}
                     >
                       Today
                     </button>
@@ -959,9 +972,11 @@ export default function ReportsPage() {
                             {paginatedRows.map((row, rowIdx) =>
                               renderReportRow(row, rowIdx, "report-screen-only-row")
                             )}
-                            {sortedRows.map((row, rowIdx) =>
-                              renderReportRow(row, rowIdx, "report-print-only-row")
-                            )}
+                            {isPrinting
+                              ? sortedRows.map((row, rowIdx) =>
+                                  renderReportRow(row, rowIdx, "report-print-only-row")
+                                )
+                              : null}
                           </>
                         );
                       }

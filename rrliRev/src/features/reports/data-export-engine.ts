@@ -15,6 +15,10 @@ import {
   type CompanyExpense,
 } from "../finance/company-expense-domain.ts";
 import {
+  buildDtrBlockAoaFromRows,
+  type ReportRowData,
+} from "./report-engine.ts";
+import {
   subjectHasPermission,
   subjectIsAdminOrSuperadmin,
   type PermissionCheckSubject,
@@ -1184,118 +1188,37 @@ export function generateWorkingWebsiteHtml(payload: ScopedExportPayload): string
 }
 
 /**
- * Builds the DAILY TRIP REPORT sheet matching the reference Delivery .xlsx layout.
+ * Builds the DAILY TRIP REPORT sheet matching the reference Delivery .xlsx layout,
+ * grouped by day with client carry-down.
  */
 function buildDailyTripReportAoa(payload: ScopedExportPayload): Array<Array<string | number>> {
-  const aoa: Array<Array<string | number>> = [
-    ["3961", "REDEEMED ROUTE LOGSITICS INC.", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "TOLL GATES"],
-    ["", `${payload.periodLabel.toUpperCase()} - DAILY TRIP REPORT`],
-    [],
-    [
-      "",
-      "NO.",
-      "CLIENT",
-      "DATE",
-      "WAYBILL \nNUMBER",
-      "PLATE NUMBER",
-      "TRUCK \n TYPE",
-      "TRUCK TEMP",
-      "ORIGIN",
-      "STORE",
-      "TOLL GATE",
-      "OTHER \n EXPENSES",
-      "ENTRY\nFEES",
-      "DRIVER",
-      "",
-      "HELPER",
-      "",
-      "DIESEL",
-      "TOTAL \nEXPENSE",
-      "RATE",
-      "NET INCOME",
-      "FUEL\nRATE",
-      "KM",
-      "TOLL GATES",
-    ],
-    ["", "", "", "", "", "", "", "", "", "", "", "", "", "ALLOWANCE", "DAILY RATE", "ALLOWANCE", "DAILY RATE"],
-  ];
+  const rows: ReportRowData[] = payload.deliveries.map((d) => ({
+    waybillNumber: d.waybillNumber,
+    deliveryDate: d.deliveryDate,
+    clientName: d.clientName,
+    plateNumber: d.plateNumber,
+    truckType: d.truckType,
+    truckOwnership: d.truckOwnership,
+    temperature: d.truckTemperature,
+    origin: d.origin,
+    store: d.dropoffs.map((s) => s.storeName).filter(Boolean).join("\n") || "—",
+    distanceKm: d.distanceKm,
+    fuelRate: d.fuelRate,
+    revenue: d.deliveryRate ?? 0,
+    diesel: d.expenses.dieselExpenses,
+    toll: d.expenses.tollGateExpenses,
+    tollGateBreakdown: d.expenses.tollGateBreakdown ?? "",
+    entryFee: d.expenses.entryFees,
+    otherExpenses: d.expenses.otherExpenses,
+    driverAllowance: d.expenses.driverAllowance,
+    driverDailyRate: d.expenses.driverDailyRate,
+    helperAllowance: d.expenses.helperAllowance,
+    helperDailyRate: d.expenses.helperDailyRate,
+    expenses: d.totalExpenses,
+    netIncome: d.netIncome,
+  }));
 
-  let sumDriverAllow = 0;
-  let sumHelperAllow = 0;
-  let sumDiesel = 0;
-  let sumTotalExp = 0;
-  let sumRate = 0;
-  let sumNet = 0;
-
-  payload.deliveries.forEach((d, idx) => {
-    const isOwned = d.truckOwnership === "Owned";
-    const store = d.dropoffs.map((s) => s.storeName).filter(Boolean).join("\n") || "—";
-    const totalExp = d.totalExpenses ?? 0;
-    const rate = d.deliveryRate ?? 0;
-    const net = d.netIncome ?? (rate - totalExp);
-
-    const toll = isOwned && d.expenses.tollGateExpenses != null ? d.expenses.tollGateExpenses : "-";
-    const other = isOwned && d.expenses.otherExpenses != null ? d.expenses.otherExpenses : "-";
-    const entry = isOwned && d.expenses.entryFees != null ? d.expenses.entryFees : "-";
-    const drvAllow = isOwned && d.expenses.driverAllowance != null ? d.expenses.driverAllowance : "-";
-    const drvRate = isOwned && d.expenses.driverDailyRate != null ? d.expenses.driverDailyRate : "-";
-    const hlpAllow = isOwned && d.expenses.helperAllowance != null ? d.expenses.helperAllowance : "-";
-    const hlpRate = isOwned && d.expenses.helperDailyRate != null ? d.expenses.helperDailyRate : "-";
-    const diesel = isOwned && d.expenses.dieselExpenses != null ? d.expenses.dieselExpenses : "-";
-    const fuelRate = isOwned && d.fuelRate != null ? d.fuelRate : "-";
-    const km = isOwned && d.distanceKm != null ? d.distanceKm : "-";
-    const tollGates = isOwned ? (d.expenses.tollGateBreakdown || "") : "";
-
-    if (typeof drvAllow === "number") sumDriverAllow += drvAllow;
-    if (typeof hlpAllow === "number") sumHelperAllow += hlpAllow;
-    if (typeof diesel === "number") sumDiesel += diesel;
-    sumTotalExp += totalExp;
-    sumRate += rate;
-    sumNet += net;
-
-    aoa.push([
-      "",
-      idx + 1,
-      d.clientName,
-      d.deliveryDate,
-      d.waybillNumber,
-      d.plateNumber,
-      d.truckType,
-      d.truckTemperature,
-      d.origin,
-      store,
-      toll,
-      other,
-      entry,
-      drvAllow,
-      drvRate,
-      hlpAllow,
-      hlpRate,
-      diesel,
-      totalExp,
-      rate,
-      net,
-      fuelRate,
-      km,
-      tollGates,
-    ]);
-  });
-
-  // Reference footer totals row
-  aoa.push([
-    "", "", "", "", "", "", "", "", "", "", "", "", "",
-    sumDriverAllow || "",
-    "",
-    sumHelperAllow || "",
-    "",
-    sumDiesel || "",
-    sumTotalExp,
-    sumRate,
-    sumNet,
-    "", "", ""
-  ]);
-
-  return aoa;
+  return buildDtrBlockAoaFromRows(rows, payload.periodLabel);
 }
 
 /**

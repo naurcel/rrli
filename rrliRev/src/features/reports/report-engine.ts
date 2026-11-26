@@ -323,6 +323,7 @@ export function generateReportRows(
       (d.expenses.driverAllowance ?? 0) +
       (d.expenses.helperDailyRate ?? 0) +
       (d.expenses.helperAllowance ?? 0);
+    const storeNames = d.dropoffs.map((s) => s.storeName).filter(Boolean).join("\n") || "—";
 
     return {
       waybillNumber: d.waybillNumber,
@@ -333,12 +334,19 @@ export function generateReportRows(
       truckOwnership: d.truckOwnership,
       temperature: d.truckTemperature,
       origin: d.origin,
+      store: storeNames,
       distanceKm: d.distanceKm,
       fuelRate: d.fuelRate,
       revenue: d.deliveryRate ?? 0,
-      diesel: d.expenses.dieselExpenses ?? 0,
+      diesel: d.expenses.dieselExpenses,
       toll: d.expenses.tollGateExpenses,
-      entryFee: d.expenses.entryFees ?? 0,
+      tollGateBreakdown: d.expenses.tollGateBreakdown ?? "",
+      entryFee: d.expenses.entryFees,
+      otherExpenses: d.expenses.otherExpenses,
+      driverAllowance: d.expenses.driverAllowance,
+      driverDailyRate: d.expenses.driverDailyRate,
+      helperAllowance: d.expenses.helperAllowance,
+      helperDailyRate: d.expenses.helperDailyRate,
       crewCost,
       expenses: d.totalExpenses,
       netIncome: d.netIncome,
@@ -350,6 +358,243 @@ export function generateReportRows(
   });
 
   return { rows, totals };
+}
+
+function formatDtrTruckType(truckType: unknown): string {
+  const raw = String(truckType ?? "").trim().toUpperCase();
+  if (!raw) return "2T";
+  if (raw === "10W" || raw === "4T" || raw === "2T") return raw;
+  if (raw.includes("10")) return "10W";
+  if (raw.includes("6")) return "4T";
+  if (raw.includes("4")) return "2T";
+  return raw;
+}
+
+function formatDtrTemp(temp: unknown): string {
+  const raw = String(temp ?? "").trim();
+  if (!raw) return "-";
+  if (raw.toUpperCase() === "DRY" || raw.toUpperCase() === "AMBIENT") return "DRY";
+  const cleaned = raw.replace(/°?[Cc]$/i, "").trim();
+  const num = Number(cleaned);
+  if (Number.isFinite(num) && num > 0 && !cleaned.startsWith("+")) {
+    return `+${cleaned}`;
+  }
+  return cleaned || raw;
+}
+
+function formatDtrBannerDate(isoDate: string, fallbackLabel: string): string {
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return fallbackLabel.toUpperCase();
+  const months = [
+    "JANUARY",
+    "FEBRUARY",
+    "MARCH",
+    "APRIL",
+    "MAY",
+    "JUNE",
+    "JULY",
+    "AUGUST",
+    "SEPTEMBER",
+    "OCTOBER",
+    "NOVEMBER",
+    "DECEMBER",
+  ];
+  const monthIdx = Number(match[2]) - 1;
+  const monthName = months[monthIdx] || "JANUARY";
+  return `${monthName} ${match[3]}, ${match[1]}`;
+}
+
+/**
+ * Builds the 2D array of rows matching the exact RRLI Daily Trip Report spreadsheet layout
+ * (daily section groupings, client carry-down, and summary totals).
+ */
+export function buildDtrBlockAoaFromRows(
+  rows: readonly ReportRowData[],
+  dateRangeLabel: string,
+): Array<Array<string | number>> {
+  const aoa: Array<Array<string | number>> = [];
+
+  // Group rows by deliveryDate (preserving chronological or existing order per day)
+  const byDate = new Map<string, ReportRowData[]>();
+  const sorted = [...rows].sort((a, b) =>
+    String(a.deliveryDate ?? "").localeCompare(String(b.deliveryDate ?? "")),
+  );
+  for (const r of sorted) {
+    const dt = String(r.deliveryDate ?? "").slice(0, 10) || "UNKNOWN";
+    const list = byDate.get(dt) ?? [];
+    list.push(r);
+    byDate.set(dt, list);
+  }
+
+  if (byDate.size === 0) {
+    byDate.set("", []);
+  }
+
+  for (const [dateKey, dayRows] of byDate.entries()) {
+    const totalCols = 23;
+
+    const padRow = (arr: Array<string | number>): Array<string | number> => {
+      const copy = [...arr];
+      while (copy.length < totalCols) copy.push("");
+      return copy;
+    };
+
+    const bannerDate = dateKey ? formatDtrBannerDate(dateKey, dateRangeLabel) : dateRangeLabel.toUpperCase();
+
+    const row0: Array<string | number> = new Array(23).fill("");
+    row0[0] = 3961;
+    row0[1] = "REDEEMED ROUTE LOGSITICS INC.";
+    aoa.push(padRow(row0));
+
+    aoa.push(padRow(["", `${bannerDate} - DAILY TRIP REPORT`]));
+    aoa.push(padRow([]));
+    aoa.push(
+      padRow([
+        "",
+        "NO.",
+        "CLIENT",
+        "DATE",
+        "WAYBILL \nNUMBER",
+        "PLATE NUMBER",
+        "TRUCK \n TYPE",
+        "TRUCK TEMP",
+        "ORIGIN",
+        "STORE",
+        "TOLL GATE",
+        "OTHER \n EXPENSES",
+        "ENTRY\nFEES",
+        "DRIVER",
+        "",
+        "HELPER",
+        "",
+        "DIESEL",
+        "TOTAL \nEXPENSE",
+        "RATE",
+        "NET INCOME",
+        "FUEL\nRATE",
+        "KM",
+      ]),
+    );
+    aoa.push(
+      padRow([
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "ALLOWANCE",
+        "DAILY RATE",
+        "ALLOWANCE",
+        "DAILY RATE",
+      ]),
+    );
+
+    let driverAllowanceSum = 0;
+    let helperAllowanceSum = 0;
+    let totalExpenseSum = 0;
+    let rateSum = 0;
+    let netIncomeSum = 0;
+    let prevClient = "";
+
+    dayRows.forEach((row, i) => {
+      const isOwned = row.truckOwnership === "Owned";
+      const totalExp = typeof row.expenses === "number" ? row.expenses : (Number(row.expenses) || 0);
+      const rev = typeof row.revenue === "number" ? row.revenue : (Number(row.revenue) || 0);
+      const net = typeof row.netIncome === "number" ? row.netIncome : (rev - totalExp);
+
+      const numOrDash = (val: unknown): number | string => {
+        if (!isOwned || val == null || val === "" || val === "-") return "-";
+        const n = typeof val === "number" ? val : Number(val);
+        return Number.isFinite(n) && n > 0 ? n : "-";
+      };
+
+      const toll = numOrDash(row.toll);
+      const other = numOrDash(row.otherExpenses);
+      const entry = numOrDash(row.entryFee);
+      const drvAllow = numOrDash(row.driverAllowance);
+      const drvRate = numOrDash(row.driverDailyRate);
+      const hlpAllow = numOrDash(row.helperAllowance);
+      const hlpRate = numOrDash(row.helperDailyRate);
+      const diesel = numOrDash(row.diesel);
+      const fuelRate = numOrDash(row.fuelRate);
+      const km = numOrDash(row.distanceKm);
+
+      if (typeof drvAllow === "number") driverAllowanceSum += drvAllow;
+      if (typeof hlpAllow === "number") helperAllowanceSum += hlpAllow;
+      totalExpenseSum += totalExp;
+      rateSum += rev;
+      netIncomeSum += net;
+
+      const rawClient = String(row.clientName ?? "").trim();
+      const displayClient =
+        rawClient && rawClient.toUpperCase() !== prevClient.toUpperCase() ? rawClient : "";
+      if (rawClient) prevClient = rawClient;
+
+      aoa.push(
+        padRow([
+          "",
+          i + 1,
+          displayClient,
+          String(row.deliveryDate ?? ""),
+          String(row.waybillNumber ?? ""),
+          String(row.plateNumber ?? ""),
+          formatDtrTruckType(row.truckType),
+          formatDtrTemp(row.temperature),
+          String(row.origin ?? "ARCA LANDERS STORE"),
+          String(row.store ?? row.destination ?? "—"),
+          toll,
+          other,
+          entry,
+          drvAllow,
+          drvRate,
+          hlpAllow,
+          hlpRate,
+          diesel,
+          Math.round(totalExp * 100) / 100,
+          Math.round(rev * 100) / 100,
+          Math.round(net * 100) / 100,
+          fuelRate,
+          km,
+        ]),
+      );
+    });
+
+    aoa.push(
+      padRow([
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        Math.round(driverAllowanceSum * 100) / 100,
+        "",
+        Math.round(helperAllowanceSum * 100) / 100,
+        "",
+        "",
+        Math.round(totalExpenseSum * 100) / 100,
+        Math.round(rateSum * 100) / 100,
+        Math.round(netIncomeSum * 100) / 100,
+      ]),
+    );
+  }
+
+  return aoa;
 }
 
 /**
@@ -407,94 +652,15 @@ export function generateReportCsv(
   processed: ProcessedReportResult,
   dateRangeLabel: string,
 ): string {
-  // If this is the Daily Trip Report, format according to the reference DTR spreadsheet layout
-  if (processed.template.id === "default-daily-trip") {
-    const dtrLines: string[] = [
-      "3961,REDEEMED ROUTE LOGSITICS INC.,,,,,,,,,,,,,,,,,,,,,,TOLL GATES,,,,,,",
-      `,"${dateRangeLabel.toUpperCase()} - DAILY TRIP REPORT",,,,,,,,,,,,,,,,,,,,,,,,,,,`,
-      ",,,,,,,,,,,,,,,,,,,,,,,,,,,,",
-      ',NO.,CLIENT,DATE,"WAYBILL \nNUMBER",PLATE NUMBER,"TRUCK \n TYPE",TRUCK TEMP,ORIGIN,STORE,TOLL GATE,"OTHER \n EXPENSES","ENTRY\nFEES",DRIVER,,HELPER,,DIESEL,"TOTAL \nEXPENSE",RATE,NET INCOME,"FUEL\nRATE",KM,,,,,,',
-      ",,,,,,,,,,,,,ALLOWANCE,DAILY RATE,ALLOWANCE,DAILY RATE,,,,,,,,,,,,",
-    ];
-
-    let driverAllowanceSum = 0;
-    let helperAllowanceSum = 0;
-    let dieselSum = 0;
-    let totalExpenseSum = 0;
-    let rateSum = 0;
-    let netIncomeSum = 0;
-
-    processed.rows.forEach((row, i) => {
-      const isOwned = row.truckOwnership === "Owned";
-      const totalExp = typeof row.expenses === "number" ? row.expenses : (Number(row.expenses) || 0);
-      const rev = typeof row.revenue === "number" ? row.revenue : (Number(row.revenue) || 0);
-      const net = typeof row.netIncome === "number" ? row.netIncome : (rev - totalExp);
-
-      const toll = isOwned && row.toll != null ? String(row.toll) : "-";
-      const other = isOwned && row.otherExpenses != null ? String(row.otherExpenses) : "-";
-      const entry = isOwned && row.entryFee != null ? String(row.entryFee) : "-";
-      const drvAllow = isOwned && row.driverAllowance != null ? Number(row.driverAllowance) : (isOwned && row.crewCost ? 350 : "-");
-      const drvRate = isOwned && row.driverDailyRate != null ? Number(row.driverDailyRate) : (isOwned && row.crewCost ? 745 : "-");
-      const hlpAllow = isOwned && row.helperAllowance != null ? Number(row.helperAllowance) : (isOwned && row.crewCost ? 200 : "-");
-      const hlpRate = isOwned && row.helperDailyRate != null ? Number(row.helperDailyRate) : (isOwned && row.crewCost ? 645 : "-");
-      const diesel = isOwned && row.diesel != null ? Number(row.diesel) : "-";
-      const fuelRate = isOwned && row.fuelRate != null ? String(row.fuelRate) : "-";
-      const km = isOwned && row.distanceKm != null ? String(row.distanceKm) : "-";
-      const tollGates = isOwned && row.tollGateBreakdown ? escapeCsvCell(String(row.tollGateBreakdown)) : "";
-
-      if (typeof drvAllow === "number") driverAllowanceSum += drvAllow;
-      if (typeof hlpAllow === "number") helperAllowanceSum += hlpAllow;
-      if (typeof diesel === "number") dieselSum += diesel;
-      totalExpenseSum += totalExp;
-      rateSum += rev;
-      netIncomeSum += net;
-
-      dtrLines.push(
-        [
-          "",
-          i + 1,
-          escapeCsvCell(String(row.clientName ?? "")),
-          escapeCsvCell(String(row.deliveryDate ?? "")),
-          escapeCsvCell(String(row.waybillNumber ?? "")),
-          escapeCsvCell(String(row.plateNumber ?? "")),
-          escapeCsvCell(String(row.truckType ?? "2T")),
-          escapeCsvCell(String(row.temperature ?? "+18")),
-          escapeCsvCell(String(row.origin ?? "ARCA LANDERS STORE")),
-          escapeCsvCell(String(row.store ?? row.destination ?? "—")),
-          toll,
-          other,
-          entry,
-          drvAllow,
-          drvRate,
-          hlpAllow,
-          hlpRate,
-          diesel,
-          totalExp,
-          rev,
-          net,
-          fuelRate,
-          km,
-          tollGates,
-        ].join(",")
-      );
-    });
-
-    dtrLines.push(
-      [
-        "", "", "", "", "", "", "", "", "", "", "", "", "",
-        driverAllowanceSum || "",
-        "",
-        helperAllowanceSum || "",
-        "",
-        dieselSum || "",
-        totalExpenseSum,
-        rateSum,
-        netIncomeSum,
-        "", "", ""
-      ].join(",")
-    );
-
-    return dtrLines.join("\r\n");
+  // If this is the Daily Trip Report or default Trip Ledger, format according to the reference DTR spreadsheet layout
+  if (
+    processed.template.id === "default-daily-trip" ||
+    processed.template.id === "default-trip-ledger"
+  ) {
+    const dtrAoa = buildDtrBlockAoaFromRows(processed.rows, dateRangeLabel);
+    return dtrAoa
+      .map((row) => row.map((cell) => escapeCsvCell(String(cell ?? ""))).join(","))
+      .join("\r\n");
   }
 
   const lines: string[] = [];
@@ -641,91 +807,14 @@ export function generateReportXlsx(
 ): Uint8Array {
   const wb = XLSX.utils.book_new();
 
-  // If this is the Daily Trip Report, format according to the reference DTR spreadsheet layout
-  if (processed.template.id === "default-daily-trip") {
-    const dtrRows: Array<Array<string | number>> = [
-      ["3961", "REDEEMED ROUTE LOGSITICS INC.", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "TOLL GATES"],
-      ["", `${dateRangeLabel.toUpperCase()} - DAILY TRIP REPORT`],
-      [],
-      ["", "NO.", "CLIENT", "DATE", "WAYBILL \nNUMBER", "PLATE NUMBER", "TRUCK \n TYPE", "TRUCK TEMP", "ORIGIN", "STORE", "TOLL GATE", "OTHER \n EXPENSES", "ENTRY\nFEES", "DRIVER", "", "HELPER", "", "DIESEL", "TOTAL \nEXPENSE", "RATE", "NET INCOME", "FUEL\nRATE", "KM", "TOLL GATES"],
-      ["", "", "", "", "", "", "", "", "", "", "", "", "", "ALLOWANCE", "DAILY RATE", "ALLOWANCE", "DAILY RATE"],
-    ];
-
-    let driverAllowanceSum = 0;
-    let helperAllowanceSum = 0;
-    let dieselSum = 0;
-    let totalExpenseSum = 0;
-    let rateSum = 0;
-    let netIncomeSum = 0;
-
-    processed.rows.forEach((row, i) => {
-      const isOwned = row.truckOwnership === "Owned";
-      const totalExp = typeof row.expenses === "number" ? row.expenses : (Number(row.expenses) || 0);
-      const rev = typeof row.revenue === "number" ? row.revenue : (Number(row.revenue) || 0);
-      const net = typeof row.netIncome === "number" ? row.netIncome : (rev - totalExp);
-
-      const toll = isOwned && row.toll != null ? Number(row.toll) : "-";
-      const other = isOwned && row.otherExpenses != null ? Number(row.otherExpenses) : "-";
-      const entry = isOwned && row.entryFee != null ? Number(row.entryFee) : "-";
-      const drvAllow = isOwned && row.driverAllowance != null ? Number(row.driverAllowance) : (isOwned && row.crewCost ? 350 : "-");
-      const drvRate = isOwned && row.driverDailyRate != null ? Number(row.driverDailyRate) : (isOwned && row.crewCost ? 745 : "-");
-      const hlpAllow = isOwned && row.helperAllowance != null ? Number(row.helperAllowance) : (isOwned && row.crewCost ? 200 : "-");
-      const hlpRate = isOwned && row.helperDailyRate != null ? Number(row.helperDailyRate) : (isOwned && row.crewCost ? 645 : "-");
-      const diesel = isOwned && row.diesel != null ? Number(row.diesel) : "-";
-      const fuelRate = isOwned && row.fuelRate != null ? Number(row.fuelRate) : "-";
-      const km = isOwned && row.distanceKm != null ? Number(row.distanceKm) : "-";
-      const tollGates = isOwned && row.tollGateBreakdown ? String(row.tollGateBreakdown) : "";
-
-      if (typeof drvAllow === "number") driverAllowanceSum += drvAllow;
-      if (typeof hlpAllow === "number") helperAllowanceSum += hlpAllow;
-      if (typeof diesel === "number") dieselSum += diesel;
-      totalExpenseSum += totalExp;
-      rateSum += rev;
-      netIncomeSum += net;
-
-      dtrRows.push([
-        "",
-        i + 1,
-        String(row.clientName ?? ""),
-        String(row.deliveryDate ?? ""),
-        String(row.waybillNumber ?? ""),
-        String(row.plateNumber ?? ""),
-        String(row.truckType ?? "2T"),
-        String(row.temperature ?? "+18"),
-        String(row.origin ?? "ARCA LANDERS STORE"),
-        String(row.store ?? row.destination ?? "—"),
-        toll,
-        other,
-        entry,
-        drvAllow,
-        drvRate,
-        hlpAllow,
-        hlpRate,
-        diesel,
-        totalExp,
-        rev,
-        net,
-        fuelRate,
-        km,
-        tollGates,
-      ]);
-    });
-
-    dtrRows.push([
-      "", "", "", "", "", "", "", "", "", "", "", "", "",
-      driverAllowanceSum || "",
-      "",
-      helperAllowanceSum || "",
-      "",
-      dieselSum || "",
-      totalExpenseSum,
-      rateSum,
-      netIncomeSum,
-      "", "", ""
-    ]);
-
+  // If this is the Daily Trip Report or default Trip Ledger, format according to the reference DTR spreadsheet layout
+  if (
+    processed.template.id === "default-daily-trip" ||
+    processed.template.id === "default-trip-ledger"
+  ) {
+    const dtrRows = buildDtrBlockAoaFromRows(processed.rows, dateRangeLabel);
     const dtrWs = XLSX.utils.aoa_to_sheet(dtrRows);
-    XLSX.utils.book_append_sheet(wb, dtrWs, "Daily Trip Report");
+    XLSX.utils.book_append_sheet(wb, dtrWs, "DAILY TRIP REPORT");
     const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     return new Uint8Array(wbOut);
   }

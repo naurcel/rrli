@@ -1,13 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Table, FileSpreadsheet, FileCode2, Database, Globe, Download, Send, Check, X, RotateCcw } from "lucide-react";
+import { Table, FileSpreadsheet, FileCode2, Database, Globe, Download, Send, Check, X, RotateCcw, Archive, Upload } from "lucide-react";
 
 import { useSearchBuffer } from "@/components/search-buffer";
+import {
+  parseDateValue,
+  presetRange,
+  useGlobalDateRange,
+} from "@/components/global-date-range-picker";
 import type { useAuthenticatedActor } from "@/components/auth-context";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import type { CompanyExpense } from "@/features/finance/company-expense-domain";
+import {
+  activateArchiveMachineSnapshot,
+  type ArchiveMachineSnapshot,
+  clearArchiveMachineSnapshot,
+  parseArchiveMachineText,
+  parseArchiveMachineWorkbook,
+  readArchiveMachineSnapshot,
+  ROUTEX_ARCHIVE_MACHINE_CHANGED,
+} from "@/features/archive/archive-machine";
 import {
   buildScopedExportPayload,
   canAccessDataExportTab,
@@ -91,7 +106,13 @@ export function ReportsDataExportTab({
   periodLabel,
   dateRangePicker,
 }: ReportsDataExportTabProps) {
+  const router = useRouter();
+  const { setRange } = useGlobalDateRange();
   const [requests, setRequests] = useState<DataExportRequest[]>(() => readExportRequests());
+  const [archiveSnapshot, setArchiveSnapshot] = useState<ArchiveMachineSnapshot | null>(() =>
+    readArchiveMachineSnapshot(),
+  );
+  const archiveFileInputRef = useRef<HTMLInputElement>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
   const {
     value: exportSearch,
@@ -108,14 +129,88 @@ export function ReportsDataExportTab({
 
   useEffect(() => {
     setRequests(readExportRequests());
-    const sync = () => setRequests(readExportRequests());
+    setArchiveSnapshot(readArchiveMachineSnapshot());
+    const sync = () => {
+      setRequests(readExportRequests());
+      setArchiveSnapshot(readArchiveMachineSnapshot());
+    };
     window.addEventListener(ROUTEX_EXPORT_REQUESTS_CHANGED, sync);
+    window.addEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, sync);
     window.addEventListener("storage", sync);
     return () => {
       window.removeEventListener(ROUTEX_EXPORT_REQUESTS_CHANGED, sync);
+      window.removeEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, sync);
       window.removeEventListener("storage", sync);
     };
   }, []);
+
+  function applyLoadedArchiveSnapshot(next: ArchiveMachineSnapshot, jumpToDashboard = false) {
+    activateArchiveMachineSnapshot(next);
+    setArchiveSnapshot(next);
+    if (next.dateFrom && next.dateTo) {
+      setRange({
+        startDate: parseDateValue(next.dateFrom),
+        endDate: parseDateValue(next.dateTo),
+        preset: "custom",
+      });
+    } else {
+      const refDate = parseDateValue(next.referenceDate);
+      setRange({
+        ...presetRange("year", refDate),
+        preset: "year",
+      });
+    }
+    setFeedbackMessage(
+      `Archive Machine loaded "${next.fileName}" (${next.archiveYear} · ${next.deliveries.length} trips · ${next.companyExpenses.length} finance records).`,
+    );
+    toast.success(`Archive Machine Active (${next.archiveYear})`, {
+      description: `Website is now displaying ${next.deliveries.length} trips and ${next.companyExpenses.length} finance records from ${next.periodLabel}.`,
+    });
+    if (jumpToDashboard) {
+      router.push("/dashboard");
+    }
+  }
+
+  function handleArchiveFileUpload(file: File) {
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const buf = e.target?.result;
+          if (buf instanceof ArrayBuffer) {
+            const parsed = parseArchiveMachineWorkbook(buf, file.name);
+            applyLoadedArchiveSnapshot(parsed, false);
+          }
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Failed to parse archive workbook.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result;
+          if (typeof text === "string") {
+            const parsed = parseArchiveMachineText(text, file.name);
+            applyLoadedArchiveSnapshot(parsed, false);
+          }
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Failed to parse archive file.");
+        }
+      };
+      reader.readAsText(file);
+    }
+  }
+
+  function handleExitArchiveMachine() {
+    clearArchiveMachineSnapshot();
+    setArchiveSnapshot(null);
+    setRange({ ...presetRange("month"), preset: "month" });
+    setFeedbackMessage("Exited Archive Machine and restored live workspace records.");
+    toast.info("Returned to Live Workspace");
+  }
 
   const isAdmin = canApproveDataExports(actor.role);
   const canRequest = canRequestDataExports(actor.role);
@@ -322,27 +417,27 @@ export function ReportsDataExportTab({
       ) : null}
 
       {/* 1. Export Data Formats Section */}
-      <section className="records-card settings-card-section" aria-label="Available Export Formats">
+      <section className="records-card" aria-label="Available Export Formats">
         <div
-          className="settings-section-header"
+          className="records-heading"
           style={{
             display: "flex",
+            flexDirection: "row",
             justifyContent: "space-between",
             alignItems: "center",
             flexWrap: "wrap",
             gap: "16px",
-            padding: "24px 28px 20px",
-            borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.06))",
+            borderBottom: "1px solid var(--line)",
           }}
         >
-          <div>
-            <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "var(--color-text-primary)" }}>Export Data</h2>
-            <p style={{ margin: "4px 0 0", fontSize: "12.5px", color: "var(--color-text-muted)" }}>Export operational and financial data for the selected period.</p>
+          <div style={{ textAlign: "left" }}>
+            <h2>Export Data</h2>
+            <p>Export operational and financial data for the selected period.</p>
           </div>
 
           <div className="export-header-meta" style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             {dateRangePicker}
-            <span style={{ fontSize: "12.5px", color: "var(--color-text-muted)" }}>
+            <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
               {activeScopedPayload.summary.totalDeliveries} trips · {activeScopedPayload.companyExpenses.length} expenses
             </span>
           </div>
@@ -527,23 +622,168 @@ export function ReportsDataExportTab({
         ) : null}
       </section>
 
-      {/* 2. Requests & Approvals Queue Section */}
-      <section className="records-card settings-card-section" aria-label="Export Requests Queue">
+      {/* 2. Archive Machine Section — View Exported Data in the Live Website */}
+      <section className="records-card" aria-label="Archive Machine Time-Travel Viewer">
         <div
-          className="settings-section-header"
+          className="records-heading"
           style={{
             display: "flex",
+            flexDirection: "row",
             justifyContent: "space-between",
             alignItems: "center",
             flexWrap: "wrap",
             gap: "16px",
-            padding: "24px 28px 20px",
-            borderBottom: "1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.06))",
+            borderBottom: "1px solid var(--line)",
           }}
         >
-          <div>
-            <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "var(--color-text-primary)" }}>{isAdmin ? "Approval Queue" : "My Requests"}</h2>
-            <p style={{ margin: "4px 0 0", fontSize: "12.5px", color: "var(--color-text-muted)" }}>
+          <div style={{ textAlign: "left" }}>
+            <h2 style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              <Archive size={17} strokeWidth={2} aria-hidden="true" style={{ color: "var(--color-accent)" }} />
+              Archive Machine
+            </h2>
+            <p>
+              Import any exported RouteX file (.xlsx, .csv, .json, .sql, or .html) to browse the entire website as if you were in that year and period.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <input
+              ref={archiveFileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,.json,.sql,.html"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleArchiveFileUpload(file);
+                e.target.value = "";
+              }}
+            />
+            {archiveSnapshot ? (
+              <>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ minHeight: "34px", padding: "0 14px", fontSize: "12.5px" }}
+                  onClick={() => router.push("/dashboard")}
+                >
+                  Open {archiveSnapshot.archiveYear} Dashboard →
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ minHeight: "34px", padding: "0 14px", fontSize: "12.5px" }}
+                  onClick={() => archiveFileInputRef.current?.click()}
+                >
+                  <Upload size={13} strokeWidth={2} aria-hidden="true" style={{ marginRight: "6px" }} />
+                  Load Another Export
+                </button>
+                <button
+                  type="button"
+                  className="primary-action-button"
+                  style={{ minHeight: "34px", padding: "0 14px", fontSize: "12.5px" }}
+                  onClick={handleExitArchiveMachine}
+                >
+                  <RotateCcw size={13} strokeWidth={2} aria-hidden="true" style={{ marginRight: "6px" }} />
+                  Return to Live Data
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="primary-action-button"
+                style={{ minHeight: "34px", padding: "0 16px", fontSize: "12.5px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                onClick={() => archiveFileInputRef.current?.click()}
+              >
+                <Upload size={13} strokeWidth={2.2} aria-hidden="true" />
+                Load Exported File into Website
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="export-package-list">
+          {archiveSnapshot ? (
+            <div className="export-package-row">
+              <div className="export-package-info-wrap">
+                <div className="export-package-icon" style={{ color: "var(--color-accent)" }}>
+                  <Archive size={18} strokeWidth={2} aria-hidden="true" />
+                </div>
+                <div className="export-package-text">
+                  <div className="export-package-title-line">
+                    <span className="export-package-title">
+                      Active Archive: {archiveSnapshot.fileName}
+                    </span>
+                    <span className="export-package-ext">
+                      Year {archiveSnapshot.archiveYear} · {archiveSnapshot.periodLabel}
+                    </span>
+                  </div>
+                  <p className="export-package-desc">
+                    Loaded {archiveSnapshot.deliveries.length} delivery trips, {archiveSnapshot.companyExpenses.length} company finance records, and {archiveSnapshot.trucks.length} fleet trucks. All website pages (Dashboard, Deliveries, Trucks, Finance, PODs, Reports) are currently displaying this historical snapshot.
+                  </p>
+                </div>
+              </div>
+              <div className="export-package-action" style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="export-action-btn is-approved"
+                  onClick={() => router.push("/dashboard")}
+                >
+                  <span>Browse Website in {archiveSnapshot.archiveYear} →</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="export-package-row">
+              <div className="export-package-info-wrap">
+                <div className="export-package-icon">
+                  <Archive size={18} strokeWidth={1.8} aria-hidden="true" />
+                </div>
+                <div className="export-package-text">
+                  <div className="export-package-title-line">
+                    <span className="export-package-title">
+                      Time-Travel Snapshot Loader
+                    </span>
+                    <span className="export-package-ext">
+                      .xlsx · .csv · .json · .sql · .html
+                    </span>
+                  </div>
+                  <p className="export-package-desc">
+                    Upload any previously exported Excel workbook, CSV dataset bundle, JSON database snapshot, SQL dump, or Offline Web App HTML file. RouteX will set the workspace calendar to that archive&apos;s year and populate Dashboard, Deliveries, Trucks, Finance, and Reports with the archived records without overwriting your live database.
+                  </p>
+                </div>
+              </div>
+              <div className="export-package-action">
+                <button
+                  type="button"
+                  className="export-action-btn"
+                  onClick={() => archiveFileInputRef.current?.click()}
+                >
+                  <Upload size={13} strokeWidth={2} aria-hidden="true" />
+                  <span>Import &amp; View Archive</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 3. Requests & Approvals Queue Section */}
+      <section className="records-card" aria-label="Export Requests Queue">
+        <div
+          className="records-heading"
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "16px",
+            borderBottom: "1px solid var(--line)",
+          }}
+        >
+          <div style={{ textAlign: "left" }}>
+            <h2>{isAdmin ? "Approval Queue" : "My Requests"}</h2>
+            <p>
               {isAdmin
                 ? "Review and authorize export requests."
                 : "Track authorization status and download approved exports."}
