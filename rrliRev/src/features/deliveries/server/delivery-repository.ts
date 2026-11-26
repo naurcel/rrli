@@ -130,6 +130,7 @@ function mapLedgerRow(
     otherExpenses: asExpenseStatus(row.other_expenses_status, "other_expenses_status", financialIntegrityIssues),
   };
   for (const [field, status] of Object.entries(expenseStates)) {
+    if (field === "dieselExpenses") continue;
     if (status === "unknown") financialIntegrityIssues.push(`${field} is unresolved.`);
   }
 

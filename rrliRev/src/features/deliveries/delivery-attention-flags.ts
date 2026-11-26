@@ -21,7 +21,6 @@ export const PRESET_FLAG_SUGGESTIONS = [
   { label: "Missing Gate Pass", category: "missing_document" as const, text: "Awaiting security gate pass copy" },
   { label: "Client Receiving Copy", category: "missing_document" as const, text: "Awaiting signed client receiving copy" },
   { label: "Return Slip (RTV)", category: "missing_document" as const, text: "Waiting for Return to Vendor (RTV) slip" },
-  { label: "Fuel Receipt Copy", category: "missing_document" as const, text: "Pending physical fuel replenishment receipt" },
   { label: "Incident / Dent Report", category: "attention_needed" as const, text: "Follow up on trip incident / transit inspection note" },
   { label: "BIR 2307 Certificate", category: "missing_document" as const, text: "Awaiting BIR 2307 withholding certificate" },
 ];

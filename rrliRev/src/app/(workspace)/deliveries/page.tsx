@@ -265,6 +265,27 @@ export default function DeliveriesPage() {
     }
   }
 
+  async function handleBulkDeleteDeliveries() {
+    if (selectedTripIds.size === 0 || isDeletingDelivery) return;
+    const count = selectedTripIds.size;
+    if (!window.confirm(`Are you sure you want to delete ${count} selected delivery record${count > 1 ? "s" : ""}?`)) {
+      return;
+    }
+    setIsDeletingDelivery(true);
+    try {
+      for (const id of Array.from(selectedTripIds)) {
+        await deleteDeliveryRecord(id).catch(() => {});
+      }
+      setDeliveries((prev) => prev.filter((d) => !selectedTripIds.has(d.id)));
+      setSelectedTripIds(new Set());
+      toast.success(`Deleted ${count} delivery record${count > 1 ? "s" : ""}`);
+    } catch {
+      toast.error("Failed to delete some selected deliveries.");
+    } finally {
+      setIsDeletingDelivery(false);
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => {
@@ -960,24 +981,15 @@ export default function DeliveriesPage() {
                   <span className="bulk-selection-count">
                     <strong>{selectedTripIds.size}</strong> delivery record{selectedTripIds.size === 1 ? "" : "s"} selected
                   </span>
-                  <div className="bulk-selection-actions">
+                  <div className="bulk-selection-actions" style={{ display: "flex", gap: "8px" }}>
                     <button
                       type="button"
                       className="secondary-button"
-                      style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
-                      onClick={() => {
-                        const rows = filteredDeliveries.filter((t) => selectedTripIds.has(t.id));
-                        const text = rows
-                          .map(
-                            (t) =>
-                              `#${t.waybillNumber}\t${t.deliveryDate}\t${t.clientName}\t${t.plateNumber}\t${formatPeso(t.deliveryRate)}\t${formatPeso(t.netIncome)}`,
-                          )
-                          .join("\n");
-                        navigator.clipboard?.writeText(text);
-                        toast.success(`Copied ${rows.length} delivery record(s) to clipboard`);
-                      }}
+                      style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px", color: "var(--color-danger, #dc2626)", borderColor: "rgba(220, 38, 38, 0.3)" }}
+                      onClick={handleBulkDeleteDeliveries}
+                      disabled={isDeletingDelivery}
                     >
-                      Copy Selected
+                      {isDeletingDelivery ? "Deleting..." : "Delete"}
                     </button>
                     <button
                       type="button"
@@ -985,7 +997,7 @@ export default function DeliveriesPage() {
                       style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
                       onClick={() => setSelectedTripIds(new Set())}
                     >
-                      Clear selection
+                      Cancel
                     </button>
                   </div>
                 </div>

@@ -489,8 +489,9 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       };
 
       for (const h of nextReferences.helpers ?? []) addHelperIfValid(h.label, h.id);
+      // All active crew members (helpers and drivers) can serve as helpers in delivery records
       for (const c of apiCrew) {
-        if (c.assignmentType === "Helper" && c.isActive !== false) {
+        if (c.isActive !== false) {
           addHelperIfValid(c.fullName, c.id);
         }
       }
@@ -660,11 +661,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     const dName = driverName.trim();
     if (!dName) {
       issues.push("No driver assigned");
-    } else if (
-      dName.toLowerCase().includes("unknown") &&
-      !existingDelivery?.driverName?.toLowerCase().includes("unknown")
-    ) {
-      issues.push("Real driver required");
     }
     if (!isSubcontracted) {
       const dRate = numberValue(values.driverDailyRate);
@@ -676,16 +672,13 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     // Helper 1 & Helper 1 Rate
     const h1Name = helper1Name.trim();
     if (!h1Name) {
-      issues.push("No helper assigned");
-    } else if (
-      h1Name.toLowerCase().includes("unknown") &&
-      !existingDelivery?.helperName?.toLowerCase().includes("unknown")
-    ) {
-      issues.push("Real helper required");
+      if (numberValue(values.helperDailyRate) || numberValue(values.helperAllowance)) {
+        issues.push("No helper assigned");
+      }
     }
     if (!isSubcontracted) {
       const h1Rate = numberValue(values.helperDailyRate);
-      if (h1Rate == null || h1Rate <= 0) {
+      if (h1Name && (h1Rate == null || h1Rate <= 0)) {
         issues.push("Helper daily rate missing");
       }
     }
@@ -746,7 +739,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     const seen = new Set<string>();
     const fleetCrew = getFleetCrew();
 
-    // 1. Primary drivers
+    // 1. Primary drivers only (Helpers must not appear on drivers dropdown)
     for (const d of references.drivers) {
       const clean = d.label.trim();
       const lower = clean.toLowerCase();
@@ -759,26 +752,20 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       });
     }
 
-    // 2. Also include helpers as alternative driver options
-    for (const h of references.helpers) {
-      const clean = h.label.trim();
-      const lower = clean.toLowerCase();
-      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
-      seen.add(lower);
-      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
-      list.push({
-        value: clean,
-        label: fleet ? formatCrewMemberOptionLabel(fleet, "Driver") : `${clean} [Helper]`,
-      });
-    }
-
     // Ensure currently selected driverName is present
     if (driverName.trim() && !seen.has(driverName.trim().toLowerCase())) {
       list.unshift({ value: driverName.trim(), label: driverName.trim() });
+      seen.add(driverName.trim().toLowerCase());
+    }
+
+    // Always provide "Unknown Driver" as an option (especially for imported records where driver is untracked)
+    if (!seen.has("unknown driver")) {
+      list.push({ value: "Unknown Driver", label: "Unknown Driver" });
+      seen.add("unknown driver");
     }
 
     return list;
-  }, [references.drivers, references.helpers, driverName]);
+  }, [references.drivers, driverName]);
 
   const helperSelectOptions = useMemo(() => {
     const list: { value: string; label: string }[] = [];
@@ -809,6 +796,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         value: clean,
         label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : `${clean} [Driver]`,
       });
+    }
+
+    // Always provide "Unknown Helper" as an option
+    if (!seen.has("unknown helper")) {
+      list.push({ value: "Unknown Helper", label: "Unknown Helper" });
+      seen.add("unknown helper");
     }
 
     return list;
@@ -1033,15 +1026,15 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     const cleanHelper1 = helper1Name.trim().toLowerCase();
     const cleanHelper2 = hasSecondHelper ? helper2Name.trim().toLowerCase() : "";
 
-    if (cleanDriver && cleanHelper1 && cleanDriver === cleanHelper1) {
+    if (cleanDriver && cleanHelper1 && cleanDriver === cleanHelper1 && !cleanDriver.includes("unknown")) {
       triggerSubmitError("The same employee cannot be assigned as both Driver and Helper on the same trip.");
       return;
     }
-    if (cleanDriver && cleanHelper2 && cleanDriver === cleanHelper2) {
+    if (cleanDriver && cleanHelper2 && cleanDriver === cleanHelper2 && !cleanDriver.includes("unknown")) {
       triggerSubmitError("The same employee cannot be assigned as both Driver and Helper 2 on the same trip.");
       return;
     }
-    if (cleanHelper1 && cleanHelper2 && cleanHelper1 === cleanHelper2) {
+    if (cleanHelper1 && cleanHelper2 && cleanHelper1 === cleanHelper2 && !cleanHelper1.includes("unknown")) {
       triggerSubmitError("Helper 1 and Helper 2 must be different employees.");
       return;
     }
@@ -1049,6 +1042,38 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     if (values.deliveryRate && Number(values.deliveryRate) < 0) {
       triggerSubmitError("Delivery rate cannot be negative.");
       return;
+    }
+
+    // Required crew rates & allowances for Owned trucks (Subcontracted trucks are exempt)
+    if (!isSubcontracted) {
+      if (!values.driverDailyRate.trim() || Number(values.driverDailyRate) <= 0) {
+        triggerSubmitError("Driver daily rate is required for owned trucks.");
+        return;
+      }
+      if (!values.driverAllowance.trim() || Number(values.driverAllowance) < 0) {
+        triggerSubmitError("Driver allowance is required for owned trucks.");
+        return;
+      }
+      if (helper1Name.trim()) {
+        if (!values.helperDailyRate.trim() || Number(values.helperDailyRate) <= 0) {
+          triggerSubmitError("Helper daily rate is required when helper is assigned.");
+          return;
+        }
+        if (!values.helperAllowance.trim() || Number(values.helperAllowance) < 0) {
+          triggerSubmitError("Helper allowance is required when helper is assigned.");
+          return;
+        }
+      }
+      if (hasSecondHelper && helper2Name.trim()) {
+        if (!values.helper2DailyRate.trim() || Number(values.helper2DailyRate) <= 0) {
+          triggerSubmitError("Helper 2 daily rate is required when Helper 2 is assigned.");
+          return;
+        }
+        if (!values.helper2Allowance.trim() || Number(values.helper2Allowance) < 0) {
+          triggerSubmitError("Helper 2 allowance is required when Helper 2 is assigned.");
+          return;
+        }
+      }
     }
 
     // Crew Inactivity / Removal check (only if employee name is specified)
@@ -1129,13 +1154,16 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         return;
       }
     }
-    if (isEditMode && editReason.trim().length < 5) {
+    if (isEditMode && !isAdmin && editReason.trim().length < 5) {
       if (!editReason.trim()) {
         setEditReason("Operational details update");
       } else {
         triggerSubmitError("Please provide a reason for editing this delivery (at least 5 characters).");
         return;
       }
+    }
+    if (isEditMode && isAdmin && !editReason.trim()) {
+      setEditReason("Administrative update");
     }
     buildPayload();
     setPreviewing(true);
@@ -2375,7 +2403,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <div className="crew-expense-fields-row">
                       <div className="daily-rate-field">
                         <label>
-                          <span className="field-label-text">Daily rate</span>
+                          <span className="field-label-text">Daily rate <span className="required-asterisk" aria-hidden="true">*</span></span>
                           <span className="peso-input-wrap">
                             <span className="peso-prefix" aria-hidden="true">₱</span>
                             <input
@@ -2393,7 +2421,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       </div>
                       <div className="daily-rate-field allowance-field">
                         <label>
-                          <span className="field-label-text">Allowance</span>
+                          <span className="field-label-text">Allowance <span className="required-asterisk" aria-hidden="true">*</span></span>
                           <span className="peso-input-wrap">
                             <span className="peso-prefix" aria-hidden="true">₱</span>
                             <input
@@ -2438,7 +2466,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <div className="crew-expense-fields-row">
                       <div className="daily-rate-field">
                         <label>
-                          <span className="field-label-text">Daily rate</span>
+                          <span className="field-label-text">Daily rate <span className="required-asterisk" aria-hidden="true">*</span></span>
                           <span className="peso-input-wrap">
                             <span className="peso-prefix" aria-hidden="true">₱</span>
                             <input
@@ -2456,7 +2484,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       </div>
                       <div className="daily-rate-field allowance-field">
                         <label>
-                          <span className="field-label-text">Allowance</span>
+                          <span className="field-label-text">Allowance <span className="required-asterisk" aria-hidden="true">*</span></span>
                           <span className="peso-input-wrap">
                             <span className="peso-prefix" aria-hidden="true">₱</span>
                             <input
@@ -2515,7 +2543,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       <div className="crew-expense-fields-row">
                         <div className="daily-rate-field">
                           <label>
-                            <span className="field-label-text">Daily rate</span>
+                            <span className="field-label-text">Daily rate <span className="required-asterisk" aria-hidden="true">*</span></span>
                             <span className="peso-input-wrap">
                               <span className="peso-prefix" aria-hidden="true">₱</span>
                               <input
@@ -2533,7 +2561,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                         </div>
                         <div className="daily-rate-field allowance-field">
                           <label>
-                            <span className="field-label-text">Allowance</span>
+                            <span className="field-label-text">Allowance <span className="required-asterisk" aria-hidden="true">*</span></span>
                             <span className="peso-input-wrap">
                               <span className="peso-prefix" aria-hidden="true">₱</span>
                               <input

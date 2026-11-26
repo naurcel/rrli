@@ -110,7 +110,7 @@ export function EditDeliveryModal({
     const seen = new Set<string>();
     const fleetCrew = getFleetCrew();
 
-    // 1. Primary drivers (from API crew, prop drivers, and local fleet)
+    // 1. Primary drivers only (Helpers must not appear on drivers dropdown)
     const allDrivers = [
       ...apiCrew.filter((c) => c.assignmentType === "Driver").map((c) => c.fullName),
       ...(propDrivers ?? []).map((d) => d.label),
@@ -128,31 +128,20 @@ export function EditDeliveryModal({
       });
     }
 
-    // 2. Also include helpers (so any crew member can be chosen as driver)
-    const allHelpers = [
-      ...apiCrew.filter((c) => c.assignmentType === "Helper").map((c) => c.fullName),
-      ...(propHelpers ?? []).map((h) => h.label),
-      ...fleetCrew.filter((c) => c.assignmentType === "Helper").map((c) => c.fullName),
-    ];
-    for (const h of allHelpers) {
-      const clean = h.trim();
-      const lower = clean.toLowerCase();
-      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
-      seen.add(lower);
-      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
-      list.push({
-        value: clean,
-        label: fleet ? formatCrewMemberOptionLabel(fleet, "Driver") : `${clean} [Helper]`,
-      });
-    }
-
     // Ensure currently assigned driver is present
     if (driverName.trim() && !seen.has(driverName.trim().toLowerCase())) {
       list.unshift({ value: driverName.trim(), label: driverName.trim() });
+      seen.add(driverName.trim().toLowerCase());
+    }
+
+    // Always provide "Unknown Driver" as an option (especially for imported records where driver is untracked)
+    if (!seen.has("unknown driver")) {
+      list.push({ value: "Unknown Driver", label: "Unknown Driver" });
+      seen.add("unknown driver");
     }
 
     return list;
-  }, [apiCrew, propDrivers, propHelpers, driverName]);
+  }, [apiCrew, propDrivers, driverName]);
 
   const helperOptions = useMemo(() => {
     const list: { value: string; label: string }[] = [];
@@ -193,6 +182,12 @@ export function EditDeliveryModal({
         value: clean,
         label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : `${clean} [Driver]`,
       });
+    }
+
+    // Always provide "Unknown Helper" as an option
+    if (!seen.has("unknown helper")) {
+      list.push({ value: "Unknown Helper", label: "Unknown Helper" });
+      seen.add("unknown helper");
     }
 
     return list;
@@ -404,7 +399,7 @@ export function EditDeliveryModal({
   const liveHasUnknownEntryFee = dropoffs.some((d) => d.entryFeeStatus === "unknown");
 
   const liveExpenseIssues: string[] = [];
-  if (statuses.dieselExpenses === "unknown") liveExpenseIssues.push("Fuel receipt");
+  // Diesel expenses are not treated as missing blocking receipts for daily trips
   if (statuses.tollGateExpenses === "unknown") liveExpenseIssues.push("Toll receipts");
   if (statuses.driverDailyRate === "unknown") liveExpenseIssues.push("Driver rate");
   if (statuses.driverAllowance === "unknown") liveExpenseIssues.push("Driver allowance");
@@ -445,15 +440,15 @@ export function EditDeliveryModal({
     const cleanDriver = driverName.trim().toLowerCase();
     const cleanHelper1 = helperName.trim().toLowerCase();
     const cleanHelper2 = hasSecondHelper ? helper2Name.trim().toLowerCase() : "";
-    if (cleanDriver && cleanHelper1 && cleanDriver === cleanHelper1) {
+    if (cleanDriver && cleanHelper1 && cleanDriver === cleanHelper1 && !cleanDriver.includes("unknown")) {
       setError("The same employee cannot be assigned as both Driver and Helper on the same trip.");
       return;
     }
-    if (cleanDriver && cleanHelper2 && cleanDriver === cleanHelper2) {
+    if (cleanDriver && cleanHelper2 && cleanDriver === cleanHelper2 && !cleanDriver.includes("unknown")) {
       setError("The same employee cannot be assigned as both Driver and Helper 2 on the same trip.");
       return;
     }
-    if (cleanHelper1 && cleanHelper2 && cleanHelper1 === cleanHelper2) {
+    if (cleanHelper1 && cleanHelper2 && cleanHelper1 === cleanHelper2 && !cleanHelper1.includes("unknown")) {
       setError("Helper 1 and Helper 2 must be different employees.");
       return;
     }
@@ -462,6 +457,32 @@ export function EditDeliveryModal({
     if (numRate < 0) {
       setError("Delivery rate cannot be negative.");
       return;
+    }
+
+    // Required crew rates for owned trucks
+    if (!isSubcontracted) {
+      const dRate = expenses.driverDailyRate != null ? Number(expenses.driverDailyRate) : 0;
+      if (!expenses.driverDailyRate || dRate <= 0) {
+        setError("Driver daily rate is required for owned trucks.");
+        return;
+      }
+      const dAllow = expenses.driverAllowance != null ? Number(expenses.driverAllowance) : -1;
+      if (expenses.driverAllowance === "" || dAllow < 0) {
+        setError("Driver allowance is required for owned trucks.");
+        return;
+      }
+      if (helperName.trim()) {
+        const hRate = expenses.helperDailyRate != null ? Number(expenses.helperDailyRate) : 0;
+        if (!expenses.helperDailyRate || hRate <= 0) {
+          setError("Helper daily rate is required when helper is assigned.");
+          return;
+        }
+        const hAllow = expenses.helperAllowance != null ? Number(expenses.helperAllowance) : -1;
+        if (expenses.helperAllowance === "" || hAllow < 0) {
+          setError("Helper allowance is required when helper is assigned.");
+          return;
+        }
+      }
     }
 
     for (let i = 0; i < dropoffs.length; i++) {
@@ -589,7 +610,7 @@ export function EditDeliveryModal({
       "otherExpenses",
     ] as const;
     const expenseIssueLabels: Record<typeof expenseKeys[number], string> = {
-      dieselExpenses: "Fuel receipt",
+      dieselExpenses: "Diesel expense",
       tollGateExpenses: "Toll receipts",
       entryFees: "Store entry fee",
       driverAllowance: "Driver allowance",
@@ -1135,7 +1156,7 @@ export function EditDeliveryModal({
                     <div className="crew-rates-fields">
                       <DialogExpenseField
                         id="corr-driver-rate"
-                        label="Daily Rate"
+                        label={isSubcontracted ? "Daily Rate" : "Daily Rate *"}
                         value={expenses.driverDailyRate ?? ""}
                         status={statuses.driverDailyRate ?? "confirmed"}
                         onValueChange={(val) => setExpenses((prev) => ({ ...prev, driverDailyRate: val }))}
@@ -1146,7 +1167,7 @@ export function EditDeliveryModal({
                       />
                       <DialogExpenseField
                         id="corr-driver-allowance"
-                        label="Trip Allowance"
+                        label={isSubcontracted ? "Trip Allowance" : "Trip Allowance *"}
                         value={expenses.driverAllowance ?? ""}
                         status={statuses.driverAllowance ?? "confirmed"}
                         onValueChange={(val) => {
@@ -1182,7 +1203,7 @@ export function EditDeliveryModal({
                     <div className="crew-rates-fields">
                       <DialogExpenseField
                         id="corr-helper-rate"
-                        label="Daily Rate"
+                        label={isSubcontracted ? "Daily Rate" : "Daily Rate *"}
                         value={expenses.helperDailyRate ?? ""}
                         status={statuses.helperDailyRate ?? "confirmed"}
                         onValueChange={(val) => setExpenses((prev) => ({ ...prev, helperDailyRate: val }))}
@@ -1193,7 +1214,7 @@ export function EditDeliveryModal({
                       />
                       <DialogExpenseField
                         id="corr-helper-allowance"
-                        label="Trip Allowance"
+                        label={isSubcontracted ? "Trip Allowance" : "Trip Allowance *"}
                         value={expenses.helperAllowance ?? ""}
                         status={statuses.helperAllowance ?? "confirmed"}
                         onValueChange={(val) => {
@@ -1243,7 +1264,7 @@ export function EditDeliveryModal({
                       <div className="crew-rates-fields">
                         <DialogExpenseField
                           id="corr-helper2-rate"
-                          label="Daily Rate"
+                          label={isSubcontracted ? "Daily Rate" : "Daily Rate *"}
                           value={expenses.helper2DailyRate ?? ""}
                           status={statuses.helper2DailyRate ?? "confirmed"}
                           onValueChange={(val) => setExpenses((prev) => ({ ...prev, helper2DailyRate: val }))}
@@ -1254,7 +1275,7 @@ export function EditDeliveryModal({
                         />
                         <DialogExpenseField
                           id="corr-helper2-allowance"
-                          label="Trip Allowance"
+                          label={isSubcontracted ? "Trip Allowance" : "Trip Allowance *"}
                           value={expenses.helper2Allowance ?? ""}
                           status={statuses.helper2Allowance ?? "confirmed"}
                           onValueChange={(val) => {

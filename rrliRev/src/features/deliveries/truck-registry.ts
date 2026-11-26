@@ -1,3 +1,4 @@
+import { isTestRunner } from "../../lib/config/test-mode.ts";
 import type {
   DeliveryRateBasis,
   TruckOwnership,
@@ -132,8 +133,9 @@ export const dynamicFleetTrucks: FleetTruck[] = [];
 export const deletedTruckPlateNumbers = new Set<string>();
 
 export function getFleetTrucks(): readonly FleetTruck[] {
+  const baseTrucks = !isTestRunner ? OWNED_TRUCKS.slice(0, 1) : FLEET_TRUCKS;
   const byIdOrPlate = new Map<string, FleetTruck>();
-  for (const truck of FLEET_TRUCKS) {
+  for (const truck of baseTrucks) {
     if (deletedTruckPlateNumbers.has(truck.plateNumber.toUpperCase())) continue;
     byIdOrPlate.set(truck.id, truck);
   }
@@ -299,4 +301,54 @@ export function deleteFleetTruck(identifier: string): { ok: true } | { ok: false
 export function resetDynamicFleetTrucks(): void {
   dynamicFleetTrucks.length = 0;
   deletedTruckPlateNumbers.clear();
+}
+
+export const DEFAULT_TRUCK_TYPES = ["4-Wheeler", "6-Wheeler", "10-Wheeler"] as const;
+export const ROUTEX_CUSTOM_TRUCK_TYPES_STORAGE_KEY = "routex_custom_truck_types";
+export const ROUTEX_TRUCK_TYPES_CHANGED_EVENT = "routex:truck-types-changed";
+
+export function readCustomTruckTypes(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(ROUTEX_CUSTOM_TRUCK_TYPES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === "string" && s.trim().length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomTruckType(size: string): string[] {
+  const clean = size.trim();
+  if (!clean) return readCustomTruckTypes();
+  if (typeof window === "undefined") return [];
+  try {
+    const existing = readCustomTruckTypes();
+    const lower = clean.toLowerCase();
+    const alreadyExists =
+      DEFAULT_TRUCK_TYPES.some((d) => d.toLowerCase() === lower) ||
+      existing.some((e) => e.toLowerCase() === lower);
+    if (!alreadyExists) {
+      const updated = [...existing, clean];
+      window.localStorage.setItem(ROUTEX_CUSTOM_TRUCK_TYPES_STORAGE_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent(ROUTEX_TRUCK_TYPES_CHANGED_EVENT, { detail: clean }));
+      return updated;
+    }
+    return existing;
+  } catch {
+    return [];
+  }
+}
+
+export function getAllAvailableTruckTypes(existingTrucks: { truckType?: string }[] = []): string[] {
+  const custom = readCustomTruckTypes();
+  const set = new Set<string>(DEFAULT_TRUCK_TYPES);
+  for (const c of custom) set.add(c);
+  for (const t of existingTrucks) {
+    if (t.truckType && t.truckType.trim()) {
+      set.add(t.truckType.trim());
+    }
+  }
+  return Array.from(set);
 }

@@ -220,11 +220,11 @@ export function formatFinancialIntegrityIssue(raw: string): string {
 export function getDeliveryIncompleteIssues(delivery: DeliveryTripRecord): string[] {
   const issues: string[] = [];
 
-  // Note: Proof of Delivery (POD) is NOT required to record a daily trip. Trips may take days or weeks.
+  // Note: Proof of Delivery (POD) and fuel receipts are NOT required to record a daily trip. Trips may take days or weeks.
 
-  // 1. Pending or unconfirmed expenses
+  // 1. Pending or unconfirmed expenses (excluding diesel, which can be delayed across daily trips)
   const unknownKeys = Object.entries(delivery.expenseStates ?? {})
-    .filter(([_, status]) => status === "unknown")
+    .filter(([key, status]) => status === "unknown" && key !== "dieselExpenses")
     .map(([key]) => key);
 
   if (unknownKeys.length > 0) {
@@ -237,20 +237,21 @@ export function getDeliveryIncompleteIssues(delivery: DeliveryTripRecord): strin
     }
   }
 
-  // 3. Pending store entry fees
+  // 2. Pending store entry fees
   const unknownEntryFees = (delivery.dropoffs ?? []).filter((d) => d.entryFeeStatus === "unknown");
   if (unknownEntryFees.length > 0 && !unknownKeys.includes("entryFees")) {
     issues.push(unknownEntryFees.length === 1 ? "Pending store entry fee" : `Pending store entry fees (${unknownEntryFees.length})`);
   }
 
-  // 4. Missing agreed delivery rate
+  // 3. Missing agreed delivery rate
   if (delivery.deliveryRate == null || delivery.deliveryRate <= 0) {
     issues.push("Missing delivery rate");
   }
 
-  // 5. Explicit financial integrity issues (sanitized into clean operational text)
+  // 4. Explicit financial integrity issues (sanitized into clean operational text, excluding diesel)
   if (delivery.financialIntegrityIssues && delivery.financialIntegrityIssues.length > 0) {
     for (const rawIssue of delivery.financialIntegrityIssues) {
+      if (rawIssue.toLowerCase().includes("diesel")) continue;
       const clean = formatFinancialIntegrityIssue(rawIssue);
       if (!issues.includes(clean)) {
         issues.push(clean);
@@ -258,7 +259,7 @@ export function getDeliveryIncompleteIssues(delivery: DeliveryTripRecord): strin
     }
   }
 
-  // 6. Missing core operational personnel (driver)
+  // 5. Missing core operational personnel (driver)
   const dName = (delivery as unknown as { driverName?: string | null }).driverName;
   if (dName !== undefined && (!dName || dName.trim() === "")) {
     issues.push("No driver assigned");
@@ -373,6 +374,7 @@ export function buildDeliveryTripRecord(input: {
   const netIncome = totalExpenses == null ? null : input.deliveryRate - totalExpenses;
   const marginPercent = calculateProfitMargin(input.deliveryRate, netIncome);
   const financialIntegrityIssues = EXPENSE_KEYS.flatMap((key) => {
+    if (key === "dieselExpenses") return [];
     if (expenseStates[key] === "unknown") return [`${key} is unknown`];
     if (expenseStates[key] === "confirmed" && fullExpenses[key] == null) {
       return [`${key} has no confirmed amount`];
@@ -405,7 +407,7 @@ export function buildDeliveryTripRecord(input: {
     netIncome,
     marginPercent,
     financialState:
-      input.financialState ?? (financialIntegrityIssues.length === 0 ? "finalized" : "incomplete"),
+      input.financialState ?? (totalExpenses != null && financialIntegrityIssues.length === 0 ? "finalized" : "incomplete"),
     financialIntegrityIssues,
     version: input.version ?? 1,
     dropoffs: normalizedDropoffs,

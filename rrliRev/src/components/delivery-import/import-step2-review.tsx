@@ -170,21 +170,35 @@ export function ImportStep2Review({
 
       {/* Staged Deliveries Table */}
       <div className="table-wrap">
-        <table>
+        <table style={{ tableLayout: "fixed", width: "100%", minWidth: "1280px" }}>
+          <colgroup>
+            <col style={{ width: "140px" }} />
+            <col style={{ width: "135px" }} />
+            <col style={{ width: "130px" }} />
+            <col style={{ width: "160px" }} />
+            <col style={{ width: "115px" }} />
+            <col style={{ width: "85px" }} />
+            <col style={{ width: "110px" }} />
+            <col style={{ width: "100px" }} />
+            <col style={{ width: "95px" }} />
+            <col style={{ width: "180px" }} />
+            <col style={{ width: "90px" }} />
+            <col style={{ width: "45px" }} />
+          </colgroup>
           <thead>
             <tr>
-              <th>Status</th>
-              <th>Date</th>
-              <th>Waybill</th>
-              <th>Client</th>
-              <th>Plate</th>
-              <th>Temp</th>
-              <th>Revenue</th>
-              <th>Diesel</th>
-              <th>Tolls</th>
-              <th>Crew (Driver / Helper)</th>
-              <th>Stops</th>
-              <th style={{ width: "40px" }} aria-label="Row Actions" />
+              <th style={{ width: "140px" }}>Status</th>
+              <th style={{ width: "135px" }}>Date</th>
+              <th style={{ width: "130px" }}>Waybill</th>
+              <th style={{ width: "160px" }}>Client</th>
+              <th style={{ width: "115px" }}>Plate</th>
+              <th style={{ width: "85px" }}>Temp</th>
+              <th style={{ width: "110px" }}>Revenue</th>
+              <th style={{ width: "100px" }}>Diesel</th>
+              <th style={{ width: "95px" }}>Tolls</th>
+              <th style={{ width: "180px" }}>Crew (Driver / Helper)</th>
+              <th style={{ width: "90px" }}>Stops</th>
+              <th style={{ width: "45px" }} aria-label="Row Actions" />
             </tr>
           </thead>
           <tbody>

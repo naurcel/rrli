@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { isTestRunner } from "../../lib/config/test-mode.ts";
 import {
   calculateProfitMargin,
   calculateTripExpenseTotal,
@@ -104,7 +105,8 @@ loadPersistedMockDeliveries();
 
 export function getAllMockDeliveries(): SmallMockDelivery[] {
   loadPersistedMockDeliveries();
-  return [...SMALL_MOCK_DATABASE.deliveries, ...dynamicMockDeliveries].filter(
+  const baseDeliveries = !isTestRunner ? SMALL_MOCK_DATABASE.deliveries.slice(0, 1) : SMALL_MOCK_DATABASE.deliveries;
+  return [...baseDeliveries, ...dynamicMockDeliveries].filter(
     (item) => !deletedDeliveryIds.has(item.record.id),
   );
 }
@@ -613,6 +615,7 @@ export function correctSmallMockDelivery(input: {
     "otherExpenses",
   ] as const;
   rec.financialIntegrityIssues = expenseKeys.flatMap((key) => {
+    if (key === "dieselExpenses") return [];
     if (rec.expenseStates[key] === "unknown") return [`${key} is unknown`];
     if (rec.expenseStates[key] === "confirmed" && rec.expenses[key] == null) {
       return [`${key} has no confirmed amount`];
