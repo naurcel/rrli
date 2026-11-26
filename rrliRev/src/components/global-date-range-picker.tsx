@@ -56,7 +56,7 @@ const formatShort = formatShortDate;
 const isBetween = isBetweenDates;
 const COMPANY_FOUNDATION_YEAR = 2024;
 
-const DATE_RANGE_STORAGE_KEY = "routex.global-date-range.v1";
+const DATE_RANGE_STORAGE_KEY = "routex.global-date-range.v2";
 const DATE_RANGE_CHANGED_EVENT = "routex:date-range-changed";
 
 let memoryCachedRange: DateRange | null = null;
@@ -87,6 +87,10 @@ function parseStoredDateRange(raw: string): DateRange | null {
     if (start && isNaN(start.getTime())) return null;
     if (end && isNaN(end.getTime())) return null;
     if (start || end) {
+      // Relative presets always recompute against today so they roll over automatically
+      if (parsed.preset === "month") {
+        return { ...presetRange("month"), preset: "month" };
+      }
       if (parsed.preset === "week" && (start || end)) {
         const ref = end ?? start!;
         return presetRange("week", ref);
@@ -123,7 +127,7 @@ export function GlobalDateRangeProvider({ children }: { children: ReactNode }) {
       memoryInitialized = true;
       return stored;
     }
-    const fallback = { ...presetRange("all"), preset: "all" as const };
+    const fallback = { ...presetRange("month"), preset: "month" as const };
     memoryCachedRange = fallback;
     return fallback;
   });

@@ -105,7 +105,7 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
       if (controller.signal.aborted) return;
       if (
         !event.key ||
-        event.key === "routex.global-date-range.v1" ||
+        event.key === "routex.global-date-range.v2" ||
         event.key.startsWith("routex:delivery") ||
         event.key.includes("deliveries")
       ) {
