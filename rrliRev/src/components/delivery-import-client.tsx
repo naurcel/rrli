@@ -60,8 +60,8 @@ export function DeliveryExcelImportClient({
     errors: { waybill: string; reason: string }[];
   } | null>(null);
 
-  const [liveTrucks, setLiveTrucks] = useState<FleetTruck[]>(() => [...getFleetTrucks()]);
-  const [liveCrew, setLiveCrew] = useState<FleetCrewMember[]>(() => [...getFleetCrew()]);
+  const [liveTrucks, setLiveTrucks] = useState<FleetTruck[]>([]);
+  const [liveCrew, setLiveCrew] = useState<FleetCrewMember[]>([]);
   const [liveClients, setLiveClients] = useState<string[]>([]);
 
   // Step 3 Preview Table state
@@ -121,7 +121,7 @@ export function DeliveryExcelImportClient({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         const crewList = data?.crew || data?.drivers;
-        if (Array.isArray(crewList) && crewList.length > 0) {
+        if (Array.isArray(crewList)) {
           setLiveCrew(crewList);
         }
       })

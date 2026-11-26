@@ -430,9 +430,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           ...nextReferences.trucks,
           ...localTrucks.filter((t) => !existingPlates.has(t.label.toUpperCase())),
         ];
+        const legacyMockCrew = new Set(["nico serrano", "mateo dela vega", "ira santos", "paolo reyes"]);
         const browserDrivers = localDeliveries
           .map((delivery) => delivery.driverName?.trim())
-          .filter((name): name is string => Boolean(name && !name.toLowerCase().includes("unknown")));
+          .filter((name): name is string => Boolean(name && !name.toLowerCase().includes("unknown") && !legacyMockCrew.has(name.toLowerCase())));
         const driverNames = new Set(
           (nextReferences.drivers ?? [])
             .filter((d) => !d.label.toLowerCase().includes("unknown"))
@@ -449,14 +450,12 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
         const baseHelpersList: DeliveryFilterOption[] = [
           ...(nextReferences.helpers ?? []),
-          ...BASE_HELPERS.map((h) => ({ id: h.id, label: h.fullName })),
-          ...getFleetCrew().filter((c) => c.assignmentType === "Helper").map((h) => ({ id: h.id, label: h.fullName })),
         ].filter((h) => !h.label.toLowerCase().includes("unknown"));
         const helperNames = new Set(baseHelpersList.map((h) => h.label.toLowerCase()));
         const browserHelpers = localDeliveries
           .filter((delivery) => Boolean(delivery.helperName))
           .flatMap((delivery) => delivery.helperName!.split(/[,/&]/).map((h) => h.trim()))
-          .filter((name) => Boolean(name) && !name.toLowerCase().includes("unknown"));
+          .filter((name) => Boolean(name) && !name.toLowerCase().includes("unknown") && !legacyMockCrew.has(name.toLowerCase()));
         const extraHelpers = browserHelpers
           .filter((name) => {
             const key = name.toLowerCase();

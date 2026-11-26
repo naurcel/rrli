@@ -180,7 +180,7 @@ export default function TruckProfitabilityPage() {
   const [deletedPlates, setDeletedPlates] = useState<Set<string>>(new Set());
 
   // Fleet Crew (Drivers & Helpers) state
-  const [crew, setCrew] = useState<FleetCrewMember[]>(() => [...getFleetCrew()]);
+  const [crew, setCrew] = useState<FleetCrewMember[]>([]);
   const [crewRoleFilter, setCrewRoleFilter] = useState<"All" | "Driver" | "Helper">("All");
   const {
     value: crewSearch,
@@ -600,15 +600,7 @@ export default function TruckProfitabilityPage() {
       .then((data: { ok?: boolean; drivers?: FleetCrewMember[]; crew?: FleetCrewMember[] }) => {
         const incoming = data?.crew ?? data?.drivers;
         if (data?.ok && Array.isArray(incoming)) {
-          setCrew((prev) => {
-            const incomingByKey = new Map(incoming.map((member) => [`${member.assignmentType}:${member.fullName.toLowerCase()}`, member]));
-            const merged = prev.map((member) => incomingByKey.get(`${member.assignmentType}:${member.fullName.toLowerCase()}`) ?? member);
-            const seen = new Set(merged.map((member) => `${member.assignmentType}:${member.fullName.toLowerCase()}`));
-            return applyBrowserCrewStatuses([
-              ...merged,
-              ...incoming.filter((member) => !seen.has(`${member.assignmentType}:${member.fullName.toLowerCase()}`)),
-            ]);
-          });
+          setCrew(applyBrowserCrewStatuses(incoming));
         }
       })
       .catch(() => {});

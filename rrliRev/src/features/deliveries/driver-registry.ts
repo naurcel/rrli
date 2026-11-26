@@ -9,43 +9,9 @@ export type FleetCrewMember = {
 
 export type FleetDriver = FleetCrewMember;
 
-export const BASE_DRIVERS: readonly FleetCrewMember[] = [
-  {
-    id: "30000000-0000-4000-8000-000000000001",
-    employeeCode: "DRV-01",
-    fullName: "Mateo Dela Vega",
-    assignmentType: "Driver",
-    contactNumber: null,
-    isActive: true,
-  },
-  {
-    id: "30000000-0000-4000-8000-000000000002",
-    employeeCode: "DRV-02",
-    fullName: "Nico Serrano",
-    assignmentType: "Driver",
-    contactNumber: null,
-    isActive: true,
-  },
-] as const;
+export const BASE_DRIVERS: readonly FleetCrewMember[] = [];
 
-export const BASE_HELPERS: readonly FleetCrewMember[] = [
-  {
-    id: "30000000-0000-4000-8000-000000000003",
-    employeeCode: "HLP-01",
-    fullName: "Ira Santos",
-    assignmentType: "Helper",
-    contactNumber: null,
-    isActive: true,
-  },
-  {
-    id: "30000000-0000-4000-8000-000000000004",
-    employeeCode: "HLP-02",
-    fullName: "Paolo Reyes",
-    assignmentType: "Helper",
-    contactNumber: null,
-    isActive: true,
-  },
-] as const;
+export const BASE_HELPERS: readonly FleetCrewMember[] = [];
 
 export const dynamicFleetCrew: FleetCrewMember[] = [];
 export const dynamicFleetDrivers = dynamicFleetCrew;

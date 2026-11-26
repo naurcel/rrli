@@ -117,15 +117,6 @@ test("correctSmallMockDelivery correctly updates driver and helper names on a de
 
 test("registerFleetCrewMember registers helpers with HLP- prefix and Helper assignmentType", () => {
   resetDynamicFleetCrew();
-  const initialCrew = getFleetCrew();
-
-  // Verify base drivers and helpers are present
-  const baseDriverNames = initialCrew.filter((c) => c.assignmentType === "Driver").map((c) => c.fullName);
-  const baseHelperNames = initialCrew.filter((c) => c.assignmentType === "Helper").map((c) => c.fullName);
-  assert.ok(baseDriverNames.includes("Mateo Dela Vega"));
-  assert.ok(baseDriverNames.includes("Nico Serrano"));
-  assert.ok(baseHelperNames.includes("Ira Santos"));
-  assert.ok(baseHelperNames.includes("Paolo Reyes"));
 
   // Register a new helper
   const result = registerFleetCrewMember({
@@ -154,7 +145,12 @@ test("registerFleetCrewMember registers helpers with HLP- prefix and Helper assi
 
 test("crew members can be deactivated and excluded from active delivery choices", () => {
   resetDynamicFleetCrew();
-  const helper = getFleetCrew().find((member) => member.assignmentType === "Helper");
+  const created = registerFleetCrewMember({
+    fullName: "Test Helper",
+    assignmentType: "Helper",
+  });
+  assert.equal(created.ok, true);
+  const helper = created.ok ? created.crewMember : null;
   assert.ok(helper);
 
   const deactivated = setFleetCrewActive(helper.id, false);
@@ -170,8 +166,17 @@ test("crew members can be deactivated and excluded from active delivery choices"
 
 test("updateFleetCrewMember modifies crew member details and validates input", () => {
   resetDynamicFleetCrew();
-  const initialCrew = getFleetCrew();
-  const target = initialCrew.find((c) => c.fullName === "Mateo Dela Vega");
+  const reg1 = registerFleetCrewMember({
+    fullName: "Mateo Dela Vega",
+    assignmentType: "Driver",
+  });
+  const reg2 = registerFleetCrewMember({
+    fullName: "Nico Serrano",
+    assignmentType: "Driver",
+  });
+  assert.equal(reg1.ok, true);
+  assert.equal(reg2.ok, true);
+  const target = reg1.ok ? reg1.crewMember : null;
   assert.ok(target);
 
   // Successful update of name and contact number
@@ -209,8 +214,12 @@ test("updateFleetCrewMember modifies crew member details and validates input", (
 
 test("deleteFleetCrewMember removes crew member from active registry", () => {
   resetDynamicFleetCrew();
-  const initialCrew = getFleetCrew();
-  const helper = initialCrew.find((c) => c.assignmentType === "Helper");
+  const created = registerFleetCrewMember({
+    fullName: "Test Delete Helper",
+    assignmentType: "Helper",
+  });
+  assert.equal(created.ok, true);
+  const helper = created.ok ? created.crewMember : null;
   assert.ok(helper);
 
   const initialCount = getFleetCrew().length;

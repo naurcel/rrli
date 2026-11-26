@@ -87,13 +87,12 @@ export function EditDeliveryModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fallbackDrivers = getFleetCrew().map((d) => ({ label: d.fullName }));
-  const fallbackHelpers = BASE_HELPERS.map((h) => ({ label: h.fullName }));
-  const drivers = (propDrivers && propDrivers.length > 0 ? propDrivers : fallbackDrivers).filter(
-    (d) => !d.label.toLowerCase().includes("unknown"),
+  const legacyMockCrew = new Set(["nico serrano", "mateo dela vega", "ira santos", "paolo reyes"]);
+  const drivers = (propDrivers ?? []).filter(
+    (d) => !d.label.toLowerCase().includes("unknown") && !legacyMockCrew.has(d.label.toLowerCase()),
   );
-  const helpers = (propHelpers && propHelpers.length > 0 ? propHelpers : fallbackHelpers).filter(
-    (h) => !h.label.toLowerCase().includes("unknown"),
+  const helpers = (propHelpers ?? []).filter(
+    (h) => !h.label.toLowerCase().includes("unknown") && !legacyMockCrew.has(h.label.toLowerCase()),
   );
 
   const isSubcontracted = Boolean(
