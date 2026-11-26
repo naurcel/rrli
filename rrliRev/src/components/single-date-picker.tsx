@@ -259,6 +259,7 @@ export function SingleDatePicker({
             right: "auto",
             bottom: "auto",
             margin: 0,
+            zIndex: 99999,
             visibility: popoverPos ? "visible" : "hidden",
             transformOrigin: `${opensAbove ? "bottom" : "top"} ${alignRight ? "right" : "left"}`,
           }}

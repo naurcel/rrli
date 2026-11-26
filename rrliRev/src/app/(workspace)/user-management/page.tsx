@@ -305,10 +305,12 @@ export default function UserManagementPage() {
   }, []);
 
   function getUserAssignedRoles(user: ManagedUserRecord): string[] {
-    if (user.isSuperadmin) return ["superadmin"];
-    if (Array.isArray(user.roles) && user.roles.length > 0) return [...user.roles];
-    if (Array.isArray(user.departments) && user.departments.length > 0) return [...user.departments];
-    return [user.role];
+    const roles = Array.isArray(user.roles) && user.roles.length > 0
+      ? [...user.roles]
+      : Array.isArray(user.departments) && user.departments.length > 0
+      ? [...user.departments]
+      : [user.role];
+    return roles.filter(Boolean);
   }
 
   function getRoleOrDeptName(key: string): string {
@@ -350,10 +352,10 @@ export default function UserManagementPage() {
   }, [actor.isSuperadmin, departmentsList]);
 
   async function handleToggleUserRole(user: ManagedUserRecord, toggledRole: string) {
-    const currentRoles = getUserAssignedRoles(user);
+    const currentRoles = getUserAssignedRoles(user).filter((r) => r !== "superadmin");
     let nextRoles: string[];
     if (currentRoles.includes(toggledRole)) {
-      if (currentRoles.length === 1) {
+      if (currentRoles.length === 1 && !user.isSuperadmin) {
         toast.error("A user must retain at least one assigned role.");
         setFeedback({
           tone: "error",
@@ -1817,39 +1819,42 @@ export default function UserManagementPage() {
                                 maxWidth: "260px",
                               }}
                             >
-                              {user.isSuperadmin ? (
-                                <span
-                                  className="discord-role-pill is-superadmin"
-                                  title="Permanent Executive: Unrestricted system authority across all modules"
-                                >
-                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                                  </svg>
-                                  <span className="discord-role-text">President</span>
-                                </span>
-                              ) : (
                                 <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
                                   <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "5px" }}>
-                                    {getUserAssignedRoles(user).map((roleKey) => {
-                                      const isProtectedAdmin = roleKey === "admin" && !actor.isSuperadmin;
-                                      const dotColor = getRoleDotColor(roleKey);
-                                      return (
-                                        <span
-                                          key={roleKey}
-                                          className="discord-role-pill"
-                                          title={isProtectedAdmin ? "Protected role: Only the President can modify Admin accounts" : getRoleOrDeptName(roleKey)}
-                                        >
+                                    {user.isSuperadmin && (
+                                      <span
+                                        className="discord-role-pill is-superadmin"
+                                        title="Permanent Executive: Unrestricted system authority across all modules"
+                                      >
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                        </svg>
+                                        <span className="discord-role-text">President</span>
+                                      </span>
+                                    )}
+
+                                    {getUserAssignedRoles(user)
+                                      .filter((roleKey) => roleKey !== "superadmin" && (!user.isSuperadmin || roleKey !== "admin"))
+                                      .map((roleKey) => {
+                                        const isProtectedAdmin = roleKey === "admin" && !actor.isSuperadmin;
+                                        const dotColor = getRoleDotColor(roleKey);
+                                        return (
                                           <span
-                                            className="discord-role-dot"
-                                            style={{ backgroundColor: dotColor }}
-                                            aria-hidden="true"
-                                          />
-                                          <span className="discord-role-text">
-                                            {getRoleOrDeptName(roleKey)}
+                                            key={roleKey}
+                                            className="discord-role-pill"
+                                            title={isProtectedAdmin ? "Protected role: Only the President can modify Admin accounts" : getRoleOrDeptName(roleKey)}
+                                          >
+                                            <span
+                                              className="discord-role-dot"
+                                              style={{ backgroundColor: dotColor }}
+                                              aria-hidden="true"
+                                            />
+                                            <span className="discord-role-text">
+                                              {getRoleOrDeptName(roleKey)}
+                                            </span>
                                           </span>
-                                        </span>
-                                      );
-                                    })}
+                                        );
+                                      })}
 
                                     {(Boolean(user.customGrants?.length) || Boolean(user.customRestrictions?.length)) && (
                                       <button
@@ -1873,7 +1878,7 @@ export default function UserManagementPage() {
                                       </button>
                                     )}
 
-                                    {(!user.isSuperadmin && (user.role !== "admin" || actor.isSuperadmin)) && (
+                                    {(actor.isSuperadmin || (!user.isSuperadmin && user.role !== "admin")) && (
                                       <button
                                         type="button"
                                         className="discord-role-add-btn"
@@ -1990,7 +1995,6 @@ export default function UserManagementPage() {
                                     </div>
                                   )}
                                 </div>
-                              )}
                             </td>
                             <td>
                               <span

@@ -4,7 +4,7 @@ import * as z from "zod";
 import { recordAuditEntry } from "@/lib/audit/server-audit-store";
 
 import { parseDeliveryListQuery } from "@/features/deliveries/delivery-query";
-import { buildDeliveryTripRecord, type TruckTemperature } from "@/features/deliveries/delivery-domain";
+import { buildDeliveryTripRecord, type TruckTemperature, type ExpenseResolutionStatus } from "@/features/deliveries/delivery-domain";
 import { validateDeliveryDateWindow } from "@/features/deliveries/delivery-recording-policy";
 import {
   getMockClients,
@@ -43,56 +43,59 @@ const optionalMoneySchema = moneySchema.nullable();
 const expenseStatusSchema = z.enum(["confirmed", "not_applicable", "unknown"]);
 
 const createDeliverySchema = z.object({
-  waybillNumber: z.string().trim().min(3, "Waybill number is required."),
+  waybillNumber: z.string().trim().optional().default(""),
   deliveryDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Valid YYYY-MM-DD delivery date is required."),
-  clientName: z.string().trim().min(2, "Client name is required."),
-  plateNumber: z.string().trim().min(3, "Truck plate number is required."),
-  truckTemperature: z.string().trim().min(1, "Temperature is required."),
-  origin: z.string().trim().min(2, "Origin is required."),
-  distanceKm: moneySchema,
-  fuelRate: moneySchema,
-  deliveryRate: z.number().finite().positive("Delivery revenue must be greater than zero."),
-  idempotencyKey: z.string().uuid(),
-  dieselExpenses: optionalMoneySchema,
-  dieselExpensesStatus: expenseStatusSchema,
-  tollGateExpenses: optionalMoneySchema,
-  tollGateExpensesStatus: expenseStatusSchema,
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Valid YYYY-MM-DD delivery date is required.")
+    .optional()
+    .default(() => new Date().toISOString().split("T")[0]),
+  clientName: z.string().trim().optional().default(""),
+  plateNumber: z.string().trim().min(1, "Truck plate number is required."),
+  truckTemperature: z.string().trim().optional().default(""),
+  origin: z.string().trim().optional().default("Pending Origin"),
+  distanceKm: moneySchema.optional().default(0),
+  fuelRate: moneySchema.optional().default(0),
+  deliveryRate: z.number().finite().min(0, "Delivery revenue cannot be negative.").optional().default(0),
+  idempotencyKey: z.string().uuid().optional().default(() => crypto.randomUUID()),
+  dieselExpenses: optionalMoneySchema.optional().default(null),
+  dieselExpensesStatus: expenseStatusSchema.optional().default("confirmed"),
+  tollGateExpenses: optionalMoneySchema.optional().default(null),
+  tollGateExpensesStatus: expenseStatusSchema.optional().default("confirmed"),
   tollGateBreakdown: z.string().trim().default(""),
-  driverAllowance: optionalMoneySchema,
-  driverAllowanceStatus: expenseStatusSchema,
-  driverDailyRate: optionalMoneySchema,
-  driverDailyRateStatus: expenseStatusSchema,
-  driverName: z.string().trim().min(2, "Driver name is required."),
+  driverAllowance: optionalMoneySchema.optional().default(null),
+  driverAllowanceStatus: expenseStatusSchema.optional().default("confirmed"),
+  driverDailyRate: optionalMoneySchema.optional().default(null),
+  driverDailyRateStatus: expenseStatusSchema.optional().default("confirmed"),
+  driverName: z.string().trim().optional().default(""),
   recordingDelayed: z.boolean().default(false),
-  helperAllowance: optionalMoneySchema,
-  helperAllowanceStatus: expenseStatusSchema,
-  helperDailyRate: optionalMoneySchema,
-  helperDailyRateStatus: expenseStatusSchema,
-  helperName: z.string().trim().min(2, "Helper name is required."),
+  helperAllowance: optionalMoneySchema.optional().default(null),
+  helperAllowanceStatus: expenseStatusSchema.optional().default("confirmed"),
+  helperDailyRate: optionalMoneySchema.optional().default(null),
+  helperDailyRateStatus: expenseStatusSchema.optional().default("confirmed"),
+  helperName: z.string().trim().optional().default(""),
   hasSecondHelper: z.boolean().default(false),
-  helper2Allowance: optionalMoneySchema.optional().nullable(),
+  helper2Allowance: optionalMoneySchema.optional().nullable().default(null),
   helper2AllowanceStatus: expenseStatusSchema.optional().default("not_applicable"),
-  helper2DailyRate: optionalMoneySchema.optional().nullable(),
+  helper2DailyRate: optionalMoneySchema.optional().nullable().default(null),
   helper2DailyRateStatus: expenseStatusSchema.optional().default("not_applicable"),
-  helper2Name: z.string().trim().optional().nullable(),
-  otherExpenses: optionalMoneySchema,
-  otherExpensesStatus: expenseStatusSchema,
+  helper2Name: z.string().trim().optional().nullable().default(""),
+  otherExpenses: optionalMoneySchema.optional().default(null),
+  otherExpensesStatus: expenseStatusSchema.optional().default("confirmed"),
   dropoffs: z
     .array(
       z.object({
-        storeName: z.string().trim().min(2, "Store name is required."),
-        destinationArea: z.string().trim().min(2, "Destination area is required."),
+        storeName: z.string().trim().optional().default("Pending Store"),
+        destinationArea: z.string().trim().optional().default("Pending Destination"),
         dropoffCount: z.number().int().min(1).default(1).optional(),
-        entryFee: optionalMoneySchema,
-        entryFeeStatus: expenseStatusSchema,
+        entryFee: optionalMoneySchema.optional().default(null),
+        entryFeeStatus: expenseStatusSchema.optional().default("confirmed"),
         podSubmitted: z.boolean().default(false),
         supportingDocsComplete: z.boolean().default(false),
         documentRef: z.string().trim().default("Pending upload"),
       }),
     )
-    .min(1, "At least one store drop-off is required."),
+    .optional()
+    .default([]),
   supportingDocuments: z
     .array(
       z.union([
@@ -109,7 +112,7 @@ const createDeliverySchema = z.object({
     )
     .optional()
     .default([]),
-  notes: z.string().trim().nullable().optional(),
+  notes: z.string().trim().nullable().optional().default(null),
 }).superRefine((data, context) => {
   const pairs = [
     ["dieselExpenses", data.dieselExpenses, data.dieselExpensesStatus],
@@ -121,9 +124,6 @@ const createDeliverySchema = z.object({
     ["otherExpenses", data.otherExpenses, data.otherExpensesStatus],
   ] as const;
   for (const [field, amount, status] of pairs) {
-    if (status === "confirmed" && amount == null) {
-      context.addIssue({ code: "custom", path: [field], message: "Enter a confirmed amount, including zero when confirmed." });
-    }
     if (status === "not_applicable" && amount != null) {
       context.addIssue({ code: "custom", path: [field], message: "Not applicable expenses must not contain an amount." });
     }
@@ -134,18 +134,12 @@ const createDeliverySchema = z.object({
       ["helper2DailyRate", data.helper2DailyRate, data.helper2DailyRateStatus],
     ] as const;
     for (const [field, amount, status] of helper2Pairs) {
-      if (status === "confirmed" && amount == null) {
-        context.addIssue({ code: "custom", path: [field], message: "Enter a confirmed amount for Helper 2, including zero when confirmed." });
-      }
       if (status === "not_applicable" && amount != null) {
         context.addIssue({ code: "custom", path: [field], message: "Not applicable expenses must not contain an amount." });
       }
     }
   }
   data.dropoffs.forEach((dropoff, index) => {
-    if (dropoff.entryFeeStatus === "confirmed" && dropoff.entryFee == null) {
-      context.addIssue({ code: "custom", path: ["dropoffs", index, "entryFee"], message: "Enter the confirmed store entry fee." });
-    }
     if (dropoff.entryFeeStatus === "not_applicable" && dropoff.entryFee != null) {
       context.addIssue({ code: "custom", path: ["dropoffs", index, "entryFee"], message: "Not applicable entry fees must not contain an amount." });
     }
@@ -350,10 +344,6 @@ export async function POST(request: Request) {
     .join(", ") || null;
 
   const runMockCreateDelivery = () => {
-    const rawClientName = parsed.data.clientName.trim();
-    const client =
-      getMockClients().find((item) => item.name.toLowerCase() === rawClientName.toLowerCase()) ??
-      registerMockClient(rawClientName);
     const rawPlate = parsed.data.plateNumber.trim().toUpperCase();
     const rawPlateClean = rawPlate.replace(/\s+/g, "");
     let truck =
@@ -389,30 +379,37 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (
-      SMALL_MOCK_DATABASE.deliveries.some((item) => item.record.waybillNumber === parsed.data.waybillNumber) ||
-      dynamicMockDeliveries.some((item) => item.record.waybillNumber === parsed.data.waybillNumber)
-    ) {
-      return NextResponse.json(
-        { ok: false, code: "DUPLICATE_WAYBILL", message: `Waybill ${parsed.data.waybillNumber} already exists.` },
-        { status: 409 },
-      );
+
+    const isSubconTruck =
+      truck.ownershipType === "Subcontracted" ||
+      rawPlate.startsWith("SUB-") ||
+      rawPlate.includes("SUBCON");
+
+    let effectiveWaybill = parsed.data.waybillNumber.trim();
+    if (!effectiveWaybill) {
+      if (isSubconTruck) {
+        effectiveWaybill = `WB-SUBCON-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      } else {
+        return NextResponse.json(
+          { ok: false, code: "WAYBILL_REQUIRED", message: "Waybill number is required for owned trucks." },
+          { status: 400 },
+        );
+      }
     }
 
-    // Crew Eligibility Check (Inactive / Removed employees cannot be assigned to new deliveries)
-    const driverEligibility = isCrewMemberEligibleForNewDelivery(parsed.data.driverName);
-    if (!driverEligibility.ok) {
-      return NextResponse.json({ ok: false, code: "CREW_INACTIVE", message: driverEligibility.message }, { status: 400 });
-    }
-    const helper1Eligibility = isCrewMemberEligibleForNewDelivery(parsed.data.helperName);
-    if (!helper1Eligibility.ok) {
-      return NextResponse.json({ ok: false, code: "CREW_INACTIVE", message: helper1Eligibility.message }, { status: 400 });
-    }
-    if (parsed.data.hasSecondHelper && parsed.data.helper2Name) {
-      const helper2Eligibility = isCrewMemberEligibleForNewDelivery(parsed.data.helper2Name);
-      if (!helper2Eligibility.ok) {
-        return NextResponse.json({ ok: false, code: "CREW_INACTIVE", message: helper2Eligibility.message }, { status: 400 });
-      }
+    const rawClientName = parsed.data.clientName.trim();
+    const client = rawClientName
+      ? (getMockClients().find((item) => item.name.toLowerCase() === rawClientName.toLowerCase()) ?? registerMockClient(rawClientName))
+      : { id: "pending-client", name: "Pending Client" };
+
+    if (
+      SMALL_MOCK_DATABASE.deliveries.some((item) => item.record.waybillNumber === effectiveWaybill) ||
+      dynamicMockDeliveries.some((item) => item.record.waybillNumber === effectiveWaybill)
+    ) {
+      return NextResponse.json(
+        { ok: false, code: "DUPLICATE_WAYBILL", message: `Waybill ${effectiveWaybill} already exists.` },
+        { status: 409 },
+      );
     }
 
     // Crew Same-Date Conflict Check (An employee cannot be assigned to multiple trips on the same date)
@@ -433,31 +430,47 @@ export async function POST(request: Request) {
       })),
     ];
 
-    const driverConflict = checkCrewDateAvailability({
-      employeeName: parsed.data.driverName,
-      deliveryDate: parsed.data.deliveryDate,
-      currentWaybillOrId: parsed.data.waybillNumber,
-      deliveries: allExistingDeliveries,
-    });
-    if (!driverConflict.ok) {
-      return NextResponse.json({ ok: false, code: "CREW_DATE_CONFLICT", message: driverConflict.message }, { status: 409 });
+    if (parsed.data.driverName.trim()) {
+      const driverEligibility = isCrewMemberEligibleForNewDelivery(parsed.data.driverName);
+      if (!driverEligibility.ok) {
+        return NextResponse.json({ ok: false, code: "CREW_INACTIVE", message: driverEligibility.message }, { status: 400 });
+      }
+      const driverConflict = checkCrewDateAvailability({
+        employeeName: parsed.data.driverName,
+        deliveryDate: parsed.data.deliveryDate,
+        currentWaybillOrId: effectiveWaybill,
+        deliveries: allExistingDeliveries,
+      });
+      if (!driverConflict.ok) {
+        return NextResponse.json({ ok: false, code: "CREW_DATE_CONFLICT", message: driverConflict.message }, { status: 409 });
+      }
     }
 
-    const helper1Conflict = checkCrewDateAvailability({
-      employeeName: parsed.data.helperName,
-      deliveryDate: parsed.data.deliveryDate,
-      currentWaybillOrId: parsed.data.waybillNumber,
-      deliveries: allExistingDeliveries,
-    });
-    if (!helper1Conflict.ok) {
-      return NextResponse.json({ ok: false, code: "CREW_DATE_CONFLICT", message: helper1Conflict.message }, { status: 409 });
+    if (parsed.data.helperName.trim()) {
+      const helper1Eligibility = isCrewMemberEligibleForNewDelivery(parsed.data.helperName);
+      if (!helper1Eligibility.ok) {
+        return NextResponse.json({ ok: false, code: "CREW_INACTIVE", message: helper1Eligibility.message }, { status: 400 });
+      }
+      const helper1Conflict = checkCrewDateAvailability({
+        employeeName: parsed.data.helperName,
+        deliveryDate: parsed.data.deliveryDate,
+        currentWaybillOrId: effectiveWaybill,
+        deliveries: allExistingDeliveries,
+      });
+      if (!helper1Conflict.ok) {
+        return NextResponse.json({ ok: false, code: "CREW_DATE_CONFLICT", message: helper1Conflict.message }, { status: 409 });
+      }
     }
 
-    if (parsed.data.hasSecondHelper && parsed.data.helper2Name) {
+    if (parsed.data.hasSecondHelper && parsed.data.helper2Name && parsed.data.helper2Name.trim()) {
+      const helper2Eligibility = isCrewMemberEligibleForNewDelivery(parsed.data.helper2Name);
+      if (!helper2Eligibility.ok) {
+        return NextResponse.json({ ok: false, code: "CREW_INACTIVE", message: helper2Eligibility.message }, { status: 400 });
+      }
       const helper2Conflict = checkCrewDateAvailability({
         employeeName: parsed.data.helper2Name,
         deliveryDate: parsed.data.deliveryDate,
-        currentWaybillOrId: parsed.data.waybillNumber,
+        currentWaybillOrId: effectiveWaybill,
         deliveries: allExistingDeliveries,
       });
       if (!helper2Conflict.ok) {
@@ -465,25 +478,31 @@ export async function POST(request: Request) {
       }
     }
 
+    const dropoffsList = parsed.data.dropoffs ?? [];
+    const calculatedEntryFees = dropoffsList.reduce((sum, d) => sum + (d.entryFee ?? 0), 0);
+    const hasUnknownEntry = dropoffsList.some((d) => d.entryFeeStatus === "unknown");
+    const calculatedEntryFeesStatus: ExpenseResolutionStatus = hasUnknownEntry ? "unknown" : "confirmed";
+
     const record = buildDeliveryTripRecord({
       id: parsed.data.idempotencyKey,
-      waybillNumber: parsed.data.waybillNumber,
+      waybillNumber: effectiveWaybill,
       deliveryDate: parsed.data.deliveryDate,
       recordingDelayed: parsed.data.recordingDelayed || deliveryDatePolicy.isLate,
       clientName: client.name,
       plateNumber: truck.plateNumber,
       truckType: truck.truckType,
-      truckTemperature: parsed.data.truckTemperature as TruckTemperature,
+      truckTemperature: (parsed.data.truckTemperature || "Ambient") as TruckTemperature,
       truckOwnership: truck.ownershipType,
       rateBasis: truck.rateBasis,
-      origin: parsed.data.origin,
-      distanceKm: parsed.data.distanceKm,
-      fuelRate: parsed.data.fuelRate,
-      deliveryRate: parsed.data.deliveryRate,
+      origin: parsed.data.origin || "Pending Origin",
+      distanceKm: parsed.data.distanceKm ?? 0,
+      fuelRate: parsed.data.fuelRate ?? 0,
+      deliveryRate: parsed.data.deliveryRate ?? 0,
       expenses: {
         dieselExpenses: parsed.data.dieselExpenses,
         tollGateExpenses: parsed.data.tollGateExpenses,
         tollGateBreakdown: parsed.data.tollGateBreakdown,
+        entryFees: calculatedEntryFees,
         driverAllowance: parsed.data.driverAllowance,
         driverDailyRate: parsed.data.driverDailyRate,
         helperAllowance: combinedHelperAllowance,
@@ -493,13 +512,14 @@ export async function POST(request: Request) {
       expenseStates: {
         dieselExpenses: parsed.data.dieselExpensesStatus,
         tollGateExpenses: parsed.data.tollGateExpensesStatus,
+        entryFees: calculatedEntryFeesStatus,
         driverAllowance: parsed.data.driverAllowanceStatus,
         driverDailyRate: parsed.data.driverDailyRateStatus,
         helperAllowance: combinedHelperAllowanceStatus,
         helperDailyRate: combinedHelperDailyRateStatus,
         otherExpenses: parsed.data.otherExpensesStatus,
       },
-      dropoffs: parsed.data.dropoffs.map((dropoff, index) => ({
+      dropoffs: dropoffsList.map((dropoff, index) => ({
         ...dropoff,
         id: `${parsed.data.idempotencyKey}-stop-${index + 1}`,
         sequence: index + 1,
@@ -507,15 +527,15 @@ export async function POST(request: Request) {
       supportingDocuments: parsed.data.supportingDocuments,
       notes: parsed.data.notes?.trim() || null,
     });
-    recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "delivery.created", entityType: "delivery", entityId: record.id, summary: `Recorded completed delivery ${record.waybillNumber}.`, changes: { clientName: record.clientName, plateNumber: record.plateNumber, deliveryRate: record.deliveryRate } });
-    if (parsed.data.driverName) {
-      registerFleetDriver({ fullName: parsed.data.driverName, assignmentType: "Driver" });
+    recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "delivery.created", entityType: "delivery", entityId: record.id, summary: `Recorded delivery ${record.waybillNumber}.`, changes: { clientName: record.clientName, plateNumber: record.plateNumber, deliveryRate: record.deliveryRate } });
+    if (parsed.data.driverName.trim()) {
+      registerFleetDriver({ fullName: parsed.data.driverName.trim(), assignmentType: "Driver" });
     }
-    if (parsed.data.helperName) {
-      registerFleetDriver({ fullName: parsed.data.helperName, assignmentType: "Helper" });
+    if (parsed.data.helperName.trim()) {
+      registerFleetDriver({ fullName: parsed.data.helperName.trim(), assignmentType: "Helper" });
     }
-    if (parsed.data.helper2Name) {
-      registerFleetDriver({ fullName: parsed.data.helper2Name, assignmentType: "Helper" });
+    if (parsed.data.helper2Name && parsed.data.helper2Name.trim()) {
+      registerFleetDriver({ fullName: parsed.data.helper2Name.trim(), assignmentType: "Helper" });
     }
     dynamicMockDeliveries.push({
       record,
@@ -523,9 +543,9 @@ export async function POST(request: Request) {
       truckId: truck.id,
       driverId: "",
       helperId: "",
-      driverName: parsed.data.driverName,
+      driverName: parsed.data.driverName || null,
       helperName: helperNames,
-      scenario: "User-recorded completed delivery.",
+      scenario: "User-recorded delivery.",
     });
     savePersistedMockDeliveries();
     return NextResponse.json({
@@ -537,7 +557,7 @@ export async function POST(request: Request) {
         clientId: client.id,
         truckId: truck.id,
         deliveryStatus: "Completed",
-        driverName: parsed.data.driverName,
+        driverName: parsed.data.driverName || null,
         helperName: helperNames,
       },
       recordedBy: { id: auth.actor.id, email: auth.actor.email, role: auth.actor.role },
@@ -551,52 +571,59 @@ export async function POST(request: Request) {
   const supabase = await getMutationSupabaseClient();
   const rawClientName = parsed.data.clientName.trim();
 
-  // Ensure new client exists in public.clients so RPC does not throw INVALID_CLIENT
-  const { data: existingClient, error: clientLookupError } = await supabase
-    .from("clients")
-    .select("id")
-    .ilike("name", rawClientName)
-    .eq("is_active", true)
-    .maybeSingle();
+  // Ensure new client exists in public.clients if client name is provided
+  let clientId: string | null = null;
+  if (rawClientName) {
+    const { data: existingClient, error: clientLookupError } = await supabase
+      .from("clients")
+      .select("id")
+      .ilike("name", rawClientName)
+      .eq("is_active", true)
+      .maybeSingle();
 
-  if (
-    clientLookupError &&
-    (clientLookupError.message.includes("schema cache") ||
-      clientLookupError.message.includes("does not exist") ||
-      clientLookupError.message.includes("relation") ||
-      clientLookupError.message.includes("clients"))
-  ) {
-    return runMockCreateDelivery();
-  }
+    if (
+      clientLookupError &&
+      (clientLookupError.message.includes("schema cache") ||
+        clientLookupError.message.includes("does not exist") ||
+        clientLookupError.message.includes("relation") ||
+        clientLookupError.message.includes("clients"))
+    ) {
+      return runMockCreateDelivery();
+    }
 
-  if (!existingClient) {
-    const clientCode =
-      rawClientName
-        .split(/\s+/)
-        .map((w) => w[0])
-        .join("")
-        .replace(/[^A-Za-z0-9]/g, "")
-        .toUpperCase()
-        .slice(0, 6) || "CLI";
+    if (existingClient) {
+      clientId = existingClient.id;
+    } else {
+      const clientCode =
+        rawClientName
+          .split(/\s+/)
+          .map((w) => w[0])
+          .join("")
+          .replace(/[^A-Za-z0-9]/g, "")
+          .toUpperCase()
+          .slice(0, 6) || "CLI";
 
-    const { error: clientInsertError } = await supabase.from("clients").insert({
-      name: rawClientName,
-      client_code: clientCode,
-      code: clientCode,
-      is_active: true,
-    });
-    if (clientInsertError && clientInsertError.code !== "23505") {
-      if (
-        clientInsertError.message.includes("schema cache") ||
-        clientInsertError.message.includes("does not exist") ||
-        clientInsertError.message.includes("relation")
-      ) {
-        return runMockCreateDelivery();
+      const { data: insertedClient, error: clientInsertError } = await supabase.from("clients").insert({
+        name: rawClientName,
+        client_code: clientCode,
+        code: clientCode,
+        is_active: true,
+      }).select("id").maybeSingle();
+
+      if (clientInsertError && clientInsertError.code !== "23505") {
+        if (
+          clientInsertError.message.includes("schema cache") ||
+          clientInsertError.message.includes("does not exist") ||
+          clientInsertError.message.includes("relation")
+        ) {
+          return runMockCreateDelivery();
+        }
+        return NextResponse.json(
+          { ok: false, code: "CLIENT_CREATE_FAILED", message: clientInsertError.message },
+          { status: 400 },
+        );
       }
-      return NextResponse.json(
-        { ok: false, code: "CLIENT_CREATE_FAILED", message: clientInsertError.message },
-        { status: 400 },
-      );
+      clientId = insertedClient?.id ?? null;
     }
   }
 
@@ -604,17 +631,34 @@ export async function POST(request: Request) {
   const rawPlate = parsed.data.plateNumber.trim().toUpperCase();
   const { data: existingTruck } = await supabase
     .from("trucks")
-    .select("id")
+    .select("id, ownership_type")
     .ilike("plate_number", rawPlate)
     .eq("is_active", true)
     .maybeSingle();
+
+  const isSubconTruck =
+    existingTruck?.ownership_type === "Subcontracted" ||
+    rawPlate.startsWith("SUB-") ||
+    rawPlate.includes("SUBCON");
+
+  let effectiveWaybill = parsed.data.waybillNumber.trim();
+  if (!effectiveWaybill) {
+    if (isSubconTruck) {
+      effectiveWaybill = `WB-SUBCON-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    } else {
+      return NextResponse.json(
+        { ok: false, code: "WAYBILL_REQUIRED", message: "Waybill number is required for owned trucks." },
+        { status: 400 },
+      );
+    }
+  }
 
   if (!existingTruck) {
     const { error: truckInsertError } = await supabase.from("trucks").insert({
       plate_number: rawPlate,
       truck_type: "6-Wheeler",
-      ownership_type: "Owned",
-      rate_basis: "Redeemed Rate",
+      ownership_type: isSubconTruck ? "Subcontracted" : "Owned",
+      rate_basis: isSubconTruck ? "Trucker Rate" : "Redeemed Rate",
       is_active: true,
     });
     if (truckInsertError && truckInsertError.code !== "23505") {
@@ -633,67 +677,70 @@ export async function POST(request: Request) {
   }
 
   const normalizedDriverName = parsed.data.driverName.trim();
-  const { data: existingDriver, error: driverLookupError } = await supabase
-    .from("employees")
-    .select("id")
-    .ilike("full_name", normalizedDriverName)
-    .eq("assignment_type", "Driver")
-    .eq("is_active", true)
-    .maybeSingle();
-  if (driverLookupError) {
-    if (
-      driverLookupError.message.includes("schema cache") ||
-      driverLookupError.message.includes("does not exist") ||
-      driverLookupError.message.includes("relation")
-    ) {
-      return runMockCreateDelivery();
-    }
-    return NextResponse.json(
-      { ok: false, code: "DRIVER_LOOKUP_FAILED", message: driverLookupError.message },
-      { status: 400 },
-    );
-  }
-  let driverId = existingDriver?.id ?? null;
-  if (!driverId) {
-    const { data: createdDriver, error: driverInsertError } = await supabase
+  let driverId: string | null = null;
+  if (normalizedDriverName) {
+    const { data: existingDriver, error: driverLookupError } = await supabase
       .from("employees")
-      .insert({
-        employee_code: `DRV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-        full_name: normalizedDriverName,
-        assignment_type: "Driver",
-        is_active: true,
-      })
       .select("id")
-      .single();
-    if (driverInsertError?.code === "23505") {
-      const { data: concurrentDriver, error: concurrentLookupError } = await supabase
-        .from("employees")
-        .select("id")
-        .ilike("full_name", normalizedDriverName)
-        .eq("assignment_type", "Driver")
-        .eq("is_active", true)
-        .single();
-      if (concurrentLookupError || !concurrentDriver) {
-        return NextResponse.json(
-          { ok: false, code: "DRIVER_LOOKUP_FAILED", message: concurrentLookupError?.message ?? "Unable to reuse driver." },
-          { status: 400 },
-        );
-      }
-      driverId = concurrentDriver.id;
-    } else if (driverInsertError || !createdDriver) {
+      .ilike("full_name", normalizedDriverName)
+      .eq("assignment_type", "Driver")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (driverLookupError) {
       if (
-        driverInsertError?.message.includes("schema cache") ||
-        driverInsertError?.message.includes("does not exist") ||
-        driverInsertError?.message.includes("relation")
+        driverLookupError.message.includes("schema cache") ||
+        driverLookupError.message.includes("does not exist") ||
+        driverLookupError.message.includes("relation")
       ) {
         return runMockCreateDelivery();
       }
       return NextResponse.json(
-        { ok: false, code: "DRIVER_CREATE_FAILED", message: driverInsertError?.message ?? "Unable to save driver." },
+        { ok: false, code: "DRIVER_LOOKUP_FAILED", message: driverLookupError.message },
         { status: 400 },
       );
-    } else {
-      driverId = createdDriver.id;
+    }
+    driverId = existingDriver?.id ?? null;
+    if (!driverId) {
+      const { data: createdDriver, error: driverInsertError } = await supabase
+        .from("employees")
+        .insert({
+          employee_code: `DRV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+          full_name: normalizedDriverName,
+          assignment_type: "Driver",
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      if (driverInsertError?.code === "23505") {
+        const { data: concurrentDriver, error: concurrentLookupError } = await supabase
+          .from("employees")
+          .select("id")
+          .ilike("full_name", normalizedDriverName)
+          .eq("assignment_type", "Driver")
+          .eq("is_active", true)
+          .single();
+        if (concurrentLookupError || !concurrentDriver) {
+          return NextResponse.json(
+            { ok: false, code: "DRIVER_LOOKUP_FAILED", message: concurrentLookupError?.message ?? "Unable to reuse driver." },
+            { status: 400 },
+          );
+        }
+        driverId = concurrentDriver.id;
+      } else if (driverInsertError || !createdDriver) {
+        if (
+          driverInsertError?.message.includes("schema cache") ||
+          driverInsertError?.message.includes("does not exist") ||
+          driverInsertError?.message.includes("relation")
+        ) {
+          return runMockCreateDelivery();
+        }
+        return NextResponse.json(
+          { ok: false, code: "DRIVER_CREATE_FAILED", message: driverInsertError?.message ?? "Unable to save driver." },
+          { status: 400 },
+        );
+      } else {
+        driverId = createdDriver.id;
+      }
     }
   }
 
@@ -725,9 +772,17 @@ export async function POST(request: Request) {
     }
   }
 
+  const dropoffsList = parsed.data.dropoffs ?? [];
+  const calculatedEntryFees = dropoffsList.reduce((sum, d) => sum + (d.entryFee ?? 0), 0);
+  const hasUnknownEntry = dropoffsList.some((d) => d.entryFeeStatus === "unknown");
+  const calculatedEntryFeesStatus: ExpenseResolutionStatus = hasUnknownEntry ? "unknown" : "confirmed";
+
   const { data: deliveryId, error } = await supabase.rpc("create_delivery_record", {
     p_record: {
       ...parsed.data,
+      waybillNumber: effectiveWaybill,
+      entryFees: calculatedEntryFees,
+      entryFeesStatus: calculatedEntryFeesStatus,
       helperAllowance: combinedHelperAllowance,
       helperAllowanceStatus: combinedHelperAllowanceStatus,
       helperDailyRate: combinedHelperDailyRate,
@@ -757,7 +812,7 @@ export async function POST(request: Request) {
           ? "INVALID_TRUCK"
           : "DELIVERY_CREATE_FAILED";
     const message = duplicate
-      ? `Waybill ${parsed.data.waybillNumber} already exists.`
+      ? `Waybill ${effectiveWaybill} already exists.`
       : invalidClient
         ? "Select an active client record."
         : invalidTruck
@@ -770,7 +825,7 @@ export async function POST(request: Request) {
     );
   }
 
-  recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "delivery.created", entityType: "delivery", entityId: String(deliveryId), summary: `Recorded completed delivery ${parsed.data.waybillNumber}.`, changes: { clientName: parsed.data.clientName, plateNumber: parsed.data.plateNumber, deliveryRate: parsed.data.deliveryRate } });
+  recordAuditEntry({ actorId: auth.actor.id, actorEmail: auth.actor.email, action: "delivery.created", entityType: "delivery", entityId: String(deliveryId), summary: `Recorded delivery ${effectiveWaybill}.`, changes: { clientName: parsed.data.clientName, plateNumber: parsed.data.plateNumber, deliveryRate: parsed.data.deliveryRate } });
 
   return NextResponse.json(
     {

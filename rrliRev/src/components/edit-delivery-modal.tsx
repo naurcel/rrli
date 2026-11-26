@@ -339,26 +339,6 @@ export function EditDeliveryModal({
       return;
     }
 
-    const isExistingUnknownDriver = Boolean(delivery.driverName && delivery.driverName.toLowerCase().includes("unknown"));
-    if (driverName.trim().toLowerCase().includes("unknown") && !isExistingUnknownDriver) {
-      setError("Unknown driver is not permitted when editing deliveries. Please assign a real driver name.");
-      return;
-    }
-    const isExistingUnknownHelper = Boolean(delivery.helperName && delivery.helperName.toLowerCase().includes("unknown"));
-    if (helperName.trim().toLowerCase().includes("unknown") && !isExistingUnknownHelper) {
-      setError("Unknown helper is not permitted when editing deliveries. Please assign a real helper name.");
-      return;
-    }
-    if (hasSecondHelper) {
-      if (helper2Name.trim().length < 2) {
-        setError("Select or enter a name for Helper 2.");
-        return;
-      }
-      if (helper2Name.trim().toLowerCase().includes("unknown")) {
-        setError("Unknown helper is not permitted when editing deliveries. Please assign a real helper name.");
-        return;
-      }
-    }
     const cleanDriver = driverName.trim().toLowerCase();
     const cleanHelper1 = helperName.trim().toLowerCase();
     const cleanHelper2 = hasSecondHelper ? helper2Name.trim().toLowerCase() : "";
@@ -375,31 +355,18 @@ export function EditDeliveryModal({
       return;
     }
 
-    const numRate = Number(rate);
-    if (!Number.isFinite(numRate) || numRate <= 0) {
-      setError("Please enter a valid positive delivery revenue.");
-      return;
-    }
-
-    if (dropoffs.length === 0) {
-      setError("At least one store drop-off is required.");
+    const numRate = Number(rate) || 0;
+    if (numRate < 0) {
+      setError("Delivery rate cannot be negative.");
       return;
     }
 
     for (let i = 0; i < dropoffs.length; i++) {
       const stop = dropoffs[i];
-      if (!stop.storeName.trim()) {
-        setError(`Store name is required for Store Drop-off #${i + 1}.`);
-        return;
-      }
-      if (!stop.destinationArea.trim()) {
-        setError(`Destination area is required for Store Drop-off #${i + 1}.`);
-        return;
-      }
-      if (stop.entryFeeStatus === "confirmed") {
-        const feeNum = stop.entryFee === "" ? null : Number(stop.entryFee);
-        if (feeNum === null || !Number.isFinite(feeNum) || feeNum < 0) {
-          setError(`Please enter a valid positive entry fee for Store Drop-off #${i + 1}.`);
+      if (stop.entryFeeStatus === "confirmed" && stop.entryFee !== "") {
+        const feeNum = Number(stop.entryFee);
+        if (!Number.isFinite(feeNum) || feeNum < 0) {
+          setError(`Please enter a valid entry fee for Store Drop-off #${i + 1}.`);
           return;
         }
       }
@@ -756,7 +723,6 @@ export function EditDeliveryModal({
                     id="corr-rate"
                     type="text"
                     inputMode="decimal"
-                    required
                     className="no-spin-stepper peso-input"
                     placeholder="0.00"
                     value={rate}

@@ -820,12 +820,13 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     return {
       ...values,
       idempotencyKey: idempotencyKeyRef.current,
-      clientName,
+      waybillNumber: isSubcontracted && !values.waybillNumber.trim() ? "" : values.waybillNumber.trim(),
+      clientName: clientName.trim() || null,
       plateNumber,
-      truckTemperature: `${truckTemperature}°C`,
+      truckTemperature: truckTemperature.trim() ? `${truckTemperature}°C` : "",
       recordingDelayed: values.deliveryDate < deliveryDateWindow.max,
-      distanceKm: numberValue(values.distanceKm),
-      fuelRate: numberValue(values.fuelRate),
+      distanceKm: numberValue(values.distanceKm) ?? 0,
+      fuelRate: numberValue(values.fuelRate) ?? 0,
       deliveryRate: numberValue(values.deliveryRate) ?? (existingDelivery?.deliveryRate ?? 0),
       additionalCharges: numberValue(values.additionalCharges),
       dieselExpenses: isSubcontracted ? null : numberValue(values.dieselExpenses),
@@ -835,7 +836,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       driverName: driverName.trim() || null,
       helperAllowance: isSubcontracted ? null : hAllowance,
       helperDailyRate: isSubcontracted ? null : hDailyRate,
-      helperName: helper1Name.trim(),
+      helperName: helper1Name.trim() || null,
       hasSecondHelper,
       helper2Allowance: isSubcontracted ? null : h2Allowance,
       helper2DailyRate: isSubcontracted ? null : h2DailyRate,
@@ -917,69 +918,33 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
   function submitDelivery(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError(null);
-    if (!clientName.trim()) {
-      triggerSubmitError("Select or enter a client name.");
-      return;
-    }
+
+    // 1. Truck plate is required for all deliveries (Owned and Subcon)
     if (!plateNumber.trim()) {
       triggerSubmitError("Select a registered truck.");
       return;
     }
-    if (!truckTemperature.trim() || !Number.isFinite(Number(truckTemperature))) {
-      triggerSubmitError("Enter a valid truck temperature.");
+
+    // 2. Waybill is required for Owned trucks; optional for Subcons (auto-generated if empty)
+    if (!isSubcontracted && !values.waybillNumber.trim()) {
+      triggerSubmitError("Waybill number is required for owned trucks.");
       return;
     }
-    if (!values.distanceKm.trim() || !Number.isFinite(Number(values.distanceKm)) || Number(values.distanceKm) <= 0) {
+
+    // 3. Delayed/in-transit fields: validated only if provided
+    if (values.distanceKm.trim() && (!Number.isFinite(Number(values.distanceKm)) || Number(values.distanceKm) < 0)) {
       triggerSubmitError("Enter a valid trip distance in kilometers.");
       return;
     }
-    if (!values.fuelRate.trim() || !Number.isFinite(Number(values.fuelRate)) || Number(values.fuelRate) <= 0) {
+    if (values.fuelRate.trim() && (!Number.isFinite(Number(values.fuelRate)) || Number(values.fuelRate) < 0)) {
       triggerSubmitError("Enter a valid fuel rate per liter.");
       return;
     }
-    if (driverName.trim().length < 2) {
-      triggerSubmitError("Select a saved driver or enter a new driver name.");
-      return;
-    }
-    const isExistingUnknownDriver = Boolean(existingDelivery?.driverName && existingDelivery.driverName.toLowerCase().includes("unknown"));
-    if (driverName.trim().toLowerCase().includes("unknown") && !isExistingUnknownDriver) {
-      triggerSubmitError("Unknown driver is not permitted when adding or editing a delivery. Please select or enter a real driver name.");
-      return;
-    }
-    if (!isSubcontracted && expenseStatuses.driverDailyRate === "confirmed" && (!values.driverDailyRate || Number(values.driverDailyRate) <= 0)) {
-      triggerSubmitError("Driver daily rate must have a valid value.");
-      return;
-    }
-    if (helper1Name.trim().length < 2) {
-      triggerSubmitError("Select a saved helper or enter a new helper name.");
-      return;
-    }
-    const isExistingUnknownHelper1 = Boolean(existingDelivery?.helperName && existingDelivery.helperName.toLowerCase().includes("unknown"));
-    if (helper1Name.trim().toLowerCase().includes("unknown") && !isExistingUnknownHelper1) {
-      triggerSubmitError("Unknown helper is not permitted when adding or editing a delivery. Please select or enter a real helper name.");
-      return;
-    }
-    if (!isSubcontracted && expenseStatuses.helperDailyRate === "confirmed" && (!values.helperDailyRate || Number(values.helperDailyRate) <= 0)) {
-      triggerSubmitError("Helper daily rate must have a valid value.");
-      return;
-    }
-    if (hasSecondHelper) {
-      if (helper2Name.trim().length < 2) {
-        triggerSubmitError("Select or enter a name for Helper 2.");
-        return;
-      }
-      if (helper2Name.trim().toLowerCase().includes("unknown")) {
-        triggerSubmitError("Unknown helper is not permitted when adding or editing a delivery. Please select or enter a real helper name.");
-        return;
-      }
-      if (!isSubcontracted && expenseStatuses.helper2DailyRate === "confirmed" && (!values.helper2DailyRate || Number(values.helper2DailyRate) <= 0)) {
-        triggerSubmitError("Daily rate for Helper 2 must have a valid value.");
-        return;
-      }
-    }
+
     const cleanDriver = driverName.trim().toLowerCase();
     const cleanHelper1 = helper1Name.trim().toLowerCase();
     const cleanHelper2 = hasSecondHelper ? helper2Name.trim().toLowerCase() : "";
+
     if (cleanDriver && cleanHelper1 && cleanDriver === cleanHelper1) {
       triggerSubmitError("The same employee cannot be assigned as both Driver and Helper on the same trip.");
       return;
@@ -992,59 +957,28 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       triggerSubmitError("Helper 1 and Helper 2 must be different employees.");
       return;
     }
-    if (!isEditMode && (!values.deliveryRate || Number(values.deliveryRate) <= 0)) {
-      triggerSubmitError("Rate must have a valid value.");
-      return;
-    }
-    if (isEditMode && values.deliveryRate && Number(values.deliveryRate) <= 0) {
-      triggerSubmitError("Rate must have a valid value.");
-      return;
-    }
-    if (!isEditMode && !isSubcontracted && expenseStatuses.dieselExpenses === "confirmed" && (!values.dieselExpenses || Number(values.dieselExpenses) < 0)) {
-      triggerSubmitError("Diesel expense must have a valid value.");
-      return;
-    }
-    if (!isEditMode && !isSubcontracted && expenseStatuses.tollGateExpenses === "confirmed" && (!values.tollGateExpenses || Number(values.tollGateExpenses) < 0)) {
-      triggerSubmitError("Toll gates expense must have a valid value.");
-      return;
-    }
-    if (!isEditMode && isSubcontracted && expenseStatuses.otherExpenses === "confirmed" && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
-      triggerSubmitError("Total subcontracted expense must have a valid value.");
-      return;
-    }
-    if (!isEditMode && !isSubcontracted && expenseStatuses.otherExpenses === "confirmed" && (!values.otherExpenses || Number(values.otherExpenses) < 0)) {
-      triggerSubmitError("Other expenses must have a valid value.");
+
+    if (values.deliveryRate && Number(values.deliveryRate) < 0) {
+      triggerSubmitError("Delivery rate cannot be negative.");
       return;
     }
 
-    if (!dropoffs || dropoffs.length === 0) {
-      triggerSubmitError("At least one store drop-off is required.");
-      return;
-    }
-    for (let i = 0; i < dropoffs.length; i++) {
-      const stop = dropoffs[i];
-      if (!stop.storeName.trim()) {
-        triggerSubmitError(`Stop #${i + 1}: Store name is required.`);
-        return;
-      }
-      if (!stop.destinationArea.trim()) {
-        triggerSubmitError(`Stop #${i + 1}: Destination area is required.`);
+    // Crew Inactivity / Removal check (only if employee name is specified)
+    if (driverName.trim()) {
+      const driverEligibility = isCrewMemberEligibleForNewDelivery(driverName);
+      if (!driverEligibility.ok) {
+        triggerSubmitError(driverEligibility.message);
         return;
       }
     }
-
-    // Crew Inactivity / Removal check
-    const driverEligibility = isCrewMemberEligibleForNewDelivery(driverName);
-    if (!driverEligibility.ok) {
-      triggerSubmitError(driverEligibility.message);
-      return;
+    if (helper1Name.trim()) {
+      const helper1Eligibility = isCrewMemberEligibleForNewDelivery(helper1Name);
+      if (!helper1Eligibility.ok) {
+        triggerSubmitError(helper1Eligibility.message);
+        return;
+      }
     }
-    const helper1Eligibility = isCrewMemberEligibleForNewDelivery(helper1Name);
-    if (!helper1Eligibility.ok) {
-      triggerSubmitError(helper1Eligibility.message);
-      return;
-    }
-    if (hasSecondHelper && helper2Name) {
+    if (hasSecondHelper && helper2Name.trim()) {
       const helper2Eligibility = isCrewMemberEligibleForNewDelivery(helper2Name);
       if (!helper2Eligibility.ok) {
         triggerSubmitError(helper2Eligibility.message);
@@ -1055,27 +989,31 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     // Crew Same-Date Double-Booking check (exempt current delivery being edited)
     const allDeliveriesForCheck = readBrowserPreviewDeliveries();
     const currentRef = existingDelivery?.id || resolvedEditId || propEditDeliveryId || values.waybillNumber;
-    const dConflict = checkCrewDateAvailability({
-      employeeName: driverName,
-      deliveryDate: values.deliveryDate,
-      currentWaybillOrId: currentRef,
-      deliveries: allDeliveriesForCheck,
-    });
-    if (!dConflict.ok) {
-      triggerSubmitError(dConflict.message);
-      return;
+    if (driverName.trim()) {
+      const dConflict = checkCrewDateAvailability({
+        employeeName: driverName,
+        deliveryDate: values.deliveryDate,
+        currentWaybillOrId: currentRef,
+        deliveries: allDeliveriesForCheck,
+      });
+      if (!dConflict.ok) {
+        triggerSubmitError(dConflict.message);
+        return;
+      }
     }
-    const h1Conflict = checkCrewDateAvailability({
-      employeeName: helper1Name,
-      deliveryDate: values.deliveryDate,
-      currentWaybillOrId: currentRef,
-      deliveries: allDeliveriesForCheck,
-    });
-    if (!h1Conflict.ok) {
-      triggerSubmitError(h1Conflict.message);
-      return;
+    if (helper1Name.trim()) {
+      const h1Conflict = checkCrewDateAvailability({
+        employeeName: helper1Name,
+        deliveryDate: values.deliveryDate,
+        currentWaybillOrId: currentRef,
+        deliveries: allDeliveriesForCheck,
+      });
+      if (!h1Conflict.ok) {
+        triggerSubmitError(h1Conflict.message);
+        return;
+      }
     }
-    if (hasSecondHelper && helper2Name) {
+    if (hasSecondHelper && helper2Name.trim()) {
       const h2Conflict = checkCrewDateAvailability({
         employeeName: helper2Name,
         deliveryDate: values.deliveryDate,
@@ -1194,7 +1132,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             changes: {
               waybillNumber: payload.waybillNumber,
               deliveryDate: payload.deliveryDate,
-              clientName: payload.clientName,
+              clientName: payload.clientName || existingDelivery?.clientName || "Pending Client",
               plateNumber: payload.plateNumber,
               origin: payload.origin,
               distanceKm: payload.distanceKm,
@@ -1263,7 +1201,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             distanceKm: payload.distanceKm ?? 0,
             fuelRate: payload.fuelRate ?? 0,
             deliveryRate: payload.deliveryRate,
-            clientName: payload.clientName,
+            clientName: payload.clientName || existingDelivery?.clientName || "Pending Client",
             plateNumber: payload.plateNumber,
             driverName: payload.driverName,
             helperName: combinedHelperName,
@@ -1722,12 +1660,14 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
           <FormHeading number="01" title="Trip details" />
           <div className="delivery-field-grid delivery-trip-grid">
             <label>
-              <span className="field-label-text">Waybill</span>
+              <span className="field-label-text">
+                Waybill {!isSubcontracted ? <span className="required-asterisk" aria-hidden="true">*</span> : <span style={{ opacity: 0.6, fontSize: "11px", fontWeight: "normal" }}>(optional for subcons)</span>}
+              </span>
               <input
-                required
+                required={!isSubcontracted}
                 value={values.waybillNumber}
                 onChange={(event) => updateValue("waybillNumber", event.target.value)}
-                placeholder="WB-2026-0001"
+                placeholder={isSubcontracted ? "Auto-generated if empty" : "WB-2026-0001"}
               />
             </label>
             <label>
@@ -1826,7 +1766,9 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
             {/* Truck Selection grouped into Owned Trucks and Subcontracted Trucks */}
             <div className="client-field-group">
-              <label className="field-label-text">Truck plate</label>
+              <label className="field-label-text">
+                Truck plate <span className="required-asterisk" aria-hidden="true">*</span>
+              </label>
               <RoundedSelect
                 value={plateNumber}
                 options={groupedTruckOptions}
@@ -1843,7 +1785,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
               <span className="field-label-text">Temperature</span>
               <span className="temperature-input-wrap">
                 <input
-                  required
                   type="text"
                   inputMode="decimal"
                   value={truckTemperature}
@@ -1864,7 +1805,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                 <span className="peso-input-wrap">
                   <span className="peso-prefix" aria-hidden="true">₱</span>
                   <input
-                    required
                     type="text"
                     inputMode="decimal"
                     className="no-spin-stepper peso-input"
@@ -1880,7 +1820,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             <label className="origin-field">
               <span className="field-label-text">Origin</span>
               <input
-                required
                 value={values.origin}
                 onChange={(event) => updateValue("origin", event.target.value)}
                 placeholder="e.g. Marilao Depot"
@@ -1889,7 +1828,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
             <label>
               <span className="field-label-text">Distance (km)</span>
               <input
-                required
                 type="text"
                 inputMode="decimal"
                 className="no-spin-stepper"
@@ -1991,7 +1929,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                   <label className="dropoff-field">
                     <span className="field-label-text">Store name</span>
                     <input
-                      required
                       value={dropoff.storeName}
                       onChange={(event) => updateDropoff(dropoff.id, "storeName", event.target.value)}
                       placeholder="e.g. Landers Balintawak"
@@ -2000,7 +1937,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                   <label className="dropoff-field">
                     <span className="field-label-text">Location</span>
                     <input
-                      required
                       value={dropoff.destinationArea}
                       onChange={(event) => updateDropoff(dropoff.id, "destinationArea", event.target.value)}
                       placeholder="e.g. Quezon City, Metro Manila"
@@ -2012,7 +1948,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       id={`dropoff-count-${dropoff.id}`}
                       min={1}
                       max={99}
-                      required
                       value={dropoff.dropoffCount}
                       onChange={(next) => updateDropoff(dropoff.id, "dropoffCount", next)}
                       placeholder="1"
@@ -2203,7 +2138,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <span className="peso-input-wrap emphasized-rate-wrap">
                       <span className="peso-prefix" aria-hidden="true">₱</span>
                       <input
-                        required
                         type="text"
                         inputMode="decimal"
                         placeholder="0.00"
@@ -2247,7 +2181,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                   <span className="peso-input-wrap">
                     <span className="peso-prefix" aria-hidden="true">₱</span>
                     <input
-                      required
                       type="text"
                       inputMode="decimal"
                       placeholder="0.00"
@@ -2270,7 +2203,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <span className="peso-input-wrap">
                       <span className="peso-prefix" aria-hidden="true">₱</span>
                       <input
-                        required
                         type="text"
                         inputMode="decimal"
                         placeholder="0.00"
@@ -2289,7 +2221,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <span className="peso-input-wrap">
                       <span className="peso-prefix" aria-hidden="true">₱</span>
                       <input
-                        required
                         type="text"
                         inputMode="decimal"
                         placeholder="0.00"
@@ -2308,7 +2239,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <span className="peso-input-wrap">
                       <span className="peso-prefix" aria-hidden="true">₱</span>
                       <input
-                        required
                         type="text"
                         inputMode="decimal"
                         placeholder="0.00"
@@ -2370,7 +2300,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                             <span className="peso-prefix" aria-hidden="true">₱</span>
                             <input
                               aria-label="Driver daily rate"
-                              required
                               type="text"
                               inputMode="decimal"
                               placeholder="0.00"
@@ -2442,7 +2371,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                             <span className="peso-prefix" aria-hidden="true">₱</span>
                             <input
                               aria-label="Helper daily rate"
-                              required
                               type="text"
                               inputMode="decimal"
                               placeholder="0.00"
@@ -2528,7 +2456,6 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                               <span className="peso-prefix" aria-hidden="true">₱</span>
                               <input
                                 aria-label="Helper 2 daily rate"
-                                required
                                 type="text"
                                 inputMode="decimal"
                                 placeholder="0.00"

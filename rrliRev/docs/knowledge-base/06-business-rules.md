@@ -30,10 +30,22 @@ RouteX enforces standard business language across all UI elements, database colu
 
 ## 2. Delivery & Trip Architecture Invariants
 
-1. **One Delivery Equals One Completed Trip:**
-   - A delivery record in RouteX represents a single, complete vehicular run from origin to destination.
-   - It is identified by a unique Waybill Number (`waybillNumber`), Delivery Date, Client, and Truck.
-2. **Locations and Numeric Stop Counts (No Individual Stop Records):**
+1. **One Delivery Equals One Trip Record:**
+   - A delivery record in RouteX represents a vehicular run.
+   - **Owned Trucks:** Identified by **Waybill Number** (`waybillNumber`), **Delivery Date**, and **Truck Plate** (`plateNumber`). Both Waybill and Truck are strictly required.
+   - **Subcontracted Trucks (Subcons):** Identified primarily by **Truck Plate** (`plateNumber`). Only the Truck is strictly required upon recording. If the waybill is not yet issued or known, the system automatically assigns a provisional identifier (e.g., `WB-SUBCON-XXXX`), which can be updated later.
+2. **Daily Trip Records & Delayed Operational Fields:**
+   - Deliveries may be recorded during initial vehicle rollout for daily trip tracking (before the trip has finished) or before final accounting paperwork is returned.
+   - **Delayed / Pending Fields:**
+     - Client name
+     - Driver and Helper(s) assignment
+     - Origin depot / warehouse
+     - Route locations & store drop-offs
+     - Delivery revenue rate (defaults to ₱0 until confirmed)
+     - Trip expenses (diesel, toll gate receipts, allowances, entry fees, and other expenses)
+   - Any delivery with missing rates, unresolved/unknown expenses, or unsubmitted PODs is classified with `financialState = 'incomplete'`.
+   - **Zero Financial Distortion Guarantee:** Deliveries in the `incomplete` financial state **MUST BE STRICTLY EXCLUDED** from aggregate revenue, expense, and net profit KPI totals across the Dashboard, Truck Profitability, and Finance overviews until dispatchers or accounting confirm all outstanding receipts and rates, promoting the trip to `finalized`.
+3. **Locations and Numeric Stop Counts (No Individual Stop Records):**
    - A delivery can have one or more **Locations**.
    - Each Location stores:
      - Location Name
@@ -42,10 +54,10 @@ RouteX enforces standard business language across all UI elements, database colu
    - **Do not create individual stop/drop-off records**, forms, or database rows.
    - The total stop/drop-off count is derived as the sum across locations:
      $$\text{Total Stops / Drop-offs} = \sum_{i=1}^{N} \text{Location}_i.\text{dropoffCount}$$
-3. **No Revenue/Expense Duplication Across Locations:**
+4. **No Revenue/Expense Duplication Across Locations:**
    - Trip Revenue and Trip Expenses belong to the overall delivery trip. They must **never** be multiplied across locations.
-4. **Completed Operations Only:**
-   - RouteX is an operational accounting system for completed deliveries. Active dispatching, live GPS telematics, and in-transit tracking are outside scope.
+5. **Operational Window & Progressive Finalization:**
+   - RouteX supports progressive data entry: operations can record the daily trip rollouts with minimal fields, and then edit the record as drivers return receipts, waybills, and POD documents.
 
 ---
 
