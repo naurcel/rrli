@@ -689,6 +689,8 @@
 }
 
 .sign-in-button {
+  position: relative;
+  overflow: hidden;
   min-height: 48px;
   width: 100%;
   margin-top: 14px;
@@ -702,7 +704,50 @@
   letter-spacing: 0.01em;
   box-shadow: 0 4px 16px rgba(180, 83, 9, 0.28);
   cursor: pointer;
-  transition: transform .18s ease, box-shadow .18s ease, background .18s ease, filter .18s ease;
+  transition: transform .18s ease, box-shadow .85s ease, background .18s ease, filter .18s ease;
+}
+
+.sign-in-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: linear-gradient(105deg, #065f46, #10b981);
+  opacity: 0;
+  transition: opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.sign-in-button > * {
+  position: relative;
+  z-index: 1;
+}
+
+.login-page.is-login-success .sign-in-button {
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.38);
+}
+
+.login-page.is-login-success .sign-in-button::before {
+  opacity: 1;
+}
+
+.login-page .forgot-password-link,
+.login-page .text-link {
+  transition: color 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.login-page.is-login-success .forgot-password-link,
+.login-page.is-login-success .text-link {
+  color: #059669;
+}
+
+.login-page.is-login-success .login-form-wrap input {
+  border-color: rgba(16, 185, 129, 0.45);
+  transition: border-color 0.85s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.login-page.is-login-success .login-checkbox input {
+  accent-color: #059669;
 }
 
 .sign-in-button:hover:not(:disabled) {

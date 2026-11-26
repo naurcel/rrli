@@ -40,10 +40,6 @@ export const PERMISSION_CATEGORIES: {
     id: "users",
     label: "User Management & Audit",
   },
-  {
-    id: "settings",
-    label: "System & Settings",
-  },
 ];
 
 export const FRIENDLY_PERMISSIONS: readonly FriendlyPermissionDefinition[] = [
@@ -189,22 +185,6 @@ export const FRIENDLY_PERMISSIONS: readonly FriendlyPermissionDefinition[] = [
     category: "users",
     categoryLabel: "User Management & Audit",
   },
-
-  // 6. System & Settings
-  {
-    key: "settings:view",
-    title: "View Profile & Security Settings",
-    description: "Access user profile configuration, avatar management, and security question settings.",
-    category: "settings",
-    categoryLabel: "System & Settings",
-  },
-  {
-    key: "settings:manage",
-    title: "Manage Workspace Configuration",
-    description: "Configure workspace design preferences, appearance themes, and generate emergency backup keys.",
-    category: "settings",
-    categoryLabel: "System & Settings",
-  },
 ];
 
 export const PERMISSION_DEFINITION_MAP = new Map<Permission, FriendlyPermissionDefinition>(
@@ -218,7 +198,7 @@ export function getFriendlyPermission(key: Permission): FriendlyPermissionDefini
     key,
     title: key.replace(/[:_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
     description: "Manage permissions for this operational feature.",
-    category: "settings",
-    categoryLabel: "System & Settings",
+    category: "users",
+    categoryLabel: "User Management & Audit",
   };
 }

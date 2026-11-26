@@ -137,9 +137,7 @@ export default function LoginPage() {
       }
 
       setStatus("success");
-      setMessage(
-        `Authenticated as ${payload.actor?.username ?? trimmedIdentifier} (${payload.actor?.roleLabel ?? "Authorized"}). Redirecting…`,
-      );
+      setMessage("");
 
       const destination = payload.redirectTo ?? "/dashboard";
       router.replace(destination);
@@ -392,7 +390,7 @@ export default function LoginPage() {
 
   return (
     <main
-      className={`login-page login-layout-split${isDark ? " theme-dark" : ""}`}
+      className={`login-page login-layout-split${isDark ? " theme-dark" : ""}${viewMode === "login" && status === "success" ? " is-login-success" : ""}`}
       aria-busy={status === "submitting"}
     >
       <div className="login-tools" aria-label="Login page tools">
@@ -524,19 +522,12 @@ export default function LoginPage() {
                 </p>
               ) : null}
 
-              {status === "success" && message ? (
-                <p className="login-note success" role="status">
-                  <span>i</span>
-                  {message}
-                </p>
-              ) : null}
-
               <button
                 className="sign-in-button"
                 type="submit"
                 disabled={status === "submitting"}
               >
-                {status === "submitting" ? "Logging in…" : "Log in"}
+                <span>{status === "submitting" ? "Logging in…" : "Log in"}</span>
               </button>
 
               <div className="login-forgot-wrap">

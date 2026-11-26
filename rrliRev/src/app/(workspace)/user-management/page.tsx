@@ -76,7 +76,7 @@ type AuditEntry = {
 const AUDIT_ACTION_FILTER_OPTIONS = [
   { value: "all", label: "All Actions" },
   { value: "delivery.created", label: "Delivery Recorded" },
-  { value: "delivery.financials_finalized", label: "Financials Finalized" },
+  { value: "delivery.financials_finalized", label: "Financials Completed" },
   { value: "delivery.financials_corrected", label: "Financial Correction" },
   { value: "delivery.batch_imported", label: "Excel Batch Import" },
   { value: "document.uploaded", label: "Document Uploaded" },
