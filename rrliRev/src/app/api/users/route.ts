@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       const supabase = createAdminSupabaseClient();
       let query = supabase
         .from("user_profiles")
-        .select("id, email, username, full_name, role, roles, is_active, must_change_password, security_question, recovery_authorized_at, recovery_expires_at, is_superadmin, designation, is_permanently_deleted, deleted_at, deleted_reason, deleted_by, custom_grants, custom_restrictions, phone_number, created_at, updated_at")
+        .select("id, email, username, full_name, role, roles, is_active, must_change_password, security_question, recovery_authorized_at, recovery_expires_at, is_superadmin, designation, is_permanently_deleted, deleted_at, deleted_reason, deleted_by, custom_grants, custom_restrictions, phone_number, avatar_url, created_at, updated_at")
         .order("created_at", { ascending: true });
 
       if (!includeDeleted) {
@@ -92,6 +92,7 @@ export async function GET(request: Request) {
             username,
             email: row.email,
             phoneNumber: row.phone_number || undefined,
+            avatarUrl: row.avatar_url || null,
             fullName: row.full_name,
             role: row.role,
             roles: userRoles,

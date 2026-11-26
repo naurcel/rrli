@@ -115,8 +115,11 @@ export default function TruckProfitabilityPage() {
   } = useSearchBuffer({ delay: 500 });
   const [classificationFilter, setClassificationFilter] = useState<TruckClassificationFilterKey>("all");
   const [performanceFilter, setPerformanceFilter] = useState<TruckPerformanceFilterKey>("all");
-  const [ownedTruckSort, setOwnedTruckSort] = useState<OwnedTruckSort>("netProfit");
+  const [vehicleSizeFilter, setVehicleSizeFilter] = useState<string>("all");
+  const [ownedTruckSort, setOwnedTruckSort] = useState<OwnedTruckSort>("plate");
   const [ownedViewMode, setOwnedViewMode] = useState<"grid" | "list">("grid");
+  const [selectedSubconPlates, setSelectedSubconPlates] = useState<Set<string>>(new Set());
+  const [selectedOwnedPlates, setSelectedOwnedPlates] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     try {
@@ -795,6 +798,21 @@ export default function TruckProfitabilityPage() {
     });
   }, [allOwnedTrucks, deletedPlates, ownedTruckSort, truckSummaries, ownedViewMode, ownedListSort]);
 
+  const vehicleSizeFilterOptions = useMemo(() => {
+    const presetSizes = ["4-Wheeler", "6-Wheeler", "10-Wheeler"];
+    const customSizes = new Set<string>();
+    for (const t of [...allOwnedTrucks, ...allSubcontractedTrucks]) {
+      if (t.truckType && !presetSizes.includes(t.truckType)) {
+        customSizes.add(t.truckType);
+      }
+    }
+    return [
+      { value: "all", label: "All Vehicle Sizes" },
+      ...presetSizes.map((size) => ({ value: size, label: size })),
+      ...Array.from(customSizes).map((size) => ({ value: size, label: size })),
+    ];
+  }, [allOwnedTrucks, allSubcontractedTrucks]);
+
   const filteredOwnedTrucks = useMemo(() => {
     const cleanSearch = debouncedPlateSearch.trim().toLowerCase().replace(/\s+/g, "");
 
@@ -819,7 +837,12 @@ export default function TruckProfitabilityPage() {
         }
       }
 
-      // 3. Performance / Value Filter
+      // 3. Vehicle Size Filter (Middle Truck Filter)
+      if (vehicleSizeFilter !== "all" && truck.truckType.toLowerCase() !== vehicleSizeFilter.toLowerCase()) {
+        return false;
+      }
+
+      // 4. Performance / Value Filter (if URL param set)
       if (performanceFilter === "top_performing" && truck.netProfit <= 0) {
         return false;
       }
@@ -832,7 +855,7 @@ export default function TruckProfitabilityPage() {
 
       return true;
     });
-  }, [classificationFilter, performanceFilter, debouncedPlateSearch, sortedTruckSummaries]);
+  }, [classificationFilter, vehicleSizeFilter, performanceFilter, debouncedPlateSearch, sortedTruckSummaries]);
 
   const sortedSubcontractedTrucks = useMemo(() => {
     const direction = subcontractedSort.direction === "asc" ? 1 : -1;
@@ -1038,23 +1061,29 @@ export default function TruckProfitabilityPage() {
     return filteredSubcontractedTrucks.slice(start, start + SUBCONTRACTED_PAGE_SIZE);
   }, [filteredSubcontractedTrucks, subcontractedPage]);
 
-  // Summary counts
-  const { freezerCount, chilledCount, dryCount } = useMemo(() => {
+  // Summary counts across all owned trucks (so clicking a classification pill doesn't zero out the other pills)
+  const { totalOwnedCount, freezerCount, chilledCount, dryCount } = useMemo(() => {
     let freezer = 0;
     let chilled = 0;
     let dry = 0;
-    for (const t of filteredOwnedTrucks) {
+    for (const t of sortedTruckSummaries) {
       const cap = getTruckStorageCapability(t.plateNumber, t.storageCapability);
       if (cap === "Freezer") freezer++;
       else if (cap === "Chilled") chilled++;
       else dry++;
     }
-    return { freezerCount: freezer, chilledCount: chilled, dryCount: dry };
-  }, [filteredOwnedTrucks]);
+    return {
+      totalOwnedCount: sortedTruckSummaries.length,
+      freezerCount: freezer,
+      chilledCount: chilled,
+      dryCount: dry,
+    };
+  }, [sortedTruckSummaries]);
 
   const hasActiveFilters = Boolean(
     plateSearch.trim() ||
     classificationFilter !== "all" ||
+    vehicleSizeFilter !== "all" ||
     performanceFilter !== "all" ||
     range.startDate ||
     range.endDate
@@ -1063,6 +1092,7 @@ export default function TruckProfitabilityPage() {
   function handleResetFilters() {
     clearPlateSearch();
     setClassificationFilter("all");
+    setVehicleSizeFilter("all");
     setPerformanceFilter("all");
     setRange({ startDate: null, endDate: null });
   }
@@ -1494,9 +1524,43 @@ export default function TruckProfitabilityPage() {
                 <h2>Owned Trucks</h2>
               </div>
               <div className="records-heading-meta">
-                <span className="ledger-total-badge">
-                  {filteredOwnedTrucks.length} trucks · {freezerCount} Freezer · {chilledCount} Chilled · {dryCount} Dry
-                </span>
+                <div className="ledger-total-badge interactive-classification-badge" role="group" aria-label="Quick filter by truck classification">
+                  <button
+                    type="button"
+                    className={`classification-badge-segment${classificationFilter === "all" ? " is-active" : ""}`}
+                    onClick={() => setClassificationFilter("all")}
+                    title="Show all owned trucks"
+                  >
+                    {totalOwnedCount} trucks
+                  </button>
+                  <span className="classification-badge-dot" aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className={`classification-badge-segment is-freezer${classificationFilter === "freezer" ? " is-active" : ""}`}
+                    onClick={() => setClassificationFilter((curr) => (curr === "freezer" ? "all" : "freezer"))}
+                    title="Filter by Freezer trucks"
+                  >
+                    {freezerCount} Freezer
+                  </button>
+                  <span className="classification-badge-dot" aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className={`classification-badge-segment is-chilled${classificationFilter === "chilled" ? " is-active" : ""}`}
+                    onClick={() => setClassificationFilter((curr) => (curr === "chilled" ? "all" : "chilled"))}
+                    title="Filter by Chilled trucks"
+                  >
+                    {chilledCount} Chilled
+                  </button>
+                  <span className="classification-badge-dot" aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className={`classification-badge-segment is-dry${classificationFilter === "dry" ? " is-active" : ""}`}
+                    onClick={() => setClassificationFilter((curr) => (curr === "dry" ? "all" : "dry"))}
+                    title="Filter by Dry trucks"
+                  >
+                    {dryCount} Dry
+                  </button>
+                </div>
                 <div className="chart-view-mode-toggle" role="group" aria-label="Owned trucks display view">
                   <button
                     type="button"
@@ -1576,11 +1640,11 @@ export default function TruckProfitabilityPage() {
 
               <div className="filter-select-wrapper">
                 <RoundedSelect
-                  value={performanceFilter}
-                  options={TRUCK_PERFORMANCE_FILTER_OPTIONS}
-                  onChange={(val) => setPerformanceFilter(val as TruckPerformanceFilterKey)}
-                  ariaLabel="Filter trucks by profit margin tier"
-                  placeholder="All Margin Tiers"
+                  value={vehicleSizeFilter}
+                  options={vehicleSizeFilterOptions}
+                  onChange={(val) => setVehicleSizeFilter(val)}
+                  ariaLabel="Filter trucks by vehicle size"
+                  placeholder="All Vehicle Sizes"
                 />
               </div>
 
@@ -1640,6 +1704,21 @@ export default function TruckProfitabilityPage() {
                       aria-label="Remove classification filter"
                       title="Clear classification"
                       onClick={() => setClassificationFilter("all")}
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+                {vehicleSizeFilter !== "all" && (
+                  <span className="filter-chip">
+                    <span className="filter-chip-category">Vehicle Size:</span>{" "}
+                    {vehicleSizeFilter}
+                    <button
+                      type="button"
+                      className="filter-chip-remove"
+                      aria-label="Remove vehicle size filter"
+                      title="Clear vehicle size filter"
+                      onClick={() => setVehicleSizeFilter("all")}
                     >
                       ×
                     </button>
@@ -1829,11 +1908,65 @@ export default function TruckProfitabilityPage() {
             </>
           ) : (
             <>
+              {selectedOwnedPlates.size > 0 && (
+                <div className="bulk-selection-bar" role="region" aria-label="Selected owned trucks actions">
+                  <span className="bulk-selection-count">
+                    <strong>{selectedOwnedPlates.size}</strong> owned truck{selectedOwnedPlates.size === 1 ? "" : "s"} selected
+                  </span>
+                  <div className="bulk-selection-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
+                      onClick={() => {
+                        const rows = filteredOwnedTrucks.filter((t) => selectedOwnedPlates.has(t.plateNumber));
+                        const text = rows
+                          .map((t) => `${t.plateNumber}\t${t.truckType}\t${getTruckStorageCapability(t.plateNumber, t.storageCapability)}\tNet: ${formatPeso(t.netProfit)}`)
+                          .join("\n");
+                        navigator.clipboard?.writeText(text);
+                        toast.success(`Copied ${rows.length} truck record(s) to clipboard`);
+                      }}
+                    >
+                      Copy Selected
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
+                      onClick={() => setSelectedOwnedPlates(new Set())}
+                    >
+                      Clear selection
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="records-card owned-trucks-table-card" style={{ padding: 0, overflow: "hidden", marginTop: "12px" }}>
                 <div className="table-wrap">
                   <table>
                     <thead>
                       <tr>
+                        <th style={{ width: "36px", textAlign: "center", paddingLeft: "12px", paddingRight: "4px" }}>
+                          <input
+                            type="checkbox"
+                            className="table-select-checkbox"
+                            aria-label="Select all owned trucks on page"
+                            checked={
+                              paginatedOwnedTrucks.length > 0 &&
+                              paginatedOwnedTrucks.every((t) => selectedOwnedPlates.has(t.plateNumber))
+                            }
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setSelectedOwnedPlates((prev) => {
+                                const next = new Set(prev);
+                                for (const t of paginatedOwnedTrucks) {
+                                  if (checked) next.add(t.plateNumber);
+                                  else next.delete(t.plateNumber);
+                                }
+                                return next;
+                              });
+                            }}
+                          />
+                        </th>
                         <SortableTableHeader label="Plate Number" sortKey="plate" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         <SortableTableHeader label="Vehicle Size" sortKey="truckType" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
                         <SortableTableHeader label="Classification" sortKey="classification" activeSortKey={ownedListSort.key} direction={ownedListSort.direction} onSort={sortOwnedList} />
@@ -1852,17 +1985,38 @@ export default function TruckProfitabilityPage() {
                     <tbody>
                       {paginatedOwnedTrucks.map((truck) => {
                         const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
+                        const isRowSelected = selectedOwnedPlates.has(truck.plateNumber);
 
                         return (
                           <tr
                             key={truck.plateNumber}
-                            className="clickable-table-row"
+                            className={`clickable-table-row${isRowSelected ? " is-selected" : ""}`}
                             onClick={() => router.push(buildTruckDetailHref(truck.plateNumber))}
                             style={{
                               position: "relative",
                               cursor: "pointer",
                             }}
                           >
+                            <td
+                              style={{ width: "36px", textAlign: "center", paddingLeft: "12px", paddingRight: "4px" }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                className="table-select-checkbox"
+                                aria-label={`Select truck ${truck.plateNumber}`}
+                                checked={isRowSelected}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setSelectedOwnedPlates((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) next.add(truck.plateNumber);
+                                    else next.delete(truck.plateNumber);
+                                    return next;
+                                  });
+                                }}
+                              />
+                            </td>
                             <td>
                               <strong className="truck-code">{truck.plateNumber}</strong>
                             </td>
@@ -2009,14 +2163,69 @@ export default function TruckProfitabilityPage() {
             </label>
           </div>
 
+          {selectedSubconPlates.size > 0 && (
+            <div className="bulk-selection-bar" role="region" aria-label="Selected subcontracted trucks actions">
+              <span className="bulk-selection-count">
+                <strong>{selectedSubconPlates.size}</strong> subcontracted truck{selectedSubconPlates.size === 1 ? "" : "s"} selected
+              </span>
+              <div className="bulk-selection-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
+                  onClick={() => {
+                    const rows = filteredSubcontractedTrucks.filter((t) => selectedSubconPlates.has(t.plateNumber));
+                    const text = rows
+                      .map((t) => `${t.provider || "—"}\t${t.plateNumber}\t${t.truckType}\t${getTruckStorageCapability(t.plateNumber, t.storageCapability)}\t${t.driverName || t.contactPerson || "—"}`)
+                      .join("\n");
+                    navigator.clipboard?.writeText(text);
+                    toast.success(`Copied ${rows.length} subcontracted truck(s) to clipboard`);
+                  }}
+                >
+                  Copy Selected
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
+                  onClick={() => setSelectedSubconPlates(new Set())}
+                >
+                  Clear selection
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
+                  <th style={{ width: "36px", textAlign: "center", paddingLeft: "12px", paddingRight: "4px" }}>
+                    <input
+                      type="checkbox"
+                      className="table-select-checkbox"
+                      aria-label="Select all subcontracted trucks on page"
+                      checked={
+                        paginatedSubcontractedTrucks.length > 0 &&
+                        paginatedSubcontractedTrucks.every((t) => selectedSubconPlates.has(t.plateNumber))
+                      }
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setSelectedSubconPlates((prev) => {
+                          const next = new Set(prev);
+                          for (const t of paginatedSubcontractedTrucks) {
+                            if (checked) next.add(t.plateNumber);
+                            else next.delete(t.plateNumber);
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </th>
+                  <SortableTableHeader label="Trucker" sortKey="provider" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Plate Number" sortKey="plateNumber" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Vehicle Size" sortKey="truckType" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Classification" sortKey="classification" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
-                  <SortableTableHeader label="Trucker" sortKey="provider" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Driver" sortKey="driverName" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   <SortableTableHeader label="Helper/s" sortKey="helperName" activeSortKey={subcontractedSort.key} direction={subcontractedSort.direction} onSort={sortSubcontractedTrucks} />
                   {canAdd && (
@@ -2030,7 +2239,7 @@ export default function TruckProfitabilityPage() {
                 {paginatedSubcontractedTrucks.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={canAdd ? 7 : 6}
+                      colSpan={canAdd ? 8 : 7}
                       className="table-empty-cell"
                     >
                       <div className="empty-state minimal" title="No subcontracted trucks">
@@ -2046,20 +2255,46 @@ export default function TruckProfitabilityPage() {
                 ) : (
                   paginatedSubcontractedTrucks.map((truck) => {
                   const capability = getTruckStorageCapability(truck.plateNumber, truck.storageCapability);
+                  const isRowSelected = selectedSubconPlates.has(truck.plateNumber);
 
                   return (
                     <tr
                       key={truck.plateNumber}
+                      className={isRowSelected ? "is-selected" : undefined}
                       style={{
                         position: "relative",
                       }}
                     >
-                      <td><strong className="truck-code">{truck.plateNumber}</strong></td>
-                      <td><span className="truck-table-spec">{truck.truckType}</span></td>
-                      <td>{capability}</td>
-                      <td>{truck.provider}</td>
-                      <td>{truck.driverName || truck.contactPerson || "—"}</td>
-                      <td>{truck.helperName || "—"}</td>
+                      <td
+                        style={{ width: "36px", textAlign: "center", paddingLeft: "12px", paddingRight: "4px" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          className="table-select-checkbox"
+                          aria-label={`Select subcontracted truck ${truck.plateNumber}`}
+                          checked={isRowSelected}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedSubconPlates((prev) => {
+                              const next = new Set(prev);
+                              if (checked) next.add(truck.plateNumber);
+                              else next.delete(truck.plateNumber);
+                              return next;
+                            });
+                          }}
+                        />
+                      </td>
+                      <td className="subcon-trucker-cell">
+                        <strong className="subcon-trucker-primary">{truck.provider || "—"}</strong>
+                      </td>
+                      <td className="subcon-plate-cell">
+                        <strong className="truck-code subcon-plate-primary">{truck.plateNumber}</strong>
+                      </td>
+                      <td className="subcon-secondary-cell"><span className="truck-table-spec">{truck.truckType}</span></td>
+                      <td className="subcon-secondary-cell">{capability}</td>
+                      <td className="subcon-secondary-cell">{truck.driverName || truck.contactPerson || "—"}</td>
+                      <td className="subcon-secondary-cell">{truck.helperName || "—"}</td>
                       {canAdd && (
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
                           <div className="truck-row-actions">
@@ -2553,7 +2788,10 @@ export default function TruckProfitabilityPage() {
                       value={truckType}
                       options={["4-Wheeler", "6-Wheeler", "10-Wheeler"]}
                       onChange={(value) => setTruckType(value as FleetTruck["truckType"])}
-                      ariaLabel="Select vehicle size"
+                      ariaLabel="Select or type vehicle size"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Type or select size..."
                     />
                   </div>
 
@@ -2569,7 +2807,10 @@ export default function TruckProfitabilityPage() {
                         { value: "Dry", label: "Dry" },
                       ]}
                       onChange={(value) => setStorageCapability(value as TruckStorageCapability)}
-                      ariaLabel="Select truck classification"
+                      ariaLabel="Select or type truck classification"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Type or select classification..."
                     />
                   </div>
                 </div>
@@ -2847,7 +3088,10 @@ export default function TruckProfitabilityPage() {
                       value={editTruckType}
                       options={["4-Wheeler", "6-Wheeler", "10-Wheeler"]}
                       onChange={(value) => setEditTruckType(value as FleetTruck["truckType"])}
-                      ariaLabel="Select vehicle size"
+                      ariaLabel="Select or type vehicle size"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Type or select size..."
                     />
                   </div>
 
@@ -2863,7 +3107,10 @@ export default function TruckProfitabilityPage() {
                         { value: "Dry", label: "Dry" },
                       ]}
                       onChange={(value) => setEditStorageCapability(value as TruckStorageCapability)}
-                      ariaLabel="Select truck classification"
+                      ariaLabel="Select or type truck classification"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Type or select classification..."
                     />
                   </div>
                 </div>

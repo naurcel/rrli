@@ -22,8 +22,13 @@ const createTruckSchema = z.object({
     .min(3, "Plate number must be at least 3 characters.")
     .max(12, "Plate number must not exceed 12 characters.")
     .regex(/^[A-Za-z0-9\s-]+$/, "Plate number contains invalid characters."),
-  truckType: z.enum(["4-Wheeler", "6-Wheeler", "10-Wheeler"]),
-  storageCapability: z.enum(["Freezer", "Chilled", "Dry", "Refrigerated"]).transform((v) => (v === "Refrigerated" ? "Freezer" : v)),
+  truckType: z.string().trim().min(1, "Vehicle size is required.").max(40, "Vehicle size must not exceed 40 characters."),
+  storageCapability: z
+    .string()
+    .trim()
+    .min(1, "Classification is required.")
+    .max(40, "Classification must not exceed 40 characters.")
+    .transform((v) => (v.toLowerCase() === "refrigerated" ? "Freezer" : v)),
   ownershipType: z.enum(["Owned", "Subcontracted"]).default("Owned"),
   rateBasis: z.enum(["Redeemed Rate", "Trucker Rate"]).optional(),
   provider: z.string().trim().nullable().optional(),
@@ -48,8 +53,13 @@ const updateTruckSchema = z.object({
     .min(3, "Plate number must be at least 3 characters.")
     .max(12, "Plate number must not exceed 12 characters.")
     .regex(/^[A-Za-z0-9\s-]+$/, "Plate number contains invalid characters."),
-  truckType: z.enum(["4-Wheeler", "6-Wheeler", "10-Wheeler"]),
-  storageCapability: z.enum(["Freezer", "Chilled", "Dry", "Refrigerated"]).transform((v) => (v === "Refrigerated" ? "Freezer" : v)),
+  truckType: z.string().trim().min(1, "Vehicle size is required.").max(40, "Vehicle size must not exceed 40 characters."),
+  storageCapability: z
+    .string()
+    .trim()
+    .min(1, "Classification is required.")
+    .max(40, "Classification must not exceed 40 characters.")
+    .transform((v) => (v.toLowerCase() === "refrigerated" ? "Freezer" : v)),
   ownershipType: z.enum(["Owned", "Subcontracted"]),
   rateBasis: z.enum(["Redeemed Rate", "Trucker Rate"]).optional(),
   provider: z.string().trim().nullable().optional(),

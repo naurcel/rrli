@@ -22,7 +22,11 @@ import {
   type FriendlyPermissionDefinition,
   type PermissionCategory,
 } from "./permission-ui-model";
-import { DiscordRosterSidebar } from "./components/DiscordRosterSidebar";
+import {
+  DiscordRosterSidebar,
+  getRoleBadgeColors,
+  resolveStaffAvatarUrl,
+} from "./components/DiscordRosterSidebar";
 import { DiscordCategorySection } from "./components/DiscordCategorySection";
 import { DiscordCreateRoleModal } from "./components/DiscordCreateRoleModal";
 
@@ -894,13 +898,53 @@ export function DiscordPermissionsManager({
               {/* Entity Header Banner */}
               <div className="discord-entity-banner">
                 <div className="discord-entity-banner-left">
-                  <div className="discord-banner-user-avatar">
-                    {selectedEntity.kind === "role"
-                      ? entityTitle.charAt(0)
-                      : selectedEntity.kind === "custom_role"
-                      ? selectedCustomRole?.name.charAt(0) || "C"
-                      : getUserInitials(selectedUser?.fullName || selectedUser?.username || "U")}
-                  </div>
+                  {(() => {
+                    const bannerAvatarUrl =
+                      selectedEntity.kind === "user" ? resolveStaffAvatarUrl(selectedUser) : null;
+                    const bannerRoleColors =
+                      selectedEntity.kind === "role"
+                        ? getRoleBadgeColors(selectedEntity.roleKey)
+                        : selectedEntity.kind === "custom_role"
+                        ? getRoleBadgeColors("custom")
+                        : null;
+                    return (
+                      <div
+                        className="discord-banner-user-avatar"
+                        style={{
+                          overflow: "hidden",
+                          fontSize: "12px",
+                          ...(bannerRoleColors
+                            ? {
+                                background: bannerRoleColors.bg,
+                                borderColor: bannerRoleColors.border,
+                                color: bannerRoleColors.text,
+                              }
+                            : {}),
+                        }}
+                      >
+                        {selectedEntity.kind === "role" ? (
+                          entityTitle.charAt(0)
+                        ) : selectedEntity.kind === "custom_role" ? (
+                          selectedCustomRole?.name.charAt(0) || "C"
+                        ) : bannerAvatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={bannerAvatarUrl}
+                            alt={selectedUser?.fullName || selectedUser?.username || "Staff"}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              borderRadius: "50%",
+                              display: "block",
+                            }}
+                          />
+                        ) : (
+                          getUserInitials(selectedUser?.fullName || selectedUser?.username || "U")
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <div className="discord-banner-details">
                     <div className="discord-banner-title-row">
@@ -1022,6 +1066,7 @@ export function DiscordPermissionsManager({
                     {/* Built-in departments / roles */}
                     {departments.map((dept) => {
                       const isAssigned = currentUserDepts.includes(dept.id);
+                      const roleColors = getRoleBadgeColors(dept.code || dept.id);
                       return (
                         <button
                           key={dept.id}
@@ -1032,7 +1077,21 @@ export function DiscordPermissionsManager({
                           onClick={() => handleToggleDept(dept.id)}
                           disabled={dept.isArchived || !canModifySelected}
                           title={dept.isArchived ? "Archived" : dept.description}
+                          style={
+                            isAssigned
+                              ? {
+                                  background: roleColors.bg,
+                                  borderColor: roleColors.border,
+                                  color: roleColors.text,
+                                }
+                              : undefined
+                          }
                         >
+                          <span
+                            className="discord-role-dot"
+                            style={{ backgroundColor: roleColors.dot }}
+                            aria-hidden="true"
+                          />
                           <span>{dept.name}</span>
                           {dept.isArchived && <span className="discord-dept-archived-tag">(Archived)</span>}
                         </button>
@@ -1042,6 +1101,7 @@ export function DiscordPermissionsManager({
                     {/* Custom roles */}
                     {customRoles.map((cr) => {
                       const isAssigned = currentUserDepts.includes(cr.id);
+                      const roleColors = getRoleBadgeColors("custom");
                       return (
                         <button
                           key={cr.id}
@@ -1052,7 +1112,21 @@ export function DiscordPermissionsManager({
                           onClick={() => handleToggleDept(cr.id)}
                           disabled={!canModifySelected}
                           title={!cr.isEnabled ? "Role is disabled (no permissions contributed)" : cr.description}
+                          style={
+                            isAssigned
+                              ? {
+                                  background: roleColors.bg,
+                                  borderColor: roleColors.border,
+                                  color: roleColors.text,
+                                }
+                              : undefined
+                          }
                         >
+                          <span
+                            className="discord-role-dot"
+                            style={{ backgroundColor: roleColors.dot }}
+                            aria-hidden="true"
+                          />
                           <span>{cr.name}</span>
                           {!cr.isEnabled && <span className="discord-dept-archived-tag">(Disabled)</span>}
                         </button>

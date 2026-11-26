@@ -892,6 +892,23 @@ export default function SettingsPage() {
                     minLength={3}
                     maxLength={30}
                   />
+                  {newUsername.trim().length > 0 ? (() => {
+                    const check = validateUsernameFormat(newUsername);
+                    return (
+                      <span
+                        style={{
+                          fontSize: "11.5px",
+                          fontWeight: 500,
+                          marginTop: "3px",
+                          color: check.isValid
+                            ? "var(--color-status-success, #0f8a4f)"
+                            : "var(--color-danger, #dc2626)",
+                        }}
+                      >
+                        {check.isValid ? "✓ Valid username format" : check.message}
+                      </span>
+                    );
+                  })() : null}
                 </div>
               </div>
 
@@ -945,6 +962,23 @@ export default function SettingsPage() {
                     onChange={(e) => setContactEmail(e.target.value)}
                     className="settings-input"
                   />
+                  {contactEmail.trim().length > 0 && contactEmail.trim() !== currentEmail ? (() => {
+                    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim());
+                    return (
+                      <span
+                        style={{
+                          fontSize: "11.5px",
+                          fontWeight: 500,
+                          marginTop: "3px",
+                          color: validEmail
+                            ? "var(--color-status-success, #0f8a4f)"
+                            : "var(--color-danger, #dc2626)",
+                        }}
+                      >
+                        {validEmail ? "✓ Valid email format" : "Enter a valid email address (e.g. name@domain.com)"}
+                      </span>
+                    );
+                  })() : null}
                 </div>
 
                 <div className="settings-form-field">
@@ -957,6 +991,24 @@ export default function SettingsPage() {
                     onChange={(e) => setContactPhone(e.target.value)}
                     className="settings-input"
                   />
+                  {contactPhone.trim().length > 0 && contactPhone.trim() !== currentPhone ? (() => {
+                    const digits = contactPhone.replace(/\D/g, "");
+                    const validPhone = digits.length >= 10 && digits.length <= 13;
+                    return (
+                      <span
+                        style={{
+                          fontSize: "11.5px",
+                          fontWeight: 500,
+                          marginTop: "3px",
+                          color: validPhone
+                            ? "var(--color-status-success, #0f8a4f)"
+                            : "var(--color-danger, #dc2626)",
+                        }}
+                      >
+                        {validPhone ? "✓ Valid phone number" : "Enter a valid 11-digit mobile number (e.g. 09171234567)"}
+                      </span>
+                    );
+                  })() : null}
                 </div>
               </div>
 
@@ -1164,6 +1216,21 @@ export default function SettingsPage() {
                     minLength={8}
                     maxLength={128}
                   />
+                  {confirmPassword.length > 0 ? (
+                    <span
+                      style={{
+                        fontSize: "11.5px",
+                        fontWeight: 500,
+                        marginTop: "3px",
+                        color:
+                          newPassword === confirmPassword
+                            ? "var(--color-status-success, #0f8a4f)"
+                            : "var(--color-danger, #dc2626)",
+                      }}
+                    >
+                      {newPassword === confirmPassword ? "✓ Passwords match" : "Passwords do not match"}
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
@@ -1234,27 +1301,65 @@ export default function SettingsPage() {
 
               <div className="settings-field-row-2col">
                 <div className="settings-form-field">
-                  <label>Security Answer (Case-sensitive)</label>
+                  <label>Security Answer</label>
                   <input
-                    type="text"
+                    type="password"
                     required
-                    placeholder="Enter secret answer"
+                    placeholder="Enter secret answer (min. 2 characters)"
                     value={securityAnswer}
                     onChange={(e) => setSecurityAnswer(e.target.value)}
                     className="settings-input"
                   />
+                  {securityAnswer.length > 0 ? (
+                    <span
+                      style={{
+                        fontSize: "11.5px",
+                        fontWeight: 500,
+                        marginTop: "3px",
+                        color:
+                          securityAnswer.trim().length >= 2
+                            ? "var(--color-status-success, #0f8a4f)"
+                            : "var(--color-danger, #dc2626)",
+                      }}
+                    >
+                      {securityAnswer.trim().length >= 2
+                        ? "✓ At least 2 characters"
+                        : "Answer must be at least 2 characters"}
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="settings-form-field">
                   <label>Confirm Security Answer</label>
                   <input
-                    type="text"
+                    type="password"
                     required
                     placeholder="Confirm secret answer"
                     value={confirmSecurityAnswer}
                     onChange={(e) => setConfirmSecurityAnswer(e.target.value)}
                     className="settings-input"
                   />
+                  {confirmSecurityAnswer.length > 0 ? (
+                    <span
+                      style={{
+                        fontSize: "11.5px",
+                        fontWeight: 500,
+                        marginTop: "3px",
+                        color:
+                          securityAnswer.trim().length >= 2 &&
+                          normalizeSecurityAnswer(securityAnswer) ===
+                            normalizeSecurityAnswer(confirmSecurityAnswer)
+                            ? "var(--color-status-success, #0f8a4f)"
+                            : "var(--color-danger, #dc2626)",
+                      }}
+                    >
+                      {securityAnswer.trim().length >= 2 &&
+                      normalizeSecurityAnswer(securityAnswer) ===
+                        normalizeSecurityAnswer(confirmSecurityAnswer)
+                        ? "✓ Answers match"
+                        : "Answers do not match"}
+                    </span>
+                  ) : null}
                 </div>
               </div>
 

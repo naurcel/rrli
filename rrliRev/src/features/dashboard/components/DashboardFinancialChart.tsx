@@ -465,6 +465,7 @@ export function DashboardFinancialChart({
               variant="ghost"
               size="xs"
               active={viewMode === "line"}
+              className={viewMode === "line" ? "active" : ""}
               onClick={() => setViewMode("line")}
               tooltip="Line chart"
               aria-label="Line chart"
@@ -488,6 +489,7 @@ export function DashboardFinancialChart({
               variant="ghost"
               size="xs"
               active={viewMode === "bar"}
+              className={viewMode === "bar" ? "active" : ""}
               onClick={() => setViewMode("bar")}
               tooltip="Bar chart"
               aria-label="Bar chart"

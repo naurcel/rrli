@@ -6,7 +6,7 @@ import type {
 
 export type { DeliveryRateBasis, TruckOwnership } from "./delivery-domain.ts";
 
-export type TruckStorageCapability = "Freezer" | "Chilled" | "Dry";
+export type TruckStorageCapability = "Freezer" | "Chilled" | "Dry" | (string & {});
 
 export type FleetTruck = {
   id: string;
@@ -75,7 +75,8 @@ export function getTruckStorageCapability(
   explicitCapability?: TruckStorageCapability | string | null,
 ): TruckStorageCapability {
   if (explicitCapability) {
-    const norm = explicitCapability.trim().toLowerCase();
+    const trimmed = explicitCapability.trim();
+    const norm = trimmed.toLowerCase();
     if (norm === "freezer") return "Freezer";
     if (norm === "chilled") return "Chilled";
     if (norm === "dry") return "Dry";
@@ -83,6 +84,9 @@ export function getTruckStorageCapability(
       const normalizedPlate = plateNumber.trim().toUpperCase().replace(/\s+/g, " ");
       if (KNOWN_CHILLED_PLATES.has(normalizedPlate)) return "Chilled";
       return "Freezer";
+    }
+    if (trimmed.length > 0 && !/\bwheeler\b/i.test(trimmed)) {
+      return trimmed;
     }
   }
   const normalized = plateNumber.trim().toUpperCase().replace(/\s+/g, " ");

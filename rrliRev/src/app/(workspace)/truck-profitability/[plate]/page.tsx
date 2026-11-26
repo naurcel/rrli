@@ -690,10 +690,10 @@ export default function TruckProfilePage({
             </section>
 
             <section className="records-card truck-profile-deliveries" id="truck-delivery-history" aria-label="Truck delivery history">
-              <div className="records-heading" style={{ gap: "16px", flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: "240px", flexWrap: "wrap" }}>
+              <div className="records-heading" style={{ gap: "16px", flexWrap: "wrap", justifyContent: "flex-start" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "240px", flexWrap: "wrap" }}>
                   <h2>Delivery History</h2>
-                  <label className={`search-box${isHistorySearchBuffering ? " is-buffering" : ""}`} style={{ maxWidth: "340px", flex: 1, minWidth: "220px" }}>
+                  <label className={`search-box${isHistorySearchBuffering ? " is-buffering" : ""}`} style={{ maxWidth: "320px", flex: 1, minWidth: "210px" }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle cx="11" cy="11" r="8" />
                       <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -716,9 +716,9 @@ export default function TruckProfilePage({
                       </button>
                     ) : null}
                   </label>
-                </div>
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <GlobalDateRangePicker />
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <GlobalDateRangePicker />
+                  </div>
                 </div>
               </div>
               <div className="table-wrap">
@@ -1359,7 +1359,10 @@ export default function TruckProfilePage({
                       value={editTruckType}
                       options={["4-Wheeler", "6-Wheeler", "10-Wheeler"]}
                       onChange={(value) => setEditTruckType(value as FleetTruck["truckType"])}
-                      ariaLabel="Select vehicle size"
+                      ariaLabel="Select or type vehicle size"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Type or select size..."
                     />
                   </div>
 
@@ -1375,7 +1378,10 @@ export default function TruckProfilePage({
                         { value: "Dry", label: "Dry" },
                       ]}
                       onChange={(value) => setEditStorageCapability(value as TruckStorageCapability)}
-                      ariaLabel="Select truck classification"
+                      ariaLabel="Select or type truck classification"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Type or select classification..."
                     />
                   </div>
                 </div>

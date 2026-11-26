@@ -1225,9 +1225,26 @@ export default function UserManagementPage() {
                           onChange={(event) => setUsername(event.target.value.toLowerCase())}
                           required
                         />
-                        <span className="user-form-hint">
-                          3-30 chars (a-z, 0-9, -, _, .)
-                        </span>
+                        {username.trim().length > 0 ? (() => {
+                          const check = validateUsernameFormat(username);
+                          return (
+                            <span
+                              className="user-form-hint"
+                              style={{
+                                color: check.isValid
+                                  ? "var(--color-status-success, #0f8a4f)"
+                                  : "var(--color-danger, #dc2626)",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {check.isValid ? "✓ Valid username (3–30 chars)" : check.message}
+                            </span>
+                          );
+                        })() : (
+                          <span className="user-form-hint">
+                            3-30 chars (a-z, 0-9, -, _, .)
+                          </span>
+                        )}
                       </div>
 
                       <div className="user-form-field">
@@ -1264,6 +1281,22 @@ export default function UserManagementPage() {
                           onChange={(event) => setEmail(event.target.value)}
                           required
                         />
+                        {email.trim().length > 0 ? (() => {
+                          const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+                          return (
+                            <span
+                              className="user-form-hint"
+                              style={{
+                                color: validEmail
+                                  ? "var(--color-status-success, #0f8a4f)"
+                                  : "var(--color-danger, #dc2626)",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {validEmail ? "✓ Valid email address" : "Enter a valid email address (e.g. name@domain.com)"}
+                            </span>
+                          );
+                        })() : null}
                       </div>
 
                       <div className="user-form-field">
@@ -1279,6 +1312,23 @@ export default function UserManagementPage() {
                           onChange={(event) => setPhoneNumber(event.target.value)}
                           required
                         />
+                        {phoneNumber.trim().length > 0 ? (() => {
+                          const digits = phoneNumber.replace(/\D/g, "");
+                          const validPhone = digits.length >= 10 && digits.length <= 13;
+                          return (
+                            <span
+                              className="user-form-hint"
+                              style={{
+                                color: validPhone
+                                  ? "var(--color-status-success, #0f8a4f)"
+                                  : "var(--color-danger, #dc2626)",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {validPhone ? "✓ Valid contact number" : "Enter a valid 11-digit mobile number (e.g. 09171234567)"}
+                            </span>
+                          );
+                        })() : null}
                       </div>
                     </div>
                   </div>

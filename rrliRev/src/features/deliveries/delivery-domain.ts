@@ -7,7 +7,7 @@
  *  multi-store drop-off stops within a single delivery.
  */
 
-export type TruckType = "4-Wheeler" | "6-Wheeler" | "10-Wheeler";
+export type TruckType = "4-Wheeler" | "6-Wheeler" | "10-Wheeler" | (string & {});
 export type TruckTemperature = `${number}°C` | string;
 export type PodVerificationStatus = "Verified" | "Incomplete" | "Pending";
 export const EXPENSE_KEYS = [

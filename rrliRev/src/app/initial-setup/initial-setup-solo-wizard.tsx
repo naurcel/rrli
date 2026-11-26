@@ -83,10 +83,27 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
   const step1Valid = pwdValidation.isValid && passwordsMatch;
 
   const resolvedQuestion = isCustomQuestion ? customQuestionText.trim() : question;
+  const customQuestionValid = !isCustomQuestion || customQuestionText.trim().length >= 5;
+  const answerMinLengthMet = answer.trim().length >= 2;
   const answersMatch =
-    answer.trim().length >= 2 &&
+    answerMinLengthMet &&
     normalizeSecurityAnswer(answer) === normalizeSecurityAnswer(confirmAnswer);
-  const step3Valid = Boolean(resolvedQuestion && answersMatch);
+  const step3Valid = Boolean(resolvedQuestion && customQuestionValid && answersMatch);
+
+  function generateClientBackupKey(): string {
+    const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const bytes = new Uint8Array(12);
+    if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < 12; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    let raw = "";
+    for (let i = 0; i < 12; i++) {
+      raw += chars[bytes[i] % chars.length];
+    }
+    return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
+  }
 
   const initials = getUserInitials(actor.fullName, actor.username);
   const firstName = actor.fullName?.trim() ? actor.fullName.trim().split(" ")[0] : actor.username;
@@ -219,14 +236,14 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
     playInterstitialThen("outro-photo", "recovery", 1800);
   }
 
-  async function handleRecoverySubmit(e: FormEvent) {
+  function handleRecoverySubmit(e: FormEvent) {
     e.preventDefault();
     setErrorMessage(null);
 
     if (!step3Valid) {
-      if (!resolvedQuestion) {
-        setErrorMessage("Please select or specify a security question.");
-      } else if (answer.trim().length < 2) {
+      if (!resolvedQuestion || !customQuestionValid) {
+        setErrorMessage("Please enter a security question (at least 5 characters).");
+      } else if (!answerMinLengthMet) {
         setErrorMessage("Answer must be at least 2 characters.");
       } else if (!answersMatch) {
         setErrorMessage("Security answers do not match.");
@@ -234,56 +251,11 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const response = await fetch("/api/auth/account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "initial-setup",
-          newPassword,
-          confirmPassword,
-          question: resolvedQuestion,
-          answer: answer.trim(),
-          confirmAnswer: confirmAnswer.trim(),
-          avatarUrl: avatarUrl || null,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as {
-        ok?: boolean;
-        message?: string;
-        backupKey?: string;
-      } | null;
-
-      if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.message ?? "Unable to complete initial setup.");
-      }
-
-      // Persist avatar locally and broadcast update
-      if (avatarUrl) {
-        try {
-          window.localStorage.setItem(getProfileStorageKey(actor.id), avatarUrl);
-          window.dispatchEvent(
-            new CustomEvent(PROFILE_PHOTO_EVENT, {
-              detail: { avatarUrl, userId: actor.id },
-            }),
-          );
-        } catch {
-          // Ignore localStorage errors
-        }
-      }
-
-      if (payload.backupKey) {
-        setBackupKey(payload.backupKey.replace(/^ROUTEX-/i, ""));
-      }
-
-      setSubmitting(false);
-      playInterstitialThen("outro-recovery", "backup-key", 1850);
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Setup submission failed.");
-      setSubmitting(false);
+    // Generate the backup key for Stage 4 without committing password/profile to the database yet
+    if (!backupKey) {
+      setBackupKey(generateClientBackupKey());
     }
+    playInterstitialThen("outro-recovery", "backup-key", 1850);
   }
 
   async function handleCopyBackupKey() {
@@ -337,30 +309,75 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
     });
   }
 
-  function handleFinishSetup(e: FormEvent) {
+  async function handleFinishSetup(e: FormEvent) {
     e.preventDefault();
-    if (!keyConfirmedSaved) return;
+    if (!keyConfirmedSaved || submitting) return;
 
-    clearAllTimers();
-    setTransitionPhase("blur-out");
+    setErrorMessage(null);
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/auth/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "initial-setup",
+          newPassword,
+          confirmPassword,
+          question: resolvedQuestion,
+          answer: answer.trim(),
+          confirmAnswer: confirmAnswer.trim(),
+          avatarUrl: avatarUrl || null,
+          backupKey,
+        }),
+      });
 
-    scheduleTimer(() => {
-      setPhase("outro-complete");
-      setTransitionPhase("blur-in");
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.message ?? "Unable to complete initial setup.");
+      }
+
+      // Persist avatar locally and broadcast update only after full setup commits
+      if (avatarUrl) {
+        try {
+          window.localStorage.setItem(getProfileStorageKey(actor.id), avatarUrl);
+          window.dispatchEvent(
+            new CustomEvent(PROFILE_PHOTO_EVENT, {
+              detail: { avatarUrl, userId: actor.id },
+            }),
+          );
+        } catch {
+          // Ignore localStorage errors
+        }
+      }
+
+      clearAllTimers();
+      setTransitionPhase("blur-out");
 
       scheduleTimer(() => {
-        setTransitionPhase("idle");
-      }, 700);
+        setPhase("outro-complete");
+        setTransitionPhase("blur-in");
 
-      scheduleTimer(() => {
-        setIsExiting(true);
-      }, 2200);
+        scheduleTimer(() => {
+          setTransitionPhase("idle");
+        }, 700);
 
-      scheduleTimer(() => {
-        router.push("/dashboard");
-        router.refresh();
-      }, 3050);
-    }, 450);
+        scheduleTimer(() => {
+          setIsExiting(true);
+        }, 2200);
+
+        scheduleTimer(() => {
+          router.push("/dashboard");
+          router.refresh();
+        }, 3050);
+      }, 450);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Setup submission failed.");
+      setSubmitting(false);
+    }
   }
 
   const isInterstitial =
@@ -795,6 +812,19 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                     required
                     autoFocus
                   />
+                  {customQuestionText.length > 0 && !customQuestionValid ? (
+                    <span className="native-setup-field-hint error">
+                      Question must be at least 5 characters ({customQuestionText.trim().length}/5)
+                    </span>
+                  ) : null}
+                  {customQuestionText.length > 0 && customQuestionValid ? (
+                    <span className="native-setup-field-hint success" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Custom question is valid
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -804,7 +834,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                   <input
                     id="sec-answer"
                     type={showAnswer ? "text" : "password"}
-                    placeholder="Enter your answer..."
+                    placeholder="Enter at least 2 characters..."
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
                     autoComplete="off"
@@ -829,6 +859,17 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                     )}
                   </button>
                 </div>
+                {answer.length > 0 && !answerMinLengthMet ? (
+                  <span className="native-setup-field-hint error">Answer must be at least 2 characters</span>
+                ) : null}
+                {answerMinLengthMet ? (
+                  <span className="native-setup-field-hint success" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    At least 2 characters
+                  </span>
+                ) : null}
               </div>
 
               <div className="native-setup-field-group setup-stagger setup-stagger-4">
@@ -951,6 +992,27 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
             </div>
 
             <form className="native-setup-form-panel" onSubmit={handleFinishSetup}>
+              {errorMessage ? (
+                <div className="native-setup-alert setup-stagger setup-stagger-2" role="alert">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span>{errorMessage}</span>
+                </div>
+              ) : null}
+
               {/* High-Emphasis Warning Banner */}
               <div className="native-setup-backup-warning setup-stagger setup-stagger-3" role="note">
                 <div className="backup-warning-icon" aria-hidden="true">
@@ -1040,13 +1102,36 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                 </span>
               </label>
 
-              <div className="native-setup-actions single setup-stagger setup-stagger-5">
+              <div className="native-setup-actions dual setup-stagger setup-stagger-5">
+                <button
+                  type="button"
+                  className="native-setup-back-btn"
+                  onClick={() => transitionToPhase("recovery")}
+                  disabled={submitting}
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <line x1="19" y1="12" x2="5" y2="12" />
+                    <polyline points="12 19 5 12 12 5" />
+                  </svg>
+                  <span>Back</span>
+                </button>
+
                 <button
                   type="submit"
                   className="native-setup-primary-btn"
-                  disabled={!keyConfirmedSaved}
+                  disabled={!keyConfirmedSaved || submitting}
                 >
-                  <span>Finish Setup</span>
+                  <span>{submitting ? "Finalizing Setup..." : "Finish Setup"}</span>
                   <svg
                     width="16"
                     height="16"

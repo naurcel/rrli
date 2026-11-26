@@ -505,6 +505,10 @@ export async function POST(request: Request) {
     }
 
     const { newPassword, confirmPassword, question, answer, confirmAnswer, avatarUrl } = parsed.data;
+    const clientProvidedKey =
+      typeof body?.backupKey === "string" && normalizeBackupKey(body.backupKey).length >= 8
+        ? body.backupKey.trim().toUpperCase()
+        : null;
 
     if (newPassword !== confirmPassword) {
       return NextResponse.json(
@@ -540,7 +544,7 @@ export async function POST(request: Request) {
 
         const db = await getDatabaseClient();
         const nowIso = new Date().toISOString();
-        const rawBackupKey = generateBackupKey();
+        const rawBackupKey = clientProvidedKey || generateBackupKey();
         const backupKeyHash = hashWithArgon2id(normalizeBackupKey(rawBackupKey));
         const answerHash = hashWithArgon2id(normalizeSecurityAnswer(answer));
 
@@ -589,7 +593,11 @@ export async function POST(request: Request) {
           if (avatarUrl) {
             updateServerAccountAvatar(actor.id, avatarUrl);
           }
-          const memKeyRes = generateServerAccountBackupKey(actor.username || actor.email);
+          const memKeyRes = generateServerAccountBackupKey(
+            actor.username || actor.email,
+            undefined,
+            rawBackupKey,
+          );
           if (memKeyRes.ok) {
             activeBackupKey = memKeyRes.backupKey;
           }
@@ -651,8 +659,14 @@ export async function POST(request: Request) {
       updateServerAccountAvatar(actor.id, avatarUrl);
     }
 
-    const backupKeyRes = generateServerAccountBackupKey(actor.username || actor.email);
-    const issuedBackupKey = backupKeyRes.ok ? backupKeyRes.backupKey : generateBackupKey();
+    const backupKeyRes = generateServerAccountBackupKey(
+      actor.username || actor.email,
+      undefined,
+      clientProvidedKey || undefined,
+    );
+    const issuedBackupKey = backupKeyRes.ok
+      ? backupKeyRes.backupKey
+      : clientProvidedKey || generateBackupKey();
 
     recordAuditEntry({
       actorId: actor.id,

@@ -877,6 +877,7 @@ export function getServerAccountRecoveryState(username: string): {
 export function generateServerAccountBackupKey(
   username: string,
   currentPassword?: string,
+  preferredRawKey?: string,
 ):
   | { ok: true; backupKey: string; generatedAt: string }
   | { ok: false; message: string } {
@@ -899,7 +900,10 @@ export function generateServerAccountBackupKey(
         }
       }
 
-      const rawKey = generateBackupKey();
+      const rawKey =
+        preferredRawKey && normalizeBackupKey(preferredRawKey).length >= 8
+          ? preferredRawKey
+          : generateBackupKey();
       const normalizedKey = normalizeBackupKey(rawKey);
       const now = new Date().toISOString();
 

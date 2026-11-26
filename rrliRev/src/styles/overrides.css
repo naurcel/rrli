@@ -2085,3 +2085,382 @@ html[data-theme="dark"] .discord-role-add-btn:hover {
   background: rgba(56, 189, 248, 0.12);
 }
 
+/* ==========================================================================
+   BATCH POLISH: PERMISSIONS, COMPACT MODE, DASHBOARD LEDGERS, MULTI-SELECT,
+   SUBCON VISIBILITY, INTERACTIVE CLASSIFICATION PILLS, SMOOTH TABS & DARK MODE
+   ========================================================================== */
+
+/* 1. Clear All button in permission toggling — distinct danger/rose color */
+.discord-quick-btn.reset {
+  color: #e11d48 !important;
+  background: rgba(225, 29, 72, 0.08) !important;
+  border: 1px solid rgba(225, 29, 72, 0.24) !important;
+}
+
+.discord-quick-btn.reset:hover:not(:disabled) {
+  color: #be123c !important;
+  background: rgba(225, 29, 72, 0.15) !important;
+  border-color: rgba(225, 29, 72, 0.4) !important;
+}
+
+html[data-theme="dark"] .discord-quick-btn.reset {
+  color: #fb7185 !important;
+  background: rgba(244, 63, 94, 0.14) !important;
+  border-color: rgba(244, 63, 94, 0.32) !important;
+}
+
+html[data-theme="dark"] .discord-quick-btn.reset:hover:not(:disabled) {
+  color: #fda4af !important;
+  background: rgba(244, 63, 94, 0.24) !important;
+  border-color: rgba(244, 63, 94, 0.5) !important;
+}
+
+/* 2. Default profile name initials — make the text slightly smaller */
+.discord-member-avatar-circle {
+  font-size: 10px !important;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+}
+
+.discord-banner-user-avatar {
+  font-size: 12px !important;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+}
+
+.settings-hero-avatar-fallback,
+.native-setup-avatar-initials {
+  font-size: 20px !important;
+  letter-spacing: -0.02em;
+}
+
+.topbar-avatar-initials,
+.profile-avatar-initials,
+.user-avatar-fallback {
+  font-size: 10.5px !important;
+  letter-spacing: -0.02em;
+}
+
+/* 3. Assigned role chips in Permissions page with role color dots */
+.discord-dept-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.16s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+/* 4. Interactive Classification Badge on Trucks page (6 trucks · 2 Freezer · 2 Chilled · 2 Dry) */
+.interactive-classification-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  padding: 3px 6px !important;
+  border-radius: 999px !important;
+}
+
+.classification-badge-segment {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.3;
+}
+
+.classification-badge-segment:hover {
+  background: rgba(217, 119, 6, 0.1);
+  color: var(--color-accent-deep, #b45309);
+}
+
+.classification-badge-segment.is-active {
+  background: var(--color-accent-soft, rgba(217, 119, 6, 0.16));
+  border-color: rgba(217, 119, 6, 0.34);
+  color: var(--color-accent-deep, #92400e);
+  font-weight: 700;
+}
+
+html[data-theme="dark"] .classification-badge-segment:hover {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+}
+
+html[data-theme="dark"] .classification-badge-segment.is-active {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fcd34d;
+}
+
+.classification-badge-dot {
+  opacity: 0.45;
+  user-select: none;
+  font-size: 11px;
+}
+
+/* 5. Subcontracted Trucks: Make Trucker and Plate Number the most visible */
+.subcon-trucker-cell .subcon-trucker-primary {
+  display: inline-block;
+  font-size: 13.5px !important;
+  font-weight: 750 !important;
+  color: var(--color-text-primary, #0f172a) !important;
+  letter-spacing: -0.01em;
+}
+
+.subcon-plate-cell .subcon-plate-primary {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 7px;
+  font-size: 12.5px !important;
+  font-weight: 750 !important;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.03em;
+  color: var(--color-accent-deep, #92400e) !important;
+  background: rgba(245, 158, 11, 0.13);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.subcontracted-trucks-table td.subcon-secondary-cell {
+  color: var(--color-text-secondary, #475569);
+  font-size: 12px;
+}
+
+html[data-theme="dark"] .subcon-trucker-cell .subcon-trucker-primary {
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .subcon-plate-cell .subcon-plate-primary {
+  color: #fcd34d !important;
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.38);
+}
+
+html[data-theme="dark"] .subcontracted-trucks-table td.subcon-secondary-cell {
+  color: #cbd5e1;
+}
+
+/* 6. Dashboard Graph Type Highlight Missing (.is-active + .active) */
+.chart-view-mode-toggle button.active,
+.chart-view-mode-toggle button.is-active {
+  background: var(--color-surface, #ffffff) !important;
+  color: var(--color-accent-deep, #b45309) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(217, 119, 6, 0.25) !important;
+}
+
+html[data-theme="dark"] .chart-view-mode-toggle button.active,
+html[data-theme="dark"] .chart-view-mode-toggle button.is-active {
+  background: rgba(245, 158, 11, 0.22) !important;
+  color: #fcd34d !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(245, 158, 11, 0.42) !important;
+}
+
+/* 7. Compact Mode: Widen outer page margins rather than reducing them */
+html[data-compactness="compact"] .content-wrap {
+  max-width: 1240px !important;
+  margin-inline: auto !important;
+  padding-inline: clamp(32px, 5.5vw, 88px) !important;
+}
+
+/* 8. Positioning of texts in ledgers in small app window (Dashboard) */
+.dashboard-kpi-grid .stat-card {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+}
+
+.dashboard-kpi-grid .stat-card strong {
+  font-size: clamp(18px, 2vw, 24px) !important;
+  line-height: 1.2 !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.dashboard-kpi-grid .stat-card .stat-meta {
+  white-space: normal !important;
+  line-height: 1.35 !important;
+  word-break: break-word !important;
+}
+
+@media (max-width: 1240px) {
+  .dashboard-top-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboard-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .dashboard-columns {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboard-recent-deliveries table th,
+  .dashboard-recent-deliveries table td {
+    padding-inline: 10px !important;
+    font-size: 12px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* 9. Smooth movement in switching table tabs / table views */
+@keyframes tab-view-smooth-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.owned-trucks-table-card,
+.truck-profitability-card-grid,
+.settings-tab-panel,
+.user-management-tab-content,
+.records-card .table-wrap {
+  animation: tab-view-smooth-enter 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.delivery-status-tab,
+.crew-role-tab,
+.chart-view-mode-toggle button,
+.routex-tab-trigger,
+.settings-nav-item {
+  transition:
+    background-color 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+/* 10. Multi-record selection checkbox & bulk selection action bar */
+.table-select-checkbox {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  accent-color: var(--color-accent, #d97706);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+tr.is-selected > td {
+  background-color: rgba(245, 158, 11, 0.08) !important;
+}
+
+html[data-theme="dark"] tr.is-selected > td {
+  background-color: rgba(245, 158, 11, 0.14) !important;
+}
+
+.bulk-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--color-text-primary, #0f172a);
+  font-size: 12.5px;
+  animation: tab-view-smooth-enter 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.bulk-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+html[data-theme="dark"] .bulk-selection-bar {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.38);
+  color: #f8fafc;
+}
+
+/* 11. Dark mode colors — fix visibility & contrast across workspace */
+html[data-theme="dark"] {
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+}
+
+html[data-theme="dark"] .subtitle,
+html[data-theme="dark"] .empty-state-desc,
+html[data-theme="dark"] .stat-label,
+html[data-theme="dark"] .stat-meta,
+html[data-theme="dark"] .discord-dept-desc,
+html[data-theme="dark"] .discord-perm-desc,
+html[data-theme="dark"] .discord-banner-desc-text,
+html[data-theme="dark"] .truck-spec-text,
+html[data-theme="dark"] table th {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] table td {
+  color: #e2e8f0;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .waybill-code,
+html[data-theme="dark"] .truck-code,
+html[data-theme="dark"] .client-name-label,
+html[data-theme="dark"] .stat-card strong,
+html[data-theme="dark"] .records-heading h2,
+html[data-theme="dark"] .page-intro h1 {
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .ledger-total-badge,
+html[data-theme="dark"] .truck-history-count,
+html[data-theme="dark"] .dropoff-count-badge {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] .search-box,
+html[data-theme="dark"] .rounded-select-trigger,
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+html[data-theme="dark"] .search-box input::placeholder,
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+html[data-theme="dark"] .secondary-button {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #f1f5f9;
+}
+
+html[data-theme="dark"] .secondary-button:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+

@@ -178,6 +178,7 @@ export default function DeliveriesPage() {
   const [returnToParam, setReturnToParam] = useState<string | null>(null);
   const [returnLabelParam, setReturnLabelParam] = useState<string | null>(null);
   const [backdatingModalOpen, setBackdatingModalOpen] = useState(false);
+  const [selectedTripIds, setSelectedTripIds] = useState<Set<string>>(new Set());
   const [, setFlagsVersion] = useState(0);
 
   useEffect(() => {
@@ -952,10 +953,68 @@ export default function DeliveriesPage() {
               message={isSearchBuffering ? "Searching deliveries…" : "Loading deliveries…"}
             />
           ) : (
-            <div className="table-wrap">
+            <>
+              {selectedTripIds.size > 0 && (
+                <div className="bulk-selection-bar" role="region" aria-label="Selected delivery records actions">
+                  <span className="bulk-selection-count">
+                    <strong>{selectedTripIds.size}</strong> delivery record{selectedTripIds.size === 1 ? "" : "s"} selected
+                  </span>
+                  <div className="bulk-selection-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
+                      onClick={() => {
+                        const rows = filteredDeliveries.filter((t) => selectedTripIds.has(t.id));
+                        const text = rows
+                          .map(
+                            (t) =>
+                              `#${t.waybillNumber}\t${t.deliveryDate}\t${t.clientName}\t${t.plateNumber}\t${formatPeso(t.deliveryRate)}\t${formatPeso(t.netIncome)}`,
+                          )
+                          .join("\n");
+                        navigator.clipboard?.writeText(text);
+                        toast.success(`Copied ${rows.length} delivery record(s) to clipboard`);
+                      }}
+                    >
+                      Copy Selected
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ minHeight: "28px", fontSize: "11.5px", padding: "0 10px" }}
+                      onClick={() => setSelectedTripIds(new Set())}
+                    >
+                      Clear selection
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: "36px", textAlign: "center", paddingLeft: "12px", paddingRight: "4px" }}>
+                      <input
+                        type="checkbox"
+                        className="table-select-checkbox"
+                        aria-label="Select all deliveries on page"
+                        checked={
+                          paginatedDeliveries.length > 0 &&
+                          paginatedDeliveries.every((trip) => selectedTripIds.has(trip.id))
+                        }
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedTripIds((prev) => {
+                            const next = new Set(prev);
+                            for (const trip of paginatedDeliveries) {
+                              if (checked) next.add(trip.id);
+                              else next.delete(trip.id);
+                            }
+                            return next;
+                          });
+                        }}
+                      />
+                    </th>
                     <SortableTableHeader label="Waybill" sortKey="waybill" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Date" sortKey="delivery_date" activeSortKey={activeSortKey} direction={activeSortDirection} defaultDirection="desc" onSort={updateTableSort} onReset={resetTableSort} />
                     <SortableTableHeader label="Client" sortKey="client" activeSortKey={activeSortKey} direction={activeSortDirection} onSort={updateTableSort} onReset={resetTableSort} />
@@ -973,7 +1032,7 @@ export default function DeliveriesPage() {
                 <tbody>
                   {filteredDeliveries.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="table-empty-cell">
+                      <td colSpan={13} className="table-empty-cell">
                         <div className="empty-state minimal">
                           <strong className="empty-state-title">No records found</strong>
                           <span className="empty-state-desc">
@@ -986,10 +1045,11 @@ export default function DeliveriesPage() {
                     paginatedDeliveries.map((trip) => {
                     const isIncomplete = isDeliveryIncomplete(trip);
                     const isFinanciallyIncomplete = !isDeliveryFinanciallyComplete(trip);
+                    const isRowSelected = selectedTripIds.has(trip.id);
                     return (
                       <tr
                         key={trip.id}
-                        className={`record-row ${isIncomplete ? "is-incomplete" : ""}`}
+                        className={`record-row ${isIncomplete ? "is-incomplete" : ""}${isRowSelected ? " is-selected" : ""}`}
                         tabIndex={0}
                         onClick={() => {
                           setActiveKpi(null);
@@ -1003,6 +1063,26 @@ export default function DeliveriesPage() {
                           }
                         }}
                       >
+                        <td
+                          style={{ width: "36px", textAlign: "center", paddingLeft: "12px", paddingRight: "4px" }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            className="table-select-checkbox"
+                            aria-label={`Select waybill #${trip.waybillNumber}`}
+                            checked={isRowSelected}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setSelectedTripIds((prev) => {
+                                const next = new Set(prev);
+                                if (checked) next.add(trip.id);
+                                else next.delete(trip.id);
+                                return next;
+                              });
+                            }}
+                          />
+                        </td>
                         <td className="cell-waybill">
                           <div className="waybill-badge-stack">
                             <strong className="waybill-code">#{trip.waybillNumber}</strong>
@@ -1266,6 +1346,7 @@ export default function DeliveriesPage() {
               </tbody>
               </table>
             </div>
+            </>
           )}
 
           <TablePagination
