@@ -240,26 +240,43 @@ export async function POST(request: Request) {
       const now = new Date().toISOString();
 
       // 2. Link RouteX profile in user_profiles table with the Supabase Auth user UUID
-      const { data: profileData, error: profileError } = await adminSupabase
+      const profilePayload: Record<string, any> = {
+        id: userId,
+        email,
+        username,
+        normalized_username: username.toLowerCase(),
+        full_name: fullName,
+        role: primaryRole,
+        roles: assignedRoles,
+        is_active: true,
+        must_change_password: true,
+        is_superadmin: false,
+        designation: parsed.data.designation?.trim() || undefined,
+        created_at: now,
+        updated_at: now,
+      };
+
+      if (parsed.data.phoneNumber) {
+        profilePayload.phone_number = formatPhoneNumber(parsed.data.phoneNumber);
+      }
+
+      let { data: profileData, error: profileError } = await adminSupabase
         .from("user_profiles")
-        .insert({
-          id: userId,
-          email,
-          username,
-          normalized_username: username.toLowerCase(),
-          full_name: fullName,
-          role: primaryRole,
-          roles: assignedRoles,
-          is_active: true,
-          must_change_password: true,
-          is_superadmin: false,
-          designation: parsed.data.designation?.trim() || undefined,
-          phone_number: parsed.data.phoneNumber ? formatPhoneNumber(parsed.data.phoneNumber) : undefined,
-          created_at: now,
-          updated_at: now,
-        })
+        .insert(profilePayload)
         .select("id, email, username, full_name, role, roles, is_active, must_change_password, created_at")
         .single();
+
+      // Gracefully handle schema cache column race or edge cases by falling back to core fields
+      if (profileError && profileError.message.includes("phone_number")) {
+        delete profilePayload.phone_number;
+        const retry = await adminSupabase
+          .from("user_profiles")
+          .insert(profilePayload)
+          .select("id, email, username, full_name, role, roles, is_active, must_change_password, created_at")
+          .single();
+        profileData = retry.data;
+        profileError = retry.error;
+      }
 
       // 3. Coordinate reliability: If profile creation fails, perform safe rollback to prevent orphaned auth accounts
       if (profileError || !profileData) {
