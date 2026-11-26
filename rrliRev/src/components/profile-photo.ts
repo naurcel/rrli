@@ -29,26 +29,47 @@ export function getDefaultAvatarUrl(username?: string | null): string | null {
   return null;
 }
 
-export function validateAndReadProfilePhotoFile(file: File): Promise<string> {
+export async function validateAndReadProfilePhotoFile(file: File): Promise<string> {
   const validTypes = ["image/jpeg", "image/png", "image/webp"];
   if (!validTypes.includes(file.type)) {
-    return Promise.reject(
-      new Error("Invalid image format. Supported formats are JPG, PNG, and WebP."),
-    );
+    throw new Error("Invalid image format. Supported formats are JPG, PNG, and WebP.");
   }
 
   if (file.size > 5 * 1024 * 1024) {
-    return Promise.reject(
-      new Error("Image file is too large. Maximum allowed size is 5MB."),
-    );
+    throw new Error("Image file is too large. Maximum allowed size is 5MB.");
   }
 
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Unable to read image file."));
-    reader.readAsDataURL(file);
-  });
+  // Use fast object URL decoding and pre-scale large 4K/phone photos to max 1024px
+  // so the interactive cropper renders and drags with zero texture lag.
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Unable to open image file."));
+      el.src = objectUrl;
+    });
+
+    const maxWorkingDim = 1024;
+    const natW = image.naturalWidth || 320;
+    const natH = image.naturalHeight || 320;
+    const scale = Math.min(1, maxWorkingDim / Math.max(natW, natH));
+    const targetW = Math.max(1, Math.round(natW * scale));
+    const targetH = Math.max(1, Math.round(natH * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Photo processing is unavailable in this browser.");
+    }
+
+    ctx.drawImage(image, 0, 0, targetW, targetH);
+    return canvas.toDataURL("image/jpeg", 0.92);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 /**

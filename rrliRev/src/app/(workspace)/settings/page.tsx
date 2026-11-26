@@ -334,12 +334,28 @@ export default function SettingsPage() {
     }
   }
 
-  // Save Cropped Profile Photo
+  // Save Cropped Profile Photo (Instant Optimistic Update + Background Persist)
   async function handleSaveCroppedPhoto(dataUrl: string) {
+    const previousAvatar = currentAvatar;
     setPhotoFeedback(null);
-    setPhotoUploading(true);
-    setPreviewUrl(dataUrl);
 
+    // 1. Close cropper & update UI immediately (0ms perceived latency)
+    setCropSourceUrl(null);
+    setCurrentAvatar(dataUrl);
+    setPreviewUrl(null);
+    try {
+      window.localStorage.setItem(getProfileStorageKey(actor.id), dataUrl);
+    } catch {
+      // Ignore
+    }
+    window.dispatchEvent(
+      new CustomEvent(PROFILE_PHOTO_EVENT, {
+        detail: { avatarUrl: dataUrl, userId: actor.id },
+      }),
+    );
+
+    // 2. Persist to server in background
+    setPhotoUploading(true);
     try {
       const res = await fetch("/api/auth/account", {
         method: "POST",
@@ -355,24 +371,10 @@ export default function SettingsPage() {
         throw new Error(data?.message ?? "Unable to save profile photo.");
       }
 
-      setCurrentAvatar(dataUrl);
-      setPreviewUrl(null);
-      setCropSourceUrl(null);
-      try {
-        window.localStorage.setItem(getProfileStorageKey(actor.id), dataUrl);
-      } catch {
-        // Ignore
-      }
-
-      window.dispatchEvent(
-        new CustomEvent(PROFILE_PHOTO_EVENT, {
-          detail: { avatarUrl: dataUrl, userId: actor.id },
-        }),
-      );
-
       setPhotoFeedback({ tone: "success", text: "Profile picture updated successfully." });
     } catch (err) {
-      setPreviewUrl(null);
+      // Roll back on failure
+      setCurrentAvatar(previousAvatar);
       setPhotoFeedback({
         tone: "error",
         text: err instanceof Error ? err.message : "Error saving photo.",

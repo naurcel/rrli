@@ -892,13 +892,12 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(15, 23, 21, 0.55);
-  backdrop-filter: blur(6px);
+  background: rgba(15, 23, 21, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  animation: setup-element-reveal 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: setup-element-reveal 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .profile-cropper-dialog {
