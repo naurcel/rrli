@@ -13,7 +13,7 @@ import {
   getDeliveryPageRange,
   type DeliveryListQuery,
 } from "@/features/deliveries/delivery-query";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type DeliveryLedgerItem = DeliveryTripRecord & {
   clientId: string;
@@ -176,7 +176,7 @@ function mapLedgerRow(
 export async function listDeliveryRecords(
   input: DeliveryListQuery,
 ): Promise<DeliveryListResult> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createAdminSupabaseClient();
   const { from, to } = getDeliveryPageRange(input);
 
   let query = supabase
