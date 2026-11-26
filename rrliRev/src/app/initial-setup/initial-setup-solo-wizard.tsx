@@ -12,10 +12,11 @@ import { PasswordCriteriaList } from "@/components/password-criteria-list";
 import { RoundedSelect } from "@/components/rounded-select";
 import {
   getUserInitials,
-  resizeProfilePhotoFile,
+  validateAndReadProfilePhotoFile,
   getProfileStorageKey,
   PROFILE_PHOTO_EVENT,
 } from "@/components/profile-photo";
+import { ProfilePhotoCropperModal } from "@/components/profile-photo-cropper";
 
 interface ActorInfo {
   id: string;
@@ -52,6 +53,8 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
 
   // Stage 2: Profile Photo
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [rawPhotoSource, setRawPhotoSource] = useState<string | null>(null);
+  const [cropModalSource, setCropModalSource] = useState<string | null>(null);
   const [photoProcessing, setPhotoProcessing] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -188,18 +191,25 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
     setPhotoError(null);
     setPhotoProcessing(true);
     try {
-      const dataUrl = await resizeProfilePhotoFile(file, 320);
-      setAvatarUrl(dataUrl);
-      toast.success("Profile photo ready", {
-        description: "Your picture will be saved with your account setup.",
-      });
+      const rawDataUrl = await validateAndReadProfilePhotoFile(file);
+      setRawPhotoSource(rawDataUrl);
+      setCropModalSource(rawDataUrl);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unable to process photo file.";
       setPhotoError(msg);
       toast.error("Photo upload failed", { description: msg });
     } finally {
       setPhotoProcessing(false);
+      e.target.value = "";
     }
+  }
+
+  function handleConfirmCrop(croppedDataUrl: string) {
+    setAvatarUrl(croppedDataUrl);
+    setCropModalSource(null);
+    toast.success("Profile photo ready", {
+      description: "Your picture will be saved with your account setup.",
+    });
   }
 
   function handleContinueFromPhoto(e: FormEvent) {
@@ -612,19 +622,32 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                   </label>
 
                   {avatarUrl ? (
-                    <button
-                      type="button"
-                      className="native-setup-back-btn"
-                      onClick={() => setAvatarUrl(null)}
-                      style={{ padding: "0 18px", height: "44px", fontSize: "13.5px" }}
-                    >
-                      Remove
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="native-setup-back-btn"
+                        onClick={() => setCropModalSource(rawPhotoSource || avatarUrl)}
+                        style={{ padding: "0 16px", height: "44px", fontSize: "13.5px" }}
+                      >
+                        Crop & Move
+                      </button>
+                      <button
+                        type="button"
+                        className="native-setup-back-btn"
+                        onClick={() => {
+                          setAvatarUrl(null);
+                          setRawPhotoSource(null);
+                        }}
+                        style={{ padding: "0 16px", height: "44px", fontSize: "13.5px" }}
+                      >
+                        Remove
+                      </button>
+                    </>
                   ) : null}
                 </div>
 
                 <p className="native-setup-avatar-hint">
-                  JPG, PNG, or WebP up to 5MB. Automatically centered and cropped.
+                  JPG, PNG, or WebP up to 5MB. Drag to reposition or use the edges to crop.
                 </p>
               </div>
 
@@ -1017,6 +1040,12 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
           </div>
         ) : null}
       </main>
+
+      <ProfilePhotoCropperModal
+        imageSrc={cropModalSource}
+        onCancel={() => setCropModalSource(null)}
+        onConfirm={handleConfirmCrop}
+      />
     </div>
   );
 }

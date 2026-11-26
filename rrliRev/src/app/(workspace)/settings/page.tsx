@@ -25,8 +25,9 @@ import {
   getProfileStorageKey,
   getUserInitials,
   PROFILE_PHOTO_EVENT,
-  resizeProfilePhotoFile,
+  validateAndReadProfilePhotoFile,
 } from "@/components/profile-photo";
+import { ProfilePhotoCropperModal } from "@/components/profile-photo-cropper";
 import { formatPhoneNumber } from "@/lib/format";
 import {
   evaluatePasswordCriteria,
@@ -76,6 +77,8 @@ export default function SettingsPage() {
     return actor.avatarUrl ?? getDefaultAvatarUrl(actor.username);
   });
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
+  const [lastRawPhotoUrl, setLastRawPhotoUrl] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoFeedback, setPhotoFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
@@ -310,18 +313,34 @@ export default function SettingsPage() {
       .catch(() => {});
   }, [actor.id]);
 
-  // Handle Profile Photo Upload / Replace
+  // Handle Profile Photo Upload / Replace (Opens interactive drag & edge cropper)
   async function handlePhotoSelect(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setPhotoFeedback(null);
-    setPhotoUploading(true);
 
     try {
-      const dataUrl = await resizeProfilePhotoFile(file, 320);
-      setPreviewUrl(dataUrl);
+      const rawDataUrl = await validateAndReadProfilePhotoFile(file);
+      setLastRawPhotoUrl(rawDataUrl);
+      setCropSourceUrl(rawDataUrl);
+    } catch (err) {
+      setPhotoFeedback({
+        tone: "error",
+        text: err instanceof Error ? err.message : "Error reading photo file.",
+      });
+    } finally {
+      e.target.value = "";
+    }
+  }
 
+  // Save Cropped Profile Photo
+  async function handleSaveCroppedPhoto(dataUrl: string) {
+    setPhotoFeedback(null);
+    setPhotoUploading(true);
+    setPreviewUrl(dataUrl);
+
+    try {
       const res = await fetch("/api/auth/account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -338,6 +357,7 @@ export default function SettingsPage() {
 
       setCurrentAvatar(dataUrl);
       setPreviewUrl(null);
+      setCropSourceUrl(null);
       try {
         window.localStorage.setItem(getProfileStorageKey(actor.id), dataUrl);
       } catch {
@@ -355,12 +375,10 @@ export default function SettingsPage() {
       setPreviewUrl(null);
       setPhotoFeedback({
         tone: "error",
-        text: err instanceof Error ? err.message : "Error processing photo.",
+        text: err instanceof Error ? err.message : "Error saving photo.",
       });
     } finally {
       setPhotoUploading(false);
-      // Reset input
-      e.target.value = "";
     }
   }
 
@@ -803,15 +821,25 @@ export default function SettingsPage() {
             </label>
 
             {activeAvatar ? (
-              <button
-                type="button"
-                className="settings-photo-remove-btn"
-                onClick={handleRemovePhoto}
-                disabled={photoUploading}
-                title="Remove photo"
-              >
-                Remove
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="secondary-button settings-photo-btn"
+                  onClick={() => setCropSourceUrl(lastRawPhotoUrl || activeAvatar)}
+                  disabled={photoUploading}
+                >
+                  Crop & Move
+                </button>
+                <button
+                  type="button"
+                  className="settings-photo-remove-btn"
+                  onClick={handleRemovePhoto}
+                  disabled={photoUploading}
+                  title="Remove photo"
+                >
+                  Remove
+                </button>
+              </>
             ) : null}
           </div>
 
@@ -1408,6 +1436,13 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <ProfilePhotoCropperModal
+        imageSrc={cropSourceUrl}
+        saving={photoUploading}
+        onCancel={() => setCropSourceUrl(null)}
+        onConfirm={handleSaveCroppedPhoto}
+      />
     </>
   );
 }

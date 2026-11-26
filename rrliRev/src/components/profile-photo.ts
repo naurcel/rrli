@@ -29,26 +29,34 @@ export function getDefaultAvatarUrl(username?: string | null): string | null {
   return null;
 }
 
-/**
- * Validates, resizes, and center-crops an uploaded photo to a standardized square avatar.
- * Returns a compact JPEG data URL suitable for immediate preview and server storage.
- */
-export async function resizeProfilePhotoFile(file: File, targetSize = 320): Promise<string> {
+export function validateAndReadProfilePhotoFile(file: File): Promise<string> {
   const validTypes = ["image/jpeg", "image/png", "image/webp"];
   if (!validTypes.includes(file.type)) {
-    throw new Error("Invalid image format. Supported formats are JPG, PNG, and WebP.");
+    return Promise.reject(
+      new Error("Invalid image format. Supported formats are JPG, PNG, and WebP."),
+    );
   }
 
   if (file.size > 5 * 1024 * 1024) {
-    throw new Error("Image file is too large. Maximum allowed size is 5MB.");
+    return Promise.reject(
+      new Error("Image file is too large. Maximum allowed size is 5MB."),
+    );
   }
 
-  const source = await new Promise<string>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(new Error("Unable to read image file."));
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Validates, resizes, and center-crops an uploaded photo to a standardized square avatar.
+ * Returns a compact JPEG data URL suitable for immediate preview and server storage.
+ */
+export async function resizeProfilePhotoFile(file: File, targetSize = 320): Promise<string> {
+  const source = await validateAndReadProfilePhotoFile(file);
 
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
