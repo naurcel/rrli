@@ -11,10 +11,16 @@ import {
   updateContactInfoSchema,
 } from "@/lib/auth/auth-schemas";
 import { hashWithArgon2id } from "@/lib/auth/argon2id";
-import { normalizeSecurityAnswer, validateUsernameFormat } from "@/lib/auth/password-policy";
+import {
+  generateBackupKey,
+  normalizeBackupKey,
+  normalizeSecurityAnswer,
+  validateUsernameFormat,
+} from "@/lib/auth/password-policy";
 import { formatPhoneNumber } from "@/lib/format";
 import {
   completeInitialServerAccountSetup,
+  generateServerAccountBackupKey,
   updateServerAccountAvatar,
   updateServerAccountContact,
   updateServerAccountPassword,
@@ -524,14 +530,18 @@ export async function POST(request: Request) {
           );
         }
 
+        const nowIso = new Date().toISOString();
+        const rawBackupKey = generateBackupKey();
+        const backupKeyHash = hashWithArgon2id(normalizeBackupKey(rawBackupKey));
         const answerHash = hashWithArgon2id(normalizeSecurityAnswer(answer));
+
         const { data: updatedProfile, error: profileError } = await supabase
           .from("user_profiles")
           .update({
             must_change_password: false,
             security_question: question.trim(),
             security_answer_hash: answerHash,
-            password_changed_at: new Date().toISOString(),
+            password_changed_at: nowIso,
             avatar_url: avatarUrl || undefined,
           })
           .eq("id", actor.id)
@@ -545,7 +555,21 @@ export async function POST(request: Request) {
           );
         }
 
+        // Persist emergency backup key hash (non-blocking if schema cache hasn't refreshed column)
+        try {
+          await supabase
+            .from("user_profiles")
+            .update({
+              backup_key_hash: backupKeyHash,
+              backup_key_generated_at: nowIso,
+            })
+            .eq("id", actor.id);
+        } catch {
+          // Non-fatal if column is unavailable in older schema cache
+        }
+
         // Also update memory store if account exists there (for hybrid/tests)
+        let activeBackupKey = rawBackupKey;
         try {
           completeInitialServerAccountSetup(
             actor.id,
@@ -555,6 +579,10 @@ export async function POST(request: Request) {
           );
           if (avatarUrl) {
             updateServerAccountAvatar(actor.id, avatarUrl);
+          }
+          const memKeyRes = generateServerAccountBackupKey(actor.username || actor.email);
+          if (memKeyRes.ok) {
+            activeBackupKey = memKeyRes.backupKey;
           }
         } catch {
           // Ignore if not present in memory store
@@ -570,13 +598,14 @@ export async function POST(request: Request) {
           changes: {
             username: actor.username,
             userId: actor.id,
-            completedAt: new Date().toISOString(),
+            completedAt: nowIso,
           },
         });
 
         return NextResponse.json({
           ok: true,
           message: "Initial account setup completed successfully.",
+          backupKey: activeBackupKey,
           profile: updatedProfile || {
             id: actor.id,
             username: actor.username,
@@ -585,6 +614,7 @@ export async function POST(request: Request) {
             role: actor.role,
             mustChangePassword: false,
             hasSecurityQuestion: true,
+            hasBackupKey: true,
             avatarUrl: avatarUrl || actor.avatarUrl || null,
           },
         });
@@ -612,6 +642,9 @@ export async function POST(request: Request) {
       updateServerAccountAvatar(actor.id, avatarUrl);
     }
 
+    const backupKeyRes = generateServerAccountBackupKey(actor.username || actor.email);
+    const issuedBackupKey = backupKeyRes.ok ? backupKeyRes.backupKey : generateBackupKey();
+
     recordAuditEntry({
       actorId: actor.id,
       actorEmail: actor.email,
@@ -629,6 +662,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: "Initial account setup completed successfully.",
+      backupKey: issuedBackupKey,
       profile: result.profile,
     });
   }

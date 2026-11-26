@@ -3,7 +3,7 @@ import { requireAuthenticatedActor } from "@/lib/auth/server-session";
 import { InitialSetupSoloWizard } from "./initial-setup-solo-wizard";
 
 export const metadata = {
-  title: "Initial Setup | RouteX",
+  title: "Welcome — Initial Setup",
   description: "Complete your one-time permanent password and account recovery setup.",
 };
 

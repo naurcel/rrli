@@ -1,7 +1,7 @@
 /* ============================================================================
-   RouteX Immersive Initial Setup Experience
+   Immersive Initial Setup Experience
    Device-like, full-screen setup flow with breathing Gemini-style ambient aurora,
-   smooth blur-fade transitions, and tactile Neumorphic design.
+   interstitial sentence transitions, staggered element reveals, and Neumorphism.
    ============================================================================ */
 
 .solo-setup-viewport {
@@ -22,7 +22,7 @@
 
 /* ============================================================================
    Living, Breathing Gemini-Style Ambient Aurora Mesh
-   Subtle organic drift and pulses using RouteX amber/terracotta/gold colors
+   Subtle organic drift and pulses using warm amber, honey, and terracotta
    ============================================================================ */
 .setup-gemini-mesh {
   position: fixed;
@@ -30,53 +30,53 @@
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.82;
+  opacity: 0.86;
 }
 
 .setup-gemini-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(85px);
+  filter: blur(88px);
   will-change: transform, opacity;
 }
 
 /* Primary Amber / Honey Orb (Breathes and floats top-left to center) */
 .setup-gemini-orb.orb-primary {
-  width: clamp(380px, 48vw, 620px);
-  height: clamp(380px, 48vw, 620px);
-  top: -8%;
-  left: 15%;
-  background: radial-gradient(circle, rgba(245, 158, 11, 0.28) 0%, rgba(251, 191, 36, 0.12) 50%, transparent 72%);
+  width: clamp(400px, 50vw, 650px);
+  height: clamp(400px, 50vw, 650px);
+  top: -10%;
+  left: 12%;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.3) 0%, rgba(251, 191, 36, 0.13) 50%, transparent 72%);
   animation: gemini-aurora-breathe-1 18s ease-in-out infinite alternate;
 }
 
 /* Secondary Terracotta / Warm Clay Orb (Breathes bottom-right) */
 .setup-gemini-orb.orb-secondary {
-  width: clamp(420px, 52vw, 680px);
-  height: clamp(420px, 52vw, 680px);
-  bottom: -12%;
-  right: 12%;
-  background: radial-gradient(circle, rgba(217, 119, 6, 0.22) 0%, rgba(180, 83, 9, 0.08) 55%, transparent 75%);
+  width: clamp(440px, 54vw, 700px);
+  height: clamp(440px, 54vw, 700px);
+  bottom: -14%;
+  right: 10%;
+  background: radial-gradient(circle, rgba(217, 119, 6, 0.24) 0%, rgba(180, 83, 9, 0.09) 55%, transparent 75%);
   animation: gemini-aurora-drift-2 22s ease-in-out infinite alternate;
 }
 
 /* Subtle Peach / Apricot Center Orb (Follows the focal stage area) */
 .setup-gemini-orb.orb-accent {
-  width: clamp(340px, 42vw, 540px);
-  height: clamp(340px, 42vw, 540px);
-  top: 38%;
+  width: clamp(360px, 44vw, 560px);
+  height: clamp(360px, 44vw, 560px);
+  top: 42%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(254, 215, 170, 0.35) 0%, rgba(245, 158, 11, 0.1) 50%, transparent 70%);
+  background: radial-gradient(circle, rgba(254, 215, 170, 0.38) 0%, rgba(245, 158, 11, 0.12) 50%, transparent 70%);
   animation: gemini-aurora-pulse-center 14s ease-in-out infinite alternate;
 }
 
-/* Whisper of Emerald Glow (Subtle accent representing active logistics/status) */
+/* Whisper of Emerald Glow (Subtle accent) */
 .setup-gemini-orb.orb-subtle {
   width: clamp(300px, 36vw, 460px);
   height: clamp(300px, 36vw, 460px);
-  top: 18%;
-  right: 22%;
+  top: 16%;
+  right: 20%;
   background: radial-gradient(circle, rgba(16, 185, 129, 0.11) 0%, rgba(245, 158, 11, 0.05) 55%, transparent 70%);
   animation: gemini-aurora-drift-emerald 20s ease-in-out infinite alternate;
 }
@@ -87,11 +87,11 @@
     opacity: 0.85;
   }
   50% {
-    transform: translate(50px, 40px) scale(1.12);
+    transform: translate(55px, 45px) scale(1.14);
     opacity: 1;
   }
   100% {
-    transform: translate(-30px, 70px) scale(0.96);
+    transform: translate(-35px, 75px) scale(0.95);
     opacity: 0.88;
   }
 }
@@ -102,27 +102,27 @@
     opacity: 0.8;
   }
   50% {
-    transform: translate(-60px, -50px) scale(1.15);
+    transform: translate(-65px, -55px) scale(1.16);
     opacity: 1;
   }
   100% {
-    transform: translate(40px, -30px) scale(0.92);
+    transform: translate(45px, -35px) scale(0.92);
     opacity: 0.82;
   }
 }
 
 @keyframes gemini-aurora-pulse-center {
   0% {
-    transform: translate(-50%, -50%) scale(0.92);
+    transform: translate(-50%, -50%) scale(0.9);
     opacity: 0.6;
   }
   50% {
-    transform: translate(-48%, -52%) scale(1.18);
-    opacity: 0.95;
+    transform: translate(-48%, -52%) scale(1.2);
+    opacity: 0.96;
   }
   100% {
     transform: translate(-52%, -48%) scale(0.98);
-    opacity: 0.7;
+    opacity: 0.72;
   }
 }
 
@@ -149,7 +149,7 @@
   z-index: 1;
   width: 100%;
   max-width: 540px;
-  min-height: calc(100svh - clamp(48px, 10vh, 112px));
+  min-height: calc(100svh - clamp(64px, 12vh, 128px));
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -159,17 +159,23 @@
 }
 
 /* ============================================================================
-   Deliberate, Serene Blur-Fade Transitions
-   Takes its time between steps for an intentional, premium feel
+   Deliberate, Serene Blur-Fade Transitions & Staggered Element Reveals
    ============================================================================ */
 .native-setup-stage {
   width: 100%;
   margin: auto 0;
-  padding: 16px 0;
-  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
-              filter 0.55s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 20px 0;
+  transition: opacity 0.64s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.64s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.64s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: opacity, filter, transform;
+}
+
+.native-setup-stage.is-interstitial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
 }
 
 .native-setup-transition-idle {
@@ -180,21 +186,59 @@
 
 .native-setup-transition-blur-out {
   opacity: 0;
-  filter: blur(14px);
-  transform: translateY(-8px) scale(0.985);
+  filter: blur(16px);
+  transform: translateY(-10px) scale(0.985);
   pointer-events: none;
-  transition: opacity 0.38s cubic-bezier(0.4, 0, 0.2, 1),
-              filter 0.38s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.44s cubic-bezier(0.4, 0, 0.2, 1),
+              filter 0.44s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.44s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .native-setup-transition-blur-in {
   opacity: 1;
   filter: blur(0px);
   transform: translateY(0) scale(1);
-  transition: opacity 0.58s cubic-bezier(0.16, 1, 0.3, 1),
-              filter 0.58s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.58s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.66s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.66s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.66s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Staggered element-by-element blur-fade reveal inside each stage */
+@keyframes setup-element-reveal {
+  0% {
+    opacity: 0;
+    filter: blur(12px);
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0);
+  }
+}
+
+.setup-stagger {
+  animation: setup-element-reveal 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.setup-stagger-1 {
+  animation-delay: 0.04s;
+}
+
+.setup-stagger-2 {
+  animation-delay: 0.13s;
+}
+
+.setup-stagger-3 {
+  animation-delay: 0.22s;
+}
+
+.setup-stagger-4 {
+  animation-delay: 0.31s;
+}
+
+.setup-stagger-5 {
+  animation-delay: 0.4s;
 }
 
 .native-setup-content-block {
@@ -202,33 +246,56 @@
 }
 
 /* ============================================================================
-   Personal, Warm Typography & Badges
+   Interstitial Sentence Screen (Before / After Each Stage)
+   ============================================================================ */
+.native-setup-interstitial {
+  width: 100%;
+  text-align: center;
+  padding: 48px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.interstitial-sentence {
+  font-size: clamp(30px, 5.2vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.18;
+  color: var(--color-text-primary, #15201d);
+  margin: 0;
+  max-width: 520px;
+}
+
+.interstitial-highlight {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.interstitial-subcaption {
+  font-size: clamp(14.5px, 2vw, 16px);
+  font-weight: 500;
+  color: var(--color-text-muted, #74827d);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================================
+   Visual Hierarchy: Stage Typography
    ============================================================================ */
 .native-setup-header {
   text-align: left;
-  margin-bottom: 28px;
-}
-
-.native-setup-personal-pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--color-accent, #b45309);
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.24);
-  padding: 4px 12px;
-  border-radius: 999px;
-  margin-bottom: 12px;
-  box-shadow: 2px 2px 6px rgba(180, 83, 9, 0.06), -2px -2px 6px rgba(255, 255, 255, 0.8);
+  margin-bottom: 30px;
 }
 
 .native-setup-hero-title {
-  font-size: clamp(28px, 4.5vw, 36px);
+  font-size: clamp(27px, 4.4vw, 35px);
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.032em;
   color: var(--color-text-primary, #15201d);
   margin: 0 0 10px 0;
   line-height: 1.18;
@@ -239,7 +306,7 @@
   line-height: 1.62;
   color: var(--color-text-secondary, #586762);
   margin: 0;
-  max-width: 510px;
+  max-width: 500px;
 }
 
 /* ============================================================================
@@ -305,7 +372,6 @@
   border: 1px solid rgba(226, 232, 240, 0.85);
   border-radius: 14px;
   outline: none;
-  /* Neumorphic Inset Depth */
   box-shadow: 
     inset 2.5px 2.5px 6px rgba(20, 32, 29, 0.045),
     inset -2.5px -2.5px 6px rgba(255, 255, 255, 0.95),
@@ -400,12 +466,196 @@
 }
 
 /* ============================================================================
+   Stage 4: Emergency Backup Key Save & High-Emphasis Warning
+   ============================================================================ */
+.native-setup-backup-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(254, 243, 199, 0.72) 0%, rgba(255, 251, 235, 0.9) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.38);
+  box-shadow: 
+    4px 4px 14px rgba(180, 83, 9, 0.06),
+    -4px -4px 14px rgba(255, 255, 255, 0.9);
+}
+
+.backup-warning-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.backup-warning-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.backup-warning-text strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #92400e;
+  letter-spacing: -0.01em;
+}
+
+.backup-warning-text p {
+  font-size: 13px;
+  line-height: 1.52;
+  color: #78350f;
+  margin: 0;
+}
+
+/* Neumorphic Backup Key Vault */
+.native-setup-backup-vault {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 20px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 
+    inset 3px 3px 8px rgba(20, 32, 29, 0.045),
+    inset -3px -3px 8px rgba(255, 255, 255, 0.98),
+    0 8px 24px rgba(20, 32, 29, 0.04);
+}
+
+.backup-vault-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted, #74827d);
+}
+
+.backup-vault-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(20px, 3.8vw, 25px);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--color-text-primary, #15201d);
+  padding: 12px 22px;
+  border-radius: 12px;
+  background: var(--color-page, #f7f8fa);
+  border: 1px dashed rgba(180, 83, 9, 0.32);
+  user-select: all;
+  text-align: center;
+  word-break: break-all;
+}
+
+.backup-vault-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.native-setup-vault-btn {
+  height: 40px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 11px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: #ffffff;
+  color: var(--color-text-primary, #15201d);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 
+    3px 3px 8px rgba(0, 0, 0, 0.04),
+    -3px -3px 8px rgba(255, 255, 255, 0.95);
+  transition: all 0.16s ease;
+}
+
+.native-setup-vault-btn:hover {
+  border-color: rgba(245, 158, 11, 0.45);
+  color: var(--color-accent, #b45309);
+  transform: translateY(-1px);
+}
+
+.native-setup-vault-btn.active {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #059669;
+}
+
+/* Tactile Acknowledgement Checkbox */
+.native-setup-confirm-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.native-setup-confirm-check:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.native-setup-confirm-check input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.confirm-check-box {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1.5px solid rgba(203, 213, 225, 0.95);
+  box-shadow: inset 1.5px 1.5px 3px rgba(0, 0, 0, 0.05);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: transparent;
+  transition: all 0.16s ease;
+}
+
+.native-setup-confirm-check input:checked + .confirm-check-box {
+  background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+  border-color: #b45309;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(180, 83, 9, 0.28);
+}
+
+.confirm-check-label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.48;
+  color: var(--color-text-secondary, #586762);
+}
+
+/* ============================================================================
    Neumorphic Action Buttons
    ============================================================================ */
 .native-setup-actions {
   display: flex;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .native-setup-actions.single button {
@@ -419,7 +669,7 @@
 
 /* Elevated Tactile Neumorphic Primary Button */
 .native-setup-primary-btn {
-  height: 50px;
+  height: 52px;
   padding: 0 28px;
   display: inline-flex;
   align-items: center;
@@ -469,7 +719,7 @@
 
 /* Extruded Soft Neumorphic Back / Secondary Button */
 .native-setup-back-btn {
-  height: 50px;
+  height: 52px;
   padding: 0 22px;
   display: inline-flex;
   align-items: center;
@@ -517,7 +767,6 @@
   padding: 20px 0;
 }
 
-/* Soft sunken well holding the avatar */
 .native-setup-avatar-well {
   padding: 10px;
   border-radius: 50%;
@@ -596,91 +845,13 @@
   border-width: 0;
 }
 
-/* ============================================================================
-   Step 4: Celebration / Activation
-   ============================================================================ */
-.native-complete-viewport {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 40px 0;
-  box-sizing: border-box;
-}
-
-.native-complete-halo {
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 24px;
-  box-shadow: 
-    0 0 32px rgba(16, 185, 129, 0.25),
-    4px 4px 14px rgba(0, 0, 0, 0.04),
-    -4px -4px 14px rgba(255, 255, 255, 0.9);
-  animation: setup-halo-pulse 2.4s infinite ease-in-out;
-}
-
-@keyframes setup-halo-pulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 0 24px rgba(16, 185, 129, 0.22);
-  }
-  50% {
-    transform: scale(1.06);
-    box-shadow: 0 0 42px rgba(16, 185, 129, 0.42);
-  }
-}
-
-.native-progress-track {
-  width: 100%;
-  max-width: 280px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(226, 232, 240, 0.7);
-  box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.08);
-  margin: 32px 0 14px 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.native-progress-bar-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  width: 100%;
-  background: linear-gradient(90deg, #f59e0b, #10b981);
-  border-radius: 999px;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-  animation: setup-bar-load 2s ease-in-out infinite;
-}
-
-@keyframes setup-bar-load {
-  0% { transform: translateX(-100%); }
-  50% { transform: translateX(0%); }
-  100% { transform: translateX(100%); }
-}
-
-.native-launching-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-muted, #74827d);
-  letter-spacing: 0.02em;
-}
-
 .native-setup-exiting-dashboard {
   opacity: 0;
-  filter: blur(12px);
+  filter: blur(14px);
   transform: scale(0.98);
-  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
-              filter 0.8s cubic-bezier(0.22, 1, 0.36, 1),
-              transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+              filter 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ============================================================================
@@ -689,10 +860,10 @@
 @media (prefers-reduced-motion: reduce) {
   .setup-gemini-orb,
   .native-setup-stage,
+  .setup-stagger,
   .native-setup-primary-btn,
   .native-setup-back-btn,
-  .native-complete-halo,
-  .native-progress-bar-fill,
+  .native-setup-vault-btn,
   .native-setup-exiting-dashboard {
     animation: none !important;
     transition: none !important;
