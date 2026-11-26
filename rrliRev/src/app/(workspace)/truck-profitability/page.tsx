@@ -63,8 +63,6 @@ import {
 } from "@/features/deliveries/driver-registry";
 import {
   getTruckStorageCapability,
-  OWNED_TRUCKS,
-  SUBCONTRACTED_TRUCKS,
   TRUCK_CLASSIFICATION_FILTER_OPTIONS,
   TRUCK_PERFORMANCE_FILTER_OPTIONS,
   type FleetTruck,
@@ -592,18 +590,7 @@ export default function TruckProfitabilityPage() {
       .then((res) => res.json())
       .then((data: { ok?: boolean; trucks?: FleetTruck[] }) => {
         if (data?.ok && Array.isArray(data.trucks)) {
-          const basePlates = new Set([
-            ...OWNED_TRUCKS.map((t) => t.plateNumber.toUpperCase()),
-            ...SUBCONTRACTED_TRUCKS.map((t) => t.plateNumber.toUpperCase()),
-          ]);
-          const newFromApi = data.trucks.filter(
-            (t) => !basePlates.has(t.plateNumber.toUpperCase()),
-          );
-          setExtraTrucks((prev) => {
-            const seen = new Set(prev.map((t) => t.plateNumber.toUpperCase()));
-            const toAdd = newFromApi.filter((t) => !seen.has(t.plateNumber.toUpperCase()));
-            return [...prev, ...toAdd];
-          });
+          setExtraTrucks(data.trucks);
         }
       })
       .catch(() => {});
@@ -641,19 +628,7 @@ export default function TruckProfitabilityPage() {
   }, []);
 
   const allFleetTrucks = useMemo(() => {
-    const byId = new Map<string, FleetTruck>();
-    for (const truck of [...OWNED_TRUCKS, ...SUBCONTRACTED_TRUCKS]) {
-      byId.set(truck.id, truck);
-    }
-    for (const truck of extraTrucks) {
-      for (const [key, existing] of byId.entries()) {
-        if (existing.plateNumber.trim().toUpperCase() === truck.plateNumber.trim().toUpperCase()) {
-          byId.delete(key);
-        }
-      }
-      byId.set(truck.id, truck);
-    }
-    return [...byId.values()].filter((t) => !deletedPlates.has(t.plateNumber.trim().toUpperCase()));
+    return extraTrucks.filter((t) => !deletedPlates.has(t.plateNumber.trim().toUpperCase()));
   }, [extraTrucks, deletedPlates]);
 
   const allOwnedTrucks = useMemo(
