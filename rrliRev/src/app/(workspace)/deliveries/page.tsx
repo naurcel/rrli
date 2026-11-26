@@ -152,8 +152,8 @@ export default function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState<readonly DeliveryLedgerItem[]>([]);
   const [clients, setClients] = useState<DeliveryFilterOption[]>([]);
   const [trucks, setTrucks] = useState<DeliveryFilterOption[]>([]);
-  const [, setDrivers] = useState<DeliveryFilterOption[]>([]);
-  const [, setHelpers] = useState<DeliveryFilterOption[]>([]);
+  const [drivers, setDrivers] = useState<DeliveryFilterOption[]>([]);
+  const [helpers, setHelpers] = useState<DeliveryFilterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const {
@@ -1387,6 +1387,8 @@ export default function DeliveriesPage() {
       {correctingTrip ? (
         <EditDeliveryModal
           delivery={correctingTrip}
+          drivers={drivers}
+          helpers={helpers}
           onClose={() => setCorrectingTrip(null)}
           onSaved={(updatedTrip, msg) => {
             setCorrectingTrip(null);

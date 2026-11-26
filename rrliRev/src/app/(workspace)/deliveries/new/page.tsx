@@ -25,6 +25,7 @@ import {
   formatCrewMemberOptionLabel,
   getFleetCrew,
   isCrewMemberEligibleForNewDelivery,
+  type FleetCrewMember,
 } from "@/features/deliveries/driver-registry";
 import { getFleetTrucks } from "@/features/deliveries/truck-registry";
 import {
@@ -380,110 +381,139 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/deliveries?page=1&pageSize=10", { signal: controller.signal })
-      .then(async (response) => {
-        const payload = (await response.json()) as {
-          ok?: boolean;
-          message?: string;
-          filters?: ReferenceData;
-        };
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.message ?? "Unable to load active clients and trucks.");
+    Promise.all([
+      fetch("/api/deliveries?page=1&pageSize=10", { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return (await response.json().catch(() => null)) as {
+            ok?: boolean;
+            filters?: ReferenceData;
+          } | null;
+        })
+        .catch(() => null),
+      fetch("/api/drivers", { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return (await response.json().catch(() => null)) as {
+            ok?: boolean;
+            crew?: FleetCrewMember[];
+            drivers?: FleetCrewMember[];
+          } | null;
+        })
+        .catch(() => null),
+    ]).then(([delivPayload, driversPayload]) => {
+      const nextReferences = delivPayload?.filters ?? { clients: [], trucks: [], drivers: [], helpers: [] };
+      const apiCrew: FleetCrewMember[] = Array.isArray(driversPayload?.crew)
+        ? driversPayload.crew
+        : Array.isArray(driversPayload?.drivers)
+        ? driversPayload.drivers
+        : [];
+
+      // Merge custom clients from localStorage
+      let storedCustomClients: DeliveryFilterOption[] = [];
+      try {
+        const raw = localStorage.getItem("routex_custom_clients");
+        if (raw) storedCustomClients = JSON.parse(raw);
+      } catch {}
+
+      // Merge custom clients from locally recorded deliveries and localStorage
+      const localDeliveries = readBrowserPreviewDeliveries();
+      const existingClientNames = new Set(nextReferences.clients.map((c) => c.label.toLowerCase()));
+      const extraClients: DeliveryFilterOption[] = [];
+      for (const c of storedCustomClients) {
+        if (c.label && !existingClientNames.has(c.label.toLowerCase())) {
+          existingClientNames.add(c.label.toLowerCase());
+          extraClients.push(c);
         }
-        const nextReferences = payload.filters ?? { clients: [], trucks: [], drivers: [], helpers: [] };
+      }
+      for (const delivery of localDeliveries) {
+        if (delivery.clientName && !existingClientNames.has(delivery.clientName.toLowerCase())) {
+          existingClientNames.add(delivery.clientName.toLowerCase());
+          extraClients.push({
+            id: delivery.clientId || `client-${delivery.clientName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+            label: delivery.clientName,
+          });
+        }
+      }
+      const mergedClients = [...nextReferences.clients, ...extraClients];
 
-        // Merge custom clients from localStorage
-        let storedCustomClients: DeliveryFilterOption[] = [];
-        try {
-          const raw = localStorage.getItem("routex_custom_clients");
-          if (raw) storedCustomClients = JSON.parse(raw);
-        } catch {}
+      const localTrucks = readBrowserPreviewTrucks().map((t) => ({
+        id: t.id,
+        label: t.plateNumber,
+        ownershipType: t.ownershipType,
+      }));
+      const existingPlates = new Set(nextReferences.trucks.map((t) => t.label.toUpperCase()));
+      const mergedTrucks = [
+        ...nextReferences.trucks,
+        ...localTrucks.filter((t) => !existingPlates.has(t.label.toUpperCase())),
+      ];
 
-        // Merge custom clients from locally recorded deliveries and localStorage
-        const localDeliveries = readBrowserPreviewDeliveries();
-        const existingClientNames = new Set(nextReferences.clients.map((c) => c.label.toLowerCase()));
-        const extraClients: DeliveryFilterOption[] = [];
-        for (const c of storedCustomClients) {
-          if (c.label && !existingClientNames.has(c.label.toLowerCase())) {
-            existingClientNames.add(c.label.toLowerCase());
-            extraClients.push(c);
+      // Merge drivers from API crew, remote delivery filters, and local deliveries
+      const driverNames = new Set<string>();
+      const combinedDrivers: DeliveryFilterOption[] = [];
+
+      const addDriverIfValid = (name: string, id?: string) => {
+        const clean = name.trim();
+        const lower = clean.toLowerCase();
+        if (!clean || lower.includes("unknown") || driverNames.has(lower)) return;
+        driverNames.add(lower);
+        combinedDrivers.push({
+          id: id || `driver-${lower.replace(/[^a-z0-9]+/g, "-")}`,
+          label: clean,
+        });
+      };
+
+      for (const d of nextReferences.drivers ?? []) addDriverIfValid(d.label, d.id);
+      for (const c of apiCrew) {
+        if (c.assignmentType === "Driver" && c.isActive !== false) {
+          addDriverIfValid(c.fullName, c.id);
+        }
+      }
+      for (const d of localDeliveries) {
+        if (d.driverName) addDriverIfValid(d.driverName);
+      }
+
+      // Merge helpers from API crew, remote delivery filters, and local deliveries
+      const helperNames = new Set<string>();
+      const combinedHelpers: DeliveryFilterOption[] = [];
+
+      const addHelperIfValid = (name: string, id?: string) => {
+        const clean = name.trim();
+        const lower = clean.toLowerCase();
+        if (!clean || lower.includes("unknown") || helperNames.has(lower)) return;
+        helperNames.add(lower);
+        combinedHelpers.push({
+          id: id || `helper-${lower.replace(/[^a-z0-9]+/g, "-")}`,
+          label: clean,
+        });
+      };
+
+      for (const h of nextReferences.helpers ?? []) addHelperIfValid(h.label, h.id);
+      for (const c of apiCrew) {
+        if (c.assignmentType === "Helper" && c.isActive !== false) {
+          addHelperIfValid(c.fullName, c.id);
+        }
+      }
+      for (const del of localDeliveries) {
+        if (del.helperName) {
+          for (const piece of del.helperName.split(/[,/&]/).map((h) => h.trim())) {
+            addHelperIfValid(piece);
           }
         }
-        for (const delivery of localDeliveries) {
-          if (delivery.clientName && !existingClientNames.has(delivery.clientName.toLowerCase())) {
-            existingClientNames.add(delivery.clientName.toLowerCase());
-            extraClients.push({
-              id: delivery.clientId || `client-${delivery.clientName.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
-              label: delivery.clientName,
-            });
-          }
-        }
-        const mergedClients = [...nextReferences.clients, ...extraClients];
+      }
 
-        const localTrucks = readBrowserPreviewTrucks().map((t) => ({
-          id: t.id,
-          label: t.plateNumber,
-          ownershipType: t.ownershipType,
-        }));
-        const existingPlates = new Set(nextReferences.trucks.map((t) => t.label.toUpperCase()));
-        const mergedTrucks = [
-          ...nextReferences.trucks,
-          ...localTrucks.filter((t) => !existingPlates.has(t.label.toUpperCase())),
-        ];
-        const legacyMockCrew = new Set(["nico serrano", "mateo dela vega", "ira santos", "paolo reyes"]);
-        const browserDrivers = localDeliveries
-          .map((delivery) => delivery.driverName?.trim())
-          .filter((name): name is string => Boolean(name && !name.toLowerCase().includes("unknown") && !legacyMockCrew.has(name.toLowerCase())));
-        const driverNames = new Set(
-          (nextReferences.drivers ?? [])
-            .filter((d) => !d.label.toLowerCase().includes("unknown"))
-            .map((driver) => driver.label.toLowerCase()),
-        );
-        const extraDrivers = browserDrivers
-          .filter((name) => {
-            const key = name.toLowerCase();
-            if (driverNames.has(key)) return false;
-            driverNames.add(key);
-            return true;
-          })
-          .map((name) => ({ id: `driver-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, label: name }));
-
-        const baseHelpersList: DeliveryFilterOption[] = [
-          ...(nextReferences.helpers ?? []),
-        ].filter((h) => !h.label.toLowerCase().includes("unknown"));
-        const helperNames = new Set(baseHelpersList.map((h) => h.label.toLowerCase()));
-        const browserHelpers = localDeliveries
-          .filter((delivery) => Boolean(delivery.helperName))
-          .flatMap((delivery) => delivery.helperName!.split(/[,/&]/).map((h) => h.trim()))
-          .filter((name) => Boolean(name) && !name.toLowerCase().includes("unknown") && !legacyMockCrew.has(name.toLowerCase()));
-        const extraHelpers = browserHelpers
-          .filter((name) => {
-            const key = name.toLowerCase();
-            if (helperNames.has(key)) return false;
-            helperNames.add(key);
-            return true;
-          })
-          .map((name) => ({ id: `helper-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, label: name }));
-        const mergedHelpers = [...baseHelpersList, ...extraHelpers].filter(
-          (helper, index, all) =>
-            all.findIndex((candidate) => candidate.label.toLowerCase() === helper.label.toLowerCase()) === index,
-        );
-
-        const mergedReferences = {
-          clients: mergedClients,
-          trucks: mergedTrucks,
-          drivers: [
-            ...(nextReferences.drivers ?? []).filter((d) => !d.label.toLowerCase().includes("unknown")),
-            ...extraDrivers,
-          ],
-          helpers: mergedHelpers,
-        };
-        setReferences(mergedReferences);
-        if (!isEditMode && !resolvedEditId && !propEditDeliveryId) {
-          setClientName(mergedReferences.clients[0]?.label ?? "");
-          setPlateNumber(mergedReferences.trucks[0]?.label ?? "");
-        }
-      })
+      const mergedReferences = {
+        clients: mergedClients,
+        trucks: mergedTrucks,
+        drivers: combinedDrivers,
+        helpers: combinedHelpers,
+      };
+      setReferences(mergedReferences);
+      if (!isEditMode && !resolvedEditId && !propEditDeliveryId) {
+        setClientName(mergedReferences.clients[0]?.label ?? "");
+        setPlateNumber(mergedReferences.trucks[0]?.label ?? "");
+      }
+    })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setReferenceError(error instanceof Error ? error.message : "Unable to load reference data.");
@@ -725,6 +755,79 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
     existingDelivery?.helperName,
     isSubcontracted,
   ]);
+
+  const driverSelectOptions = useMemo(() => {
+    const list: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+    const fleetCrew = getFleetCrew();
+
+    // 1. Primary drivers
+    for (const d of references.drivers) {
+      const clean = d.label.trim();
+      const lower = clean.toLowerCase();
+      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
+      seen.add(lower);
+      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
+      list.push({
+        value: clean,
+        label: fleet ? formatCrewMemberOptionLabel(fleet, "Driver") : clean,
+      });
+    }
+
+    // 2. Also include helpers as alternative driver options
+    for (const h of references.helpers) {
+      const clean = h.label.trim();
+      const lower = clean.toLowerCase();
+      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
+      seen.add(lower);
+      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
+      list.push({
+        value: clean,
+        label: fleet ? formatCrewMemberOptionLabel(fleet, "Driver") : `${clean} [Helper]`,
+      });
+    }
+
+    // Ensure currently selected driverName is present
+    if (driverName.trim() && !seen.has(driverName.trim().toLowerCase())) {
+      list.unshift({ value: driverName.trim(), label: driverName.trim() });
+    }
+
+    return list;
+  }, [references.drivers, references.helpers, driverName]);
+
+  const helperSelectOptions = useMemo(() => {
+    const list: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+    const fleetCrew = getFleetCrew();
+
+    // 1. Primary helpers
+    for (const h of references.helpers) {
+      const clean = h.label.trim();
+      const lower = clean.toLowerCase();
+      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
+      seen.add(lower);
+      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
+      list.push({
+        value: clean,
+        label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : clean,
+      });
+    }
+
+    // 2. Also include all drivers (so when you choose a driver in helper, their name shows up!)
+    for (const d of references.drivers) {
+      const clean = d.label.trim();
+      const lower = clean.toLowerCase();
+      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
+      seen.add(lower);
+      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
+      list.push({
+        value: clean,
+        label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : `${clean} [Driver]`,
+      });
+    }
+
+    return list;
+  }, [references.helpers, references.drivers]);
 
   function updateValue(name: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -2271,15 +2374,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <span className="crew-role-pill driver">Driver</span>
                     <RoundedSelect
                       value={driverName}
-                      options={references.drivers
-                        .filter((driver) => !driver.label.toLowerCase().includes("unknown"))
-                        .map((driver) => {
-                          const fleet = getFleetCrew().find((c) => c.fullName.toLowerCase() === driver.label.toLowerCase());
-                          return {
-                            value: driver.label,
-                            label: fleet ? formatCrewMemberOptionLabel(fleet) : driver.label,
-                          };
-                        })}
+                      options={driverSelectOptions}
                       onChange={(val) => setDriverName(sanitizePersonNameInput(val))}
                       inputFilter={sanitizePersonNameInput}
                       ariaLabel="Driver name"
@@ -2342,15 +2437,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                     <span className="crew-role-pill helper">Helper 1</span>
                     <RoundedSelect
                       value={helper1Name}
-                      options={references.helpers
-                        .filter((helper) => !helper.label.toLowerCase().includes("unknown"))
-                        .map((helper) => {
-                          const fleet = getFleetCrew().find((c) => c.fullName.toLowerCase() === helper.label.toLowerCase());
-                          return {
-                            value: helper.label,
-                            label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : helper.label,
-                          };
-                        })}
+                      options={helperSelectOptions}
                       onChange={(val) => setHelper1Name(sanitizePersonNameInput(val))}
                       inputFilter={sanitizePersonNameInput}
                       ariaLabel="Helper name"
@@ -2414,15 +2501,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
                       <span className="crew-role-pill helper-2">Helper 2</span>
                       <RoundedSelect
                         value={helper2Name}
-                        options={references.helpers
-                          .filter((helper) => !helper.label.toLowerCase().includes("unknown"))
-                          .map((helper) => {
-                            const fleet = getFleetCrew().find((c) => c.fullName.toLowerCase() === helper.label.toLowerCase());
-                            return {
-                              value: helper.label,
-                              label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : helper.label,
-                            };
-                          })}
+                        options={helperSelectOptions}
                         onChange={(val) => setHelper2Name(sanitizePersonNameInput(val))}
                         inputFilter={sanitizePersonNameInput}
                         ariaLabel="Helper 2 name"

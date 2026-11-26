@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { RoundedSelect } from "@/components/rounded-select";
@@ -22,7 +22,12 @@ import {
   readBrowserPreviewDeliveries,
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
-import { BASE_HELPERS, getFleetCrew } from "@/features/deliveries/driver-registry";
+import {
+  BASE_HELPERS,
+  getFleetCrew,
+  formatCrewMemberOptionLabel,
+  type FleetCrewMember,
+} from "@/features/deliveries/driver-registry";
 import {
   handlePositiveDecimalKeyDown,
   sanitizePositiveDecimalInput,
@@ -86,14 +91,112 @@ export function EditDeliveryModal({
   const [dropoffs, setDropoffs] = useState<CorrectionDropoffDraft[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiCrew, setApiCrew] = useState<FleetCrewMember[]>([]);
 
-  const legacyMockCrew = new Set(["nico serrano", "mateo dela vega", "ira santos", "paolo reyes"]);
-  const drivers = (propDrivers ?? []).filter(
-    (d) => !d.label.toLowerCase().includes("unknown") && !legacyMockCrew.has(d.label.toLowerCase()),
-  );
-  const helpers = (propHelpers ?? []).filter(
-    (h) => !h.label.toLowerCase().includes("unknown") && !legacyMockCrew.has(h.label.toLowerCase()),
-  );
+  useEffect(() => {
+    fetch("/api/drivers")
+      .then((res) => res.json())
+      .then((data: { ok?: boolean; crew?: FleetCrewMember[]; drivers?: FleetCrewMember[] }) => {
+        const incoming = data?.crew ?? data?.drivers;
+        if (data?.ok && Array.isArray(incoming)) {
+          setApiCrew(incoming.filter((c) => c.isActive !== false));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const driverOptions = useMemo(() => {
+    const list: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+    const fleetCrew = getFleetCrew();
+
+    // 1. Primary drivers (from API crew, prop drivers, and local fleet)
+    const allDrivers = [
+      ...apiCrew.filter((c) => c.assignmentType === "Driver").map((c) => c.fullName),
+      ...(propDrivers ?? []).map((d) => d.label),
+      ...fleetCrew.filter((c) => c.assignmentType === "Driver").map((c) => c.fullName),
+    ];
+    for (const d of allDrivers) {
+      const clean = d.trim();
+      const lower = clean.toLowerCase();
+      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
+      seen.add(lower);
+      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
+      list.push({
+        value: clean,
+        label: fleet ? formatCrewMemberOptionLabel(fleet, "Driver") : clean,
+      });
+    }
+
+    // 2. Also include helpers (so any crew member can be chosen as driver)
+    const allHelpers = [
+      ...apiCrew.filter((c) => c.assignmentType === "Helper").map((c) => c.fullName),
+      ...(propHelpers ?? []).map((h) => h.label),
+      ...fleetCrew.filter((c) => c.assignmentType === "Helper").map((c) => c.fullName),
+    ];
+    for (const h of allHelpers) {
+      const clean = h.trim();
+      const lower = clean.toLowerCase();
+      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
+      seen.add(lower);
+      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
+      list.push({
+        value: clean,
+        label: fleet ? formatCrewMemberOptionLabel(fleet, "Driver") : `${clean} [Helper]`,
+      });
+    }
+
+    // Ensure currently assigned driver is present
+    if (driverName.trim() && !seen.has(driverName.trim().toLowerCase())) {
+      list.unshift({ value: driverName.trim(), label: driverName.trim() });
+    }
+
+    return list;
+  }, [apiCrew, propDrivers, propHelpers, driverName]);
+
+  const helperOptions = useMemo(() => {
+    const list: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+    const fleetCrew = getFleetCrew();
+
+    // 1. Primary helpers
+    const allHelpers = [
+      ...apiCrew.filter((c) => c.assignmentType === "Helper").map((c) => c.fullName),
+      ...(propHelpers ?? []).map((h) => h.label),
+      ...fleetCrew.filter((c) => c.assignmentType === "Helper").map((c) => c.fullName),
+    ];
+    for (const h of allHelpers) {
+      const clean = h.trim();
+      const lower = clean.toLowerCase();
+      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
+      seen.add(lower);
+      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
+      list.push({
+        value: clean,
+        label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : clean,
+      });
+    }
+
+    // 2. Also include all drivers (so when you choose a driver in helper, they are listed!)
+    const allDrivers = [
+      ...apiCrew.filter((c) => c.assignmentType === "Driver").map((c) => c.fullName),
+      ...(propDrivers ?? []).map((d) => d.label),
+      ...fleetCrew.filter((c) => c.assignmentType === "Driver").map((c) => c.fullName),
+    ];
+    for (const d of allDrivers) {
+      const clean = d.trim();
+      const lower = clean.toLowerCase();
+      if (!clean || lower.includes("unknown") || seen.has(lower)) continue;
+      seen.add(lower);
+      const fleet = fleetCrew.find((c) => c.fullName.toLowerCase() === lower);
+      list.push({
+        value: clean,
+        label: fleet ? formatCrewMemberOptionLabel(fleet, "Helper") : `${clean} [Driver]`,
+      });
+    }
+
+    return list;
+  }, [apiCrew, propHelpers, propDrivers]);
 
   const isSubcontracted = Boolean(
     delivery?.truckOwnership === "Subcontracted" ||
@@ -1018,12 +1121,14 @@ export function EditDeliveryModal({
                     <span className="crew-role-pill driver">Driver</span>
                     <RoundedSelect
                       value={driverName}
-                      options={drivers.map((d) => ({
-                        value: d.label,
-                        label: d.label,
-                      }))}
+                      options={driverOptions}
                       onChange={(val) => setDriverName(val)}
                       ariaLabel="Assigned Driver selection"
+                      placeholder="Select or enter driver"
+                      emptyMessage="No saved drivers"
+                      searchable
+                      allowCustomValue
+                      searchPlaceholder="Search or enter driver"
                     />
                   </div>
                   {!isSubcontracted && (
@@ -1063,12 +1168,11 @@ export function EditDeliveryModal({
                     <span className="crew-role-pill helper">Helper 1</span>
                     <RoundedSelect
                       value={helperName}
-                      options={helpers.map((h) => ({
-                        value: h.label,
-                        label: h.label,
-                      }))}
+                      options={helperOptions}
                       onChange={(val) => setHelperName(val)}
                       ariaLabel="Assigned Helper selection"
+                      placeholder="Select or enter helper"
+                      emptyMessage="No saved helpers"
                       searchable
                       allowCustomValue
                       searchPlaceholder="Search or enter helper"
@@ -1112,13 +1216,11 @@ export function EditDeliveryModal({
                       <span className="crew-role-pill helper-2">Helper 2</span>
                       <RoundedSelect
                         value={helper2Name}
-                        options={helpers.map((h) => ({
-                          value: h.label,
-                          label: h.label,
-                        }))}
+                        options={helperOptions}
                         onChange={(val) => setHelper2Name(val)}
                         ariaLabel="Assigned Helper 2 selection"
                         placeholder="Select or enter helper"
+                        emptyMessage="No saved helpers"
                         searchable
                         allowCustomValue
                         searchPlaceholder="Search or enter helper"
