@@ -183,19 +183,6 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
 
   return (
     <div className={`native-setup-canvas ${isExiting ? "native-setup-exiting-dashboard" : ""}`}>
-      {/* RouteX Brand Header */}
-      <div className="native-setup-brand" aria-label="RouteX Account Activation">
-        <img
-          src="/branding/redeemed-route-emblem.png"
-          alt="RouteX Logistics"
-          className="native-setup-brand-emblem"
-        />
-        <div className="native-setup-brand-text">
-          <span className="native-setup-brand-title">RouteX</span>
-          <span className="native-setup-brand-badge">Account Activation</span>
-        </div>
-      </div>
-
       {/* Top Progress Track */}
       {step < 4 ? (
         <header className="native-setup-nav" role="banner">
