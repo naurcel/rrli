@@ -420,6 +420,7 @@ export async function POST(request: Request) {
         .from("clients")
         .insert({
           name: clean,
+          client_code: clientCode,
           code: clientCode,
           is_active: true,
         })

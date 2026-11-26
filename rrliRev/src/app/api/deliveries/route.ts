@@ -581,6 +581,7 @@ export async function POST(request: Request) {
 
     const { error: clientInsertError } = await supabase.from("clients").insert({
       name: rawClientName,
+      client_code: clientCode,
       code: clientCode,
       is_active: true,
     });
@@ -955,6 +956,7 @@ export async function PATCH(request: Request) {
         const { data: newEmp } = await supabase
           .from("employees")
           .insert({
+            employee_code: `DRV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
             full_name: driverName,
             assignment_type: "Driver",
             is_active: true,
@@ -982,6 +984,7 @@ export async function PATCH(request: Request) {
         const { data: newEmp } = await supabase
           .from("employees")
           .insert({
+            employee_code: `HLP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
             full_name: helperName,
             assignment_type: "Helper",
             is_active: true,
@@ -1110,6 +1113,12 @@ export async function DELETE(request: Request) {
   }
 
   const supabase = await getMutationSupabaseClient();
+  // Delete cascading child records first to satisfy foreign key constraints
+  await supabase.from("delivery_dropoffs").delete().eq("delivery_id", deliveryId);
+  await supabase.from("delivery_activity").delete().eq("delivery_id", deliveryId);
+  await supabase.from("delivery_mutation_requests").delete().eq("delivery_id", deliveryId);
+  await supabase.from("delivery_documents").delete().eq("delivery_id", deliveryId);
+
   const { data: deletedDelivery, error } = await supabase
     .from("deliveries")
     .delete()
