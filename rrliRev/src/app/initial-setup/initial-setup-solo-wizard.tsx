@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -27,8 +27,9 @@ interface ActorInfo {
 export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
   const router = useRouter();
 
-  // Wizard step: 1 = Password, 2 = Profile Photo, 3 = Recovery Question, 4 = Launching
+  // Active step state & smooth blur-fade transition phase
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [transitionPhase, setTransitionPhase] = useState<"idle" | "blur-out" | "blur-in">("blur-in");
   const [isExiting, setIsExiting] = useState(false);
 
   // Step 1: Password fields
@@ -65,10 +66,33 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
   const step3Valid = Boolean(resolvedQuestion && answersMatch);
 
   const initials = getUserInitials(actor.fullName, actor.username);
+  const firstName = actor.fullName?.trim() ? actor.fullName.trim().split(" ")[0] : actor.username;
+
+  // Initial mount smooth entrance
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTransitionPhase("idle");
+    }, 650);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Smooth, deliberate blur-fade transition between steps
+  function navigateToStep(nextStep: 1 | 2 | 3 | 4) {
+    if (nextStep === step) return;
+    setErrorMessage(null);
+    setTransitionPhase("blur-out");
+
+    setTimeout(() => {
+      setStep(nextStep);
+      setTransitionPhase("blur-in");
+      setTimeout(() => {
+        setTransitionPhase("idle");
+      }, 600);
+    }, 380);
+  }
 
   function handleContinueToPhotoStep(e: FormEvent) {
     e.preventDefault();
-    setErrorMessage(null);
     if (!step1Valid) {
       if (!pwdValidation.isValid) {
         setErrorMessage(pwdValidation.errors[0] || "Password does not meet all security criteria.");
@@ -77,7 +101,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
       }
       return;
     }
-    setStep(2);
+    navigateToStep(2);
   }
 
   async function handlePhotoFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -103,8 +127,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
 
   function handleContinueToRecovery(e: FormEvent) {
     e.preventDefault();
-    setErrorMessage(null);
-    setStep(3);
+    navigateToStep(3);
   }
 
   async function handleFinalSubmit(e: FormEvent) {
@@ -161,20 +184,25 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
         }
       }
 
-      setStep(4);
-      toast.success("Account setup complete!", {
-        description: "Your credentials and profile are active.",
-      });
-
-      // Smooth, cinematic dissolve transition into dashboard
+      // Smooth transition into step 4 (celebration)
+      setTransitionPhase("blur-out");
       setTimeout(() => {
-        setIsExiting(true);
-      }, 1500);
+        setStep(4);
+        setTransitionPhase("blur-in");
+        toast.success("Account setup complete!", {
+          description: "Your credentials and profile are active.",
+        });
 
-      setTimeout(() => {
-        router.push("/dashboard");
-        router.refresh();
-      }, 2200);
+        // Deliberate, relaxed timing before entering dashboard
+        setTimeout(() => {
+          setIsExiting(true);
+        }, 2200);
+
+        setTimeout(() => {
+          router.push("/dashboard");
+          router.refresh();
+        }, 3000);
+      }, 400);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Setup submission failed.");
       setSubmitting(false);
@@ -183,43 +211,26 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
 
   return (
     <div className={`native-setup-canvas ${isExiting ? "native-setup-exiting-dashboard" : ""}`}>
-      {/* Top Progress Track */}
-      {step < 4 ? (
-        <header className="native-setup-nav" role="banner">
-          <div className="native-setup-progress-meta">
-            <span className="native-setup-counter">
-              Step {step} of 3
-            </span>
-            <span className="native-setup-step-title">
-              {step === 1
-                ? "Permanent Password"
-                : step === 2
-                  ? "Profile Photo (Optional)"
-                  : "Account Recovery"}
-            </span>
-          </div>
+      {/* Living Breathing Gemini-Style Gradient Aurora Mesh */}
+      <div className="setup-gemini-mesh" aria-hidden="true">
+        <div className="setup-gemini-orb orb-primary" />
+        <div className="setup-gemini-orb orb-secondary" />
+        <div className="setup-gemini-orb orb-accent" />
+        <div className="setup-gemini-orb orb-subtle" />
+      </div>
 
-          <div className="native-setup-step-segments" aria-label={`Progress: step ${step} of 3`}>
-            <div className={`native-setup-segment ${step >= 1 ? "active" : ""}`} />
-            <div className={`native-setup-segment ${step >= 2 ? "active" : ""}`} />
-            <div className={`native-setup-segment ${step >= 3 ? "active" : ""}`} />
-          </div>
-        </header>
-      ) : null}
-
-      {/* Main Centered Stage */}
-      <main className="native-setup-stage">
+      {/* Main Centered Stage with Silky Blur-Fade Transition */}
+      <main className={`native-setup-stage native-setup-transition-${transitionPhase}`}>
         {/* ========================================================================= */}
         {/* STEP 1: PERMANENT PASSWORD */}
         {/* ========================================================================= */}
         {step === 1 ? (
-          <div key="native-step-1" className="native-setup-card-centered native-setup-fade">
+          <div key="native-step-1" className="native-setup-content-block">
             <div className="native-setup-header">
-              <h1>Create your permanent password</h1>
-              <p>
-                Welcome, <strong>@{actor.username}</strong>
-                {actor.fullName ? ` (${actor.fullName})` : ""}. Set a private permanent password
-                to secure your workspace credentials.
+              <span className="native-setup-personal-pill">Welcome to RouteX</span>
+              <h1 className="native-setup-hero-title">Welcome, {firstName}.</h1>
+              <p className="native-setup-hero-subtitle">
+                Let&apos;s take a moment to make this space feel like yours. First, create a permanent password only you know.
               </p>
             </div>
 
@@ -357,12 +368,12 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
         {/* STEP 2: PROFILE PHOTO SETUP */}
         {/* ========================================================================= */}
         {step === 2 ? (
-          <div key="native-step-2" className="native-setup-card-centered native-setup-fade">
+          <div key="native-step-2" className="native-setup-content-block">
             <div className="native-setup-header">
-              <h1>Personalize your profile photo</h1>
-              <p>
-                Add a face to your workspace. Your picture appears across navigation,
-                activity logs, and trip records. This step is optional.
+              <span className="native-setup-personal-pill">Profile & Presence</span>
+              <h1 className="native-setup-hero-title">Looking good, {firstName}.</h1>
+              <p className="native-setup-hero-subtitle">
+                Put a face to your name so your team knows who&apos;s behind the wheel. You can always change this later.
               </p>
             </div>
 
@@ -389,18 +400,20 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
               ) : null}
 
               <div className="native-setup-avatar-card">
-                <div className="native-setup-avatar-ring">
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt={actor.fullName || actor.username}
-                      className="native-setup-avatar-img"
-                    />
-                  ) : (
-                    <div className="native-setup-avatar-initials">
-                      <span>{initials}</span>
-                    </div>
-                  )}
+                <div className="native-setup-avatar-well">
+                  <div className="native-setup-avatar-ring">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={actor.fullName || actor.username}
+                        className="native-setup-avatar-img"
+                      />
+                    ) : (
+                      <div className="native-setup-avatar-initials">
+                        <span>{initials}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="native-setup-avatar-actions">
@@ -416,7 +429,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                   <label
                     htmlFor="setup-profile-photo-input"
                     className="native-setup-primary-btn"
-                    style={{ cursor: "pointer", height: "42px", padding: "0 20px", fontSize: "13px" }}
+                    style={{ cursor: "pointer", height: "44px", padding: "0 22px", fontSize: "13.5px" }}
                   >
                     {photoProcessing
                       ? "Processing..."
@@ -430,7 +443,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                       type="button"
                       className="native-setup-back-btn"
                       onClick={() => setAvatarUrl(null)}
-                      style={{ padding: "0 16px", height: "42px", fontSize: "13px" }}
+                      style={{ padding: "0 18px", height: "44px", fontSize: "13.5px" }}
                     >
                       Remove
                     </button>
@@ -446,10 +459,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                 <button
                   type="button"
                   className="native-setup-back-btn"
-                  onClick={() => {
-                    setErrorMessage(null);
-                    setStep(1);
-                  }}
+                  onClick={() => navigateToStep(1)}
                   disabled={photoProcessing}
                 >
                   <svg
@@ -499,12 +509,12 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
         {/* STEP 3: ACCOUNT RECOVERY QUESTION */}
         {/* ========================================================================= */}
         {step === 3 ? (
-          <div key="native-step-3" className="native-setup-card-centered native-setup-fade">
+          <div key="native-step-3" className="native-setup-content-block">
             <div className="native-setup-header">
-              <h1>Set up account recovery</h1>
-              <p>
-                Configure a confidential recovery question so you can securely reset your password
-                if you ever forget it.
+              <span className="native-setup-personal-pill">Account Recovery</span>
+              <h1 className="native-setup-hero-title">Just between us.</h1>
+              <p className="native-setup-hero-subtitle">
+                Set a safety question you&apos;ll easily remember. If you ever forget your password, you can reset it on your own without waiting for an administrator.
               </p>
             </div>
 
@@ -615,10 +625,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                 <button
                   type="button"
                   className="native-setup-back-btn"
-                  onClick={() => {
-                    setErrorMessage(null);
-                    setStep(2);
-                  }}
+                  onClick={() => navigateToStep(2)}
                   disabled={submitting}
                 >
                   <svg
@@ -643,7 +650,7 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                   className="native-setup-primary-btn"
                   disabled={!step3Valid || submitting}
                 >
-                  <span>{submitting ? "Finalizing Setup..." : "Complete Setup & Launch"}</span>
+                  <span>{submitting ? "Securing Workspace..." : "Complete Setup & Launch"}</span>
                   <svg
                     width="16"
                     height="16"
@@ -667,11 +674,11 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
         {/* STEP 4: CELEBRATION / WORKSPACE ACTIVATION */}
         {/* ========================================================================= */}
         {step === 4 ? (
-          <div key="native-step-4" className="native-complete-viewport native-setup-fade">
+          <div key="native-step-4" className="native-complete-viewport">
             <div className="native-complete-halo" aria-hidden="true">
               <svg
-                width="36"
-                height="36"
+                width="38"
+                height="38"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -682,19 +689,19 @@ export function InitialSetupSoloWizard({ actor }: { actor: ActorInfo }) {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <h1>You&apos;re all set</h1>
-            <p>
-              Your credentials and profile are active. Entering your RouteX workspace...
+            <h1 className="native-setup-hero-title">You&apos;re all set, {firstName}.</h1>
+            <p className="native-setup-hero-subtitle">
+              Your credentials and personal settings are verified. Taking you to your RouteX command center...
             </p>
             <div className="native-progress-track" aria-hidden="true">
               <div className="native-progress-bar-fill" />
             </div>
-            <span className="native-launching-text">Launching workspace...</span>
+            <span className="native-launching-text">Preparing your workspace...</span>
           </div>
         ) : null}
       </main>
 
-      <footer style={{ height: "24px" }} aria-hidden="true" />
+      <footer style={{ height: "20px" }} aria-hidden="true" />
     </div>
   );
 }

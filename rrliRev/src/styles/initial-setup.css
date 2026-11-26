@@ -1,7 +1,7 @@
 /* ============================================================================
    RouteX Immersive Initial Setup Experience
-   Device-like, full-screen setup flow (Windows OOBE / Mobile Phone Setup).
-   Strictly no cards, no modals, no floating containers, and no logo branding.
+   Device-like, full-screen setup flow with breathing Gemini-style ambient aurora,
+   smooth blur-fade transitions, and tactile Neumorphic design.
    ============================================================================ */
 
 .solo-setup-viewport {
@@ -10,148 +10,241 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  padding: clamp(24px, 5vh, 56px) clamp(20px, 6vw, 64px);
-  background: 
-    radial-gradient(1000px 650px at 50% 0%, rgba(245, 158, 11, 0.08), transparent 70%),
-    radial-gradient(800px 500px at 50% 100%, rgba(245, 158, 11, 0.04), transparent 65%),
-    var(--color-page, #f6f7f9);
+  padding: clamp(32px, 6vh, 64px) clamp(20px, 6vw, 64px);
+  background-color: var(--color-page, #f7f8fa);
   color: var(--color-text-primary, #15201d);
+  overflow-x: hidden;
   overflow-y: auto;
   box-sizing: border-box;
 }
 
-/* Central Stage Container — Full-screen, spacious, zero card styling */
+/* ============================================================================
+   Living, Breathing Gemini-Style Ambient Aurora Mesh
+   Subtle organic drift and pulses using RouteX amber/terracotta/gold colors
+   ============================================================================ */
+.setup-gemini-mesh {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.82;
+}
+
+.setup-gemini-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(85px);
+  will-change: transform, opacity;
+}
+
+/* Primary Amber / Honey Orb (Breathes and floats top-left to center) */
+.setup-gemini-orb.orb-primary {
+  width: clamp(380px, 48vw, 620px);
+  height: clamp(380px, 48vw, 620px);
+  top: -8%;
+  left: 15%;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.28) 0%, rgba(251, 191, 36, 0.12) 50%, transparent 72%);
+  animation: gemini-aurora-breathe-1 18s ease-in-out infinite alternate;
+}
+
+/* Secondary Terracotta / Warm Clay Orb (Breathes bottom-right) */
+.setup-gemini-orb.orb-secondary {
+  width: clamp(420px, 52vw, 680px);
+  height: clamp(420px, 52vw, 680px);
+  bottom: -12%;
+  right: 12%;
+  background: radial-gradient(circle, rgba(217, 119, 6, 0.22) 0%, rgba(180, 83, 9, 0.08) 55%, transparent 75%);
+  animation: gemini-aurora-drift-2 22s ease-in-out infinite alternate;
+}
+
+/* Subtle Peach / Apricot Center Orb (Follows the focal stage area) */
+.setup-gemini-orb.orb-accent {
+  width: clamp(340px, 42vw, 540px);
+  height: clamp(340px, 42vw, 540px);
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(254, 215, 170, 0.35) 0%, rgba(245, 158, 11, 0.1) 50%, transparent 70%);
+  animation: gemini-aurora-pulse-center 14s ease-in-out infinite alternate;
+}
+
+/* Whisper of Emerald Glow (Subtle accent representing active logistics/status) */
+.setup-gemini-orb.orb-subtle {
+  width: clamp(300px, 36vw, 460px);
+  height: clamp(300px, 36vw, 460px);
+  top: 18%;
+  right: 22%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.11) 0%, rgba(245, 158, 11, 0.05) 55%, transparent 70%);
+  animation: gemini-aurora-drift-emerald 20s ease-in-out infinite alternate;
+}
+
+@keyframes gemini-aurora-breathe-1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate(50px, 40px) scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-30px, 70px) scale(0.96);
+    opacity: 0.88;
+  }
+}
+
+@keyframes gemini-aurora-drift-2 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate(-60px, -50px) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(40px, -30px) scale(0.92);
+    opacity: 0.82;
+  }
+}
+
+@keyframes gemini-aurora-pulse-center {
+  0% {
+    transform: translate(-50%, -50%) scale(0.92);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(-48%, -52%) scale(1.18);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-52%, -48%) scale(0.98);
+    opacity: 0.7;
+  }
+}
+
+@keyframes gemini-aurora-drift-emerald {
+  0% {
+    transform: translate(0, 0) scale(0.95);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate(-50px, 60px) scale(1.14);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(30px, 30px) scale(1);
+    opacity: 0.75;
+  }
+}
+
+/* ============================================================================
+   Stage Canvas
+   ============================================================================ */
 .native-setup-canvas {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 540px;
   min-height: calc(100svh - clamp(48px, 10vh, 112px));
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
+  align-items: center;
   margin: auto;
   box-sizing: border-box;
 }
 
-/* Top Progress Track */
-.native-setup-nav {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-bottom: 24px;
-}
-
-.native-setup-progress-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.native-setup-counter {
-  font-size: 11.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-accent, #b45309);
-  background: var(--color-accent-soft, #fffbeb);
-  border: 1px solid rgba(245, 158, 11, 0.22);
-  padding: 3px 12px;
-  border-radius: 999px;
-}
-
-.native-setup-step-title {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--color-text-muted, #74827d);
-  letter-spacing: -0.01em;
-}
-
-.native-setup-step-segments {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-}
-
-.native-setup-segment {
-  flex: 1;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--color-border, #e6e8ec);
-  transition: background 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
-}
-
-.native-setup-segment.active {
-  background: linear-gradient(90deg, #f59e0b, #b45309);
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
-}
-
-/* Main Setup Stage (Content area) */
+/* ============================================================================
+   Deliberate, Serene Blur-Fade Transitions
+   Takes its time between steps for an intentional, premium feel
+   ============================================================================ */
 .native-setup-stage {
   width: 100%;
   margin: auto 0;
-  padding: 24px 0;
+  padding: 16px 0;
+  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, filter, transform;
 }
 
-/* Step Canvas Container — Explicitly NO card, NO border, NO box shadow */
-.native-setup-card-centered {
+.native-setup-transition-idle {
+  opacity: 1;
+  filter: blur(0px);
+  transform: translateY(0) scale(1);
+}
+
+.native-setup-transition-blur-out {
+  opacity: 0;
+  filter: blur(14px);
+  transform: translateY(-8px) scale(0.985);
+  pointer-events: none;
+  transition: opacity 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+              filter 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.native-setup-transition-blur-in {
+  opacity: 1;
+  filter: blur(0px);
+  transform: translateY(0) scale(1);
+  transition: opacity 0.58s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.58s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.58s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.native-setup-content-block {
   width: 100%;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-  overflow: visible;
-  position: relative;
-  box-sizing: border-box;
 }
 
-/* Step Transitions & Progressive Reveals */
-.native-setup-fade {
-  animation: setup-step-enter 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes setup-step-enter {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Typography — Spacious, device-like presentation */
+/* ============================================================================
+   Personal, Warm Typography & Badges
+   ============================================================================ */
 .native-setup-header {
   text-align: left;
   margin-bottom: 28px;
 }
 
-.native-setup-header h1 {
-  font-size: clamp(24px, 4vw, 32px);
+.native-setup-personal-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-accent, #b45309);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+  box-shadow: 2px 2px 6px rgba(180, 83, 9, 0.06), -2px -2px 6px rgba(255, 255, 255, 0.8);
+}
+
+.native-setup-hero-title {
+  font-size: clamp(28px, 4.5vw, 36px);
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--color-text-primary, #15201d);
-  margin: 0 0 12px 0;
-  line-height: 1.2;
+  margin: 0 0 10px 0;
+  line-height: 1.18;
 }
 
-.native-setup-header p {
-  font-size: clamp(14px, 2vw, 15.5px);
-  line-height: 1.6;
+.native-setup-hero-subtitle {
+  font-size: clamp(14.5px, 2vw, 16px);
+  line-height: 1.62;
   color: var(--color-text-secondary, #586762);
   margin: 0;
-  max-width: 520px;
+  max-width: 510px;
 }
 
-.native-setup-header p strong {
-  color: var(--color-accent, #b45309);
-  font-weight: 600;
-}
-
-/* Form Panel */
+/* ============================================================================
+   Form Layout & Alert
+   ============================================================================ */
 .native-setup-form-panel {
   display: flex;
   flex-direction: column;
@@ -162,13 +255,14 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 13px 16px;
-  border-radius: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
   background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.24);
   color: #dc2626;
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.45;
+  box-shadow: 2px 2px 8px rgba(220, 38, 38, 0.06), -2px -2px 8px rgba(255, 255, 255, 0.8);
 }
 
 .native-setup-alert svg {
@@ -189,7 +283,9 @@
   letter-spacing: -0.01em;
 }
 
-/* Inputs — Spacious, modern, tactile */
+/* ============================================================================
+   Neumorphic Input Fields (Sunken / Inset Tactile Surfaces)
+   ============================================================================ */
 .native-setup-input-wrap {
   position: relative;
   width: 100%;
@@ -200,16 +296,21 @@
 .native-setup-input-wrap input,
 .native-setup-text-input {
   width: 100%;
-  height: 48px;
+  height: 50px;
   padding: 0 84px 0 16px;
   font-family: inherit;
-  font-size: 14.5px;
+  font-size: 15px;
   color: var(--color-text-primary, #15201d);
-  background: var(--color-surface, #ffffff);
-  border: 1px solid var(--color-border, #e6e8ec);
-  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: 14px;
   outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  /* Neumorphic Inset Depth */
+  box-shadow: 
+    inset 2.5px 2.5px 6px rgba(20, 32, 29, 0.045),
+    inset -2.5px -2.5px 6px rgba(255, 255, 255, 0.95),
+    0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
   box-sizing: border-box;
 }
 
@@ -226,8 +327,32 @@
 .native-setup-input-wrap input:focus,
 .native-setup-text-input:focus {
   border-color: #f59e0b;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
   background: #ffffff;
+  box-shadow: 
+    inset 1px 1px 3px rgba(245, 158, 11, 0.06),
+    0 0 0 3px rgba(245, 158, 11, 0.16),
+    0 6px 16px rgba(245, 158, 11, 0.12);
+}
+
+/* Neumorphic styling for RoundedSelect inside setup */
+.native-setup-field-group button[aria-haspopup="listbox"] {
+  height: 50px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(226, 232, 240, 0.85) !important;
+  background: #ffffff !important;
+  box-shadow: 
+    inset 2px 2px 5px rgba(20, 32, 29, 0.04),
+    inset -2px -2px 5px rgba(255, 255, 255, 0.95),
+    0 1px 2px rgba(0, 0, 0, 0.02) !important;
+  font-size: 14.5px !important;
+}
+
+.native-setup-field-group button[aria-haspopup="listbox"]:focus-visible,
+.native-setup-field-group button[aria-haspopup="listbox"][aria-expanded="true"] {
+  border-color: #f59e0b !important;
+  box-shadow: 
+    0 0 0 3px rgba(245, 158, 11, 0.16),
+    0 6px 16px rgba(245, 158, 11, 0.12) !important;
 }
 
 /* Password Visibility Toggle */
@@ -239,26 +364,28 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 32px;
-  padding: 0 10px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid transparent;
-  border-radius: 8px;
+  height: 34px;
+  padding: 0 11px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: 9px;
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary, #586762);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.16s ease;
   user-select: none;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.03), -2px -2px 5px rgba(255, 255, 255, 0.8);
 }
 
 .native-setup-toggle-pw:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: var(--color-text-primary, #15201d);
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--color-accent, #b45309);
+  border-color: rgba(245, 158, 11, 0.28);
 }
 
 .native-setup-field-hint {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 500;
   line-height: 1.4;
   margin-top: 3px;
@@ -272,7 +399,9 @@
   color: var(--color-status-success, #0f8a4f);
 }
 
-/* Actions & Buttons */
+/* ============================================================================
+   Neumorphic Action Buttons
+   ============================================================================ */
 .native-setup-actions {
   display: flex;
   gap: 12px;
@@ -288,83 +417,129 @@
   grid-template-columns: auto 1fr;
 }
 
+/* Elevated Tactile Neumorphic Primary Button */
 .native-setup-primary-btn {
-  height: 48px;
-  padding: 0 26px;
+  height: 50px;
+  padding: 0 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border: none;
-  border-radius: 12px;
+  border-radius: 14px;
   background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
   color: #ffffff;
   font-family: inherit;
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(180, 83, 9, 0.28);
-  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+  box-shadow: 
+    0 10px 24px -4px rgba(180, 83, 9, 0.38),
+    0 4px 10px rgba(0, 0, 0, 0.04),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.18s ease;
   user-select: none;
   white-space: nowrap;
 }
 
 .native-setup-primary-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(180, 83, 9, 0.36);
+  transform: translateY(-1.5px);
+  box-shadow: 
+    0 14px 28px -4px rgba(180, 83, 9, 0.45),
+    0 6px 14px rgba(0, 0, 0, 0.06),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.5);
 }
 
 .native-setup-primary-btn:active:not(:disabled) {
   transform: translateY(0);
+  box-shadow: 
+    0 6px 16px -2px rgba(180, 83, 9, 0.32),
+    inset 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .native-setup-primary-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   box-shadow: none;
+  transform: none;
 }
 
+/* Extruded Soft Neumorphic Back / Secondary Button */
 .native-setup-back-btn {
-  height: 48px;
-  padding: 0 20px;
+  height: 50px;
+  padding: 0 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--color-border, #e6e8ec);
-  border-radius: 12px;
-  background: var(--color-surface, #ffffff);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: 14px;
+  background: #ffffff;
   color: var(--color-text-secondary, #586762);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.16s ease;
+  box-shadow: 
+    4px 4px 12px rgba(0, 0, 0, 0.04),
+    -4px -4px 12px rgba(255, 255, 255, 0.95);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
 }
 
 .native-setup-back-btn:hover:not(:disabled) {
-  background: var(--color-page, #f6f7f9);
+  background: #fcfdfe;
   color: var(--color-text-primary, #15201d);
-  border-color: #d1d5db;
+  transform: translateY(-1px);
+  box-shadow: 
+    5px 5px 14px rgba(0, 0, 0, 0.05),
+    -5px -5px 14px rgba(255, 255, 255, 1);
 }
 
-/* Avatar / Profile Photo Step */
+.native-setup-back-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 
+    2px 2px 6px rgba(0, 0, 0, 0.03),
+    -2px -2px 6px rgba(255, 255, 255, 0.9);
+}
+
+/* ============================================================================
+   Neumorphic Avatar Well & Ring
+   ============================================================================ */
 .native-setup-avatar-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  padding: 24px 0;
+  gap: 22px;
+  padding: 20px 0;
+}
+
+/* Soft sunken well holding the avatar */
+.native-setup-avatar-well {
+  padding: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(241, 245, 249, 0.5) 100%);
+  border: 1px solid rgba(226, 232, 240, 0.65);
+  box-shadow: 
+    inset 4px 4px 12px rgba(0, 0, 0, 0.05),
+    inset -4px -4px 12px rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .native-setup-avatar-ring {
-  width: 120px;
-  height: 120px;
+  width: 124px;
+  height: 124px;
   border-radius: 50%;
   padding: 5px;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.45), rgba(180, 83, 9, 0.22));
-  box-shadow: 0 12px 30px rgba(180, 83, 9, 0.16);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.5), rgba(180, 83, 9, 0.25));
+  box-shadow: 
+    0 14px 32px rgba(180, 83, 9, 0.22),
+    0 4px 12px rgba(0, 0, 0, 0.06);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -383,12 +558,12 @@
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: var(--color-surface, #ffffff);
+  background: #ffffff;
   border: 2px solid #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 38px;
+  font-size: 40px;
   font-weight: 700;
   color: var(--color-accent, #b45309);
   letter-spacing: -0.02em;
@@ -401,7 +576,7 @@
 }
 
 .native-setup-avatar-hint {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--color-text-muted, #74827d);
   text-align: center;
   max-width: 360px;
@@ -421,23 +596,22 @@
   border-width: 0;
 }
 
-/* Step 4: Celebration / Launching Viewport */
+/* ============================================================================
+   Step 4: Celebration / Activation
+   ============================================================================ */
 .native-complete-viewport {
   width: 100%;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 40px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  padding: 40px 0;
   box-sizing: border-box;
 }
 
 .native-complete-halo {
-  width: 88px;
-  height: 88px;
+  width: 92px;
+  height: 92px;
   border-radius: 50%;
   background: rgba(16, 185, 129, 0.12);
   color: #10b981;
@@ -445,35 +619,22 @@
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  box-shadow: 0 0 28px rgba(16, 185, 129, 0.22);
-  animation: setup-halo-pulse 2.2s infinite ease-in-out;
+  box-shadow: 
+    0 0 32px rgba(16, 185, 129, 0.25),
+    4px 4px 14px rgba(0, 0, 0, 0.04),
+    -4px -4px 14px rgba(255, 255, 255, 0.9);
+  animation: setup-halo-pulse 2.4s infinite ease-in-out;
 }
 
 @keyframes setup-halo-pulse {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 22px rgba(16, 185, 129, 0.22);
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.22);
   }
   50% {
     transform: scale(1.06);
-    box-shadow: 0 0 38px rgba(16, 185, 129, 0.42);
+    box-shadow: 0 0 42px rgba(16, 185, 129, 0.42);
   }
-}
-
-.native-complete-viewport h1 {
-  font-size: clamp(26px, 4.5vw, 34px);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--color-text-primary, #15201d);
-  margin: 0 0 10px 0;
-}
-
-.native-complete-viewport p {
-  font-size: 15px;
-  color: var(--color-text-secondary, #586762);
-  max-width: 380px;
-  line-height: 1.6;
-  margin: 0;
 }
 
 .native-progress-track {
@@ -481,7 +642,8 @@
   max-width: 280px;
   height: 6px;
   border-radius: 999px;
-  background: var(--color-border, #e6e8ec);
+  background: rgba(226, 232, 240, 0.7);
+  box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.08);
   margin: 32px 0 14px 0;
   overflow: hidden;
   position: relative;
@@ -495,7 +657,8 @@
   width: 100%;
   background: linear-gradient(90deg, #f59e0b, #10b981);
   border-radius: 999px;
-  animation: setup-bar-load 1.8s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  animation: setup-bar-load 2s ease-in-out infinite;
 }
 
 @keyframes setup-bar-load {
@@ -513,15 +676,19 @@
 
 .native-setup-exiting-dashboard {
   opacity: 0;
+  filter: blur(12px);
   transform: scale(0.98);
-  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+              filter 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Reduced Motion Support */
+/* ============================================================================
+   Reduced Motion Accessibility
+   ============================================================================ */
 @media (prefers-reduced-motion: reduce) {
-  .native-setup-fade,
-  .native-setup-canvas,
-  .native-setup-segment,
+  .setup-gemini-orb,
+  .native-setup-stage,
   .native-setup-primary-btn,
   .native-setup-back-btn,
   .native-complete-halo,
@@ -530,5 +697,6 @@
     animation: none !important;
     transition: none !important;
     transform: none !important;
+    filter: none !important;
   }
 }
