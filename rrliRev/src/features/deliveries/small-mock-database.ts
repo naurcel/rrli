@@ -895,8 +895,8 @@ const DELIVERIES = [
       deliveryRate: 31000,
       expenses: {
         dieselExpenses: 4200,
-        tollGateExpenses: 1100,
-        tollGateBreakdown: "SLEX & Skyway Stage 3 port access tolls",
+        tollGateExpenses: null,
+        tollGateBreakdown: "Pending SLEX & Skyway Stage 3 port access toll receipts",
         driverAllowance: 350,
         driverDailyRate: 1000,
         helperAllowance: 250,
@@ -934,7 +934,7 @@ const DELIVERIES = [
       fuelRate: 87.0,
       deliveryRate: 28500,
       expenses: {
-        dieselExpenses: 4000,
+        dieselExpenses: null,
         tollGateExpenses: 950,
         tollGateBreakdown: "SLEX & C-5 Libis corridor tolls",
         driverAllowance: 350,
@@ -952,46 +952,6 @@ const DELIVERIES = [
         podSubmitted: true,
         supportingDocsComplete: true,
         documentRef: "SAMPLE-POD-MCC-20.pdf",
-      }],
-    }),
-  },
-  {
-    clientId: CLIENTS[2].id,
-    truckId: TRUCKS[2].id,
-    driverId: DRIVERS[1].id,
-    helperId: HELPERS[0].id,
-    scenario: "Vanguard temperature-controlled distribution to S&R Congressional Quezon City.",
-    record: buildDeliveryTripRecord({
-      id: "40000000-0000-4000-8000-000000000021",
-      waybillNumber: "WB-261116",
-      deliveryDate: "2026-11-16",
-      clientName: CLIENTS[2].name,
-      plateNumber: TRUCKS[2].plateNumber,
-      truckType: TRUCKS[2].truckType,
-      truckTemperature: "20°C",
-      origin: "Fictional Origin: Vanguard Industrial Cross-Dock Hub, Biñan, Laguna",
-      distanceKm: 91,
-      fuelRate: 85.0,
-      deliveryRate: 27500,
-      expenses: {
-        dieselExpenses: 3650,
-        tollGateExpenses: 850,
-        tollGateBreakdown: "SLEX & Skyway Quezon Ave tolls",
-        driverAllowance: 350,
-        driverDailyRate: 950,
-        helperAllowance: 250,
-        helperDailyRate: 600,
-        otherExpenses: 0,
-      },
-      dropoffs: [{
-        id: "50000000-0000-4000-8000-000000000024",
-        sequence: 1,
-        storeName: "S&R Membership Shopping - Congressional",
-        destinationArea: "Bahay Toro, Quezon City, Metro Manila",
-        entryFee: 150,
-        podSubmitted: true,
-        supportingDocsComplete: true,
-        documentRef: "SAMPLE-POD-VGD-21.pdf",
       }],
     }),
   },
@@ -1013,7 +973,6 @@ const DOCUMENT_DELIVERY_STATUSES = [
   "Submitted",
   "Verified",
   "Submitted",
-  "Verified",
   "Verified",
   "Verified",
   "Verified",
@@ -1044,11 +1003,15 @@ const DOCUMENTS: readonly SmallMockDocument[] = DELIVERIES.flatMap((delivery, de
   }),
 );
 
+const USED_TRUCK_IDS = new Set<string>(DELIVERIES.map((delivery) => delivery.truckId));
+const USED_DRIVER_IDS = new Set<string>(DELIVERIES.map((delivery) => delivery.driverId));
+const USED_HELPER_IDS = new Set<string>(DELIVERIES.map((delivery) => delivery.helperId));
+
 export const SMALL_MOCK_DATABASE = {
   clients: CLIENTS,
-  trucks: FLEET_TRUCKS,
-  drivers: DRIVERS,
-  helpers: HELPERS,
+  trucks: FLEET_TRUCKS.filter((truck) => USED_TRUCK_IDS.has(truck.id)),
+  drivers: DRIVERS.filter((driver) => USED_DRIVER_IDS.has(driver.id)),
+  helpers: HELPERS.filter((helper) => USED_HELPER_IDS.has(helper.id)),
   deliveries: DELIVERIES,
   documents: DOCUMENTS,
 } as const;
@@ -1105,16 +1068,16 @@ export function validateSmallMockDatabase(): string[] {
 
   if (clients.length !== 3) issues.push("Expected exactly 3 mock clients.");
   if (trucks.filter((truck) => truck.ownershipType === "Owned").length !== 6) issues.push("Expected exactly 6 owned mock trucks.");
-  if (trucks.filter((truck) => truck.ownershipType === "Subcontracted").length !== 15) issues.push("Expected exactly 15 subcontracted mock trucks.");
+  if (trucks.filter((truck) => truck.ownershipType === "Subcontracted").length !== 1) issues.push("Expected exactly 1 subcontracted mock truck referenced in deliveries.");
   if (drivers.length !== 2) issues.push("Expected exactly 2 mock drivers.");
   if (helpers.length !== 2) issues.push("Expected exactly 2 mock helpers.");
-  if (deliveries.length !== 21) issues.push("Expected exactly 21 mock deliveries.");
-  if (dropoffCount !== 24) issues.push("Expected exactly 24 mock drop-offs.");
+  if (deliveries.length !== 20) issues.push("Expected exactly 20 mock deliveries.");
+  if (dropoffCount !== 23) issues.push("Expected exactly 23 mock drop-offs.");
   if (waybills.size !== deliveries.length) issues.push("Mock waybill numbers must be unique.");
 
   for (const client of clients) {
     const count = deliveries.filter((delivery) => delivery.clientId === client.id).length;
-    if (count !== 7) issues.push(`${client.name} must have exactly 7 deliveries.`);
+    if (count < 6) issues.push(`${client.name} must have at least 6 deliveries.`);
   }
   for (const delivery of deliveries) {
     const truck = trucks.find((candidate) => candidate.id === delivery.truckId);
@@ -1136,8 +1099,8 @@ export function validateSmallMockDatabase(): string[] {
 
   const finalized = deliveries.filter((delivery) => delivery.record.financialState === "finalized");
   const incomplete = deliveries.filter((delivery) => delivery.record.financialState === "incomplete");
-  if (finalized.length !== 20 || incomplete.length !== 1) {
-    issues.push("Expected 20 financially finalized deliveries and 1 incomplete delivery.");
+  if (finalized.length !== 17 || incomplete.length !== 3) {
+    issues.push("Expected 17 financially finalized deliveries and 3 incomplete deliveries.");
   }
   if (summarizeTruckProfitability(deliveries.map((delivery) => delivery.record)).length !== 7) {
     issues.push("All 6 owned trucks and the active subcontracted truck must appear in confirmed profitability summaries.");

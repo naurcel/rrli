@@ -6,6 +6,8 @@ import { createPortal } from "react-dom";
 
 import { useAuthenticatedActor } from "@/components/auth-context";
 import {
+  beginDateRangeLoad,
+  endDateRangeLoad,
   GlobalDateRangePicker,
   isDateInRange,
   parseDateValue,
@@ -19,7 +21,14 @@ import { useSearchBuffer } from "@/components/search-buffer";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import { isImageDocument, triggerDocumentDownload } from "@/features/deliveries/pod-utils";
 import { derivePodVerificationStatus } from "@/features/deliveries/delivery-domain";
-import { upsertBrowserPreviewDelivery } from "@/features/deliveries/browser-preview-deliveries";
+import {
+  selectBrowserPreviewDeliveries,
+  upsertBrowserPreviewDelivery,
+} from "@/features/deliveries/browser-preview-deliveries";
+import {
+  readArchiveMachineSnapshot,
+  ROUTEX_ARCHIVE_MACHINE_CHANGED,
+} from "@/features/archive/archive-machine";
 import { canManageDocuments } from "@/lib/auth/rbac";
 import { withReturnContext } from "@/lib/navigation/return-context";
 
@@ -107,31 +116,73 @@ export default function PodDocumentsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setLoadError(null);
+    const loadId = `pod-documents:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const loadPodDeliveries = () => {
+      setLoading(true);
+      setLoadError(null);
 
-    const params = new URLSearchParams({ page: "1", pageSize: "100" });
-    if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
-    if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+      const archive = readArchiveMachineSnapshot();
+      if (archive) {
+        setDeliveries(
+          selectBrowserPreviewDeliveries({
+            dateFrom: range.startDate ? toDateKey(range.startDate) : undefined,
+            dateTo: range.endDate ? toDateKey(range.endDate) : undefined,
+          }),
+        );
+        setLoading(false);
+        return;
+      }
 
-    fetch(`/api/deliveries?${params.toString()}`, { signal: controller.signal })
-      .then(async (response) => {
-        const data = (await response.json()) as {
-          ok?: boolean;
-          items?: DeliveryLedgerItem[];
-          message?: string;
-        };
-        if (!response.ok || !data.ok) {
-          throw new Error(data.message ?? "Unable to load POD records.");
-        }
-        setDeliveries(data.items ?? []);
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        setLoadError(error instanceof Error ? error.message : "Unable to load POD records.");
-      })
-      .finally(() => setLoading(false));
-    return () => controller.abort();
+      const params = new URLSearchParams({ page: "1", pageSize: "1000" });
+      if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
+      if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
+
+      beginDateRangeLoad(loadId);
+      fetch(`/api/deliveries?${params.toString()}`, { signal: controller.signal })
+        .then(async (response) => {
+          const data = (await response.json()) as {
+            ok?: boolean;
+            items?: DeliveryLedgerItem[];
+            message?: string;
+          };
+          if (!response.ok || !data.ok) {
+            throw new Error(data.message ?? "Unable to load POD records.");
+          }
+          const remote = data.items ?? [];
+          const local = selectBrowserPreviewDeliveries({
+            dateFrom: range.startDate ? toDateKey(range.startDate) : undefined,
+            dateTo: range.endDate ? toDateKey(range.endDate) : undefined,
+          });
+          const remoteIds = new Set(remote.map((item) => item.id));
+          const remoteWaybills = new Set(
+            remote.map((item) => item.waybillNumber.trim().toUpperCase()),
+          );
+          setDeliveries([
+            ...remote,
+            ...local.filter(
+              (item) =>
+                !remoteIds.has(item.id) &&
+                !remoteWaybills.has(item.waybillNumber.trim().toUpperCase()),
+            ),
+          ]);
+        })
+        .catch((error: unknown) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          setLoadError(error instanceof Error ? error.message : "Unable to load POD records.");
+        })
+        .finally(() => {
+          endDateRangeLoad(loadId);
+          setLoading(false);
+        });
+    };
+
+    loadPodDeliveries();
+    window.addEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, loadPodDeliveries);
+    return () => {
+      endDateRangeLoad(loadId);
+      window.removeEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, loadPodDeliveries);
+      controller.abort();
+    };
   }, [range]);
 
   const dateFilteredDeliveries = useMemo(
@@ -456,7 +507,8 @@ export default function PodDocumentsPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Waybill & Date</th>
+                    <th>Waybill</th>
+                    <th>Date</th>
                     <th>Client</th>
                     <th>Truck</th>
                     <th>Store Drop-off & Store Name</th>
@@ -467,7 +519,7 @@ export default function PodDocumentsPage() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={6} className="table-empty-cell">
+                      <td colSpan={7} className="table-empty-cell">
                         <div className="empty-state minimal" role="status">
                           <strong className="empty-state-title">Loading documents…</strong>
                           <span className="empty-state-desc">Retrieving completed deliveries and store-level document attachments.</span>
@@ -476,7 +528,7 @@ export default function PodDocumentsPage() {
                     </tr>
                   ) : filteredStops.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="table-empty-cell">
+                      <td colSpan={7} className="table-empty-cell">
                         <div className="empty-state minimal" title="No store drop-offs match the selected document filter or date range">
                           <strong className="empty-state-title">
                             {bufferedQuery.trim() ? `No drop-offs match "${searchQuery.trim()}"` : "No drop-offs match this view"}
@@ -506,7 +558,8 @@ export default function PodDocumentsPage() {
                     >
                       <td>
                         <strong>{item.waybillNumber}</strong>
-                        <br />
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
                         <small>{item.deliveryDate}</small>
                       </td>
                       <td>{item.clientName}</td>

@@ -667,19 +667,27 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
       if (dRate == null || dRate <= 0) {
         issues.push("Driver daily rate missing");
       }
+      const dAllow = numberValue(values.driverAllowance);
+      if (!values.driverAllowance.trim() || dAllow == null || dAllow < 0) {
+        issues.push("Driver allowance missing");
+      }
     }
 
-    // Helper 1 & Helper 1 Rate
+    // Helper 1 & Helper 1 Rate / Allowance
     const h1Name = helper1Name.trim();
     if (!h1Name) {
       if (numberValue(values.helperDailyRate) || numberValue(values.helperAllowance)) {
         issues.push("No helper assigned");
       }
     }
-    if (!isSubcontracted) {
+    if (!isSubcontracted && h1Name) {
       const h1Rate = numberValue(values.helperDailyRate);
-      if (h1Name && (h1Rate == null || h1Rate <= 0)) {
+      if (h1Rate == null || h1Rate <= 0) {
         issues.push("Helper daily rate missing");
+      }
+      const h1Allow = numberValue(values.helperAllowance);
+      if (!values.helperAllowance.trim() || h1Allow == null || h1Allow < 0) {
+        issues.push("Helper allowance missing");
       }
     }
 
@@ -693,6 +701,10 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
         const h2Rate = numberValue(values.helper2DailyRate);
         if (h2Rate == null || h2Rate <= 0) {
           issues.push("Helper 2 daily rate missing");
+        }
+        const h2Allow = numberValue(values.helper2Allowance);
+        if (!values.helper2Allowance.trim() || h2Allow == null || h2Allow < 0) {
+          issues.push("Helper 2 allowance missing");
         }
       }
     }
@@ -720,8 +732,11 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
   }, [
     values.deliveryRate,
     values.driverDailyRate,
+    values.driverAllowance,
     values.helperDailyRate,
+    values.helperAllowance,
     values.helper2DailyRate,
+    values.helper2Allowance,
     values.dieselExpenses,
     values.tollGateExpenses,
     driverName,
@@ -1860,7 +1875,7 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
               </div>
             )}
             <div className="client-field-group">
-              <label className="field-label-text">Client</label>
+              <span className="field-label-text">Client</span>
               <RoundedSelect
                 value={clientName}
                 options={references.clients.map((option) => ({ value: option.label, label: option.label }))}
@@ -1882,9 +1897,9 @@ export default function NewCompletedDeliveryPage({ editDeliveryId: propEditDeliv
 
             {/* Truck Selection grouped into Owned Trucks and Subcontracted Trucks */}
             <div className="client-field-group">
-              <label className="field-label-text">
+              <span className="field-label-text">
                 Truck plate <span className="required-asterisk" aria-hidden="true">*</span>
-              </label>
+              </span>
               <RoundedSelect
                 value={plateNumber}
                 options={groupedTruckOptions}

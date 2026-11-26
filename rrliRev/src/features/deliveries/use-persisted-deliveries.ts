@@ -2,12 +2,20 @@
 
 import { useEffect, useState } from "react";
 
-import type { DateRange } from "@/components/global-date-range-picker";
+import {
+  beginDateRangeLoad,
+  endDateRangeLoad,
+  type DateRange,
+} from "@/components/global-date-range-picker";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import {
   BROWSER_PREVIEW_DELIVERIES_CHANGED,
   selectBrowserPreviewDeliveries,
 } from "@/features/deliveries/browser-preview-deliveries";
+import {
+  readArchiveMachineSnapshot,
+  ROUTEX_ARCHIVE_MACHINE_CHANGED,
+} from "@/features/archive/archive-machine";
 
 type DeliveryPagePayload = {
   ok?: boolean;
@@ -28,7 +36,7 @@ async function fetchDeliveryPage(
 ): Promise<DeliveryPagePayload> {
   const params = new URLSearchParams({
     page: String(page),
-    pageSize: "100",
+    pageSize: "1000",
     sort: "delivery_date",
     direction: "desc",
   });
@@ -62,6 +70,7 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
 
   useEffect(() => {
     const controller = new AbortController();
+    const loadId = `usePersistedDeliveries:${cacheKey}:${Math.random().toString(36).slice(2)}`;
     const activeRange: DateRange = {
       startDate: startTime == null ? null : new Date(startTime),
       endDate: endTime == null ? null : new Date(endTime),
@@ -75,7 +84,21 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
       setLoading(true);
     }
     setError(null);
-    const load = () => fetchDeliveryPage(1, activeRange, controller.signal)
+    const load = async () => {
+      const archive = readArchiveMachineSnapshot();
+      if (archive) {
+        const archived = selectBrowserPreviewDeliveries({
+          dateFrom: activeRange.startDate ? toDateKey(activeRange.startDate) : undefined,
+          dateTo: activeRange.endDate ? toDateKey(activeRange.endDate) : undefined,
+        });
+        deliveriesSwrCache.set(cacheKey, archived);
+        setDeliveries(archived);
+        setLoading(false);
+        return;
+      }
+
+      beginDateRangeLoad(loadId);
+      return fetchDeliveryPage(1, activeRange, controller.signal)
       .then(async (firstPage) => {
         const pageCount = firstPage.pageCount ?? 1;
         const remaining = options.allPages === false ? [] : await Promise.all(
@@ -87,14 +110,22 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
           ...(firstPage.items ?? []),
           ...remaining.flatMap((page) => page.items ?? []),
         ];
-        const local = firstPage.source === "bundled-mock"
-          ? selectBrowserPreviewDeliveries({
-              dateFrom: activeRange.startDate ? toDateKey(activeRange.startDate) : undefined,
-              dateTo: activeRange.endDate ? toDateKey(activeRange.endDate) : undefined,
-            })
-          : [];
-        const localIds = new Set(local.map((item) => item.id));
-        const nextDeliveries = [...local, ...persisted.filter((item) => !localIds.has(item.id))];
+        const local = selectBrowserPreviewDeliveries({
+          dateFrom: activeRange.startDate ? toDateKey(activeRange.startDate) : undefined,
+          dateTo: activeRange.endDate ? toDateKey(activeRange.endDate) : undefined,
+        });
+        const persistedIds = new Set(persisted.map((item) => item.id));
+        const persistedWaybills = new Set(
+          persisted.map((item) => item.waybillNumber.trim().toUpperCase()),
+        );
+        const nextDeliveries = [
+          ...persisted,
+          ...local.filter(
+            (item) =>
+              !persistedIds.has(item.id) &&
+              !persistedWaybills.has(item.waybillNumber.trim().toUpperCase()),
+          ),
+        ];
         deliveriesSwrCache.set(cacheKey, nextDeliveries);
         setDeliveries(nextDeliveries);
       })
@@ -118,7 +149,11 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
           );
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        endDateRangeLoad(loadId);
+        setLoading(false);
+      });
+    };
 
     void load();
     const reload = () => {
@@ -138,10 +173,13 @@ export function usePersistedDeliveries(range: DateRange, options: { allPages?: b
       }
     };
     window.addEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
+    window.addEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, reload);
     window.addEventListener("storage", onStorage);
 
     return () => {
+      endDateRangeLoad(loadId);
       window.removeEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
+      window.removeEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, reload);
       window.removeEventListener("storage", onStorage);
       controller.abort();
     };

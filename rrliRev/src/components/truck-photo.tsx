@@ -42,10 +42,79 @@ export async function resizeTruckPhoto(file: File): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
+const serverPhotoCache = new Map<string, string | null>();
+
+export async function fetchTruckPhoto(plateNumber: string): Promise<string | null> {
+  const normalized = plateNumber.trim().toUpperCase();
+  if (!normalized) return null;
+  if (serverPhotoCache.has(normalized)) {
+    return serverPhotoCache.get(normalized) ?? null;
+  }
+  try {
+    const response = await fetch(`/api/trucks/photo?plate=${encodeURIComponent(normalized)}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      photoUrl?: string | null;
+    } | null;
+    const url = payload?.ok ? (payload.photoUrl ?? null) : null;
+    serverPhotoCache.set(normalized, url);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveTruckPhotoFile(plateNumber: string, file: File): Promise<void> {
+  const normalized = plateNumber.trim().toUpperCase();
   const photo = await resizeTruckPhoto(file);
-  window.localStorage.setItem(storageKey(plateNumber), photo);
-  window.dispatchEvent(new Event(PHOTO_EVENT));
+  if (typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.setItem(storageKey(normalized), photo);
+  }
+  serverPhotoCache.set(normalized, photo);
+
+  const response = await fetch("/api/trucks/photo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      plateNumber: normalized,
+      photoDataUrl: photo,
+    }),
+  });
+  const payload = (await response.json().catch(() => null)) as {
+    ok?: boolean;
+    message?: string;
+    photoUrl?: string | null;
+  } | null;
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.message ?? "Unable to upload truck photo.");
+  }
+  if (payload.photoUrl) {
+    serverPhotoCache.set(normalized, payload.photoUrl);
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(PHOTO_EVENT));
+  }
+}
+
+export async function deleteTruckPhoto(plateNumber: string): Promise<void> {
+  const normalized = plateNumber.trim().toUpperCase();
+  if (typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.removeItem(storageKey(normalized));
+  }
+  serverPhotoCache.set(normalized, null);
+  try {
+    await fetch(`/api/trucks/photo?plate=${encodeURIComponent(normalized)}`, {
+      method: "DELETE",
+    });
+  } catch {
+    // Ignore network error on cleanup
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(PHOTO_EVENT));
+  }
 }
 
 export function TruckPhoto({
@@ -65,16 +134,33 @@ export function TruckPhoto({
   const normalizedPlate = plateNumber.trim().toUpperCase();
 
   useEffect(() => {
+    let cancelled = false;
     const key = storageKey(plateNumber);
-    const syncPhoto = () => setPhoto(window.localStorage.getItem(key));
+    const syncPhoto = () => {
+      const cached = serverPhotoCache.get(normalizedPlate);
+      if (cached !== undefined) {
+        setPhoto(cached ?? window.localStorage.getItem(key));
+      } else {
+        setPhoto(window.localStorage.getItem(key));
+      }
+    };
     syncPhoto();
+    void fetchTruckPhoto(normalizedPlate).then((remoteUrl) => {
+      if (cancelled) return;
+      if (remoteUrl) {
+        setPhoto(remoteUrl);
+      } else if (!window.localStorage.getItem(key)) {
+        setPhoto(null);
+      }
+    });
     window.addEventListener(PHOTO_EVENT, syncPhoto);
     window.addEventListener("storage", syncPhoto);
     return () => {
+      cancelled = true;
       window.removeEventListener(PHOTO_EVENT, syncPhoto);
       window.removeEventListener("storage", syncPhoto);
     };
-  }, [plateNumber]);
+  }, [normalizedPlate, plateNumber]);
 
   useEffect(() => {
     function closeOnOutsideClick(event: PointerEvent) {
@@ -102,10 +188,8 @@ export function TruckPhoto({
     setProcessing(true);
     setMessage(null);
     try {
-      const nextPhoto = await resizeTruckPhoto(file);
-      window.localStorage.setItem(storageKey(plateNumber), nextPhoto);
-      setPhoto(nextPhoto);
-      window.dispatchEvent(new Event(PHOTO_EVENT));
+      await saveTruckPhotoFile(plateNumber, file);
+      setPhoto(serverPhotoCache.get(normalizedPlate) ?? window.localStorage.getItem(storageKey(plateNumber)));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to save this photo.");
     } finally {
@@ -115,10 +199,9 @@ export function TruckPhoto({
 
   function removePhoto() {
     if (menuRef.current) menuRef.current.open = false;
-    window.localStorage.removeItem(storageKey(plateNumber));
     setPhoto(null);
     setMessage(null);
-    window.dispatchEvent(new Event(PHOTO_EVENT));
+    void deleteTruckPhoto(plateNumber);
   }
 
   return (

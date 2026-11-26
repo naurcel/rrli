@@ -185,14 +185,19 @@ function compareValues(
 export function listSmallMockDeliveryRecords(input: Partial<DeliveryListQuery> = {}): DeliveryListResult {
   const search = (input.search ?? "").toLocaleLowerCase().trim();
   const searchClean = search.replace(/\s+/g, "");
+  const fleetTrucks = getFleetTrucks();
+  const providerByPlateOrId = new Map<string, string>();
+  for (const t of fleetTrucks) {
+    const prov = (t.provider ?? "").toLocaleLowerCase();
+    providerByPlateOrId.set(t.plateNumber.toUpperCase(), prov);
+    providerByPlateOrId.set(t.id, prov);
+  }
   const matchingBase = ledgerItems().filter((item) => {
     const plateClean = item.plateNumber.toLocaleLowerCase().replace(/\s+/g, "");
-    const regTruck = getFleetTrucks().find(
-      (t) =>
-        t.plateNumber.toUpperCase() === item.plateNumber.toUpperCase() ||
-        t.id === item.truckId,
-    );
-    const truckerName = (regTruck?.provider ?? "").toLocaleLowerCase();
+    const truckerName =
+      providerByPlateOrId.get(item.plateNumber.toUpperCase()) ??
+      providerByPlateOrId.get(item.truckId) ??
+      "";
 
     const searchable = [
       item.id,

@@ -18,14 +18,14 @@ test("keeps the RouteX mock database intentionally small and internally related"
     SMALL_MOCK_DATABASE.clients.map((client) => client.name),
     ["Landers", "Manila Comisario Central Inc. (MCCI)", "Vanguard"],
   );
-  assert.equal(SMALL_MOCK_DATABASE.trucks.length, 21);
+  assert.equal(SMALL_MOCK_DATABASE.trucks.length, 7);
   assert.equal(
     SMALL_MOCK_DATABASE.trucks.filter((truck) => truck.ownershipType === "Owned").length,
     6,
   );
   assert.equal(
     SMALL_MOCK_DATABASE.trucks.filter((truck) => truck.ownershipType === "Subcontracted").length,
-    15,
+    1,
   );
   const ownedTrucks = SMALL_MOCK_DATABASE.trucks.filter(
     (truck) => truck.ownershipType === "Owned",
@@ -41,27 +41,28 @@ test("keeps the RouteX mock database intentionally small and internally related"
   );
   assert.equal(SMALL_MOCK_DATABASE.drivers.length, 2);
   assert.equal(SMALL_MOCK_DATABASE.helpers.length, 2);
-  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 21);
+  assert.equal(SMALL_MOCK_DATABASE.deliveries.length, 20);
   assert.equal(
     SMALL_MOCK_DATABASE.deliveries.reduce(
       (count, delivery) => count + delivery.record.dropoffs.length,
       0,
     ),
-    24,
+    23,
   );
 });
 
-test("returns exactly seven deliveries per client and honors the date range filter", () => {
-  for (const client of SMALL_MOCK_DATABASE.clients) {
-    assert.equal(filterSmallMockDeliveries({ clientId: client.id }).length, 7);
-  }
+test("returns expected deliveries per client and honors the date range filter", () => {
+  assert.deepEqual(
+    SMALL_MOCK_DATABASE.clients.map((client) => filterSmallMockDeliveries({ clientId: client.id }).length),
+    [7, 7, 6],
+  );
 
   assert.equal(
     filterSmallMockDeliveries({
       dateFrom: SMALL_MOCK_PERIOD.start,
       dateTo: SMALL_MOCK_PERIOD.end,
     }).length,
-    21,
+    20,
   );
   assert.equal(
     filterSmallMockDeliveries({ dateFrom: "2026-10-29", dateTo: "2026-10-31" }).length,
@@ -98,12 +99,12 @@ test("preserves confirmed zero, not applicable, unknown, low-margin, and incompl
   assert.equal(subcontracted?.deliveryRate, 6325);
 });
 
-test("excludes the incomplete trip from confirmed truck profitability", () => {
+test("excludes the incomplete trips from confirmed truck profitability", () => {
   const records = SMALL_MOCK_DATABASE.deliveries.map((delivery) => delivery.record);
   const summaries = summarizeTruckProfitability(records);
 
   assert.equal(summaries.length, 7);
-  assert.equal(summaries.reduce((count, truck) => count + truck.completedTrips, 0), 20);
+  assert.equal(summaries.reduce((count, truck) => count + truck.completedTrips, 0), 17);
   for (const summary of summaries) {
     assert.equal(summary.netProfit, summary.totalEarnings - summary.totalExpenses);
     assert.ok(summary.netProfit > 0, `Truck ${summary.plateNumber} should have positive net profit`);

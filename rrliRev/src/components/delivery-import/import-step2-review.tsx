@@ -1,9 +1,10 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { StagedDeliveryRow } from "@/features/deliveries/delivery-import-parser";
 import type { FleetTruck } from "@/features/deliveries/truck-registry";
 import type { FleetCrewMember } from "@/features/deliveries/driver-registry";
+import { TablePagination } from "@/components/table-pagination";
 
 type FilterTab = "all" | "ready" | "attention" | "duplicate";
 
@@ -55,6 +56,25 @@ export function ImportStep2Review({
   liveCrew,
 }: ImportStep2ReviewProps) {
   const searchInputId = useId();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  const pageCount = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, searchQuery, pageSize]);
+
+  useEffect(() => {
+    if (page > pageCount) {
+      setPage(pageCount);
+    }
+  }, [page, pageCount]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return visibleRows.slice(start, start + pageSize);
+  }, [visibleRows, page, pageSize]);
 
   return (
     <section className="records-card" aria-label="Review and Validate Staged Deliveries">
@@ -166,43 +186,72 @@ export function ImportStep2Review({
             Clear Search
           </button>
         ) : null}
+        <label
+          style={{
+            marginLeft: "auto",
+            fontSize: "12px",
+            color: "var(--color-text-muted)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          Rows per page:
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            style={{
+              fontSize: "12px",
+              padding: "4px 8px",
+              borderRadius: "6px",
+              border: "1px solid var(--line)",
+              background: "var(--color-surface)",
+              color: "var(--color-text-primary)",
+            }}
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </label>
       </div>
 
       {/* Staged Deliveries Table */}
       <div className="table-wrap">
-        <table style={{ tableLayout: "fixed", width: "100%", minWidth: "1280px" }}>
+        <table style={{ tableLayout: "fixed", width: "100%", minWidth: "1530px" }}>
           <colgroup>
-            <col style={{ width: "140px" }} />
-            <col style={{ width: "135px" }} />
-            <col style={{ width: "130px" }} />
-            <col style={{ width: "160px" }} />
-            <col style={{ width: "115px" }} />
-            <col style={{ width: "85px" }} />
+            <col style={{ width: "195px" }} />
+            <col style={{ width: "155px" }} />
+            <col style={{ width: "150px" }} />
+            <col style={{ width: "165px" }} />
+            <col style={{ width: "125px" }} />
+            <col style={{ width: "90px" }} />
             <col style={{ width: "110px" }} />
             <col style={{ width: "100px" }} />
-            <col style={{ width: "95px" }} />
-            <col style={{ width: "180px" }} />
-            <col style={{ width: "90px" }} />
-            <col style={{ width: "45px" }} />
+            <col style={{ width: "100px" }} />
+            <col style={{ width: "160px" }} />
+            <col style={{ width: "130px" }} />
+            <col style={{ width: "50px" }} />
           </colgroup>
           <thead>
             <tr>
-              <th style={{ width: "140px" }}>Status</th>
-              <th style={{ width: "135px" }}>Date</th>
-              <th style={{ width: "130px" }}>Waybill</th>
-              <th style={{ width: "160px" }}>Client</th>
-              <th style={{ width: "115px" }}>Plate</th>
-              <th style={{ width: "85px" }}>Temp</th>
+              <th style={{ width: "195px" }}>Status</th>
+              <th style={{ width: "155px" }}>Date</th>
+              <th style={{ width: "150px" }}>Waybill</th>
+              <th style={{ width: "165px" }}>Client</th>
+              <th style={{ width: "125px" }}>Plate</th>
+              <th style={{ width: "90px" }}>Temp</th>
               <th style={{ width: "110px" }}>Revenue</th>
               <th style={{ width: "100px" }}>Diesel</th>
-              <th style={{ width: "95px" }}>Tolls</th>
-              <th style={{ width: "180px" }}>Crew (Driver / Helper)</th>
-              <th style={{ width: "90px" }}>Stops</th>
-              <th style={{ width: "45px" }} aria-label="Row Actions" />
+              <th style={{ width: "100px" }}>Tolls</th>
+              <th style={{ width: "160px" }}>Crew (Driver / Helper)</th>
+              <th style={{ width: "130px" }}>Stops</th>
+              <th style={{ width: "50px" }} aria-label="Row Actions" />
             </tr>
           </thead>
           <tbody>
-            {visibleRows.length === 0 ? (
+            {paginatedRows.length === 0 ? (
               <tr>
                 <td
                   colSpan={12}
@@ -216,7 +265,7 @@ export function ImportStep2Review({
                 </td>
               </tr>
             ) : (
-              visibleRows.map((row) => (
+              paginatedRows.map((row) => (
                 <tr
                   key={row.id}
                   style={{
@@ -228,8 +277,8 @@ export function ImportStep2Review({
                           : undefined,
                   }}
                 >
-                  <td>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                  <td style={{ whiteSpace: "normal", overflow: "hidden", verticalAlign: "top" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "3px", maxWidth: "100%" }}>
                       <span
                         className={`pod-status ${
                           row.status === "ready"
@@ -263,45 +312,45 @@ export function ImportStep2Review({
                             <line x1="12" y1="8" x2="12" y2="12" />
                             <line x1="12" y1="16" x2="12.01" y2="16" />
                           </svg>
-                          {row.issues.map((i) => i.message).join(", ")}
+                          <span>{row.issues.map((i) => i.message).join(", ")}</span>
                         </span>
                       ) : null}
                     </div>
                   </td>
-                  <td>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
                     <input
                       type="date"
                       min="2024-01-01"
                       className="import-table-input"
                       value={row.deliveryDate}
                       onChange={(e) => updateRowField(row.id, "deliveryDate", e.target.value)}
-                      style={{ width: "125px" }}
+                      style={{ width: "100%" }}
                     />
                   </td>
-                  <td>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
                     <input
                       type="text"
                       className={`import-table-input${!row.waybillNumber.trim() ? " has-error" : ""}`}
                       value={row.waybillNumber}
                       onChange={(e) => updateRowField(row.id, "waybillNumber", e.target.value)}
                       style={{
-                        width: "115px",
+                        width: "100%",
                         fontFamily: "var(--font-mono, monospace)",
                         fontWeight: 600,
                       }}
                     />
                   </td>
-                  <td>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
                     <input
                       type="text"
                       list="registered-clients-datalist"
                       className={`import-table-input${!row.clientName.trim() ? " has-error" : ""}`}
                       value={row.clientName}
                       onChange={(e) => updateRowField(row.id, "clientName", e.target.value)}
-                      style={{ width: "135px" }}
+                      style={{ width: "100%" }}
                     />
                   </td>
-                  <td>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                       <input
                         type="text"
@@ -329,7 +378,7 @@ export function ImportStep2Review({
                             updateRowField(row.id, "plateNumber", newPlate);
                           }
                         }}
-                        style={{ width: "95px", textTransform: "uppercase", fontWeight: 600 }}
+                        style={{ width: "100%", textTransform: "uppercase", fontWeight: 600 }}
                       />
                       <span
                         className="routex-badge"
@@ -344,17 +393,17 @@ export function ImportStep2Review({
                       </span>
                     </div>
                   </td>
-                  <td>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
                     <input
                       type="text"
                       className="import-table-input"
                       value={row.truckTemperature}
                       placeholder="Temp"
                       onChange={(e) => updateRowField(row.id, "truckTemperature", e.target.value)}
-                      style={{ width: "80px", textAlign: "center" }}
+                      style={{ width: "100%", textAlign: "center" }}
                     />
                   </td>
-                  <td>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
                     <input
                       type="number"
                       className={`import-table-input${row.deliveryRate <= 0 ? " has-error" : ""}`}
@@ -365,13 +414,13 @@ export function ImportStep2Review({
                         updateRowField(row.id, "deliveryRate", Number(e.target.value) || 0)
                       }
                       style={{
-                        width: "90px",
+                        width: "100%",
                         textAlign: "right",
                         fontVariantNumeric: "tabular-nums",
                       }}
                     />
                   </td>
-                  <td>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
                     <input
                       type="number"
                       className="import-table-input"
@@ -386,13 +435,13 @@ export function ImportStep2Review({
                         )
                       }
                       style={{
-                        width: "80px",
+                        width: "100%",
                         textAlign: "right",
                         fontVariantNumeric: "tabular-nums",
                       }}
                     />
                   </td>
-                  <td>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
                     <input
                       type="number"
                       className="import-table-input"
@@ -407,13 +456,13 @@ export function ImportStep2Review({
                         )
                       }
                       style={{
-                        width: "80px",
+                        width: "100%",
                         textAlign: "right",
                         fontVariantNumeric: "tabular-nums",
                       }}
                     />
                   </td>
-                  <td>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                       <input
                         type="text"
@@ -428,7 +477,7 @@ export function ImportStep2Review({
                             e.target.value.trim() ? e.target.value : null,
                           )
                         }
-                        style={{ width: "110px", fontSize: "11px", padding: "3px 6px" }}
+                        style={{ width: "100%", fontSize: "11px", padding: "3px 6px" }}
                       />
                       <input
                         type="text"
@@ -443,12 +492,12 @@ export function ImportStep2Review({
                             e.target.value.trim() ? e.target.value : null,
                           )
                         }
-                        style={{ width: "110px", fontSize: "11px", padding: "3px 6px" }}
+                        style={{ width: "100%", fontSize: "11px", padding: "3px 6px" }}
                       />
                     </div>
                   </td>
-                  <td>
-                    <div style={{ maxWidth: "200px" }}>
+                  <td style={{ overflow: "hidden", verticalAlign: "top" }}>
+                    <div style={{ maxWidth: "100%" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                         <span className="routex-badge" style={{ fontSize: "10px" }}>
                           {(() => {
@@ -537,6 +586,18 @@ export function ImportStep2Review({
             ))}
         </datalist>
       </div>
+
+      {visibleRows.length > 0 ? (
+        <TablePagination
+          page={page}
+          pageCount={pageCount}
+          totalItems={visibleRows.length}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          itemLabel="staged trips"
+          itemCountInPage={paginatedRows.length}
+        />
+      ) : null}
     </section>
   );
 }

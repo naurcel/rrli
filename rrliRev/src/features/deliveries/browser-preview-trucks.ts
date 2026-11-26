@@ -2,12 +2,17 @@ import {
   FLEET_TRUCKS,
   type FleetTruck,
 } from "./truck-registry.ts";
+import { readArchiveMachineSnapshot } from "../archive/archive-machine.ts";
 
 export const BROWSER_PREVIEW_TRUCKS_KEY = "routex-browser-preview-trucks-v1";
 export const BROWSER_PREVIEW_TRUCKS_CHANGED = "routex:browser-preview-trucks-changed";
 
 export function readBrowserPreviewTrucks(): FleetTruck[] {
   if (typeof window === "undefined") return [];
+  const archive = readArchiveMachineSnapshot();
+  if (archive && Array.isArray(archive.trucks) && archive.trucks.length > 0) {
+    return archive.trucks;
+  }
   try {
     const raw = window.localStorage.getItem(BROWSER_PREVIEW_TRUCKS_KEY);
     if (!raw) return [];

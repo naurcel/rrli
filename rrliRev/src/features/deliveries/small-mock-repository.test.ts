@@ -227,7 +227,7 @@ test("mock repository sorts incomplete null expenses to the bottom when sorting 
   });
 
   const lastItem = ascExpenses.items[ascExpenses.items.length - 1];
-  assert.equal(lastItem.waybillNumber, "WB-261102", "Incomplete trip with null expenses must sort to the end in asc order");
+  assert.equal(lastItem.financialState, "incomplete", "Incomplete trip with null expenses must sort to the end in asc order");
   assert.equal(lastItem.totalExpenses, null);
 
   // First item must have lowest confirmed expenses, not null

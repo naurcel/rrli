@@ -2,11 +2,19 @@
 
 import { useEffect, useState } from "react";
 
-import type { DateRange } from "@/components/global-date-range-picker";
+import {
+  beginDateRangeLoad,
+  endDateRangeLoad,
+  type DateRange,
+} from "@/components/global-date-range-picker";
 import {
   BROWSER_PREVIEW_DELIVERIES_CHANGED,
   mergeBrowserPreviewSummary,
 } from "@/features/deliveries/browser-preview-deliveries";
+import {
+  readArchiveMachineSnapshot,
+  ROUTEX_ARCHIVE_MACHINE_CHANGED,
+} from "@/features/archive/archive-machine";
 
 export type PersistedTruckSummary = {
   truck_id: string;
@@ -47,6 +55,7 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
 
   useEffect(() => {
     const controller = new AbortController();
+    const loadId = `useDeliveryProfitabilitySummary:${cacheKey}:${Math.random().toString(36).slice(2)}`;
     const params = new URLSearchParams();
     if (start) params.set("dateFrom", start);
     if (end) params.set("dateTo", end);
@@ -59,7 +68,26 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
       setLoading(true);
     }
     setError(null);
-    const load = () => fetch(`/api/deliveries/summary?${params}`, { signal: controller.signal })
+    const load = async () => {
+      const archive = readArchiveMachineSnapshot();
+      if (archive) {
+        const emptySummary: PersistedProfitabilitySummary = {
+          deliveries: 0,
+          revenue: 0,
+          expenses: 0,
+          netIncome: 0,
+          profitMargin: null,
+          trucks: [],
+        };
+        const archiveSummary = mergeBrowserPreviewSummary(emptySummary, start, end, []);
+        summarySwrCache.set(cacheKey, archiveSummary);
+        setSummary(archiveSummary);
+        setLoading(false);
+        return;
+      }
+
+      beginDateRangeLoad(loadId);
+      return fetch(`/api/deliveries/summary?${params}`, { signal: controller.signal })
       .then(async (response) => {
         const payload = await response.json() as {
           ok?: boolean;
@@ -95,7 +123,11 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
           setError(reason instanceof Error ? reason.message : "Unable to load profitability summary.");
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        endDateRangeLoad(loadId);
+        setLoading(false);
+      });
+    };
     void load();
     const reload = () => {
       summarySwrCache.clear();
@@ -114,9 +146,12 @@ export function useDeliveryProfitabilitySummary(range: DateRange) {
       }
     };
     window.addEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
+    window.addEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, reload);
     window.addEventListener("storage", onStorage);
     return () => {
+      endDateRangeLoad(loadId);
       window.removeEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, reload);
+      window.removeEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, reload);
       window.removeEventListener("storage", onStorage);
       controller.abort();
     };

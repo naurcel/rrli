@@ -9,7 +9,8 @@ import { useAuthenticatedActor } from "@/components/auth-context";
 import { ConfirmDeliveryDeletionDialog } from "@/components/confirm-delivery-deletion-dialog";
 import { BackdatingTicketsModal } from "@/components/backdating-tickets-modal";
 import {
-  formatDateRange,
+  beginDateRangeLoad,
+  endDateRangeLoad,
   GlobalDateRangePicker,
   parseDateValue,
   useGlobalDateRange,
@@ -37,9 +38,14 @@ import {
 } from "@/lib/auth/rbac";
 import { formatPercent, formatPeso } from "@/lib/format";
 import {
+  BROWSER_PREVIEW_DELIVERIES_CHANGED,
   selectBrowserPreviewDeliveries,
   upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
+import {
+  readArchiveMachineSnapshot,
+  ROUTEX_ARCHIVE_MACHINE_CHANGED,
+} from "@/features/archive/archive-machine";
 import { deleteDeliveryRecord } from "@/features/deliveries/delivery-deletion-client";
 import {
   countUnresolvedDeliveryAttentionFlags,
@@ -178,16 +184,20 @@ export default function DeliveriesPage() {
   const [returnLabelParam, setReturnLabelParam] = useState<string | null>(null);
   const [backdatingModalOpen, setBackdatingModalOpen] = useState(false);
   const [selectedTripIds, setSelectedTripIds] = useState<Set<string>>(new Set());
-  const [, setFlagsVersion] = useState(0);
+  const [flagsVersion, setFlagsVersion] = useState(0);
 
   useEffect(() => {
     function handleFlags() {
       setFlagsVersion((v) => v + 1);
     }
     window.addEventListener(DELIVERY_FLAGS_CHANGED_EVENT, handleFlags);
+    window.addEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, handleFlags);
+    window.addEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, handleFlags);
     window.addEventListener("storage", handleFlags);
     return () => {
       window.removeEventListener(DELIVERY_FLAGS_CHANGED_EVENT, handleFlags);
+      window.removeEventListener(ROUTEX_ARCHIVE_MACHINE_CHANGED, handleFlags);
+      window.removeEventListener(BROWSER_PREVIEW_DELIVERIES_CHANGED, handleFlags);
       window.removeEventListener("storage", handleFlags);
     };
   }, []);
@@ -288,21 +298,63 @@ export default function DeliveriesPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    const loadId = `deliveries-page:${Date.now()}:${Math.random().toString(36).slice(2)}`;
     const timeout = window.setTimeout(() => {
-      const params = new URLSearchParams({ page: "1", pageSize: "100" });
+      const archive = readArchiveMachineSnapshot();
+      const [sortField, direction] = sort.split(":");
+      if (archive) {
+        const local = selectBrowserPreviewDeliveries({
+          search: debouncedSearchQuery,
+          clientIds: selectedClients.length > 0 ? selectedClients : undefined,
+          truckIds: selectedTrucks.length > 0 ? selectedTrucks : undefined,
+          dateFrom: range.startDate ? toDateKey(range.startDate) : undefined,
+          dateTo: range.endDate ? toDateKey(range.endDate) : undefined,
+        });
+        setDeliveries(sortDeliveryLedgerItems(local, sortField, direction as TableSortDirection));
+        const clientSet = new Map<string, DeliveryFilterOption>();
+        const truckSet = new Map<string, DeliveryFilterOption>();
+        const driverSet = new Map<string, DeliveryFilterOption>();
+        const helperSet = new Map<string, DeliveryFilterOption>();
+        for (const item of archive.deliveries) {
+          if (item.clientId && !clientSet.has(item.clientId)) {
+            clientSet.set(item.clientId, { id: item.clientId, label: item.clientName });
+          }
+          if (item.plateNumber && !truckSet.has(item.plateNumber)) {
+            truckSet.set(item.plateNumber, { id: item.plateNumber, label: item.plateNumber });
+          }
+          if (item.driverName && !driverSet.has(item.driverName.toLowerCase())) {
+            driverSet.set(item.driverName.toLowerCase(), {
+              id: `driver-${item.driverName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+              label: item.driverName,
+            });
+          }
+          if (item.helperName && !helperSet.has(item.helperName.toLowerCase())) {
+            helperSet.set(item.helperName.toLowerCase(), {
+              id: `helper-${item.helperName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+              label: item.helperName,
+            });
+          }
+        }
+        setClients(Array.from(clientSet.values()));
+        setTrucks(Array.from(truckSet.values()));
+        setDrivers(Array.from(driverSet.values()));
+        setHelpers(Array.from(helperSet.values()));
+        setLoading(false);
+        return;
+      }
+
+      const params = new URLSearchParams({ page: "1", pageSize: "1000" });
       if (debouncedSearchQuery.trim()) params.set("q", debouncedSearchQuery.trim());
       if (selectedClients.length > 0) params.set("clientIds", selectedClients.join(","));
       if (selectedTrucks.length > 0) params.set("truckIds", selectedTrucks.join(","));
       if (range.startDate) params.set("dateFrom", toDateKey(range.startDate));
       if (range.endDate) params.set("dateTo", toDateKey(range.endDate));
-      const [sortField, direction] = sort.split(":");
       params.set("sort", sortField);
       params.set("direction", direction);
 
-      if (deliveries.length === 0) {
-        setLoading(true);
-      }
+      setLoading(true);
       setLoadError(null);
+      beginDateRangeLoad(loadId);
       fetch(`/api/deliveries?${params.toString()}`, { signal: controller.signal })
         .then(async (response) => {
           const data = (await response.json()) as {
@@ -322,18 +374,26 @@ export default function DeliveriesPage() {
           if (!response.ok || !data.ok) {
             throw new Error(data.message ?? "Unable to load delivery records.");
           }
-          const local = data.source === "bundled-mock"
-            ? selectBrowserPreviewDeliveries({
-                search: debouncedSearchQuery,
-                clientIds: selectedClients.length > 0 ? selectedClients : undefined,
-                truckIds: selectedTrucks.length > 0 ? selectedTrucks : undefined,
-                dateFrom: range.startDate ? toDateKey(range.startDate) : undefined,
-                dateTo: range.endDate ? toDateKey(range.endDate) : undefined,
-              })
-            : [];
+          const local = selectBrowserPreviewDeliveries({
+            search: debouncedSearchQuery,
+            clientIds: selectedClients.length > 0 ? selectedClients : undefined,
+            truckIds: selectedTrucks.length > 0 ? selectedTrucks : undefined,
+            dateFrom: range.startDate ? toDateKey(range.startDate) : undefined,
+            dateTo: range.endDate ? toDateKey(range.endDate) : undefined,
+          });
           const remote = data.items ?? [];
-          const localIds = new Set(local.map((item) => item.id));
-          const combined = [...local, ...remote.filter((item) => !localIds.has(item.id))];
+          const remoteIds = new Set(remote.map((item) => item.id));
+          const remoteWaybills = new Set(
+            remote.map((item) => item.waybillNumber.trim().toUpperCase()),
+          );
+          const combined = [
+            ...remote,
+            ...local.filter(
+              (item) =>
+                !remoteIds.has(item.id) &&
+                !remoteWaybills.has(item.waybillNumber.trim().toUpperCase()),
+            ),
+          ];
           setDeliveries(sortDeliveryLedgerItems(combined, sortField, direction as TableSortDirection));
           const remoteClients = data.filters?.clients ?? [];
           const existingClientIds = new Set(remoteClients.map((c) => c.id));
@@ -393,15 +453,19 @@ export default function DeliveriesPage() {
           setDeliveries([]);
           setLoadError(error instanceof Error ? error.message : "Unable to load deliveries.");
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          endDateRangeLoad(loadId);
+          setLoading(false);
+        });
     }, 50);
 
     return () => {
+      endDateRangeLoad(loadId);
       window.clearTimeout(timeout);
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, debouncedSearchQuery, selectedClients, selectedTrucks]);
+  }, [range, debouncedSearchQuery, selectedClients, selectedTrucks, flagsVersion]);
 
   const isInitialParamsParsed = useRef(false);
 
@@ -882,73 +946,11 @@ export default function DeliveriesPage() {
                 setRange({ startDate: null, endDate: null });
               }}
             />
-          </div>
 
-          {(selectedClients.length > 0 ||
-            selectedTrucks.length > 0 ||
-            range.startDate ||
-            range.endDate) && (
-            <div className="active-filter-chips" aria-label="Active filters">
-              <span className="active-chips-label">Active filters:</span>
-              {(range.startDate || range.endDate) && (
-                <span className="filter-chip">
-                  <span className="filter-chip-category">Date:</span>{" "}
-                  {formatDateRange(range)}
-                  <button
-                    type="button"
-                    className="filter-chip-remove"
-                    aria-label="Remove date range filter"
-                    title="Remove date range filter"
-                    onClick={() =>
-                      setRange({ startDate: null, endDate: null })
-                    }
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
-              {selectedClients.map((id) => {
-                const client = clients.find((c) => c.id === id);
-                const label = client?.label ?? id;
-                return (
-                  <span key={`client-${id}`} className="filter-chip">
-                    <span className="filter-chip-category">Client:</span> {label}
-                    <button
-                      type="button"
-                      className="filter-chip-remove"
-                      aria-label={`Remove filter for ${label}`}
-                      title={`Remove filter for ${label}`}
-                      onClick={() => setSelectedClients((prev) => prev.filter((item) => item !== id))}
-                    >
-                      ×
-                    </button>
-                  </span>
-                );
-              })}
-              {selectedTrucks.map((id) => {
-                const truck = trucks.find(
-                  (t) =>
-                    t.id === id ||
-                    t.label.toUpperCase() === id.toUpperCase() ||
-                    t.label.replace(/\s+/g, "").toUpperCase() ===
-                      id.replace(/\s+/g, "").toUpperCase(),
-                );
-                const label = truck?.label ?? id;
-                return (
-                  <span key={`truck-${id}`} className="filter-chip">
-                    <span className="filter-chip-category">Truck:</span> {label}
-                    <button
-                      type="button"
-                      className="filter-chip-remove"
-                      aria-label={`Remove filter for ${label}`}
-                      title={`Remove filter for ${label}`}
-                      onClick={() => setSelectedTrucks((prev) => prev.filter((item) => item !== id))}
-                    >
-                      ×
-                    </button>
-                  </span>
-                );
-              })}
+            {(selectedClients.length > 0 ||
+              selectedTrucks.length > 0 ||
+              range.startDate ||
+              range.endDate) && (
               <button
                 type="button"
                 className="filter-chip-clear-all"
@@ -962,8 +964,8 @@ export default function DeliveriesPage() {
               >
                 Clear all
               </button>
-            </div>
-          )}
+            )}
+          </div>
 
           {loadError ? (
             <div className="empty-state" role="alert">

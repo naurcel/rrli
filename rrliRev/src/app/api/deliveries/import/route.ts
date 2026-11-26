@@ -390,6 +390,33 @@ export async function POST(request: Request) {
     const driverCache = new Map<string, string>();
     const helperCache = new Map<string, string>();
 
+    // Pre-warm entity caches in parallel before processing rows
+    const [clientsPreload, trucksPreload, employeesPreload] = await Promise.all([
+      supabase.from("clients").select("id, name").eq("is_active", true),
+      supabase.from("trucks").select("id, plate_number").eq("is_active", true),
+      supabase.from("employees").select("id, full_name, assignment_type").eq("is_active", true),
+    ]);
+
+    for (const c of clientsPreload.data ?? []) {
+      if (c.name && c.id) clientCache.set(c.name.trim().toLowerCase(), c.id);
+    }
+    for (const t of trucksPreload.data ?? []) {
+      if (t.plate_number && t.id) truckCache.set(t.plate_number.trim().toLowerCase(), t.id);
+    }
+    for (const emp of employeesPreload.data ?? []) {
+      if (!emp.full_name || !emp.id) continue;
+      const lower = emp.full_name.trim().toLowerCase();
+      if (emp.assignment_type === "Helper") {
+        helperCache.set(lower, emp.id);
+      } else {
+        driverCache.set(lower, emp.id);
+        if (!driverCache.has("fleet driver")) {
+          driverCache.set("fleet driver", emp.id);
+          driverCache.set("unknown driver", emp.id);
+        }
+      }
+    }
+
     async function resolveClientId(name: string): Promise<string> {
       const clean = name.trim();
       const lower = clean.toLowerCase();
@@ -603,50 +630,92 @@ export async function POST(request: Request) {
       return null;
     }
 
+    // Pre-resolve unique clients, trucks, drivers, and helpers so concurrent row RPCs don't race on entity creation
+    const uniqueClients = new Set<string>();
+    const uniqueTrucks = new Map<string, { plate: string; type?: string; ownership?: string }>();
+    const uniqueDrivers = new Set<string>();
+    const uniqueHelpers = new Set<string>();
+
+    const nonDuplicateRows: typeof rows = [];
     for (const row of rows) {
       if (existingSet.has(row.waybillNumber)) {
         duplicates.push(row.waybillNumber);
         continue;
       }
-
-      try {
-        await resolveClientId(row.clientName);
-        await resolveTruckId(row.plateNumber, row.truckType, row.truckOwnership);
-        const driverId = await resolveDriverId(row.driverName);
-        const helperId = await resolveHelperId(row.helperName);
-
-        const rpcPayload = {
-          ...row,
-          driverId,
-          helperId,
-          idempotencyKey: crypto.randomUUID(),
-        };
-
-        const { error } = await supabase.rpc("create_delivery_record", {
-          p_record: rpcPayload,
-          p_dropoffs: row.dropoffs,
+      existingSet.add(row.waybillNumber);
+      nonDuplicateRows.push(row);
+      if (row.clientName?.trim()) uniqueClients.add(row.clientName.trim());
+      if (row.plateNumber?.trim()) {
+        uniqueTrucks.set(row.plateNumber.trim().toUpperCase(), {
+          plate: row.plateNumber.trim().toUpperCase(),
+          type: row.truckType,
+          ownership: row.truckOwnership,
         });
+      }
+      if (row.driverName?.trim()) uniqueDrivers.add(row.driverName.trim());
+      if (row.helperName?.trim()) uniqueHelpers.add(row.helperName.trim());
+    }
 
-        if (error) {
-          if (
-            error.message.includes("schema cache") ||
-            error.message.includes("does not exist") ||
-            error.message.includes("create_delivery_record")
-          ) {
-            return runMockImportBatch();
+    await Promise.all([
+      ...Array.from(uniqueClients).map((c) => resolveClientId(c).catch(() => null)),
+      ...Array.from(uniqueTrucks.values()).map((t) =>
+        resolveTruckId(t.plate, t.type, t.ownership).catch(() => null),
+      ),
+      ...Array.from(uniqueDrivers).map((d) => resolveDriverId(d).catch(() => null)),
+      ...Array.from(uniqueHelpers).map((h) => resolveHelperId(h).catch(() => null)),
+    ]);
+
+    const BATCH_CONCURRENCY = 10;
+    for (let i = 0; i < nonDuplicateRows.length; i += BATCH_CONCURRENCY) {
+      const chunk = nonDuplicateRows.slice(i, i + BATCH_CONCURRENCY);
+      let shouldFallbackToMock = false;
+
+      await Promise.all(
+        chunk.map(async (row) => {
+          try {
+            await resolveClientId(row.clientName);
+            await resolveTruckId(row.plateNumber, row.truckType, row.truckOwnership);
+            const driverId = await resolveDriverId(row.driverName);
+            const helperId = await resolveHelperId(row.helperName);
+
+            const rpcPayload = {
+              ...row,
+              driverId,
+              helperId,
+              idempotencyKey: crypto.randomUUID(),
+            };
+
+            const { error } = await supabase.rpc("create_delivery_record", {
+              p_record: rpcPayload,
+              p_dropoffs: row.dropoffs,
+            });
+
+            if (error) {
+              if (
+                error.message.includes("schema cache") ||
+                error.message.includes("does not exist") ||
+                error.message.includes("create_delivery_record")
+              ) {
+                shouldFallbackToMock = true;
+                return;
+              }
+              if (error.code === "23505" || error.message.includes("waybill_number")) {
+                duplicates.push(row.waybillNumber);
+              } else {
+                errors.push({ waybill: row.waybillNumber, reason: error.message });
+              }
+            } else {
+              committed.push(row.waybillNumber);
+            }
+          } catch (rowErr) {
+            const reason = rowErr instanceof Error ? rowErr.message : "Entity resolution failed";
+            errors.push({ waybill: row.waybillNumber, reason });
           }
-          if (error.code === "23505" || error.message.includes("waybill_number")) {
-            duplicates.push(row.waybillNumber);
-          } else {
-            errors.push({ waybill: row.waybillNumber, reason: error.message });
-          }
-        } else {
-          committed.push(row.waybillNumber);
-          existingSet.add(row.waybillNumber);
-        }
-      } catch (rowErr) {
-        const reason = rowErr instanceof Error ? rowErr.message : "Entity resolution failed";
-        errors.push({ waybill: row.waybillNumber, reason });
+        }),
+      );
+
+      if (shouldFallbackToMock) {
+        return runMockImportBatch();
       }
     }
 

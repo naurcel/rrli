@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   generateImportErrorReport,
@@ -12,9 +12,9 @@ import {
   type StagedDeliveryRow,
 } from "@/features/deliveries/delivery-import-parser";
 import {
+  batchUpsertBrowserPreviewDeliveries,
   deleteBrowserPreviewDeliveriesByWaybills,
   readBrowserPreviewDeliveries,
-  upsertBrowserPreviewDelivery,
 } from "@/features/deliveries/browser-preview-deliveries";
 import { getFleetTrucks, type FleetTruck } from "@/features/deliveries/truck-registry";
 import { getFleetCrew, type FleetCrewMember } from "@/features/deliveries/driver-registry";
@@ -326,14 +326,17 @@ export function DeliveryExcelImportClient({
   }
 
   // Filtered rows for Step 2
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredPreviewSearch = useDeferredValue(previewSearch);
+
   const visibleRows = useMemo(() => {
+    const q = deferredSearchQuery.trim().toLowerCase();
     return stagedRows.filter((r) => {
       if (activeTab === "ready" && r.status !== "ready") return false;
       if (activeTab === "attention" && r.status !== "needs_attention") return false;
       if (activeTab === "duplicate" && r.status !== "duplicate") return false;
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      if (q) {
         const matchesWb = r.waybillNumber.toLowerCase().includes(q);
         const matchesClient = r.clientName.toLowerCase().includes(q);
         const matchesPlate = r.plateNumber.toLowerCase().includes(q);
@@ -343,22 +346,63 @@ export function DeliveryExcelImportClient({
 
       return true;
     });
-  }, [stagedRows, activeTab, searchQuery]);
+  }, [stagedRows, activeTab, deferredSearchQuery]);
 
-  const readyRows = useMemo(() => stagedRows.filter((r) => r.status === "ready"), [stagedRows]);
-  const readyCount = readyRows.length;
-  const attentionCount = stagedRows.filter((r) => r.status === "needs_attention").length;
-  const duplicateCount = stagedRows.filter((r) => r.status === "duplicate").length;
-  const readyOwnedCount = readyRows.filter((r) => r.truckOwnership === "Owned").length;
-  const readySubconCount = readyRows.filter((r) => r.truckOwnership === "Subcontracted").length;
-  const readyNewTrucksCount = readyRows.filter((r) => r.isNewTruck).length;
-  const readyMatchedTrucksCount = readyRows.filter((r) => !r.isNewTruck).length;
-  const readyAutoCompletedCount = readyRows.filter((r) => r.expectedCompletionStatus === "Completed").length;
-  const missingWaybillCount = stagedRows.filter((r) => !r.waybillNumber.trim()).length;
+  const {
+    readyRows,
+    readyCount,
+    attentionCount,
+    duplicateCount,
+    readyOwnedCount,
+    readySubconCount,
+    readyNewTrucksCount,
+    readyMatchedTrucksCount,
+    readyAutoCompletedCount,
+    missingWaybillCount,
+  } = useMemo(() => {
+    const ready: StagedDeliveryRow[] = [];
+    let attention = 0;
+    let duplicate = 0;
+    let owned = 0;
+    let subcon = 0;
+    let newTrucks = 0;
+    let matchedTrucks = 0;
+    let autoCompleted = 0;
+    let missingWb = 0;
+
+    for (const r of stagedRows) {
+      if (!r.waybillNumber.trim()) missingWb++;
+      if (r.status === "ready") {
+        ready.push(r);
+        if (r.truckOwnership === "Owned") owned++;
+        if (r.truckOwnership === "Subcontracted") subcon++;
+        if (r.isNewTruck) newTrucks++;
+        else matchedTrucks++;
+        if (r.expectedCompletionStatus === "Completed") autoCompleted++;
+      } else if (r.status === "needs_attention") {
+        attention++;
+      } else if (r.status === "duplicate") {
+        duplicate++;
+      }
+    }
+
+    return {
+      readyRows: ready,
+      readyCount: ready.length,
+      attentionCount: attention,
+      duplicateCount: duplicate,
+      readyOwnedCount: owned,
+      readySubconCount: subcon,
+      readyNewTrucksCount: newTrucks,
+      readyMatchedTrucksCount: matchedTrucks,
+      readyAutoCompletedCount: autoCompleted,
+      missingWaybillCount: missingWb,
+    };
+  }, [stagedRows]);
 
   // Step 3 preview table filtering and pagination
   const filteredReadyRows = useMemo(() => {
-    const q = previewSearch.trim().toLowerCase();
+    const q = deferredPreviewSearch.trim().toLowerCase();
     if (!q) return readyRows;
     return readyRows.filter((r) => {
       const stops = r.dropoffs.map((d) => d.storeName).join(" ").toLowerCase();
@@ -371,7 +415,7 @@ export function DeliveryExcelImportClient({
         stops.includes(q)
       );
     });
-  }, [readyRows, previewSearch]);
+  }, [readyRows, deferredPreviewSearch]);
 
   const totalPreviewPages = Math.ceil(filteredReadyRows.length / previewPageSize) || 1;
   const paginatedReadyRows = useMemo(() => {
@@ -408,19 +452,19 @@ export function DeliveryExcelImportClient({
             deliveryRate: r.deliveryRate,
             totalExpenses: r.totalExpenses,
             dieselExpenses: isSubcon ? null : r.dieselExpenses,
-            dieselExpensesStatus: isSubcon ? "not_applicable" : (r.dieselExpenses != null ? "confirmed" : "unknown"),
+            dieselExpensesStatus: isSubcon ? "not_applicable" : (r.dieselExpenses != null ? "confirmed" : "not_applicable"),
             tollGateExpenses: isSubcon ? null : r.tollGateExpenses,
             tollGateExpensesStatus: isSubcon ? "not_applicable" : (r.tollGateExpenses != null ? "confirmed" : "not_applicable"),
             tollGateBreakdown: isSubcon ? "" : (r.tollGateBreakdown || ""),
             driverDailyRate: isSubcon ? null : r.driverDailyRate,
-            driverDailyRateStatus: isSubcon ? "not_applicable" : (r.driverDailyRate != null ? "confirmed" : "unknown"),
+            driverDailyRateStatus: isSubcon ? "not_applicable" : (r.driverDailyRate != null ? "confirmed" : "not_applicable"),
             driverAllowance: isSubcon ? null : r.driverAllowance,
-            driverAllowanceStatus: isSubcon ? "not_applicable" : (r.driverAllowance != null ? "confirmed" : "unknown"),
+            driverAllowanceStatus: isSubcon ? "not_applicable" : (r.driverAllowance != null ? "confirmed" : "not_applicable"),
             driverName: r.driverName,
             helperDailyRate: isSubcon ? null : r.helperDailyRate,
-            helperDailyRateStatus: isSubcon ? "not_applicable" : (r.helperDailyRate != null ? "confirmed" : "unknown"),
+            helperDailyRateStatus: isSubcon ? "not_applicable" : (r.helperDailyRate != null ? "confirmed" : "not_applicable"),
             helperAllowance: isSubcon ? null : r.helperAllowance,
-            helperAllowanceStatus: isSubcon ? "not_applicable" : (r.helperAllowance != null ? "confirmed" : "unknown"),
+            helperAllowanceStatus: isSubcon ? "not_applicable" : (r.helperAllowance != null ? "confirmed" : "not_applicable"),
             helperName: r.helperName,
             otherExpenses: isSubcon ? (r.totalExpenses ?? r.otherExpenses ?? 0) : r.otherExpenses,
             otherExpensesStatus: isSubcon ? "confirmed" : (r.otherExpenses != null ? "confirmed" : "not_applicable"),
@@ -451,8 +495,8 @@ export function DeliveryExcelImportClient({
         throw new Error(data.message ?? "Server rejected the import payload.");
       }
 
-      // Mirror to browser-preview so local view stays responsive
-      for (const row of readyRows) {
+      // Mirror to browser-preview in a single atomic batch write so local view stays responsive
+      const previewItems: DeliveryLedgerItem[] = readyRows.map((row) => {
         const isSubcon = row.truckOwnership === "Subcontracted";
         const expenses = {
           dieselExpenses: isSubcon ? null : row.dieselExpenses,
@@ -466,20 +510,20 @@ export function DeliveryExcelImportClient({
           otherExpenses: isSubcon ? (row.totalExpenses ?? row.otherExpenses ?? 0) : row.otherExpenses,
         };
         const expenseStates = {
-          dieselExpenses: isSubcon ? ("not_applicable" as const) : (row.dieselExpenses != null ? ("confirmed" as const) : ("unknown" as const)),
+          dieselExpenses: isSubcon ? ("not_applicable" as const) : (row.dieselExpenses != null ? ("confirmed" as const) : ("not_applicable" as const)),
           tollGateExpenses: isSubcon ? ("not_applicable" as const) : (row.tollGateExpenses != null ? ("confirmed" as const) : ("not_applicable" as const)),
           entryFees: row.entryFees != null ? ("confirmed" as const) : ("not_applicable" as const),
-          driverAllowance: isSubcon ? ("not_applicable" as const) : (row.driverAllowance != null ? ("confirmed" as const) : ("unknown" as const)),
-          driverDailyRate: isSubcon ? ("not_applicable" as const) : (row.driverDailyRate != null ? ("confirmed" as const) : ("unknown" as const)),
-          helperAllowance: isSubcon ? ("not_applicable" as const) : (row.helperAllowance != null ? ("confirmed" as const) : ("unknown" as const)),
-          helperDailyRate: isSubcon ? ("not_applicable" as const) : (row.helperDailyRate != null ? ("confirmed" as const) : ("unknown" as const)),
+          driverAllowance: isSubcon ? ("not_applicable" as const) : (row.driverAllowance != null ? ("confirmed" as const) : ("not_applicable" as const)),
+          driverDailyRate: isSubcon ? ("not_applicable" as const) : (row.driverDailyRate != null ? ("confirmed" as const) : ("not_applicable" as const)),
+          helperAllowance: isSubcon ? ("not_applicable" as const) : (row.helperAllowance != null ? ("confirmed" as const) : ("not_applicable" as const)),
+          helperDailyRate: isSubcon ? ("not_applicable" as const) : (row.helperDailyRate != null ? ("confirmed" as const) : ("not_applicable" as const)),
           otherExpenses: isSubcon ? ("confirmed" as const) : (row.otherExpenses != null ? ("confirmed" as const) : ("not_applicable" as const)),
         };
         const totalExpenses = row.totalExpenses ?? 0;
         const netIncome = row.deliveryRate - totalExpenses;
         const marginPercent = row.deliveryRate > 0 ? (netIncome / row.deliveryRate) * 100 : null;
 
-        const item: DeliveryLedgerItem = {
+        return {
           id: `preview-dtr-${row.waybillNumber}`,
           clientId: row.clientName,
           truckId: row.plateNumber,
@@ -521,8 +565,8 @@ export function DeliveryExcelImportClient({
           podStatus: "Verified",
           notes: `Batch Reference: ${batchName}`,
         };
-        upsertBrowserPreviewDelivery(item);
-      }
+      });
+      batchUpsertBrowserPreviewDeliveries(previewItems);
 
       setImportResult({
         batchName,

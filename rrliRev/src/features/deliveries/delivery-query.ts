@@ -1,6 +1,6 @@
 import * as z from "zod";
 
-export const DELIVERY_PAGE_SIZES = [10, 25, 50, 100] as const;
+export const DELIVERY_PAGE_SIZES = [10, 25, 50, 100, 1000] as const;
 
 export const DELIVERY_SORT_FIELDS = [
   "delivery_date",

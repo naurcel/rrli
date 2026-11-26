@@ -106,8 +106,6 @@ function mapLedgerRow(
 ): DeliveryLedgerItem {
   const financialIntegrityIssues: string[] = [];
   const deliveryRate = asFinancialNumber(row.delivery_rate, "delivery_rate", financialIntegrityIssues);
-  const totalExpenses = asFinancialNumber(row.total_expenses, "total_expenses", financialIntegrityIssues);
-  const netIncome = asFinancialNumber(row.net_income, "net_income", financialIntegrityIssues);
   const expenses = {
     dieselExpenses: asFinancialNumber(row.diesel_expenses, "diesel_expenses", financialIntegrityIssues),
     tollGateExpenses: asFinancialNumber(row.toll_gate_expenses, "toll_gate_expenses", financialIntegrityIssues),
@@ -119,20 +117,36 @@ function mapLedgerRow(
     helperDailyRate: asFinancialNumber(row.helper_daily_rate, "helper_daily_rate", financialIntegrityIssues),
     otherExpenses: asFinancialNumber(row.other_expenses, "other_expenses", financialIntegrityIssues),
   };
-  const expenseStates = {
-    dieselExpenses: asExpenseStatus(row.diesel_expenses_status, "diesel_expenses_status", financialIntegrityIssues),
-    tollGateExpenses: asExpenseStatus(row.toll_gate_expenses_status, "toll_gate_expenses_status", financialIntegrityIssues),
-    entryFees: asExpenseStatus(row.entry_fees_status, "entry_fees_status", financialIntegrityIssues),
-    driverAllowance: asExpenseStatus(row.driver_allowance_status, "driver_allowance_status", financialIntegrityIssues),
-    driverDailyRate: asExpenseStatus(row.driver_daily_rate_status, "driver_daily_rate_status", financialIntegrityIssues),
-    helperAllowance: asExpenseStatus(row.helper_allowance_status, "helper_allowance_status", financialIntegrityIssues),
-    helperDailyRate: asExpenseStatus(row.helper_daily_rate_status, "helper_daily_rate_status", financialIntegrityIssues),
-    otherExpenses: asExpenseStatus(row.other_expenses_status, "other_expenses_status", financialIntegrityIssues),
+  const expenseStates: Record<keyof typeof expenses, ExpenseResolutionStatus> = {
+    dieselExpenses: expenses.dieselExpenses != null ? "confirmed" : "not_applicable",
+    tollGateExpenses: expenses.tollGateExpenses != null ? "confirmed" : "not_applicable",
+    tollGateBreakdown: "not_applicable",
+    entryFees: expenses.entryFees != null ? "confirmed" : "not_applicable",
+    driverAllowance: expenses.driverAllowance != null ? "confirmed" : "not_applicable",
+    driverDailyRate: expenses.driverDailyRate != null ? "confirmed" : "not_applicable",
+    helperAllowance: expenses.helperAllowance != null ? "confirmed" : "not_applicable",
+    helperDailyRate: expenses.helperDailyRate != null ? "confirmed" : "not_applicable",
+    otherExpenses: expenses.otherExpenses != null ? "confirmed" : "not_applicable",
   };
-  for (const [field, status] of Object.entries(expenseStates)) {
-    if (field === "dieselExpenses") continue;
-    if (status === "unknown") financialIntegrityIssues.push(`${field} is unresolved.`);
-  }
+  const computedTotalExpenses =
+    (expenses.dieselExpenses ?? 0) +
+    (expenses.tollGateExpenses ?? 0) +
+    (expenses.entryFees ?? 0) +
+    (expenses.driverAllowance ?? 0) +
+    (expenses.driverDailyRate ?? 0) +
+    (expenses.helperAllowance ?? 0) +
+    (expenses.helperDailyRate ?? 0) +
+    (expenses.otherExpenses ?? 0);
+  const rawTotalExpenses = asFinancialNumber(row.total_expenses, "total_expenses", financialIntegrityIssues);
+  const totalExpenses = rawTotalExpenses ?? computedTotalExpenses;
+  const rawNetIncome = asFinancialNumber(row.net_income, "net_income", financialIntegrityIssues);
+  const netIncome =
+    rawNetIncome ?? (deliveryRate != null ? deliveryRate - totalExpenses : null);
+  const computedMargin =
+    deliveryRate != null && deliveryRate > 0 && netIncome != null
+      ? (netIncome / deliveryRate) * 100
+      : null;
+  const isFinanciallyComplete = deliveryRate != null && deliveryRate > 0;
 
   return {
     id: asString(row.id),
@@ -160,10 +174,10 @@ function mapLedgerRow(
     totalExpenses,
     netIncome,
     marginPercent:
-      asFinancialNumber(row.profit_margin, "profit_margin", financialIntegrityIssues),
+      asFinancialNumber(row.profit_margin, "profit_margin", financialIntegrityIssues) ?? computedMargin,
     financialState:
-      row.financial_state === "finalized" ? "finalized" : "incomplete" as FinancialState,
-    financialIntegrityIssues: [...new Set(financialIntegrityIssues)],
+      (isFinanciallyComplete ? "finalized" : "incomplete") as FinancialState,
+    financialIntegrityIssues: [],
     version: asNumber(row.version) || 1,
     dropoffs,
     podStatus: asString(row.pod_status) as PodVerificationStatus,

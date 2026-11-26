@@ -7,6 +7,7 @@ import {
 } from "@/features/deliveries/delivery-domain";
 import { FLEET_TRUCKS } from "@/features/deliveries/truck-registry";
 import { readBrowserPreviewTrucks } from "@/features/deliveries/browser-preview-trucks";
+import { readArchiveMachineSnapshot } from "@/features/archive/archive-machine";
 import type { DeliveryLedgerItem } from "@/features/deliveries/server/delivery-repository";
 import type {
   PersistedProfitabilitySummary,
@@ -35,6 +36,8 @@ function reconcileDeliveryFinancialState(item: DeliveryLedgerItem): DeliveryLedg
   for (const key of Object.keys(nextStates) as Array<keyof typeof nextStates>) {
     if (typeof expensesObj[key] === "number" && Number.isFinite(expensesObj[key] as number)) {
       nextStates[key] = "confirmed";
+    } else if (expensesObj[key] == null) {
+      nextStates[key] = "not_applicable";
     }
   }
   const hasUnknownExpenses = Object.values(nextStates).some((st) => st === "unknown");
@@ -65,6 +68,10 @@ function reconcileDeliveryFinancialState(item: DeliveryLedgerItem): DeliveryLedg
 
 export function readBrowserPreviewDeliveries(): DeliveryLedgerItem[] {
   if (typeof window === "undefined") return [];
+  const archive = readArchiveMachineSnapshot();
+  if (archive) {
+    return archive.deliveries.map(reconcileDeliveryFinancialState);
+  }
   try {
     const value = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]") as unknown;
     if (!Array.isArray(value)) return [];
@@ -92,6 +99,26 @@ export function upsertBrowserPreviewDelivery(delivery: DeliveryLedgerItem): void
     reconciled,
     ...current.filter(
       (item) => item.id !== reconciled.id && item.waybillNumber !== reconciled.waybillNumber,
+    ),
+  ];
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event(BROWSER_PREVIEW_DELIVERIES_CHANGED));
+}
+
+export function batchUpsertBrowserPreviewDeliveries(deliveries: readonly DeliveryLedgerItem[]): void {
+  if (typeof window === "undefined" || !Array.isArray(deliveries) || deliveries.length === 0) return;
+  const current = readBrowserPreviewDeliveries();
+  const reconciledBatch = deliveries.map(reconcileDeliveryFinancialState);
+  const incomingIds = new Set(reconciledBatch.map((item) => item.id));
+  const incomingWaybills = new Set(
+    reconciledBatch.map((item) => item.waybillNumber.trim().toUpperCase()),
+  );
+  const next = [
+    ...reconciledBatch,
+    ...current.filter(
+      (item) =>
+        !incomingIds.has(item.id) &&
+        !incomingWaybills.has(item.waybillNumber.trim().toUpperCase()),
     ),
   ];
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -129,15 +156,19 @@ export function selectBrowserPreviewDeliveries(
   const search = filters.search?.trim().toLocaleLowerCase() ?? "";
   const searchClean = search.replace(/\s+/g, "");
   const allTrucks = [...FLEET_TRUCKS, ...readBrowserPreviewTrucks()];
+  const providerByPlateOrId = new Map<string, string>();
+  for (const t of allTrucks) {
+    const prov = (t.provider ?? "").toLocaleLowerCase();
+    providerByPlateOrId.set(t.plateNumber.toUpperCase(), prov);
+    providerByPlateOrId.set(t.id, prov);
+  }
 
   return readBrowserPreviewDeliveries().filter((item) => {
     const plateClean = item.plateNumber.toLocaleLowerCase().replace(/\s+/g, "");
-    const regTruck = allTrucks.find(
-      (t) =>
-        t.plateNumber.toUpperCase() === item.plateNumber.toUpperCase() ||
-        t.id === item.truckId,
-    );
-    const truckerName = (regTruck?.provider ?? "").toLocaleLowerCase();
+    const truckerName =
+      providerByPlateOrId.get(item.plateNumber.toUpperCase()) ??
+      providerByPlateOrId.get(item.truckId) ??
+      "";
 
     const searchable = [
       item.waybillNumber,
