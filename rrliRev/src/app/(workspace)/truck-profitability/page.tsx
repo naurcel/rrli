@@ -603,7 +603,20 @@ export default function TruckProfitabilityPage() {
       .then((data: { ok?: boolean; drivers?: FleetCrewMember[]; crew?: FleetCrewMember[] }) => {
         const incoming = data?.crew ?? data?.drivers;
         if (data?.ok && Array.isArray(incoming)) {
-          setCrew(applyBrowserCrewStatuses(incoming));
+          // Deduplicate by normalized name (case-insensitive)
+          // A driver should not also be listed as a helper
+          const uniqueMap = new Map<string, FleetCrewMember>();
+          for (const m of incoming) {
+            const norm = (m.fullName ?? "").trim().toLowerCase();
+            if (!norm) continue;
+            const existing = uniqueMap.get(norm);
+            if (!existing) {
+              uniqueMap.set(norm, m);
+            } else if (m.assignmentType === "Driver" && existing.assignmentType === "Helper") {
+              uniqueMap.set(norm, m);
+            }
+          }
+          setCrew(applyBrowserCrewStatuses(Array.from(uniqueMap.values())));
         }
       })
       .catch(() => {});
@@ -1381,6 +1394,12 @@ export default function TruckProfitabilityPage() {
       return;
     }
 
+    const existingCrew = crew.find((c) => c.fullName.trim().toLowerCase() === normalizedName.toLowerCase());
+    if (existingCrew) {
+      setCrewFormError(`Crew member "${normalizedName}" is already registered as a ${existingCrew.assignmentType}.`);
+      return;
+    }
+
     setCrewSubmitting(true);
     try {
       const response = await fetch("/api/drivers", {
@@ -1412,7 +1431,7 @@ export default function TruckProfitabilityPage() {
       }
 
       setCrew((prev) => {
-        if (prev.some((c) => c.assignmentType === registered.assignmentType && c.fullName.toLowerCase() === registered.fullName.toLowerCase())) {
+        if (prev.some((c) => c.fullName.toLowerCase() === registered.fullName.toLowerCase())) {
           return prev;
         }
         return [...prev, registered];

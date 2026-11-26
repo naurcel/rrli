@@ -51,7 +51,20 @@ export async function GET() {
   }
 
   if (!isSupabaseConfigured()) {
-    const crew = getFleetCrew();
+    const rawCrew = getFleetCrew();
+    const uniqueCrewMap = new Map<string, FleetCrewMember>();
+    for (const member of rawCrew) {
+      const normName = (member.fullName ?? "").trim().toLowerCase();
+      if (!normName) continue;
+      const existing = uniqueCrewMap.get(normName);
+      const isDriver = member.assignmentType === "Driver";
+      if (!existing) {
+        uniqueCrewMap.set(normName, member);
+      } else if (isDriver && existing.assignmentType === "Helper") {
+        uniqueCrewMap.set(normName, member);
+      }
+    }
+    const crew = Array.from(uniqueCrewMap.values());
     return NextResponse.json({
       ok: true,
       source: "bundled-mock",
@@ -75,7 +88,20 @@ export async function GET() {
         error.message.includes("relation") ||
         error.message.includes("employees")
       ) {
-        const crew = getFleetCrew();
+        const rawCrew = getFleetCrew();
+        const uniqueCrewMap = new Map<string, FleetCrewMember>();
+        for (const member of rawCrew) {
+          const normName = (member.fullName ?? "").trim().toLowerCase();
+          if (!normName) continue;
+          const existing = uniqueCrewMap.get(normName);
+          const isDriver = member.assignmentType === "Driver";
+          if (!existing) {
+            uniqueCrewMap.set(normName, member);
+          } else if (isDriver && existing.assignmentType === "Helper") {
+            uniqueCrewMap.set(normName, member);
+          }
+        }
+        const crew = Array.from(uniqueCrewMap.values());
         return NextResponse.json({
           ok: true,
           source: "bundled-mock",
@@ -87,14 +113,31 @@ export async function GET() {
       throw error;
     }
 
-    const crew: FleetCrewMember[] = (rows ?? []).map((row) => ({
-      id: row.id,
-      employeeCode: row.employee_code ?? "",
-      fullName: row.full_name,
-      assignmentType: (row.assignment_type === "Helper" ? "Helper" : "Driver") as "Driver" | "Helper",
-      contactNumber: row.contact_number ?? null,
-      isActive: row.is_active ?? true,
-    }));
+    // Deduplicate by normalized name (case-insensitive)
+    // Priority: If registered as Driver, keep Driver role; avoid duplicate Helper entry
+    const uniqueCrewMap = new Map<string, FleetCrewMember>();
+    for (const row of rows ?? []) {
+      const normName = (row.full_name ?? "").trim().toLowerCase();
+      if (!normName) continue;
+      const existing = uniqueCrewMap.get(normName);
+      const isDriver = row.assignment_type === "Driver";
+      const member: FleetCrewMember = {
+        id: row.id,
+        employeeCode: row.employee_code ?? "",
+        fullName: row.full_name.trim(),
+        assignmentType: (row.assignment_type === "Helper" ? "Helper" : "Driver") as "Driver" | "Helper",
+        contactNumber: row.contact_number ?? null,
+        isActive: row.is_active ?? true,
+      };
+
+      if (!existing) {
+        uniqueCrewMap.set(normName, member);
+      } else if (isDriver && existing.assignmentType === "Helper") {
+        uniqueCrewMap.set(normName, member);
+      }
+    }
+
+    const crew: FleetCrewMember[] = Array.from(uniqueCrewMap.values());
 
     return NextResponse.json({ ok: true, source: "database", drivers: crew, crew });
   } catch (error) {
@@ -182,11 +225,11 @@ export async function POST(request: Request) {
   try {
     const supabase = createAdminSupabaseClient();
 
-    // Check for duplicate name for this role
+    // Check for duplicate name across all crew (Driver and Helper)
     const { data: existing } = await supabase
       .from("employees")
-      .select("id")
-      .eq("assignment_type", assignmentType)
+      .select("id, assignment_type, full_name")
+      .in("assignment_type", ["Driver", "Helper"])
       .ilike("full_name", fullName)
       .maybeSingle();
 
@@ -195,7 +238,7 @@ export async function POST(request: Request) {
         {
           ok: false,
           code: "DUPLICATE_CREW",
-          message: `${assignmentType} "${fullName}" already exists.`,
+          message: `Crew member "${fullName}" is already registered as a ${existing.assignment_type}.`,
         },
         { status: 409 },
       );
