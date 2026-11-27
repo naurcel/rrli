@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
 import { TruckPhoto } from "@/components/truck-photo";
+import { useFleetTruckMeta } from "@/components/use-fleet-truck-meta";
 import {
-  getFleetTrucks,
   getTruckStorageCapability,
   type TruckOwnership,
 } from "@/features/deliveries/truck-registry";
@@ -38,11 +37,7 @@ export function DeliveryTruckTripSection({
   deliveryDate,
   formatPeso,
 }: DeliveryTruckTripSectionProps) {
-  const truckMeta = useMemo(() => {
-    const fleet = getFleetTrucks();
-    const normalized = plateNumber.trim().toUpperCase();
-    return fleet.find((t) => t.plateNumber.toUpperCase() === normalized) ?? null;
-  }, [plateNumber]);
+  const truckMeta = useFleetTruckMeta(plateNumber);
 
   const storageCapability = getTruckStorageCapability(
     plateNumber,
